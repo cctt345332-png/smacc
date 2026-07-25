@@ -56,3 +56,23 @@ export const getMyInvoices = () => api.get("/reps/me/invoices");
 export const getMyPayments = () => api.get("/reps/me/payments");
 
 export const getMySummary = () => api.get("/reps/me/summary");
+
+// ─── تتبع مواقع المناديب ──────────────────────────────────────────────
+
+export const postMyLocation = (data: {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  battery_level?: number;
+  is_moving?: boolean;
+  recorded_at?: string;
+}) => api.post("/reps/me/location", data);
+
+export const getMyLatestLocation = () => api.get("/reps/me/location/latest");
+
+export const getAllRepsLiveLocations = () => api.get("/reps/locations/live");
+
+export const getRepLocationHistory = (repId: string, date?: string) =>
+  api.get(`/reps/${repId}/locations${date ? `?date=${date}` : ""}`);

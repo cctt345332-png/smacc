@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getRep, getRepSummary, getRepStock, getRepInvoices, getRepTransfers, updateRep } from "@/lib/reps";
+import { getRep, getRepSummary, getRepStock, getRepInvoices, getRepTransfers, getRepLocationHistory, updateRep } from "@/lib/reps";
 import api from "@/lib/api";
 
 const fmt  = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -30,7 +30,14 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
   const [stock, setStock] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
-  const [tab, setTab] = useState<"info" | "stock" | "invoices" | "review" | "transfers">("info");
+  const [tab, setTab] = useState<"info" | "stock" | "invoices" | "review" | "transfers" | "tracking">("info");
+
+  // ── تتبع الموقع ─────────────────────────────────────────────────────
+  const mapRef = useRef<HTMLDivElement>(null);
+  const trackingMap = useRef<any>(null);
+  const [trackDate, setTrackDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [trackPoints, setTrackPoints] = useState<any[]>([]);
+  const [trackLoading, setTrackLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<any>(null);
@@ -99,6 +106,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
     { key: "review",    label: ar ? "للمراجعة" : "Review", count: submittedInvoices.length, alert: submittedInvoices.length > 0 },
     { key: "stock",     label: ar ? "المخزون" : "Stock", count: stock.length },
     { key: "transfers", label: ar ? "المناقلات" : "Transfers", count: transfers.length },
+    { key: "tracking",  label: ar ? "التتبع" : "Tracking" },
   ] as const;
 
   return (
@@ -448,6 +456,22 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
+      {/* تبويب: التتبع */}
+      {tab === "tracking" && (
+        <TrackingTab
+          locale={locale}
+          repId={rep_id}
+          trackDate={trackDate}
+          setTrackDate={setTrackDate}
+          trackPoints={trackPoints}
+          setTrackPoints={setTrackPoints}
+          trackLoading={trackLoading}
+          setTrackLoading={setTrackLoading}
+          mapRef={mapRef}
+          trackingMap={trackingMap}
+        />
+      )}
+
       {/* Modal الرفض */}
       {rejectModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
@@ -472,5 +496,205 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
     </>
+  );
+}
+
+/* ================================================================== */
+/* مكوّن تبويب التتبع                                                   */
+/* ================================================================== */
+function TrackingTab({
+  locale, repId, trackDate, setTrackDate,
+  trackPoints, setTrackPoints, trackLoading, setTrackLoading,
+  mapRef, trackingMap,
+}: {
+  locale: string; repId: string;
+  trackDate: string; setTrackDate: (d: string) => void;
+  trackPoints: any[]; setTrackPoints: (p: any[]) => void;
+  trackLoading: boolean; setTrackLoading: (b: boolean) => void;
+  mapRef: React.RefObject<HTMLDivElement>;
+  trackingMap: React.MutableRefObject<any>;
+}) {
+  const ar = locale === "ar";
+
+  /* Leaflet CSS */
+  useEffect(() => {
+    const id = "leaflet-css";
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id; link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+  }, []);
+
+  /* تهيئة الخريطة */
+  useEffect(() => {
+    if (!mapRef.current || trackingMap.current) return;
+    import("leaflet").then(L => {
+      // @ts-ignore
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+      const map = L.map(mapRef.current!, { center: [24.7136, 46.6753], zoom: 11 });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors", maxZoom: 19,
+      }).addTo(map);
+      trackingMap.current = { map, L };
+    });
+    return () => { trackingMap.current?.map?.remove(); trackingMap.current = null; };
+  }, []);
+
+  /* رسم المسار */
+  useEffect(() => {
+    if (!trackingMap.current || trackPoints.length === 0) return;
+    const { map, L } = trackingMap.current;
+
+    // إزالة الطبقات السابقة
+    map.eachLayer((l: any) => {
+      if (l._isTrackLayer) map.removeLayer(l);
+    });
+
+    const coords: [number, number][] = trackPoints.map(p => [p.latitude, p.longitude]);
+
+    // خط المسار
+    const polyline = L.polyline(coords, { color: "#2563EB", weight: 3, opacity: 0.8 });
+    polyline._isTrackLayer = true;
+    polyline.addTo(map);
+
+    // نقطة البداية
+    if (coords.length > 0) {
+      const start = L.circleMarker(coords[0], { radius: 8, color: "#059669", fillColor: "#059669", fillOpacity: 1, weight: 2 });
+      start._isTrackLayer = true;
+      start.bindTooltip(ar ? "نقطة البداية" : "Start", { permanent: false }).addTo(map);
+    }
+
+    // نقطة النهاية
+    if (coords.length > 1) {
+      const end = L.circleMarker(coords[coords.length - 1], { radius: 8, color: "#DC2626", fillColor: "#DC2626", fillOpacity: 1, weight: 2 });
+      end._isTrackLayer = true;
+      end.bindTooltip(ar ? "آخر موقع" : "Last", { permanent: false }).addTo(map);
+    }
+
+    // نقاط متوسطة (كل 5 نقاط)
+    trackPoints.forEach((p, i) => {
+      if (i === 0 || i === trackPoints.length - 1) return;
+      if (i % 5 !== 0) return;
+      const time = new Date(p.recorded_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+      const dot = L.circleMarker([p.latitude, p.longitude], {
+        radius: 5, color: "#7C3AED", fillColor: "#7C3AED", fillOpacity: 0.7, weight: 1,
+      });
+      dot._isTrackLayer = true;
+      dot.bindTooltip(time, { permanent: false }).addTo(map);
+    });
+
+    map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+  }, [trackPoints, ar]);
+
+  /* جلب بيانات المسار */
+  const fetchTrack = async (date: string) => {
+    setTrackLoading(true);
+    try {
+      const res = await getRepLocationHistory(repId, date);
+      setTrackPoints(Array.isArray(res.data) ? res.data : []);
+    } catch { setTrackPoints([]); }
+    finally { setTrackLoading(false); }
+  };
+
+  useEffect(() => { fetchTrack(trackDate); }, [repId]);
+
+  return (
+    <div>
+      {/* شريط التحكم */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
+        <input
+          type="date"
+          className="form-input"
+          style={{ width: 160 }}
+          value={trackDate}
+          onChange={e => {
+            setTrackDate(e.target.value);
+            fetchTrack(e.target.value);
+          }}
+        />
+        <button className="btn btn-secondary" onClick={() => fetchTrack(trackDate)}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          {ar ? "تحديث" : "Refresh"}
+        </button>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          {trackLoading
+            ? (ar ? "جاري التحميل..." : "Loading...")
+            : `${trackPoints.length} ${ar ? "نقطة" : "points"}`}
+        </span>
+      </div>
+
+      {/* الخريطة */}
+      <div style={{ height: 480, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative" }}>
+        <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
+        {trackPoints.length === 0 && !trackLoading && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", alignItems: "center",
+            justifyContent: "center", background: "rgba(255,255,255,0.85)", flexDirection: "column", gap: 8,
+          }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+            <div style={{ fontSize: 14, color: "var(--text-muted)" }}>
+              {ar ? "لا توجد بيانات لهذا اليوم" : "No data for this day"}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* جدول النقاط */}
+      {trackPoints.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div style={{ padding: "14px 16px", fontWeight: 700, fontSize: 13, borderBottom: "1px solid var(--border)" }}>
+            {ar ? "سجل النقاط" : "Points Log"}
+          </div>
+          <div className="table-wrapper" style={{ border: "none", borderRadius: 0, maxHeight: 300, overflowY: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>{ar ? "الوقت" : "Time"}</th>
+                  <th>{ar ? "الإحداثيات" : "Coordinates"}</th>
+                  <th>{ar ? "السرعة" : "Speed"}</th>
+                  <th>{ar ? "البطارية" : "Battery"}</th>
+                  <th>{ar ? "الحالة" : "Status"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trackPoints.map((p, i) => (
+                  <tr key={i}>
+                    <td style={{ fontSize: 12, fontFamily: "monospace" }}>
+                      {new Date(p.recorded_at).toLocaleTimeString("en-US")}
+                    </td>
+                    <td style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-secondary)" }}>
+                      {Number(p.latitude).toFixed(5)}, {Number(p.longitude).toFixed(5)}
+                    </td>
+                    <td style={{ fontSize: 12 }}>{p.speed != null ? `${p.speed} km/h` : "—"}</td>
+                    <td style={{ fontSize: 12 }}>{p.battery_level != null ? `${p.battery_level}%` : "—"}</td>
+                    <td>
+                      <span style={{
+                        fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20,
+                        background: p.is_moving ? "#D1FAE5" : "#F3F4F6",
+                        color: p.is_moving ? "#059669" : "#6B7280",
+                      }}>
+                        {p.is_moving ? (ar ? "متحرك" : "Moving") : (ar ? "ثابت" : "Still")}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

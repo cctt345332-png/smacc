@@ -284,5 +284,210 @@ async def rep_summary(
 
 
 # ══════════════════════════════════════════════════════════════════
+# تتبع مواقع المناديب
+# ══════════════════════════════════════════════════════════════════
+
+@router.post("/me/location", status_code=201)
+async def post_my_location(
+    data: dict,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """المندوب يرسل موقعه الحالي — يُحفظ في rep_locations"""
+    from app.models.reps import SalesRep, RepLocation
+    from sqlalchemy import select
+    import uuid
+    from datetime import datetime
+
+    # تحقق أن المستخدم مندوب
+    rep_r = await db.execute(
+        select(SalesRep).where(
+            SalesRep.user_id == user["user_id"],
+            SalesRep.tenant_id == user["tenant_id"],
+        )
+    )
+    rep = rep_r.scalar_one_or_none()
+    if not rep:
+        from fastapi import HTTPException
+        raise HTTPException(403, "هذا الحساب ليس مندوباً")
+
+    loc = RepLocation(
+        id=str(uuid.uuid4()),
+        tenant_id=user["tenant_id"],
+        rep_id=rep.id,
+        latitude=data["latitude"],
+        longitude=data["longitude"],
+        accuracy=data.get("accuracy"),
+        speed=data.get("speed"),
+        heading=data.get("heading"),
+        battery_level=data.get("battery_level"),
+        is_moving=data.get("is_moving", False),
+        recorded_at=datetime.fromisoformat(data["recorded_at"]) if data.get("recorded_at") else datetime.utcnow(),
+        created_at=datetime.utcnow(),
+    )
+    db.add(loc)
+    await db.commit()
+    return {"id": loc.id, "rep_id": loc.rep_id, "recorded_at": loc.recorded_at.isoformat()}
+
+
+@router.get("/me/location/latest")
+async def my_latest_location(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """آخر موقع مسجّل للمندوب الحالي"""
+    from app.models.reps import SalesRep, RepLocation
+    from sqlalchemy import select
+
+    rep_r = await db.execute(
+        select(SalesRep).where(
+            SalesRep.user_id == user["user_id"],
+            SalesRep.tenant_id == user["tenant_id"],
+        )
+    )
+    rep = rep_r.scalar_one_or_none()
+    if not rep:
+        from fastapi import HTTPException
+        raise HTTPException(403, "هذا الحساب ليس مندوباً")
+
+    loc_r = await db.execute(
+        select(RepLocation)
+        .where(RepLocation.rep_id == rep.id, RepLocation.tenant_id == user["tenant_id"])
+        .order_by(RepLocation.recorded_at.desc())
+        .limit(1)
+    )
+    loc = loc_r.scalar_one_or_none()
+    if not loc:
+        from fastapi import HTTPException
+        raise HTTPException(404, "لا يوجد موقع مسجّل")
+
+    return {
+        "id": loc.id,
+        "rep_id": loc.rep_id,
+        "latitude": float(loc.latitude),
+        "longitude": float(loc.longitude),
+        "accuracy": float(loc.accuracy) if loc.accuracy else None,
+        "speed": float(loc.speed) if loc.speed else None,
+        "heading": float(loc.heading) if loc.heading else None,
+        "battery_level": loc.battery_level,
+        "is_moving": loc.is_moving,
+        "recorded_at": loc.recorded_at.isoformat(),
+    }
+
+
+@router.get("/locations/live")
+async def live_locations(
+    user=Depends(require_role(["manager", "accountant", "sales"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    آخر موقع لكل مندوب نشط — للخريطة الحية.
+    يعيد: [{rep_id, rep_name, latitude, longitude, recorded_at, is_moving, battery_level}]
+    """
+    from app.models.reps import SalesRep, RepLocation
+    from app.models.user import User
+    from sqlalchemy import select
+    from sqlalchemy.sql import func
+
+    # نجيب آخر recorded_at لكل مندوب في هذا الـ tenant
+    subq = (
+        select(RepLocation.rep_id, func.max(RepLocation.recorded_at).label("max_rec"))
+        .where(RepLocation.tenant_id == user["tenant_id"])
+        .group_by(RepLocation.rep_id)
+        .subquery()
+    )
+
+    rows = await db.execute(
+        select(RepLocation, SalesRep, User)
+        .join(subq, (RepLocation.rep_id == subq.c.rep_id) & (RepLocation.recorded_at == subq.c.max_rec))
+        .join(SalesRep, SalesRep.id == RepLocation.rep_id)
+        .join(User, User.id == SalesRep.user_id)
+        .where(RepLocation.tenant_id == user["tenant_id"], SalesRep.is_active == True)
+    )
+
+    result = []
+    for loc, rep, u in rows.all():
+        result.append({
+            "rep_id": rep.id,
+            "rep_code": rep.rep_code,
+            "rep_name": u.full_name,
+            "latitude": float(loc.latitude),
+            "longitude": float(loc.longitude),
+            "accuracy": float(loc.accuracy) if loc.accuracy else None,
+            "speed": float(loc.speed) if loc.speed else None,
+            "heading": float(loc.heading) if loc.heading else None,
+            "battery_level": loc.battery_level,
+            "is_moving": loc.is_moving,
+            "recorded_at": loc.recorded_at.isoformat(),
+        })
+
+    return result
+
+
+@router.get("/{rep_id}/locations")
+async def rep_location_history(
+    rep_id: str,
+    date: str | None = None,
+    user=Depends(require_role(["manager", "accountant", "sales"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    مسار مندوب خلال يوم محدد (YYYY-MM-DD).
+    إذا لم يُحدَّد التاريخ يُعاد اليوم الحالي.
+    """
+    from app.models.reps import SalesRep, RepLocation
+    from sqlalchemy import select
+    from datetime import datetime, date as date_type
+
+    # تحقق أن المندوب موجود
+    rep_r = await db.execute(
+        select(SalesRep).where(
+            SalesRep.id == rep_id,
+            SalesRep.tenant_id == user["tenant_id"],
+        )
+    )
+    rep = rep_r.scalar_one_or_none()
+    if not rep:
+        from fastapi import HTTPException
+        raise HTTPException(404, "المندوب غير موجود")
+
+    # تحديد نطاق التاريخ
+    if date:
+        target = datetime.strptime(date, "%Y-%m-%d").date()
+    else:
+        target = date_type.today()
+
+    day_start = datetime(target.year, target.month, target.day, 0, 0, 0)
+    day_end = datetime(target.year, target.month, target.day, 23, 59, 59)
+
+    locs_r = await db.execute(
+        select(RepLocation)
+        .where(
+            RepLocation.rep_id == rep_id,
+            RepLocation.tenant_id == user["tenant_id"],
+            RepLocation.recorded_at >= day_start,
+            RepLocation.recorded_at <= day_end,
+        )
+        .order_by(RepLocation.recorded_at.asc())
+    )
+    locs = locs_r.scalars().all()
+
+    return [
+        {
+            "id": loc.id,
+            "latitude": float(loc.latitude),
+            "longitude": float(loc.longitude),
+            "accuracy": float(loc.accuracy) if loc.accuracy else None,
+            "speed": float(loc.speed) if loc.speed else None,
+            "heading": float(loc.heading) if loc.heading else None,
+            "battery_level": loc.battery_level,
+            "is_moving": loc.is_moving,
+            "recorded_at": loc.recorded_at.isoformat(),
+        }
+        for loc in locs
+    ]
+
+
+# ══════════════════════════════════════════════════════════════════
 # نهاية الـ router
 # ══════════════════════════════════════════════════════════════════

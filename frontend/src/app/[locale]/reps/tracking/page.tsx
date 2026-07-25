@@ -1,0 +1,380 @@
+"use client";
+import { useEffect, useRef, useState, useCallback } from "react";
+import Link from "next/link";
+import { getAllRepsLiveLocations, getReps } from "@/lib/reps";
+
+/* ------------------------------------------------------------------ */
+/* الألوان المستخدمة للدبابيس — تتناوب حسب ترتيب المندوب              */
+/* ------------------------------------------------------------------ */
+const PIN_COLORS = [
+  "#2563EB", "#059669", "#DC2626", "#D97706", "#7C3AED",
+  "#0891B2", "#BE185D", "#15803D", "#B45309", "#4338CA",
+];
+
+/* تنسيق الوقت */
+const fmtTime = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  } catch { return "—"; }
+};
+
+const fmtDateTime = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch { return "—"; }
+};
+
+/* ------------------------------------------------------------------ */
+/* نوع بيانات الموقع                                                   */
+/* ------------------------------------------------------------------ */
+interface LiveLocation {
+  rep_id: string;
+  rep_code: string;
+  rep_name: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  battery_level?: number;
+  is_moving: boolean;
+  recorded_at: string;
+}
+
+/* ================================================================== */
+/* الصفحة الرئيسية                                                     */
+/* ================================================================== */
+export default function RepsTrackingPage({
+  params: { locale },
+}: {
+  params: { locale: string };
+}) {
+  const ar = locale === "ar";
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMap = useRef<any>(null);
+  const markersRef = useRef<Record<string, any>>({});
+
+  const [locations, setLocations] = useState<LiveLocation[]>([]);
+  const [allReps, setAllReps] = useState<any[]>([]);
+  const [filterRep, setFilterRep] = useState<string>("all");
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [selectedRep, setSelectedRep] = useState<LiveLocation | null>(null);
+
+  /* ── تحميل بيانات الموقع ────────────────────────────────────────── */
+  const fetchLocations = useCallback(async () => {
+    try {
+      const res = await getAllRepsLiveLocations();
+      setLocations(Array.isArray(res.data) ? res.data : []);
+      setLastUpdate(new Date());
+    } catch { /* صمت */ }
+    finally { setLoading(false); }
+  }, []);
+
+  /* ── تحميل قائمة المناديب للفلتر ───────────────────────────────── */
+  useEffect(() => {
+    getReps()
+      .then(r => setAllReps(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+  }, []);
+
+  /* ── تهيئة الخريطة (Leaflet) ────────────────────────────────────── */
+  useEffect(() => {
+    if (!mapRef.current || leafletMap.current) return;
+
+    // Leaflet يحتاج window → نستورده ديناميكياً
+    import("leaflet").then(L => {
+      // إصلاح أيقونات Leaflet الافتراضية عند استخدام Webpack
+      // @ts-ignore
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+
+      const map = L.map(mapRef.current!, {
+        center: [24.7136, 46.6753], // الرياض
+        zoom: 11,
+        zoomControl: true,
+      });
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(map);
+
+      leafletMap.current = { map, L };
+    });
+
+    return () => {
+      leafletMap.current?.map.remove();
+      leafletMap.current = null;
+    };
+  }, []);
+
+  /* ── تحديث الدبابيس عند تغير البيانات ─────────────────────────── */
+  useEffect(() => {
+    if (!leafletMap.current) return;
+    const { map, L } = leafletMap.current;
+
+    const visible = filterRep === "all"
+      ? locations
+      : locations.filter(l => l.rep_id === filterRep);
+
+    // إزالة دبابيس المناديب المحجوبين
+    const visibleIds = new Set(visible.map(l => l.rep_id));
+    Object.keys(markersRef.current).forEach(rid => {
+      if (!visibleIds.has(rid)) {
+        markersRef.current[rid].remove();
+        delete markersRef.current[rid];
+      }
+    });
+
+    visible.forEach((loc, idx) => {
+      const color = PIN_COLORS[idx % PIN_COLORS.length];
+      const initials = loc.rep_name
+        .split(" ")
+        .slice(0, 2)
+        .map((w: string) => w[0])
+        .join("")
+        .toUpperCase();
+
+      const iconHtml = `
+        <div style="
+          background:${color};
+          color:white;
+          border-radius:50% 50% 50% 0;
+          transform:rotate(-45deg);
+          width:36px;height:36px;
+          display:flex;align-items:center;justify-content:center;
+          box-shadow:0 2px 6px rgba(0,0,0,0.35);
+          border:2px solid white;
+          font-size:11px;font-weight:700;
+        ">
+          <span style="transform:rotate(45deg)">${initials}</span>
+        </div>`;
+
+      const icon = L.divIcon({
+        html: iconHtml,
+        iconSize: [36, 36],
+        iconAnchor: [18, 36],
+        popupAnchor: [0, -38],
+        className: "",
+      });
+
+      const popupContent = `
+        <div style="font-family:inherit;min-width:180px;padding:4px 0">
+          <div style="font-weight:700;font-size:14px;margin-bottom:6px;color:${color}">${loc.rep_name}</div>
+          <div style="font-size:12px;color:#6B7280;margin-bottom:4px">${loc.rep_code}</div>
+          <hr style="margin:6px 0;border-color:#E5E7EB"/>
+          <div style="font-size:12px;margin-bottom:3px">
+            <span style="color:#6B7280">${ar ? "آخر تحديث:" : "Last update:"}</span>
+            <strong style="margin-inline-start:4px">${fmtDateTime(loc.recorded_at)}</strong>
+          </div>
+          ${loc.speed != null ? `<div style="font-size:12px;margin-bottom:3px"><span style="color:#6B7280">${ar ? "السرعة:" : "Speed:"}</span> <strong>${loc.speed} km/h</strong></div>` : ""}
+          ${loc.battery_level != null ? `<div style="font-size:12px;margin-bottom:3px"><span style="color:#6B7280">${ar ? "البطارية:" : "Battery:"}</span> <strong>${loc.battery_level}%</strong></div>` : ""}
+          <div style="font-size:12px">
+            <span style="background:${loc.is_moving ? "#D1FAE5" : "#F3F4F6"};color:${loc.is_moving ? "#059669" : "#6B7280"};padding:2px 8px;border-radius:20px;font-weight:600">
+              ${loc.is_moving ? (ar ? "متحرك" : "Moving") : (ar ? "ثابت" : "Stationary")}
+            </span>
+          </div>
+        </div>`;
+
+      if (markersRef.current[loc.rep_id]) {
+        markersRef.current[loc.rep_id]
+          .setLatLng([loc.latitude, loc.longitude])
+          .setPopupContent(popupContent);
+      } else {
+        const marker = L.marker([loc.latitude, loc.longitude], { icon })
+          .addTo(map)
+          .bindPopup(popupContent);
+        markersRef.current[loc.rep_id] = marker;
+      }
+    });
+  }, [locations, filterRep, ar]);
+
+  /* ── جلب أولي + تحديث دوري كل 30 ثانية ────────────────────────── */
+  useEffect(() => {
+    fetchLocations();
+    const id = setInterval(fetchLocations, 30_000);
+    return () => clearInterval(id);
+  }, [fetchLocations]);
+
+  /* ── تحريك الخريطة نحو المندوب المختار ─────────────────────────── */
+  useEffect(() => {
+    if (!selectedRep || !leafletMap.current) return;
+    const { map } = leafletMap.current;
+    map.flyTo([selectedRep.latitude, selectedRep.longitude], 15, { duration: 1 });
+    markersRef.current[selectedRep.rep_id]?.openPopup();
+  }, [selectedRep]);
+
+  /* ── Leaflet CSS ────────────────────────────────────────────────── */
+  useEffect(() => {
+    const id = "leaflet-css";
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id;
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+  }, []);
+
+  /* ── المناديب المعروضون ─────────────────────────────────────────── */
+  const visibleLocations =
+    filterRep === "all" ? locations : locations.filter(l => l.rep_id === filterRep);
+
+  /* ================================================================ */
+  return (
+    <>
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <div className="breadcrumb">
+            <Link href={`/${locale}/reps/manage`}>{ar ? "المناديب" : "Sales Reps"}</Link>
+            <span className="breadcrumb-sep">/</span>
+            <span>{ar ? "خريطة المناديب" : "Reps Map"}</span>
+          </div>
+          <h1 className="page-title">{ar ? "خريطة المناديب الحية" : "Live Reps Map"}</h1>
+          {lastUpdate && (
+            <p className="page-subtitle">
+              {ar ? "آخر تحديث:" : "Last update:"}{" "}
+              {lastUpdate.toLocaleTimeString("en-US")}
+              {" · "}
+              {ar ? "يتجدد كل 30 ثانية" : "Refreshes every 30s"}
+            </p>
+          )}
+        </div>
+
+        {/* فلتر المندوب */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select
+            className="form-input"
+            style={{ minWidth: 180 }}
+            value={filterRep}
+            onChange={e => setFilterRep(e.target.value)}
+          >
+            <option value="all">{ar ? "جميع المناديب" : "All Reps"}</option>
+            {allReps.map((r: any) => (
+              <option key={r.id} value={r.id}>
+                {r.full_name} ({r.rep_code})
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="btn btn-secondary"
+            onClick={fetchLocations}
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            {ar ? "تحديث" : "Refresh"}
+          </button>
+        </div>
+      </div>
+
+      {/* Layout: قائمة جانبية + خريطة */}
+      <div style={{ display: "flex", gap: 16, height: "calc(100vh - 180px)", minHeight: 520 }}>
+
+        {/* القائمة الجانبية */}
+        <div style={{
+          width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8,
+          overflowY: "auto",
+        }}>
+          {loading && (
+            <div className="card" style={{ padding: 16, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+              {ar ? "جاري التحميل..." : "Loading..."}
+            </div>
+          )}
+
+          {!loading && visibleLocations.length === 0 && (
+            <div className="card" style={{ padding: 20, textAlign: "center" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto" }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                {ar ? "لا توجد مواقع مسجّلة" : "No locations recorded"}
+              </div>
+            </div>
+          )}
+
+          {visibleLocations.map((loc, idx) => {
+            const color = PIN_COLORS[idx % PIN_COLORS.length];
+            const isSelected = selectedRep?.rep_id === loc.rep_id;
+            return (
+              <div
+                key={loc.rep_id}
+                className="card"
+                onClick={() => setSelectedRep(isSelected ? null : loc)}
+                style={{
+                  padding: "12px 14px",
+                  cursor: "pointer",
+                  border: isSelected ? `2px solid ${color}` : "1px solid var(--border)",
+                  transition: "border-color 0.15s",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {/* مؤشر اللون */}
+                  <div style={{
+                    width: 10, height: 10, borderRadius: "50%",
+                    background: color, flexShrink: 0,
+                    boxShadow: loc.is_moving ? `0 0 0 3px ${color}33` : "none",
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {loc.rep_name}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {loc.rep_code}
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20,
+                    background: loc.is_moving ? "#D1FAE5" : "#F3F4F6",
+                    color: loc.is_moving ? "#059669" : "#6B7280",
+                    flexShrink: 0,
+                  }}>
+                    {loc.is_moving ? (ar ? "متحرك" : "Moving") : (ar ? "ثابت" : "Still")}
+                  </span>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-secondary)", display: "flex", justifyContent: "space-between" }}>
+                  <span>{fmtTime(loc.recorded_at)}</span>
+                  {loc.battery_level != null && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/></svg>
+                      {loc.battery_level}%
+                    </span>
+                  )}
+                </div>
+                <Link
+                  href={`/${locale}/reps/${loc.rep_id}`}
+                  onClick={e => e.stopPropagation()}
+                  style={{ display: "block", marginTop: 8, fontSize: 11, color: "var(--primary)", textDecoration: "none" }}
+                >
+                  {ar ? "عرض ملف المندوب" : "View profile"}
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* الخريطة */}
+        <div style={{ flex: 1, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative" }}>
+          <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
+
+          {/* عدّاد المناديب */}
+          <div style={{
+            position: "absolute", top: 12, right: 12, zIndex: 1000,
+            background: "white", borderRadius: 8, padding: "6px 12px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)", fontSize: 12, fontWeight: 600,
+          }}>
+            {visibleLocations.length} {ar ? "مندوب على الخريطة" : "reps on map"}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}

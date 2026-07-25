@@ -2,7 +2,7 @@
 نموذج المناديب (Sales Representatives)
 كل مندوب = مستخدم بدور sales_rep + مستودع خاص مرتبط به
 """
-from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Text, Date
+from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Text, Date, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, date
 from decimal import Decimal
@@ -42,4 +42,21 @@ class SalesRep(Base):
     commission_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RepLocation(Base):
+    __tablename__ = "rep_locations"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    rep_id: Mapped[str] = mapped_column(String, ForeignKey("sales_reps.id"), index=True)
+    latitude: Mapped[Decimal] = mapped_column(Numeric(10, 7))
+    longitude: Mapped[Decimal] = mapped_column(Numeric(10, 7))
+    accuracy: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    speed: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    heading: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
+    battery_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_moving: Mapped[bool] = mapped_column(Boolean, default=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
