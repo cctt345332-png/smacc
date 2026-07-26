@@ -301,8 +301,9 @@ async def invoice_pdf(
 
     ten_r = await db.execute(sa_select(Tenant).where(Tenant.id == user["tenant_id"]))
     ten = ten_r.scalar_one_or_none()
-    company_name = (ten.company_name_ar if ten else "") or ""
+    company_name = (ten.name if ten else "") or ""
     company_vat  = (ten.vat_number if ten else "") or ""
+    company_cr   = (ten.cr_number if ten else "") or ""
 
     def fmt(n):
         try: return f"{float(n or 0):,.2f}"
