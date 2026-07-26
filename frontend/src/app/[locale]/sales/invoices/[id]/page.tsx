@@ -80,6 +80,16 @@ export default function InvoiceDetailPage({ params: { locale, id } }: { params: 
 
   useEffect(() => { load(); }, [id]);
 
+  // طباعة تلقائية إذا جاء ?print=1
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("print") === "1" && invoice) {
+        setTimeout(() => window.print(), 800);
+      }
+    }
+  }, [invoice]);
+
   const handleConfirm = async () => {
     if (!confirm(ar ? "تأكيد الفاتورة؟" : "Confirm this invoice?")) return;
     setActing(true);

@@ -11,23 +11,13 @@ const fmtDate = (d: any) =>
 /* ── زر تحميل PDF ────────────────────────────────────────────────── */
 function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; invoiceNumber: string; locale: string }) {
   const ar = locale === "ar";
-  const [loading, setLoading] = useState(false);
 
-  const handleDownload = async () => {
-    setLoading(true);
-    try {
-      const res = await api.get(`/sales/invoices/${invoiceId}/pdf`, { responseType: "text" });
-      const blob = new Blob([res.data], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } catch {
-      alert(ar ? "تعذّر تحميل PDF" : "Could not download PDF");
-    } finally { setLoading(false); }
+  const handleDownload = () => {
+    window.open(`/${locale}/sales/invoices/${invoiceId}?print=1`, "_blank");
   };
 
   return (
-    <button onClick={handleDownload} disabled={loading}
+    <button onClick={handleDownload}
       style={{
         width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #BFDBFE",
         background: "#EFF6FF", color: "#2563EB", fontWeight: 700, fontSize: 14,
@@ -37,7 +27,7 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
       </svg>
-      {loading ? (ar ? "جاري التحميل..." : "Downloading...") : (ar ? "تحميل PDF" : "Download PDF")}
+      {ar ? "طباعة / PDF" : "Print / PDF"}
     </button>
   );
 }
