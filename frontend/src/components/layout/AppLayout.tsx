@@ -31,7 +31,7 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
     }
     // إذا الدور sales_rep — يُوجَّه دائماً لواجهة المندوب المخصصة
     if (user.role === "sales_rep") {
-      router.replace(`/${locale}/reps/dashboard`);
+      router.replace(`/${locale}/reps/me/dashboard`);
     }
   }, [_hasHydrated, token, user, pathname, locale, router]);
 

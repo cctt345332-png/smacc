@@ -73,8 +73,8 @@ function MoreDrawer({
 }) {
   const base = `/${locale}`;
   const links = [
-    { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/payments`,  color: "#059669" },
-    { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/reports`,   color: "#7C3AED" },
+    { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/me/payments`,  color: "#059669" },
+    { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/reports`,      color: "#7C3AED" },
   ];
 
   return (
@@ -219,10 +219,10 @@ export default function RepLayout({
 
   /* Bottom nav items */
   const navItems = [
-    { key: "home",      icon: NavIcons.home,      label: ar ? "الرئيسية" : "Home",      href: `${base}/reps/dashboard` },
-    { key: "invoices",  icon: NavIcons.invoice,   label: ar ? "الفواتير" : "Invoices",  href: `${base}/reps/invoices` },
-    { key: "customers", icon: NavIcons.customers, label: ar ? "العملاء" : "Customers",  href: `${base}/reps/customers` },
-    { key: "stock",     icon: NavIcons.stock,     label: ar ? "المخزون" : "Stock",      href: `${base}/reps/stock` },
+    { key: "home",      icon: NavIcons.home,      label: ar ? "الرئيسية" : "Home",      href: `${base}/reps/me/dashboard` },
+    { key: "invoices",  icon: NavIcons.invoice,   label: ar ? "الفواتير" : "Invoices",  href: `${base}/reps/me/invoices` },
+    { key: "customers", icon: NavIcons.customers, label: ar ? "العملاء" : "Customers",  href: `${base}/reps/me/customers` },
+    { key: "stock",     icon: NavIcons.stock,     label: ar ? "المخزون" : "Stock",      href: `${base}/reps/me/stock` },
     { key: "more",      icon: NavIcons.more,      label: ar ? "المزيد" : "More",        href: null },
   ];
 
