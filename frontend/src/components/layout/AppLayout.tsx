@@ -29,16 +29,9 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
         router.replace(`/${locale}/pos/cashier`);
       }
     }
-    // إذا الدور sales_rep — يُسمح فقط بصفحات المبيعات والعملاء والمخزون
+    // إذا الدور sales_rep — يُوجَّه دائماً لواجهة المندوب المخصصة
     if (user.role === "sales_rep") {
-      const allowed = [
-        `/${locale}/sales`,
-        `/${locale}/inventory/stock`,
-        `/${locale}/dashboard`,
-      ].some(p => pathname.startsWith(p));
-      if (!allowed) {
-        router.replace(`/${locale}/sales/invoices`);
-      }
+      router.replace(`/${locale}/reps/dashboard`);
     }
   }, [_hasHydrated, token, user, pathname, locale, router]);
 
@@ -93,21 +86,15 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
     );
   }
 
-  // المندوب — layout عادي مع sidebar مبسط
+  // المندوب — يُوجَّه لواجهته الخاصة، لا يدخل AppLayout
   if (user?.role === "sales_rep") {
-    if (![
-      `/${locale}/sales`,
-      `/${locale}/inventory`,
-      `/${locale}/dashboard`,
-    ].some(p => pathname.startsWith(p))) {
-      return (
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
-          <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
-            {locale === "ar" ? "جاري التحميل..." : "Loading..."}
-          </div>
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
+        <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+          {locale === "ar" ? "جاري التحميل..." : "Loading..."}
         </div>
-      );
-    }
+      </div>
+    );
   }
 
   return (

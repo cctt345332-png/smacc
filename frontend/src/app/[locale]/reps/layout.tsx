@@ -1,4 +1,4 @@
-import AppLayout from "@/components/layout/AppLayout";
+import RepLayout from "@/components/layout/RepLayout";
 export default function Layout({ children, params: { locale } }: { children: React.ReactNode; params: { locale: string } }) {
-  return <AppLayout locale={locale}>{children}</AppLayout>;
+  return <RepLayout locale={locale}>{children}</RepLayout>;
 }
