@@ -5,14 +5,251 @@ import api from "@/lib/api";
 import { getReps } from "@/lib/reps";
 
 const fmt  = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
-const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US") : "—";
+const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year:"numeric", month:"short", day:"numeric" }) : "—";
 
 const PAY_METHOD: Record<string, { ar: string; color: string }> = {
-  cash:     { ar: "نقد",       color: "#059669" },
-  credit:   { ar: "آجل",       color: "#D97706" },
-  cheque:   { ar: "شيك",       color: "#7C3AED" },
-  transfer: { ar: "تحويل",     color: "#2563EB" },
+  cash:     { ar: "نقد",    color: "#059669" },
+  credit:   { ar: "آجل",   color: "#D97706" },
+  cheque:   { ar: "شيك",   color: "#7C3AED" },
+  transfer: { ar: "تحويل", color: "#2563EB" },
 };
+
+const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
+  draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
+  submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
+  approved:  { ar: "موافق عليها",      color: "#2563EB", bg: "#EFF6FF" },
+  rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
+  confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
+  paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+  partial:   { ar: "جزئي",             color: "#D97706", bg: "#FEF3C7" },
+  cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
+};
+
+/* ── مكوّن modal تفاصيل الفاتورة ────────────────────────────────── */
+function InvoiceDetailModal({
+  inv, locale, repName, onClose, onApprove, onReject, actionLoad,
+}: {
+  inv: any; locale: string; repName: string;
+  onClose: () => void;
+  onApprove: (id: string) => void;
+  onReject: (inv: any) => void;
+  actionLoad: string | null;
+}) {
+  const ar = locale === "ar";
+  const [detail, setDetail] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  useEffect(() => {
+    api.get(`/sales/invoices/${inv.id}`)
+      .then(r => setDetail(r.data))
+      .catch(() => setDetail(inv))
+      .finally(() => setLoading(false));
+  }, [inv.id]);
+
+  const handlePDF = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get(`/sales/invoices/${inv.id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${inv.invoice_number}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert(ar ? "تعذّر تحميل PDF" : "Could not download PDF");
+    } finally { setDownloading(false); }
+  };
+
+  const st = STATUS[inv.status] || STATUS.submitted;
+  const d = detail || inv;
+  const remaining = Number(d.total || 0) - Number(d.paid_amount || 0);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 400,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 620,
+        maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* رأس */}
+        <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid var(--border)",
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+              <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#2563EB" }}>
+                {inv.invoice_number}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                background: st.bg, color: st.color }}>{ar ? st.ar : inv.status}</span>
+            </div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+              {ar ? "المندوب:" : "Rep:"} <strong>{repName}</strong>
+              {" · "}
+              {ar ? "العميل:" : "Customer:"} <strong>{d.buyer_name_ar}</strong>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={handlePDF} disabled={downloading}
+              style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #BFDBFE",
+                background: "#EFF6FF", color: "#2563EB", fontSize: 13, fontWeight: 600,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              {downloading ? "..." : "PDF"}
+            </button>
+            <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8,
+              border: "1px solid var(--border)", background: "transparent", cursor: "pointer",
+              fontSize: 18, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              ×
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+            {ar ? "جاري التحميل..." : "Loading..."}
+          </div>
+        ) : (
+          <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
+
+            {/* بيانات الدفع */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              {[
+                { label: ar ? "تاريخ الإصدار" : "Issue Date",  value: fmtD(d.issue_date) },
+                { label: ar ? "طريقة الدفع" : "Payment",
+                  value: d.payment_type === "cash" ? (ar ? "نقدي" : "Cash") :
+                         d.payment_type === "credit" ? (ar ? `آجل (${d.credit_days || 30} يوم)` : `Credit (${d.credit_days || 30}d)`) :
+                         d.invoice_payment_method || d.payment_type || "—" },
+                { label: ar ? "تاريخ الاستحقاق" : "Due Date",  value: fmtD(d.due_date) },
+              ].map(f => (
+                <div key={f.label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>{f.label}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{f.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* سبب الرفض */}
+            {d.status === "rejected" && d.rejection_note && (
+              <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10,
+                padding: "10px 14px", color: "#DC2626", fontSize: 13 }}>
+                <strong>{ar ? "سبب الرفض: " : "Rejection reason: "}</strong>{d.rejection_note}
+              </div>
+            )}
+
+            {/* أسطر الفاتورة */}
+            {d.lines && d.lines.length > 0 && (
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: "var(--text-secondary)",
+                  textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {ar ? "أسطر الفاتورة" : "Invoice Lines"}
+                </div>
+                <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#F8FAFC", borderBottom: "1px solid var(--border)" }}>
+                        <th style={{ padding: "8px 12px", textAlign: "start", fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الصنف" : "Item"}</th>
+                        <th style={{ padding: "8px 12px", width: 70, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الكمية" : "Qty"}</th>
+                        <th style={{ padding: "8px 12px", width: 100, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "السعر" : "Price"}</th>
+                        <th style={{ padding: "8px 12px", width: 80, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "ضريبة%" : "VAT%"}</th>
+                        <th style={{ padding: "8px 12px", width: 110, textAlign: "end", fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الإجمالي" : "Total"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.lines.map((line: any, i: number) => (
+                        <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                          <td style={{ padding: "10px 12px" }}>
+                            <div style={{ fontWeight: 600 }}>{line.description_ar}</div>
+                            {line.serial_numbers?.length > 0 && (
+                              <div style={{ fontSize: 11, color: "#7C3AED", marginTop: 2, fontFamily: "monospace" }}>
+                                {line.serial_numbers.slice(0, 3).join(", ")}
+                                {line.serial_numbers.length > 3 && ` +${line.serial_numbers.length - 3}`}
+                              </div>
+                            )}
+                            {line.discount_pct > 0 && (
+                              <div style={{ fontSize: 11, color: "#DC2626" }}>خصم {line.discount_pct}%</div>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 12px", fontWeight: 600 }}>{line.quantity}</td>
+                          <td style={{ padding: "10px 12px" }}>{fmt(line.unit_price)} SAR</td>
+                          <td style={{ padding: "10px 12px", color: "#D97706" }}>{line.vat_rate || 15}%</td>
+                          <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 700, color: "#2563EB" }}>
+                            {fmt(line.total || (line.quantity * line.unit_price))} SAR
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* ملخص المبالغ */}
+            <div style={{ background: "#F8FAFC", borderRadius: 12, padding: "14px 16px" }}>
+              {[
+                { label: ar ? "المبلغ قبل الضريبة" : "Subtotal", value: fmt(d.subtotal || 0), color: "var(--text-primary)" },
+                { label: ar ? "الخصم" : "Discount",              value: `- ${fmt(d.discount_amount || 0)}`, color: "#DC2626" },
+                { label: ar ? "ضريبة القيمة المضافة 15%" : "VAT 15%", value: fmt(d.vat_amount || 0), color: "#D97706" },
+              ].map(r => (
+                <div key={r.label} style={{ display: "flex", justifyContent: "space-between",
+                  padding: "5px 0", fontSize: 13, borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{r.label}</span>
+                  <span style={{ fontWeight: 600, color: r.color }}>{r.value} SAR</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 4px",
+                fontWeight: 800, fontSize: 16 }}>
+                <span>{ar ? "الإجمالي" : "Total"}</span>
+                <span style={{ color: "#2563EB" }}>{fmt(d.total)} SAR</span>
+              </div>
+              {Number(d.paid_amount || 0) > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "#059669" }}>{ar ? "المدفوع" : "Paid"}</span>
+                  <span style={{ fontWeight: 700, color: "#059669" }}>{fmt(d.paid_amount)} SAR</span>
+                </div>
+              )}
+              {remaining > 0.01 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ color: "#DC2626" }}>{ar ? "المتبقي" : "Remaining"}</span>
+                  <span style={{ fontWeight: 700, color: "#DC2626" }}>{fmt(remaining)} SAR</span>
+                </div>
+              )}
+            </div>
+
+            {/* ملاحظات */}
+            {d.notes && (
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "10px 14px" }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>{ar ? "ملاحظات" : "Notes"}</div>
+                <div style={{ fontSize: 13 }}>{d.notes}</div>
+              </div>
+            )}
+
+            {/* أزرار الإجراء — فقط للفواتير submitted */}
+            {inv.status === "submitted" && (
+              <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+                <button onClick={() => { onApprove(inv.id); onClose(); }} disabled={actionLoad === inv.id}
+                  style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none",
+                    background: "#059669", color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                  {actionLoad === inv.id ? "..." : (ar ? "موافقة على الفاتورة" : "Approve Invoice")}
+                </button>
+                <button onClick={() => { onReject(inv); onClose(); }}
+                  style={{ flex: 1, padding: "12px", borderRadius: 10, border: "1px solid #FECACA",
+                    background: "#FEF2F2", color: "#DC2626", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                  {ar ? "رفض" : "Reject"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ReviewPage({ params: { locale } }: { params: { locale: string } }) {
   const ar = locale === "ar";
@@ -27,6 +264,7 @@ export default function ReviewPage({ params: { locale } }: { params: { locale: s
   const [rejectModal, setRejectModal] = useState<any>(null);
   const [rejectNote, setRejectNote]   = useState("");
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [detailModal, setDetailModal] = useState<any>(null);
 
   const load = async () => {
     setLoading(true);
@@ -209,8 +447,11 @@ export default function ReviewPage({ params: { locale } }: { params: { locale: s
                       <td>
                         <input type="checkbox" checked={selected.has(inv.id)} onChange={() => toggleSelect(inv.id)} />
                       </td>
-                      <td style={{ fontWeight: 700, color: "var(--primary)", fontFamily: "monospace" }}>
-                        {inv.invoice_number}
+                      <td style={{ fontWeight: 700, color: "var(--primary)", fontFamily: "monospace", cursor: "pointer" }}
+                        onClick={() => setDetailModal(inv)}>
+                        <span style={{ textDecoration: "underline", textDecorationStyle: "dotted" }}>
+                          {inv.invoice_number}
+                        </span>
                       </td>
                       <td>
                         <Link href={`/${locale}/reps/${inv.rep_id}`} style={{ color: "var(--primary)", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
@@ -288,6 +529,19 @@ export default function ReviewPage({ params: { locale } }: { params: { locale: s
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal تفاصيل الفاتورة */}
+      {detailModal && (
+        <InvoiceDetailModal
+          inv={detailModal}
+          locale={locale}
+          repName={repMap[detailModal.rep_id] || "—"}
+          onClose={() => setDetailModal(null)}
+          onApprove={doApprove}
+          onReject={(inv) => { setRejectModal(inv); setRejectNote(""); }}
+          actionLoad={actionLoad}
+        />
       )}
     </>
   );

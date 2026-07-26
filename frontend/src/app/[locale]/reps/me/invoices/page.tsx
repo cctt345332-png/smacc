@@ -8,6 +8,42 @@ const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFraction
 const fmtDate = (d: any) =>
   d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
 
+/* ── زر تحميل PDF ────────────────────────────────────────────────── */
+function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; invoiceNumber: string; locale: string }) {
+  const ar = locale === "ar";
+  const [loading, setLoading] = useState(false);
+
+  const handleDownload = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/sales/invoices/${invoiceId}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${invoiceNumber}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert(ar ? "تعذّر تحميل PDF" : "Could not download PDF");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <button onClick={handleDownload} disabled={loading}
+      style={{
+        width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #BFDBFE",
+        background: "#EFF6FF", color: "#2563EB", fontWeight: 700, fontSize: 14,
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+      }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      {loading ? (ar ? "جاري التحميل..." : "Downloading...") : (ar ? "تحميل PDF" : "Download PDF")}
+    </button>
+  );
+}
+
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   draft:     { ar: "مسودة",              color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة",   color: "#D97706", bg: "#FEF3C7" },
@@ -174,6 +210,11 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
                 </div>
                 <div style={{ fontSize: 13 }}>{data.notes}</div>
               </div>
+            )}
+
+            {/* زر تحميل PDF — بعد الموافقة */}
+            {["approved", "confirmed", "paid", "partial"].includes(inv.status) && (
+              <PDFButton invoiceId={inv.id} invoiceNumber={inv.invoice_number} locale={locale} />
             )}
           </div>
         )}
