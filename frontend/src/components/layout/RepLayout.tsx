@@ -150,11 +150,16 @@ export default function RepLayout({
   const { user, token, logout, _hasHydrated } = useAuthStore();
   const [unread, setUnread] = useState(0);
   const [moreOpen, setMoreOpen] = useState(false);
+  // نتحقق من الـ hydration مباشرة من localStorage لتجنب الشاشة البيضاء
+  const [mounted, setMounted] = useState(false);
 
-  /* auth guard */
+  useEffect(() => { setMounted(true); }, []);
+
+  /* auth guard — بعد الـ mount فقط */
   useEffect(() => {
-    if (_hasHydrated && !token) router.replace(`/${locale}/login`);
-  }, [_hasHydrated, token]);
+    if (!mounted) return;
+    if (!token) router.replace(`/${locale}/login`);
+  }, [mounted, token]);
 
   /* جلب التنبيهات */
   useEffect(() => {
@@ -208,7 +213,7 @@ export default function RepLayout({
     router.push(window.location.pathname.replace(`/${locale}`, `/${newLocale}`));
   };
 
-  if (!_hasHydrated) {
+  if (!mounted) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
         <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>
