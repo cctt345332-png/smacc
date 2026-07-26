@@ -158,7 +158,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
           <div style={{ fontSize: 13, color: "#92400E", flex: 1 }}>
             <strong>{lowStock.length}</strong> {ar ? " صنف مخزونه منخفض" : " items low in stock"}
           </div>
-          <Link href={`${base}/reps/stock`} style={{ fontSize: 12, color: "#D97706", fontWeight: 700, textDecoration: "none", flexShrink: 0 }}>
+          <Link href={`${base}/reps/me/stock`} style={{ fontSize: 12, color: "#D97706", fontWeight: 700, textDecoration: "none", flexShrink: 0 }}>
             {ar ? "عرض" : "View"}
           </Link>
         </div>
@@ -226,19 +226,19 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <ActionCard icon={Icons.newInvoice} label={ar ? "فاتورة جديدة" : "New Invoice"}
             desc={ar ? "اصدر فاتورة مبيعات جديدة" : "Create a new sales invoice"}
-            color="#2563EB" href={`${base}/reps/invoices/new`} />
+            color="#2563EB" href={`${base}/reps/me/invoices/new`} />
           <ActionCard icon={Icons.customers} label={ar ? "عملائي" : "My Customers"}
             desc={ar ? "عرض وإدارة عملائك" : "View and manage your customers"}
-            color="#059669" href={`${base}/reps/customers`} />
+            color="#059669" href={`${base}/reps/me/customers`} />
           <ActionCard icon={Icons.stock} label={ar ? "مخزوني" : "My Stock"}
             desc={ar ? `${stock.length} صنف متاح` : `${stock.length} items available`}
-            color="#D97706" href={`${base}/reps/stock`} />
+            color="#D97706" href={`${base}/reps/me/stock`} />
           <ActionCard icon={Icons.receipt} label={ar ? "سندات القبض" : "Receipts"}
             desc={ar ? "سندات القبض من العملاء" : "Customer payment receipts"}
-            color="#7C3AED" href={`${base}/reps/payments`} />
+            color="#7C3AED" href={`${base}/reps/me/payments`} />
           <ActionCard icon={Icons.newCustomer} label={ar ? "عميل جديد" : "New Customer"}
             desc={ar ? "أضف عميلاً جديداً" : "Add a new customer"}
-            color="#0891B2" href={`${base}/reps/customers?action=new`} />
+            color="#0891B2" href={`${base}/reps/me/customers?action=new`} />
           <ActionCard icon={Icons.reports} label={ar ? "تقاريري" : "My Reports"}
             desc={ar ? "عرض تقارير أدائك" : "View your performance reports"}
             color="#DC2626" href={`${base}/reps/reports`} />
@@ -252,7 +252,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
               {ar ? "آخر الفواتير" : "Recent Invoices"}
             </div>
-            <Link href={`${base}/reps/invoices`} style={{ fontSize: 12, color: "#2563EB", fontWeight: 700, textDecoration: "none" }}>
+            <Link href={`${base}/reps/me/invoices`} style={{ fontSize: 12, color: "#2563EB", fontWeight: 700, textDecoration: "none" }}>
               {ar ? "عرض الكل" : "View all"}
             </Link>
           </div>

@@ -1,0 +1,59 @@
+{
+  "name": "masar-pos",
+  "version": "1.0.0",
+  "description": "Masar POS — تطبيق نقطة البيع",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run next:dev\" \"wait-on http://localhost:3001 && electron .\"",
+    "next:dev": "next dev -p 3001",
+    "next:build": "next build",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "start": "electron ."
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "electron-store": "^11.0.2",
+    "next": "14.2.3",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "concurrently": "^8.2.2",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.masar.pos",
+    "productName": "Masar POS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [],
+    "win": {
+      "target": "nsis",
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Masar POS"
+    }
+  }
+}
