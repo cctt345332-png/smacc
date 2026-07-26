@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getMySummary, getMyStock, getMyInvoices } from "@/lib/reps";
 import { useAuthStore } from "@/store/authStore";
+import api from "@/lib/api";
 
 const fmt = (n: any) =>
   Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -97,6 +98,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
   const [stock, setStock]       = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
   useEffect(() => {
     Promise.all([
@@ -271,17 +273,22 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
               const sc = statusColors[inv.status] || "#94A3B8";
               const sl = statusLabels[inv.status] || { ar: inv.status, en: inv.status };
               return (
-                <Link key={inv.id} href={`${base}/sales/invoices/${inv.id}`}
-                  style={{ textDecoration: "none" }}>
+                <div key={inv.id} onClick={() => setSelectedInvoice(inv)}
+                  style={{ cursor: "pointer" }}>
                   <div style={{
                     background: "var(--surface)", borderRadius: 14, padding: "14px 16px",
                     border: "1px solid var(--border)", display: "flex",
                     alignItems: "center", gap: 12,
-                  }}>
+                    transition: "border-color 0.15s",
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.borderColor = sc)}
+                    onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+                    onTouchStart={e => (e.currentTarget.style.borderColor = sc)}
+                    onTouchEnd={e => (e.currentTarget.style.borderColor = "var(--border)")}>
                     <div style={{
                       width: 42, height: 42, borderRadius: 12, background: sc + "18",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      color: sc, flexShrink: 0, fontSize: 20,
+                      color: sc, flexShrink: 0,
                     }}>{Icons.invoice}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 13, fontFamily: "monospace" }}>
@@ -297,8 +304,12 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
                         {ar ? sl.ar : sl.en}
                       </div>
                     </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2.5" style={{ color: "var(--text-muted)", flexShrink: 0 }}>
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -307,6 +318,181 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
 
       {/* مسافة نهاية الصفحة */}
       <div style={{ height: 8 }} />
+      {/* modal تفاصيل الفاتورة */}
+      {selectedInvoice && (
+        <DashInvoiceModal
+          inv={selectedInvoice}
+          locale={locale}
+          onClose={() => setSelectedInvoice(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Modal بسيط لتفاصيل الفاتورة من الداشبورد ──────────────────── */
+function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onClose: () => void }) {
+  const ar = locale === "ar";
+  const [detail, setDetail] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
+    draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
+    submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
+    approved:  { ar: "موافق عليها",      color: "#2563EB", bg: "#EFF6FF" },
+    rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
+    confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
+    paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+    partial:   { ar: "جزئي",             color: "#D97706", bg: "#FEF3C7" },
+    cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
+  };
+
+  const fmt2 = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
+  const fmtD2 = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
+
+  useEffect(() => {
+    api.get(`/sales/invoices/${inv.id}`)
+      .then(r => setDetail(r.data))
+      .catch(() => setDetail(inv))
+      .finally(() => setLoading(false));
+  }, [inv.id]);
+
+  const handlePDF = async () => {
+    setDownloading(true);
+    try {
+      const res = await api.get(`/sales/invoices/${inv.id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `${inv.invoice_number}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { alert(ar ? "تعذّر تحميل PDF" : "Could not download PDF"); }
+    finally { setDownloading(false); }
+  };
+
+  const st = STATUS[inv.status] || STATUS.draft;
+  const d = detail || inv;
+  const remaining = Number(d.total || 0) - Number(d.paid_amount || 0);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 800,
+      display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+      onClick={onClose}>
+      <div style={{ background: "var(--surface)", borderRadius: "20px 20px 0 0",
+        width: "100%", maxWidth: 580, maxHeight: "92vh", overflowY: "auto", padding: "0 0 32px" }}
+        onClick={e => e.stopPropagation()}>
+
+        <div style={{ padding: "14px 20px 0", textAlign: "center" }}>
+          <div style={{ width: 40, height: 4, background: "var(--border)", borderRadius: 2, margin: "0 auto 14px" }} />
+        </div>
+
+        <div style={{ padding: "0 20px 14px", borderBottom: "1px solid var(--border)",
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+              <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 17, color: "#2563EB" }}>{inv.invoice_number}</span>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: st.bg, color: st.color }}>{ar ? st.ar : inv.status}</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.buyer_name_ar}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {["approved","confirmed","paid","partial"].includes(inv.status) && (
+              <button onClick={handlePDF} disabled={downloading}
+                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #BFDBFE",
+                  background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 5 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                {downloading ? "..." : "PDF"}
+              </button>
+            )}
+            <button onClick={onClose} style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--border)",
+              background: "transparent", cursor: "pointer", fontSize: 16, color: "var(--text-muted)" }}>×</button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 30, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+            {ar ? "جاري التحميل..." : "Loading..."}
+          </div>
+        ) : (
+          <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {[
+                { label: ar ? "التاريخ" : "Date", value: fmtD2(d.issue_date) },
+                { label: ar ? "طريقة الدفع" : "Payment", value: d.payment_type === "cash" ? (ar ? "نقدي" : "Cash") : (ar ? "آجل" : "Credit") },
+                { label: ar ? "تاريخ الاستحقاق" : "Due", value: fmtD2(d.due_date) },
+                { label: ar ? "العميل" : "Customer", value: d.buyer_name_ar },
+              ].map(f => (
+                <div key={f.label} style={{ background: "var(--bg)", borderRadius: 10, padding: "9px 12px" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>{f.label}</div>
+                  <div style={{ fontWeight: 600, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {d.status === "rejected" && d.rejection_note && (
+              <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", color: "#DC2626", fontSize: 13 }}>
+                <strong>{ar ? "سبب الرفض: " : "Rejected: "}</strong>{d.rejection_note}
+              </div>
+            )}
+
+            {d.lines?.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {ar ? "الأصناف" : "Items"}
+                </div>
+                {d.lines.map((line: any, i: number) => (
+                  <div key={i} style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 14px",
+                    display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{line.description_ar}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                        {line.quantity} × {fmt2(line.unit_price)} SAR
+                        {line.discount_pct > 0 && ` — خصم ${line.discount_pct}%`}
+                      </div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: "#2563EB", flexShrink: 0, marginInlineStart: 12 }}>
+                      {fmt2(line.total || line.quantity * line.unit_price)} SAR
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ background: "var(--bg)", borderRadius: 12, padding: "12px 16px" }}>
+              {[
+                { label: ar ? "قبل الضريبة" : "Subtotal", value: fmt2(d.subtotal || 0), color: "var(--text-primary)" },
+                { label: ar ? "ضريبة 15%" : "VAT 15%", value: fmt2(d.vat_amount || 0), color: "#D97706" },
+              ].map(r => (
+                <div key={r.label} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13, borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{r.label}</span>
+                  <span style={{ fontWeight: 600, color: r.color }}>{r.value} SAR</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 0", fontWeight: 800, fontSize: 16 }}>
+                <span>{ar ? "الإجمالي" : "Total"}</span>
+                <span style={{ color: "#2563EB" }}>{fmt2(d.total)} SAR</span>
+              </div>
+              {Number(d.paid_amount || 0) > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 4 }}>
+                  <span style={{ color: "#059669" }}>{ar ? "المدفوع" : "Paid"}</span>
+                  <span style={{ fontWeight: 700, color: "#059669" }}>{fmt2(d.paid_amount)} SAR</span>
+                </div>
+              )}
+              {remaining > 0.01 && (
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 4 }}>
+                  <span style={{ color: "#DC2626" }}>{ar ? "المتبقي" : "Remaining"}</span>
+                  <span style={{ fontWeight: 700, color: "#DC2626" }}>{fmt2(remaining)} SAR</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

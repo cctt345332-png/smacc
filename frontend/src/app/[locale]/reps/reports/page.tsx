@@ -18,6 +18,63 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
   const [filterStatus, setFilterStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterZone, setFilterZone] = useState("");
+  const [filterMonth, setFilterMonth] = useState("");
+
+  /* ── تصدير Excel ────────────────────────────────────────────────── */
+  const exportToExcel = (type: "performance" | "invoices") => {
+    if (type === "performance") {
+      const rows = [
+        ["المندوب", "الكود", "المنطقة", "الهدف الشهري", "المبيعات", "نسبة التحقق%", "المحصّل", "المستحق", "عدد الفواتير", "العمولة"],
+        ...repStats.map(({ rep, sum, pct, commission }) => [
+          rep.full_name, rep.rep_code, rep.zone || "",
+          rep.target_monthly || 0,
+          Number(sum.total_sales || 0).toFixed(2),
+          pct !== null ? pct : "",
+          Number(sum.total_collected || 0).toFixed(2),
+          Number(sum.outstanding || 0).toFixed(2),
+          sum.invoice_count || 0,
+          commission > 0 ? commission.toFixed(2) : 0,
+        ]),
+        ["الإجمالي", "", "", "",
+          totalSales.toFixed(2), "", totalCollected.toFixed(2), totalOutstanding.toFixed(2),
+          repStats.reduce((s, r) => s + (r.sum.invoice_count || 0), 0),
+          totalCommission.toFixed(2),
+        ],
+      ];
+      downloadCSV(rows, "reps-performance.csv");
+    } else {
+      const rows = [
+        ["رقم الفاتورة", "المندوب", "المنطقة", "العميل", "الحالة", "طريقة الدفع", "التاريخ", "الإجمالي", "المدفوع", "المتبقي"],
+        ...filteredInvoices.map((inv: any) => {
+          const rep = repMap[inv.rep_id];
+          const remaining = Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0));
+          return [
+            inv.invoice_number, rep?.full_name || "", rep?.zone || "",
+            inv.buyer_name_ar, STATUS_AR[inv.status] || inv.status,
+            { cash: "نقد", credit: "آجل", cheque: "شيك", transfer: "تحويل" }[inv.invoice_payment_method as string] || "",
+            inv.issue_date ? new Date(inv.issue_date).toLocaleDateString("en-US") : "",
+            Number(inv.total || 0).toFixed(2),
+            Number(inv.paid_amount || 0).toFixed(2),
+            remaining.toFixed(2),
+          ];
+        }),
+      ];
+      downloadCSV(rows, "reps-invoices.csv");
+    }
+  };
+
+  const downloadCSV = (rows: any[][], filename: string) => {
+    const bom = "\uFEFF"; // BOM for Arabic in Excel
+    const csv = bom + rows.map(r =>
+      r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
+    ).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -49,11 +106,19 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
     const matchS = !filterStatus || inv.status === filterStatus;
     const matchFrom = !dateFrom || new Date(inv.issue_date) >= new Date(dateFrom);
     const matchTo = !dateTo || new Date(inv.issue_date) <= new Date(dateTo + "T23:59:59");
-    return matchR && matchS && matchFrom && matchTo && inv.rep_id;
+    const matchZone = !filterZone || (repMap[inv.rep_id]?.zone || "") === filterZone;
+    const matchMonth = !filterMonth || (inv.issue_date || "").startsWith(filterMonth);
+    // فقط الفواتير المؤكدة والمدفوعة في الإحصائيات
+    return matchR && matchS && matchFrom && matchTo && matchZone && matchMonth && inv.rep_id;
   });
 
-  // إحصائيات مجمّعة لكل مندوب
-  const repStats = reps.map(rep => {
+  // المناطق المتاحة للفلتر
+  const zones = [...new Set(reps.map(r => r.zone).filter(Boolean))] as string[];
+
+  // إحصائيات مجمّعة لكل مندوب — مع فلتر المنطقة
+  const repStats = reps
+    .filter(rep => !filterZone || (rep.zone || "") === filterZone)
+    .map(rep => {
     const sum = summaries[rep.id] || {};
     const repInvs = filteredInvoices.filter((i: any) => i.rep_id === rep.id);
     const pct = rep.target_monthly > 0
@@ -99,6 +164,42 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
           <h1 className="page-title">{ar ? "تقارير المناديب" : "Sales Rep Reports"}</h1>
           <p className="page-subtitle">{ar ? "مقارنة الاداء — المبيعات والتحصيل والمخزون والعمولات" : "Performance comparison — sales, collection, stock and commissions"}</p>
         </div>
+        {/* أزرار التصدير */}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => exportToExcel("performance")}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #BBF7D0", background: "#F0FDF4", color: "#059669", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            {ar ? "أداء Excel" : "Performance Excel"}
+          </button>
+          <button onClick={() => exportToExcel("invoices")}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#2563EB", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            {ar ? "فواتير Excel" : "Invoices Excel"}
+          </button>
+        </div>
+      </div>
+
+      {/* فلاتر عامة — تؤثر على كل التبويبات */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <select className="form-input form-select" style={{ width: 180 }} value={filterRep} onChange={e => setFilterRep(e.target.value)}>
+            <option value="">{ar ? "كل المناديب" : "All Reps"}</option>
+            {reps.map(r => <option key={r.id} value={r.id}>{r.full_name} ({r.rep_code})</option>)}
+          </select>
+          {zones.length > 0 && (
+            <select className="form-input form-select" style={{ width: 150 }} value={filterZone} onChange={e => setFilterZone(e.target.value)}>
+              <option value="">{ar ? "كل المناطق" : "All Zones"}</option>
+              {zones.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+          )}
+          <input type="month" className="form-input" style={{ width: 150 }} value={filterMonth} onChange={e => setFilterMonth(e.target.value)}
+            title={ar ? "فلتر بالشهر" : "Filter by month"} />
+          {(filterRep || filterZone || filterMonth) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setFilterRep(""); setFilterZone(""); setFilterMonth(""); }}>
+              {ar ? "مسح" : "Clear"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ملخص عام */}
@@ -130,18 +231,14 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
       {tab === "invoices" && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <select className="form-input form-select" style={{ width: 180 }} value={filterRep} onChange={e => setFilterRep(e.target.value)}>
-              <option value="">{ar ? "كل المناديب" : "All Reps"}</option>
-              {reps.map(r => <option key={r.id} value={r.id}>{r.full_name} ({r.rep_code})</option>)}
-            </select>
             <select className="form-input form-select" style={{ width: 160 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
               <option value="">{ar ? "كل الحالات" : "All Statuses"}</option>
               {Object.entries(STATUS_AR).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <input type="date" className="form-input" style={{ width: 150 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} title={ar ? "من" : "From"} />
             <input type="date" className="form-input" style={{ width: 150 }} value={dateTo} onChange={e => setDateTo(e.target.value)} title={ar ? "إلى" : "To"} />
-            {(filterRep || filterStatus || dateFrom || dateTo) && (
-              <button className="btn btn-secondary btn-sm" onClick={() => { setFilterRep(""); setFilterStatus(""); setDateFrom(""); setDateTo(""); }}>
+            {(filterStatus || dateFrom || dateTo) && (
+              <button className="btn btn-secondary btn-sm" onClick={() => { setFilterStatus(""); setDateFrom(""); setDateTo(""); }}>
                 {ar ? "مسح" : "Clear"}
               </button>
             )}

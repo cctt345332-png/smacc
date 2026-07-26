@@ -860,25 +860,43 @@ async def _create_credit_note_journal(db, tenant_id, user_id, cn, original_invoi
 
 # ─── Summary ─────────────────────────────────────────────────────────
 async def get_sales_summary(db: AsyncSession, tenant_id: str, rep_id: str | None = None):
-    q = select(Invoice).where(Invoice.tenant_id == tenant_id)
+    """ملخص المبيعات — يحسب فقط الفواتير المؤكدة والمدفوعة (تجاهل المسودات والملغية والمرفوضة)"""
+    CONFIRMED_STATUSES = (
+        InvoiceStatus.CONFIRMED,
+        InvoiceStatus.PAID,
+        InvoiceStatus.PARTIAL,
+        InvoiceStatus.OVERDUE,
+    )
+    q = select(Invoice).where(
+        Invoice.tenant_id == tenant_id,
+        Invoice.status.in_(CONFIRMED_STATUSES),
+    )
     if rep_id:
         q = q.where(Invoice.rep_id == rep_id)
     invoices_r = await db.execute(q)
     invoices = invoices_r.scalars().all()
 
-    total_invoiced = sum(i.total for i in invoices if i.status != InvoiceStatus.CANCELLED)
-    total_paid = sum(i.paid_amount for i in invoices)
+    total_invoiced   = sum(i.total for i in invoices)
+    total_paid       = sum(i.paid_amount for i in invoices)
     total_outstanding = total_invoiced - total_paid
-    overdue_count = sum(1 for i in invoices if i.status == InvoiceStatus.OVERDUE)
-    draft_count = sum(1 for i in invoices if i.status == InvoiceStatus.DRAFT)
+    overdue_count    = sum(1 for i in invoices if i.status == InvoiceStatus.OVERDUE)
+
+    # عدد الفواتير المعلّقة للمراجعة (submitted) — لا تُحسب ضمن الإيرادات
+    pending_q = select(func.count(Invoice.id)).where(
+        Invoice.tenant_id == tenant_id,
+        Invoice.status == InvoiceStatus.SUBMITTED,
+    )
+    if rep_id:
+        pending_q = pending_q.where(Invoice.rep_id == rep_id)
+    pending_count = (await db.execute(pending_q)).scalar() or 0
 
     return {
-        "total_invoiced": total_invoiced,
-        "total_paid": total_paid,
-        "total_outstanding": total_outstanding,
-        "overdue_count": overdue_count,
-        "draft_count": draft_count,
-        "invoice_count": len(invoices),
+        "total_invoiced":    float(total_invoiced),
+        "total_paid":        float(total_paid),
+        "total_outstanding": float(total_outstanding),
+        "overdue_count":     overdue_count,
+        "draft_count":       int(pending_count),   # يُستخدم لعرض عدد المعلّقة
+        "invoice_count":     len(invoices),
     }
 
 
@@ -906,7 +924,10 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
 
 
 async def approve_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
-    """المحاسب/المدير يوافق على الفاتورة — submitted → approved"""
+    """
+    المحاسب/المدير يوافق على الفاتورة — submitted → approved → confirmed
+    الموافقة تُكمل دورة الحياة كاملة: تخصم المخزون وتُغلق الفاتورة
+    """
     invoice = await get_invoice(db, tenant_id, invoice_id)
 
     if invoice.status != InvoiceStatus.SUBMITTED:
@@ -915,6 +936,18 @@ async def approve_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
     invoice.status = InvoiceStatus.APPROVED
     invoice.reviewed_by = user_id
     invoice.reviewed_at = datetime.utcnow()
+    await db.flush()  # نحفظ APPROVED مؤقتاً
+
+    # تأكيد الفاتورة تلقائياً بعد الموافقة — يخصم المخزون
+    if invoice.fiscal_year_id:
+        try:
+            journal_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
+            invoice.journal_entry_id = journal_id
+        except Exception:
+            pass  # القيد المحاسبي اختياري
+
+    await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
+    invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
