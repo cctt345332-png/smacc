@@ -242,6 +242,16 @@ async def get_rep_stock(db: AsyncSession, tenant_id: str, rep_id: str) -> list:
     return await get_stock_by_warehouse(db, tenant_id, rep.warehouse_id)
 
 
+async def get_my_stock(db: AsyncSession, tenant_id: str, user_id: str) -> list:
+    """جلب مخزون المندوب الحالي (من توكنه)"""
+    rep = await get_rep_by_user(db, user_id)
+    if not rep:
+        raise HTTPException(403, "هذا الحساب ليس مندوباً")
+
+    from app.modules.inventory.service import get_stock_by_warehouse
+    return await get_stock_by_warehouse(db, tenant_id, rep.warehouse_id)
+
+
 async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
     """ملخص أداء المندوب الحالي — فقط الفواتير المؤكدة/المدفوعة"""
     rep = await get_rep_by_user(db, user_id)

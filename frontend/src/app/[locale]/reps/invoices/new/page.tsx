@@ -236,8 +236,8 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
         </span>
       </div>
 
-      {/* ── الجزء العلوي: عمودان ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, marginBottom: 16 }}>
+      {/* ── الجزء العلوي: عمود واحد على الجوال ── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
 
         {/* بيانات الفاتورة */}
         <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", padding: 20 }}>

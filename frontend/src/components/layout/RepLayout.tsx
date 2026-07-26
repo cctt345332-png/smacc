@@ -73,9 +73,8 @@ function MoreDrawer({
 }) {
   const base = `/${locale}`;
   const links = [
-    { label: ar ? "سندات القبض" : "Receipts",      href: `${base}/reps/payments`,    color: "#059669" },
-    { label: ar ? "تقاريري" : "My Reports",         href: `${base}/reps/reports`,     color: "#7C3AED" },
-    { label: ar ? "موقعي الحالي" : "My Location",   href: `${base}/reps/dashboard`,   color: "#2563EB" },
+    { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/payments`,  color: "#059669" },
+    { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/reports`,   color: "#7C3AED" },
   ];
 
   return (
@@ -164,6 +163,38 @@ export default function RepLayout({
     const id = setInterval(() => {
       getUnreadCount().then(r => setUnread(r.data.count)).catch(() => {});
     }, 60_000);
+    return () => clearInterval(id);
+  }, [token]);
+
+  /* تتبع الموقع — صامت، كل 5 دقائق */
+  useEffect(() => {
+    if (!token) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const sendLocation = () => {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          import("@/lib/reps").then(({ postMyLocation }) => {
+            postMyLocation({
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+              accuracy: pos.coords.accuracy ?? undefined,
+              speed: pos.coords.speed ?? undefined,
+              heading: pos.coords.heading ?? undefined,
+              is_moving: (pos.coords.speed ?? 0) > 0.5,
+              recorded_at: new Date(pos.timestamp).toISOString(),
+            }).catch(() => {});
+          });
+        },
+        () => {}, // صمت عند الرفض
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      );
+    };
+
+    // أرسل فوراً عند الفتح
+    sendLocation();
+    // ثم كل 5 دقائق
+    const id = setInterval(sendLocation, 5 * 60_000);
     return () => clearInterval(id);
   }, [token]);
 
