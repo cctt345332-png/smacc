@@ -214,10 +214,9 @@ export default function RepLayout({
   };
 
   if (!mounted) {
+    // عرض skeleton بسيط بدل شاشة بيضاء — بدون انتظار
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
-        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>
-      </div>
+      <div style={{ minHeight: "100vh", background: "var(--bg)" }} />
     );
   }
   if (!token) return null;

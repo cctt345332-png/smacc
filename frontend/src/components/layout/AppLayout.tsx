@@ -29,9 +29,12 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
         router.replace(`/${locale}/pos/cashier`);
       }
     }
-    // إذا الدور sales_rep — يُوجَّه دائماً لواجهة المندوب المخصصة
+    // إذا الدور sales_rep — لا يُسمح له بـ AppLayout، يُوجَّه لواجهته
     if (user.role === "sales_rep") {
-      router.replace(`/${locale}/reps/me/dashboard`);
+      if (!pathname.startsWith(`/${locale}/reps/me`)) {
+        router.replace(`/${locale}/reps/me/dashboard`);
+      }
+      return; // لا تُكمل
     }
   }, [_hasHydrated, token, user, pathname, locale, router]);
 
@@ -66,6 +69,9 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
   }
 
   if (!token) return null;
+
+  // المندوب — لا يجب أن يكون هنا، RepLayout يتولى الأمر
+  if (user?.role === "sales_rep") return null;
 
   // الكاشير — شاشة كاملة بدون sidebar أو header، مباشرة للكاشير
   if (user?.role === "cashier") {
