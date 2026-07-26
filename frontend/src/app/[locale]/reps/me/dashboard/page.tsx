@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -361,10 +361,11 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
   const handlePDF = async () => {
     setDownloading(true);
     try {
-      const res = await api.get(`/sales/invoices/${inv.id}/pdf`, { responseType: "blob" });
-      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-      const a = document.createElement("a");
-      a.href = url; a.download = `${inv.invoice_number}.pdf`; a.click();
+      const res = await api.get(`/sales/invoices/${inv.id}/pdf`, { responseType: "text" });
+      const blob = new Blob([res.data], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
       URL.revokeObjectURL(url);
     } catch { alert(ar ? "تعذّر تحميل PDF" : "Could not download PDF"); }
     finally { setDownloading(false); }

@@ -274,7 +274,174 @@ async def customer_statement(
     return await orders_service.get_customer_statement(db, tenant_id, customer_id, from_date, to_date)
 
 
-# ─── Customer Documents ──────────────────────────────────────────────
+# ─── Customer Statement ──────────────────────────────────────────────
+@router.get("/customers/{customer_id}/statement")
+async def customer_statement(
+    customer_id: str,
+    from_date: datetime = Query(...),
+    to_date: datetime = Query(...),
+    tenant_id=Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    return await orders_service.get_customer_statement(db, tenant_id, customer_id, from_date, to_date)
+
+
+# ─── Invoice PDF (HTML قابل للطباعة) ─────────────────────────────────
+@router.get("/invoices/{invoice_id}/pdf")
+async def invoice_pdf(
+    invoice_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi.responses import HTMLResponse
+    from app.models.tenant import Tenant
+    from sqlalchemy import select as sa_select
+
+    inv = await service.get_invoice(db, user["tenant_id"], invoice_id)
+
+    ten_r = await db.execute(sa_select(Tenant).where(Tenant.id == user["tenant_id"]))
+    ten = ten_r.scalar_one_or_none()
+    company_name = (ten.company_name_ar if ten else "") or ""
+    company_vat  = (ten.vat_number if ten else "") or ""
+
+    def fmt(n):
+        try: return f"{float(n or 0):,.2f}"
+        except: return "0.00"
+
+    lines_rows = ""
+    for ln in (inv.lines or []):
+        t = float(ln.total or (float(ln.quantity or 1) * float(ln.unit_price or 0)))
+        lines_rows += f"""<tr style="border-bottom:1px solid #E5E7EB">
+          <td style="padding:9px 14px;font-size:13px">{ln.description_ar or ""}</td>
+          <td style="padding:9px 14px;text-align:center;font-size:13px">{float(ln.quantity or 1):.0f}</td>
+          <td style="padding:9px 14px;text-align:center;font-size:13px">{fmt(ln.unit_price)}</td>
+          <td style="padding:9px 14px;text-align:center;font-size:13px">{float(ln.vat_rate or 15):.0f}%</td>
+          <td style="padding:9px 14px;text-align:end;font-weight:700;font-size:13px;color:#1D4ED8">{fmt(t)} SAR</td>
+        </tr>"""
+
+    pay_rows = ""
+    for pay in (inv.payments or []):
+        method_str = str(pay.payment_method.value if hasattr(pay.payment_method, "value") else pay.payment_method)
+        method_ar = {"cash":"نقد","bank_transfer":"تحويل","cheque":"شيك","credit_card":"بطاقة","mada":"مدى","stc_pay":"STC Pay"}.get(method_str, method_str)
+        pay_rows += f"""<tr style="border-bottom:1px solid #F3F4F6">
+          <td style="padding:6px 14px;font-size:12px;font-family:monospace">{pay.payment_number}</td>
+          <td style="padding:6px 14px;font-size:12px">{str(pay.payment_date)[:10]}</td>
+          <td style="padding:6px 14px;font-size:12px">{method_ar}</td>
+          <td style="padding:6px 14px;text-align:end;font-weight:700;font-size:12px;color:#059669">{fmt(pay.amount)} SAR</td>
+        </tr>"""
+
+    remaining = float(inv.total or 0) - float(inv.paid_amount or 0)
+    status_ar = {"draft":"مسودة","submitted":"بانتظار المراجعة","approved":"موافق عليها",
+                 "rejected":"مرفوضة","confirmed":"مؤكدة","paid":"مدفوعة",
+                 "partial":"جزئي","cancelled":"ملغاة"}.get(
+        inv.status.value if hasattr(inv.status, "value") else str(inv.status), "")
+    issue_date = str(inv.issue_date)[:10] if inv.issue_date else ""
+    due_date   = str(inv.due_date)[:10] if inv.due_date else "—"
+    pt = getattr(inv, "payment_type", None)
+    pay_type_ar = "نقدي" if str(pt or "").lower() == "cash" else "آجل"
+
+    paid_section = ""
+    if inv.payments:
+        paid_section = f"""<div style="margin-top:24px">
+          <div style="font-size:11px;color:#6B7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">سندات القبض</div>
+          <table style="border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;width:100%">
+            <thead><tr style="background:#F9FAFB">
+              <th style="padding:8px 14px;text-align:start;font-size:12px;color:#6B7280;font-weight:600">رقم السند</th>
+              <th style="padding:8px 14px;text-align:start;font-size:12px;color:#6B7280;font-weight:600">التاريخ</th>
+              <th style="padding:8px 14px;text-align:start;font-size:12px;color:#6B7280;font-weight:600">طريقة الدفع</th>
+              <th style="padding:8px 14px;text-align:end;font-size:12px;color:#6B7280;font-weight:600">المبلغ</th>
+            </tr></thead>
+            <tbody>{pay_rows}</tbody>
+          </table>
+        </div>"""
+
+    html = f"""<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>فاتورة {inv.invoice_number}</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:"Segoe UI",Tahoma,Arial,sans-serif;direction:rtl;color:#111;background:#fff;padding:28px;max-width:820px;margin:0 auto}}
+@media print{{body{{padding:0}}.no-print{{display:none!important}}@page{{margin:10mm}}}}
+</style>
+</head>
+<body>
+<div class="no-print" style="text-align:center;margin-bottom:20px">
+  <button onclick="window.print()"
+    style="padding:10px 32px;background:#1D4ED8;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
+    طباعة / حفظ PDF
+  </button>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #1D4ED8">
+  <div>
+    <div style="font-size:22px;font-weight:800;color:#1D4ED8">{company_name}</div>
+    {f'<div style="font-size:12px;color:#6B7280;margin-top:3px">الرقم الضريبي: {company_vat}</div>' if company_vat else ""}
+  </div>
+  <div style="text-align:start">
+    <div style="font-size:24px;font-weight:800;color:#1D4ED8;font-family:monospace">{inv.invoice_number}</div>
+    <span style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#DBEAFE;color:#1D4ED8;margin-top:4px">{status_ar}</span>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+  <div>
+    <div style="font-size:11px;color:#6B7280;margin-bottom:8px;text-transform:uppercase">بيانات الفاتورة</div>
+    <table><tbody>
+      <tr><td style="padding:3px 0;color:#6B7280;font-size:13px;min-width:120px">تاريخ الإصدار</td><td style="padding:3px 12px;font-weight:600;font-size:13px">{issue_date}</td></tr>
+      <tr><td style="padding:3px 0;color:#6B7280;font-size:13px">تاريخ الاستحقاق</td><td style="padding:3px 12px;font-weight:600;font-size:13px">{due_date}</td></tr>
+      <tr><td style="padding:3px 0;color:#6B7280;font-size:13px">طريقة الدفع</td><td style="padding:3px 12px;font-weight:600;font-size:13px">{pay_type_ar}</td></tr>
+    </tbody></table>
+  </div>
+  <div>
+    <div style="font-size:11px;color:#6B7280;margin-bottom:8px;text-transform:uppercase">العميل</div>
+    <div style="font-weight:700;font-size:16px">{inv.buyer_name_ar or ""}</div>
+    {f'<div style="font-size:12px;color:#6B7280;margin-top:3px">الرقم الضريبي: {getattr(inv,"buyer_vat_number","")}</div>' if getattr(inv,"buyer_vat_number",None) else ""}
+  </div>
+</div>
+
+<div style="margin-bottom:24px">
+  <div style="font-size:11px;color:#6B7280;margin-bottom:8px;text-transform:uppercase">أسطر الفاتورة</div>
+  <table style="border:1px solid #E5E7EB;border-radius:8px;overflow:hidden;width:100%">
+    <thead>
+      <tr style="background:#F9FAFB;border-bottom:1px solid #E5E7EB">
+        <th style="padding:10px 14px;text-align:start;font-size:12px;color:#6B7280;font-weight:600">الصنف</th>
+        <th style="padding:10px 14px;text-align:center;font-size:12px;color:#6B7280;font-weight:600">الكمية</th>
+        <th style="padding:10px 14px;text-align:center;font-size:12px;color:#6B7280;font-weight:600">السعر</th>
+        <th style="padding:10px 14px;text-align:center;font-size:12px;color:#6B7280;font-weight:600">ضريبة%</th>
+        <th style="padding:10px 14px;text-align:end;font-size:12px;color:#6B7280;font-weight:600">الإجمالي</th>
+      </tr>
+    </thead>
+    <tbody>{lines_rows}</tbody>
+  </table>
+</div>
+
+<div style="display:flex;justify-content:flex-start">
+  <div style="min-width:280px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:14px 16px">
+    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #E5E7EB">
+      <span style="color:#6B7280">قبل الضريبة</span><span style="font-weight:600">{fmt(inv.subtotal)} SAR</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px solid #E5E7EB">
+      <span style="color:#6B7280">ضريبة 15%</span><span style="font-weight:600;color:#D97706">{fmt(inv.vat_amount)} SAR</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:10px 0 5px;font-size:18px;font-weight:800">
+      <span>الإجمالي</span><span style="color:#1D4ED8">{fmt(inv.total)} SAR</span>
+    </div>
+    {f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#059669;font-weight:600">المدفوع</span><span style="font-weight:700;color:#059669">{fmt(inv.paid_amount)} SAR</span></div>' if float(inv.paid_amount or 0) > 0 else ""}
+    {f'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#DC2626;font-weight:600">المتبقي</span><span style="font-weight:700;color:#DC2626">{fmt(remaining)} SAR</span></div>' if remaining > 0.01 else ""}
+  </div>
+</div>
+
+{paid_section}
+
+<div style="margin-top:32px;padding-top:12px;border-top:1px solid #E5E7EB;text-align:center;font-size:11px;color:#9CA3AF">
+  تم إنشاء هذه الفاتورة إلكترونياً • {company_name}
+</div>
+</body>
+</html>"""
+    return HTMLResponse(content=html, media_type="text/html; charset=utf-8")
 @router.post("/customers/{customer_id}/documents/{doc_type}")
 async def upload_customer_document(
     customer_id: str,

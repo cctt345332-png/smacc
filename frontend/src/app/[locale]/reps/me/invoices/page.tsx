@@ -16,13 +16,11 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
   const handleDownload = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/sales/invoices/${invoiceId}/pdf`, { responseType: "blob" });
-      const url = URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${invoiceNumber}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const res = await api.get(`/sales/invoices/${invoiceId}/pdf`, { responseType: "text" });
+      const blob = new Blob([res.data], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch {
       alert(ar ? "تعذّر تحميل PDF" : "Could not download PDF");
     } finally { setLoading(false); }
