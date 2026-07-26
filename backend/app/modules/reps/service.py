@@ -242,7 +242,53 @@ async def get_rep_stock(db: AsyncSession, tenant_id: str, rep_id: str) -> list:
     return await get_stock_by_warehouse(db, tenant_id, rep.warehouse_id)
 
 
-async def get_my_stock(db: AsyncSession, tenant_id: str, user_id: str) -> list:
+async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """ملخص أداء المندوب الحالي — فقط الفواتير المؤكدة/المدفوعة"""
+    rep = await get_rep_by_user(db, user_id)
+    if not rep:
+        raise HTTPException(403, "هذا الحساب ليس مندوباً")
+
+    # إجمالي المبيعات — فقط confirmed/paid/partial
+    sales_r = await db.execute(
+        select(func.sum(Invoice.total), func.count(Invoice.id))
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.rep_id == rep.id,
+            Invoice.status.in_(["confirmed", "paid", "partial"]),
+        )
+    )
+    total_sales, invoice_count = sales_r.one()
+
+    # المقبوضات
+    pay_r = await db.execute(
+        select(func.sum(Payment.amount))
+        .where(Payment.tenant_id == tenant_id, Payment.rep_id == rep.id)
+    )
+    total_collected = pay_r.scalar() or Decimal("0")
+
+    # كمية المخزون
+    stock_r = await db.execute(
+        select(func.sum(InventoryStock.quantity))
+        .where(
+            InventoryStock.tenant_id == tenant_id,
+            InventoryStock.warehouse_id == rep.warehouse_id,
+        )
+    )
+    stock_qty = stock_r.scalar() or Decimal("0")
+
+    return {
+        "rep_id": rep.id,
+        "total_sales": float(total_sales or 0),
+        "invoice_count": invoice_count or 0,
+        "total_collected": float(total_collected),
+        "outstanding": float((total_sales or 0) - total_collected),
+        "stock_qty": float(stock_qty),
+        "target_monthly": float(rep.target_monthly or 0),
+        "commission_pct": float(rep.commission_pct or 0),
+    }
+
+
+
     """جلب مخزون المندوب الحالي (من توكنه)"""
     rep = await get_rep_by_user(db, user_id)
     if not rep:
@@ -373,10 +419,14 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
         raise HTTPException(404, "المندوب غير موجود")
     rep, user, wh = row
 
-    # إجمالي المبيعات
+    # إجمالي المبيعات — فقط الفواتير المؤكدة والمدفوعة
     sales_r = await db.execute(
         select(func.sum(Invoice.total), func.count(Invoice.id))
-        .where(Invoice.tenant_id == tenant_id, Invoice.rep_id == rep_id)
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.rep_id == rep_id,
+            Invoice.status.in_(["confirmed", "paid", "partial"]),
+        )
     )
     total_sales, invoice_count = sales_r.one()
 

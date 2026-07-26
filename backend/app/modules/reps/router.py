@@ -73,12 +73,8 @@ async def my_summary(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """ملخص أداء المندوب الحالي"""
-    rep = await service.get_rep_by_user(db, user["user_id"])
-    if not rep:
-        from fastapi import HTTPException
-        raise HTTPException(403, "هذا الحساب ليس مندوباً")
-    return await service.get_rep_summary(db, user["tenant_id"], rep.id)
+    """ملخص أداء المندوب الحالي — فقط confirmed/paid/partial"""
+    return await service.get_my_summary(db, user["tenant_id"], user["user_id"])
 
 
 @router.get("/me/transfers")

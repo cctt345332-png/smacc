@@ -1,426 +1,437 @@
 "use client";
 /**
- * صفحة فاتورة جديدة للمندوب
- * - تحمّل العملاء والأصناف من مخزونه الخاص فقط
- * - تُرسل الفاتورة عبر sales API — يُرفق rep_id تلقائياً في البايكند
+ * فاتورة المندوب الجديدة
+ * - نفس تصميم فاتورة المبيعات الرئيسية
+ * - الأصناف من مخزون المندوب فقط (مع سيريالات)
+ * - بعد الحفظ: status = submitted → تنتظر موافقة المحاسب
+ * - زر "إرسال للمراجعة" بدلاً من "تأكيد مباشر"
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCustomers, createInvoice, confirmInvoice } from "@/lib/sales";
+import Link from "next/link";
+import { getCustomers, createInvoice } from "@/lib/sales";
 import { getMyStock } from "@/lib/reps";
+import api from "@/lib/api";
+import RepStockItemPicker, { RepPickedItem } from "@/components/inventory/RepStockItemPicker";
 
-const today = () => new Date().toISOString().split("T")[0];
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
+const today = () => new Date().toISOString().split("T")[0];
 
 interface Line {
-  item_id: string;
-  item_name: string;
-  quantity: number;
-  unit_price: number;
-  discount_pct: number;
-  vat_rate: number;
-  max_qty: number;
+  picked: RepPickedItem;
+  discount_pct: string;
+  vat_rate: string;
 }
 
-function calcLine(l: Line) {
-  const gross = l.quantity * l.unit_price;
-  const disc = gross * (l.discount_pct / 100);
-  const taxable = gross - disc;
-  const tax = taxable * (l.vat_rate / 100);
-  return { gross, disc, taxable, tax, total: taxable + tax };
+const emptyLine = (): Line => ({
+  picked: { mode: "free", description_ar: "", unit_price: 0, quantity: 1 },
+  discount_pct: "0",
+  vat_rate: "15",
+});
+
+function calcLine(line: Line) {
+  const qty = line.picked.quantity || 0;
+  const price = line.picked.unit_price || 0;
+  const disc = parseFloat(line.discount_pct) || 0;
+  const taxRate = parseFloat(line.vat_rate) || 0;
+  const gross = qty * price;
+  const discAmt = gross * (disc / 100);
+  const taxable = gross - discAmt;
+  const tax = taxable * (taxRate / 100);
+  return { gross, discAmt, taxable, tax, total: taxable + tax };
 }
 
 export default function RepNewInvoicePage({ params: { locale } }: { params: { locale: string } }) {
   const ar = locale === "ar";
   const router = useRouter();
+  const base = `/${locale}`;
 
   const [customers, setCustomers] = useState<any[]>([]);
-  const [stock, setStock] = useState<any[]>([]);
+  const [myStock, setMyStock] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
     customer_id: "",
+    payment_type: "cash",
+    credit_days: "30",
     issue_date: today(),
     supply_date: today(),
     due_date: "",
     notes: "",
   });
 
-  const [lines, setLines] = useState<Line[]>([]);
+  const handlePaymentTypeChange = (type: string) => {
+    if (type === "cash") {
+      setForm(f => ({ ...f, payment_type: type, due_date: f.issue_date }));
+    } else {
+      const d = new Date(form.issue_date);
+      d.setDate(d.getDate() + (parseInt(form.credit_days) || 30));
+      setForm(f => ({ ...f, payment_type: type, due_date: d.toISOString().split("T")[0] }));
+    }
+  };
+
+  const handleCreditDaysChange = (days: string) => {
+    const d = new Date(form.issue_date);
+    d.setDate(d.getDate() + (parseInt(days) || 30));
+    setForm(f => ({ ...f, credit_days: days, due_date: d.toISOString().split("T")[0] }));
+  };
+
+  const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
   useEffect(() => {
     Promise.all([getCustomers(), getMyStock()])
       .then(([cRes, sRes]) => {
         setCustomers(Array.isArray(cRes.data) ? cRes.data : []);
-        const stockItems = Array.isArray(sRes.data) ? sRes.data : [];
-        setStock(stockItems);
+        setMyStock(Array.isArray(sRes.data) ? sRes.data : []);
       })
       .catch(() => {});
   }, []);
-  const addLine = (stockItem: any) => {
-    if (lines.find((l) => l.item_id === stockItem.item_id)) return;
-    setLines((prev) => [
-      ...prev,
-      {
-        item_id: stockItem.item_id,
-        item_name: stockItem.item_name || stockItem.name_ar,
-        quantity: 1,
-        unit_price: Number(stockItem.sale_price || 0),
-        discount_pct: 0,
-        vat_rate: 15,
-        max_qty: Number(stockItem.quantity || 0),
-      },
-    ]);
-  };
 
-  const removeLine = (idx: number) => setLines((p) => p.filter((_, i) => i !== idx));
+  const setLine = (i: number, field: keyof Omit<Line, "picked">, value: string) =>
+    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
 
-  const updateLine = (idx: number, key: keyof Line, val: any) => {
-    setLines((p) => p.map((l, i) => (i === idx ? { ...l, [key]: val } : l)));
-  };
+  const setPicked = (i: number, picked: RepPickedItem) =>
+    setLines(prev => prev.map((l, idx) => idx === i ? { ...l, picked } : l));
 
-  // ─── حساب الإجماليات ──────────────────────────────────────────────
-  const totals = lines.reduce(
-    (acc, l) => {
-      const c = calcLine(l);
-      return {
-        subtotal: acc.subtotal + c.gross,
-        discount: acc.discount + c.disc,
-        vat: acc.vat + c.tax,
-        total: acc.total + c.total,
-      };
-    },
-    { subtotal: 0, discount: 0, vat: 0, total: 0 }
-  );
+  const addLine = () => setLines(prev => [...prev, emptyLine()]);
+  const removeLine = (i: number) => setLines(prev => prev.filter((_, idx) => idx !== i));
 
-  // ─── إرسال الفاتورة ───────────────────────────────────────────────
-  const handleSubmit = async (confirm: boolean) => {
-    if (!form.customer_id) return setError(ar ? "اختر العميل" : "Select a customer");
-    if (lines.length === 0) return setError(ar ? "أضف صنفاً على الأقل" : "Add at least one item");
+  const totals = lines.reduce((acc, l) => {
+    const c = calcLine(l);
+    return {
+      subtotal: acc.subtotal + c.gross,
+      discount: acc.discount + c.discAmt,
+      taxable: acc.taxable + c.taxable,
+      vat: acc.vat + c.tax,
+      total: acc.total + c.total,
+    };
+  }, { subtotal: 0, discount: 0, taxable: 0, vat: 0, total: 0 });
+
+  const validate = () => {
+    if (!form.customer_id) { setError(ar ? "يرجى اختيار العميل" : "Select a customer"); return false; }
+    if (lines.every(l => !l.picked.description_ar && !l.picked.inventory_item_id)) {
+      setError(ar ? "أضف صنفاً واحداً على الأقل" : "Add at least one item"); return false;
+    }
     for (const l of lines) {
-      if (l.quantity > l.max_qty) {
-        return setError(
-          ar
-            ? `الكمية المطلوبة (${l.quantity}) أكبر من المتاح (${l.max_qty}) للصنف: ${l.item_name}`
-            : `Quantity (${l.quantity}) exceeds available stock (${l.max_qty}) for: ${l.item_name}`
-        );
+      if (l.picked.mode === "serial" && !l.picked.serial_ids?.length) {
+        setError(ar ? "يرجى تحديد السيريالات لكل صنف مسرّل" : "Select serials for serial items");
+        return false;
+      }
+      if (l.picked.inventory_item_id && l.picked.mode === "item") {
+        const stockItem = myStock.find(s => s.item_id === l.picked.inventory_item_id || s.id === l.picked.inventory_item_id);
+        if (stockItem && l.picked.quantity > Number(stockItem.quantity || stockItem.available_qty || 0)) {
+          setError(ar ? `الكمية أكبر من المتاح للصنف: ${l.picked.item_name}` : `Qty exceeds stock for: ${l.picked.item_name}`);
+          return false;
+        }
       }
     }
+    return true;
+  };
 
-    setSaving(true);
-    setError("");
+  const buildPayload = () => ({
+    customer_id: form.customer_id,
+    invoice_type: "simplified",
+    payment_type: form.payment_type,
+    issue_date: form.issue_date,
+    supply_date: form.supply_date,
+    due_date: form.due_date || null,
+    notes: form.notes || null,
+    lines: lines
+      .filter(l => l.picked.description_ar || l.picked.inventory_item_id)
+      .map((l, i) => ({
+        description_ar: l.picked.description_ar || l.picked.item_name || (ar ? "صنف" : "Item"),
+        quantity: l.picked.quantity || 1,
+        unit_price: l.picked.unit_price || 0,
+        discount_pct: parseFloat(l.discount_pct) || 0,
+        vat_rate: parseFloat(l.vat_rate) || 15,
+        vat_category: "S",
+        line_order: i,
+        inventory_item_id: l.picked.inventory_item_id || null,
+        serial_item_id: l.picked.serial_item_id || null,
+        serial_ids: l.picked.serial_ids || null,
+      })),
+  });
+
+  /* حفظ مسودة */
+  const handleSaveDraft = async () => {
+    if (!validate()) return;
+    setSaving(true); setError("");
     try {
-      const payload = {
-        customer_id: form.customer_id,
-        invoice_type: "simplified",
-        issue_date: new Date(form.issue_date).toISOString(),
-        supply_date: new Date(form.supply_date).toISOString(),
-        due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
-        notes: form.notes,
-        lines: lines.map((l) => ({
-          description_ar: l.item_name,
-          quantity: l.quantity,
-          unit_price: l.unit_price,
-          discount_pct: l.discount_pct,
-          vat_rate: l.vat_rate,
-          vat_category: "S",
-          inventory_item_id: l.item_id,
-        })),
-      };
-
-      const res = await createInvoice(payload as any);
-      const inv = res.data;
-      if (!inv?.id) throw new Error(inv?.detail || "خطأ في إنشاء الفاتورة");
-
-      if (confirm) {
-        await confirmInvoice(inv.id);
-      }
-      router.push(`/${locale}/reps/invoices`);
+      await createInvoice(buildPayload() as any);
+      router.push(`${base}/reps/invoices`);
     } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
-    }
+      setError(e?.response?.data?.detail || e?.message || "Error");
+    } finally { setSaving(false); }
+  };
+
+  /* إرسال للمراجعة (submit) */
+  const handleSubmitForReview = async () => {
+    if (!validate()) return;
+    setSaving(true); setError("");
+    try {
+      const { data: inv } = await createInvoice(buildPayload() as any);
+      if (!inv?.id) throw new Error("خطأ في إنشاء الفاتورة");
+      /* submit = تغيير الحالة لـ submitted — تنتظر المحاسب */
+      await api.post(`/sales/invoices/${inv.id}/submit`);
+      router.push(`${base}/reps/invoices`);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || e?.message || "Error");
+    } finally { setSaving(false); }
   };
 
   return (
     <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">{ar ? "فاتورة جديدة" : "New Invoice"}</h1>
-          <p className="page-subtitle">
-            {ar ? "إصدار فاتورة من مخزونك الخاص" : "Issue invoice from your own stock"}
-          </p>
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6, display: "flex", gap: 6, alignItems: "center" }}>
+          <Link href={`${base}/reps/dashboard`} style={{ color: "var(--text-muted)", textDecoration: "none" }}>{ar ? "الرئيسية" : "Home"}</Link>
+          <span>/</span>
+          <Link href={`${base}/reps/invoices`} style={{ color: "var(--text-muted)", textDecoration: "none" }}>{ar ? "الفواتير" : "Invoices"}</Link>
+          <span>/</span>
+          <span>{ar ? "فاتورة جديدة" : "New Invoice"}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>
+              {ar ? "فاتورة مبيعات جديدة" : "New Sales Invoice"}
+            </h1>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "4px 0 0" }}>
+              {ar ? "سيتم إرسالها للمحاسب للمراجعة والموافقة" : "Will be sent to accountant for review"}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Link href={`${base}/reps/invoices`}
+              style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13, fontWeight: 600, textDecoration: "none", color: "var(--text-primary)" }}>
+              {ar ? "إلغاء" : "Cancel"}
+            </Link>
+            <button onClick={handleSaveDraft} disabled={saving}
+              style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text-primary)" }}>
+              {ar ? "حفظ كمسودة" : "Save Draft"}
+            </button>
+            <button onClick={handleSubmitForReview} disabled={saving}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#2563EB", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              {saving ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال للمراجعة" : "Send for Review")}
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* رسالة خطأ */}
       {error && (
-        <div
-          style={{
-            background: "#FEF2F2",
-            border: "1px solid #FECACA",
-            borderRadius: 8,
-            padding: "12px 16px",
-            marginBottom: 16,
-            color: "#DC2626",
-            fontSize: 13,
-          }}
-        >
-          {error}
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "12px 16px", marginBottom: 16, color: "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>{error}</span>
+          <button onClick={() => setError("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#DC2626" }}>×</button>
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20 }}>
-        {/* ─── بيانات الفاتورة ─────────────────────────────── */}
-        <div>
-          <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>
-              {ar ? "بيانات الفاتورة" : "Invoice Details"}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  {ar ? "العميل *" : "Customer *"}
-                </label>
-                <select
-                  className="input"
-                  value={form.customer_id}
-                  onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value }))}
-                >
-                  <option value="">{ar ? "اختر العميل..." : "Select customer..."}</option>
-                  {customers.map((c: any) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name_ar}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  {ar ? "تاريخ الفاتورة" : "Issue Date"}
-                </label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.issue_date}
-                  onChange={(e) => setForm((f) => ({ ...f, issue_date: e.target.value, supply_date: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  {ar ? "تاريخ الاستحقاق" : "Due Date"}
-                </label>
-                <input
-                  type="date"
-                  className="input"
-                  value={form.due_date}
-                  onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
-                  {ar ? "ملاحظات" : "Notes"}
-                </label>
-                <input
-                  className="input"
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  placeholder={ar ? "ملاحظات اختيارية..." : "Optional notes..."}
-                />
-              </div>
+      {/* بانر workflow */}
+      <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#1E40AF" }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>
+          {ar
+            ? "بعد الإرسال، ستنتظر الفاتورة موافقة المحاسب. يمكنك تحميل نسخة PDF بعد الموافقة."
+            : "After sending, the invoice awaits accountant approval. You can download PDF after approval."}
+        </span>
+      </div>
+
+      {/* ── الجزء العلوي: عمودان ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, marginBottom: 16 }}>
+
+        {/* بيانات الفاتورة */}
+        <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", padding: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>{ar ? "بيانات الفاتورة" : "Invoice Details"}</div>
+
+          {/* العميل */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+              {ar ? "العميل" : "Customer"} <span style={{ color: "#DC2626" }}>*</span>
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <select className="form-input form-select" style={{ flex: 1 }}
+                value={form.customer_id}
+                onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}>
+                <option value="">{ar ? "— اختر العميل —" : "— Select Customer —"}</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>{c.name_ar}{c.name_en ? ` / ${c.name_en}` : ""}</option>
+                ))}
+              </select>
+              <Link href={`${base}/reps/customers?action=new`}
+                style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", fontSize: 12, color: "#2563EB", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
+                + {ar ? "عميل جديد" : "New"}
+              </Link>
             </div>
           </div>
 
-          {/* ─── اختيار الأصناف من المخزون ────────────────────── */}
-          <div className="card" style={{ padding: 20, marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>
-              {ar ? "اختر من مخزونك" : "Select from your stock"}
+          {/* طريقة الدفع */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+              {ar ? "طريقة الدفع" : "Payment"}
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {["cash", "credit"].map(type => (
+                <button key={type} type="button" onClick={() => handlePaymentTypeChange(type)}
+                  style={{
+                    flex: 1, padding: "8px 12px", borderRadius: 8, border: "2px solid",
+                    borderColor: form.payment_type === type ? (type === "cash" ? "#2563EB" : "#D97706") : "var(--border)",
+                    background: form.payment_type === type ? (type === "cash" ? "#2563EB" : "#D97706") : "var(--surface)",
+                    color: form.payment_type === type ? "white" : "var(--text-primary)",
+                    fontWeight: 700, fontSize: 13, cursor: "pointer",
+                  }}>
+                  {type === "cash" ? (ar ? "نقدي" : "Cash") : (ar ? "آجل" : "Credit")}
+                </button>
+              ))}
             </div>
-            {stock.length === 0 ? (
-              <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "12px 0" }}>
-                {ar ? "لا يوجد مخزون متاح لديك" : "No stock available"}
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {stock.map((s: any) => {
-                  const already = lines.some((l) => l.item_id === s.item_id);
-                  return (
-                    <button
-                      key={s.item_id}
-                      onClick={() => addLine(s)}
-                      disabled={already || Number(s.quantity) <= 0}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: 8,
-                        border: `1px solid ${already ? "#059669" : "var(--border)"}`,
-                        background: already ? "#F0FDF4" : "var(--bg)",
-                        color: already ? "#059669" : "var(--text)",
-                        cursor: already || Number(s.quantity) <= 0 ? "not-allowed" : "pointer",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        opacity: Number(s.quantity) <= 0 ? 0.4 : 1,
-                      }}
-                    >
-                      {s.item_name || s.name_ar}
-                      <span style={{ marginInlineStart: 6, opacity: 0.6 }}>({fmt(s.quantity)})</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
 
-          {/* ─── أسطر الفاتورة ─────────────────────────────────── */}
-          {lines.length > 0 && (
-            <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-              <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{ar ? "الصنف" : "Item"}</th>
-                      <th style={{ width: 100 }}>{ar ? "الكمية" : "Qty"}</th>
-                      <th style={{ width: 120 }}>{ar ? "السعر" : "Price"}</th>
-                      <th style={{ width: 90 }}>{ar ? "خصم%" : "Disc%"}</th>
-                      <th style={{ width: 90 }}>{ar ? "ضريبة%" : "VAT%"}</th>
-                      <th style={{ textAlign: "end", width: 130 }}>{ar ? "الإجمالي" : "Total"}</th>
-                      <th style={{ width: 40 }} />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l, i) => {
-                      const c = calcLine(l);
-                      return (
-                        <tr key={i}>
-                          <td style={{ fontWeight: 600, fontSize: 13 }}>
-                            {l.item_name}
-                            <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>
-                              {ar ? "متاح:" : "Avail:"} {fmt(l.max_qty)}
-                            </div>
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              className="input"
-                              style={{ width: 80, fontSize: 13 }}
-                              min={1}
-                              max={l.max_qty}
-                              value={l.quantity}
-                              onChange={(e) => updateLine(i, "quantity", Math.max(1, Number(e.target.value)))}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              className="input"
-                              style={{ width: 100, fontSize: 13 }}
-                              value={l.unit_price}
-                              onChange={(e) => updateLine(i, "unit_price", Number(e.target.value))}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              className="input"
-                              style={{ width: 70, fontSize: 13 }}
-                              min={0}
-                              max={100}
-                              value={l.discount_pct}
-                              onChange={(e) => updateLine(i, "discount_pct", Number(e.target.value))}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              className="input"
-                              style={{ width: 70, fontSize: 13 }}
-                              value={l.vat_rate}
-                              onChange={(e) => updateLine(i, "vat_rate", Number(e.target.value))}
-                            />
-                          </td>
-                          <td style={{ textAlign: "end", fontWeight: 700, color: "#2563EB" }}>
-                            {fmt(c.total)} SAR
-                          </td>
-                          <td>
-                            <button
-                              onClick={() => removeLine(i)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                cursor: "pointer",
-                                color: "#DC2626",
-                                fontSize: 16,
-                                padding: 4,
-                              }}
-                            >
-                              ×
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+          {form.payment_type === "credit" && (
+            <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#92400E", display: "block", marginBottom: 6 }}>{ar ? "مدة الأجل" : "Credit Period"}</label>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {["15", "30", "45", "60", "90"].map(d => (
+                  <button key={d} type="button" onClick={() => handleCreditDaysChange(d)}
+                    style={{
+                      padding: "4px 10px", borderRadius: 6, border: "1px solid",
+                      borderColor: form.credit_days === d ? "#D97706" : "var(--border)",
+                      background: form.credit_days === d ? "#D97706" : "var(--surface)",
+                      color: form.credit_days === d ? "white" : "var(--text-secondary)",
+                      fontSize: 12, cursor: "pointer", fontWeight: 600,
+                    }}>{d} {ar ? "يوم" : "d"}</button>
+                ))}
               </div>
+              {form.due_date && (
+                <div style={{ marginTop: 8, fontSize: 12, color: "#92400E", fontWeight: 600 }}>
+                  {ar ? "الاستحقاق:" : "Due:"} {form.due_date}
+                </div>
+              )}
             </div>
           )}
-        </div>
 
-        {/* ─── الملخص والأزرار ─────────────────────────────────── */}
-        <div>
-          <div className="card" style={{ padding: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 16 }}>
-              {ar ? "ملخص الفاتورة" : "Invoice Summary"}
+          {/* التواريخ */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "تاريخ الإصدار" : "Issue Date"}</label>
+              <input type="date" className="form-input" value={form.issue_date}
+                onChange={e => setForm(f => ({ ...f, issue_date: e.target.value, supply_date: e.target.value }))} />
             </div>
-            {[
-              { label: ar ? "المبلغ قبل الخصم" : "Subtotal", value: totals.subtotal },
-              { label: ar ? "الخصم" : "Discount", value: totals.discount, color: "#DC2626" },
-              { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: totals.vat },
-            ].map((row) => (
-              <div
-                key={row.label}
-                style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, fontSize: 13 }}
-              >
-                <span style={{ color: "var(--text-secondary)" }}>{row.label}</span>
-                <span style={{ fontWeight: 600, color: row.color }}>
-                  {fmt(row.value)} SAR
-                </span>
-              </div>
-            ))}
-            <div
-              style={{
-                borderTop: "2px solid var(--border)",
-                paddingTop: 12,
-                marginTop: 4,
-                display: "flex",
-                justifyContent: "space-between",
-                fontSize: 16,
-                fontWeight: 800,
-              }}
-            >
-              <span>{ar ? "الإجمالي" : "Total"}</span>
-              <span style={{ color: "#2563EB" }}>{fmt(totals.total)} SAR</span>
-            </div>
-
-            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-              <button
-                className="btn btn-primary"
-                style={{ width: "100%" }}
-                onClick={() => handleSubmit(true)}
-                disabled={saving}
-              >
-                {saving ? "..." : ar ? "حفظ وتأكيد" : "Save & Confirm"}
-              </button>
-              <button
-                className="btn btn-secondary"
-                style={{ width: "100%" }}
-                onClick={() => handleSubmit(false)}
-                disabled={saving}
-              >
-                {ar ? "حفظ كمسودة" : "Save as Draft"}
-              </button>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "تاريخ الاستحقاق" : "Due Date"}</label>
+              <input type="date" className="form-input" value={form.due_date}
+                onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
             </div>
           </div>
+
+          {/* ملاحظات */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "ملاحظات" : "Notes"}</label>
+            <textarea className="form-input" rows={2} value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder={ar ? "ملاحظات اختيارية..." : "Optional notes..."} />
+          </div>
+        </div>
+
+        {/* ملخص الفاتورة */}
+        <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{ar ? "ملخص الفاتورة" : "Summary"}</div>
+          {[
+            { label: ar ? "المبلغ قبل الخصم" : "Subtotal",  value: `${fmt(totals.subtotal)} SAR`, color: "var(--text-primary)" },
+            { label: ar ? "الخصم" : "Discount",              value: `- ${fmt(totals.discount)} SAR`, color: "#DC2626" },
+            { label: ar ? "الوعاء الضريبي" : "Taxable",      value: `${fmt(totals.taxable)} SAR`, color: "var(--text-secondary)" },
+            { label: ar ? "ضريبة القيمة المضافة" : "VAT",    value: `${fmt(totals.vat)} SAR`, color: "#D97706" },
+          ].map(r => (
+            <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: r.color }}>
+              <span>{r.label}</span><span style={{ fontWeight: 600 }}>{r.value}</span>
+            </div>
+          ))}
+          <div style={{ borderTop: "2px solid var(--border)", paddingTop: 10, display: "flex", justifyContent: "space-between" }}>
+            <span style={{ fontWeight: 800, fontSize: 15 }}>{ar ? "الإجمالي" : "Total"}</span>
+            <span style={{ fontWeight: 800, fontSize: 18, color: "#2563EB" }}>{fmt(totals.total)} SAR</span>
+          </div>
+          <button onClick={handleSubmitForReview} disabled={saving}
+            style={{ marginTop: 8, width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "#2563EB", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            {saving ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال للمراجعة" : "Send for Review")}
+          </button>
+          <button onClick={handleSaveDraft} disabled={saving}
+            style={{ width: "100%", padding: "10px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg)", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text-secondary)" }}>
+            {ar ? "حفظ كمسودة" : "Save as Draft"}
+          </button>
+        </div>
+      </div>
+
+      {/* ── أسطر الفاتورة ── */}
+      <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", marginBottom: 16, overflow: "hidden" }}>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{ar ? "أسطر الفاتورة" : "Invoice Lines"}</span>
+          <button onClick={addLine}
+            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#2563EB" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            {ar ? "إضافة سطر" : "Add Line"}
+          </button>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "var(--bg)" }}>
+                <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 600, color: "var(--text-secondary)", minWidth: 240 }}>{ar ? "الصنف / الوصف" : "Item / Description"}</th>
+                <th style={{ padding: "10px 8px", width: 80, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الكمية" : "Qty"}</th>
+                <th style={{ padding: "10px 8px", width: 110, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "سعر الوحدة" : "Unit Price"}</th>
+                <th style={{ padding: "10px 8px", width: 80, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "خصم%" : "Disc%"}</th>
+                <th style={{ padding: "10px 8px", width: 80, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "ضريبة%" : "VAT%"}</th>
+                <th style={{ padding: "10px 16px", width: 120, textAlign: "end", fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الإجمالي" : "Total"}</th>
+                <th style={{ width: 36 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((line, i) => {
+                const c = calcLine(line);
+                return (
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "10px 16px", verticalAlign: "top" }}>
+                      <RepStockItemPicker
+                        locale={locale}
+                        value={line.picked}
+                        onChange={picked => setPicked(i, picked)}
+                        stockItems={myStock}
+                      />
+                    </td>
+                    <td style={{ padding: "10px 8px", verticalAlign: "top" }}>
+                      <input type="number" className="form-input" style={{ width: 70 }}
+                        value={line.picked.quantity} min="0"
+                        disabled={line.picked.mode === "serial"}
+                        onChange={e => setPicked(i, { ...line.picked, quantity: Math.max(0, Number(e.target.value)) })} />
+                    </td>
+                    <td style={{ padding: "10px 8px", verticalAlign: "top" }}>
+                      <input type="number" className="form-input" style={{ width: 100 }}
+                        value={line.picked.unit_price} min="0" step="0.01"
+                        onChange={e => setPicked(i, { ...line.picked, unit_price: Number(e.target.value) })} />
+                    </td>
+                    <td style={{ padding: "10px 8px", verticalAlign: "top" }}>
+                      <input type="number" className="form-input" style={{ width: 66 }}
+                        value={line.discount_pct} min="0" max="100"
+                        onChange={e => setLine(i, "discount_pct", e.target.value)} />
+                    </td>
+                    <td style={{ padding: "10px 8px", verticalAlign: "top" }}>
+                      <input type="number" className="form-input" style={{ width: 66 }}
+                        value={line.vat_rate} min="0" max="100"
+                        onChange={e => setLine(i, "vat_rate", e.target.value)} />
+                    </td>
+                    <td style={{ padding: "10px 16px", textAlign: "end", fontWeight: 700, color: "#2563EB", verticalAlign: "top", paddingTop: 14 }}>
+                      {fmt(c.total)} SAR
+                    </td>
+                    <td style={{ padding: "10px 8px", verticalAlign: "top" }}>
+                      {lines.length > 1 && (
+                        <button onClick={() => removeLine(i)}
+                          style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+                          ×
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </>

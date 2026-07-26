@@ -238,7 +238,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
             color="#7C3AED" href={`${base}/reps/payments`} />
           <ActionCard icon={Icons.newCustomer} label={ar ? "عميل جديد" : "New Customer"}
             desc={ar ? "أضف عميلاً جديداً" : "Add a new customer"}
-            color="#0891B2" href={`${base}/sales/customers/new`} />
+            color="#0891B2" href={`${base}/reps/customers?action=new`} />
           <ActionCard icon={Icons.reports} label={ar ? "تقاريري" : "My Reports"}
             desc={ar ? "عرض تقارير أدائك" : "View your performance reports"}
             color="#DC2626" href={`${base}/reps/reports`} />
