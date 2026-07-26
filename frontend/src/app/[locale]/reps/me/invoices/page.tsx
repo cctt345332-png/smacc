@@ -13,7 +13,7 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
   const ar = locale === "ar";
 
   const handleDownload = () => {
-    window.open(`/${locale}/sales/invoices/${invoiceId}?print=1`, "_blank");
+    window.open(`/${locale}/reps/me/invoices/${invoiceId}/print`, "_blank");
   };
 
   return (

@@ -48,7 +48,7 @@ function InvoiceDetailModal({
   }, [inv.id]);
 
   const handlePDF = () => {
-    window.open(`/${locale}/sales/invoices/${inv.id}?print=1`, "_blank");
+    window.open(`/${locale}/reps/me/invoices/${inv.id}/print`, "_blank");
   };
 
   const st = STATUS[inv.status] || STATUS.submitted;

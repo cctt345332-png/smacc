@@ -358,17 +358,8 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
       .finally(() => setLoading(false));
   }, [inv.id]);
 
-  const handlePDF = async () => {
-    setDownloading(true);
-    try {
-      const res = await api.get(`/sales/invoices/${inv.id}/pdf`, { responseType: "text" });
-      const blob = new Blob([res.data], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      URL.revokeObjectURL(url);
-    } catch { alert(ar ? "تعذّر تحميل PDF" : "Could not download PDF"); }
-    finally { setDownloading(false); }
+  const handlePDF = () => {
+    window.open(`/${locale}/reps/me/invoices/${inv.id}/print`, "_blank");
   };
 
   const st = STATUS[inv.status] || STATUS.draft;
