@@ -44,7 +44,7 @@ export default function RepInvoicesPage({ params: { locale } }: { params: { loca
             {ar ? "كل الفواتير التي أصدرتها" : "All invoices you have issued"}
           </p>
         </div>
-        <Link href={`/${locale}/reps/invoices/new`} className="btn btn-primary">
+        <Link href={`/${locale}/reps/me/invoices/new`} className="btn btn-primary">
           + {ar ? "فاتورة جديدة" : "New Invoice"}
         </Link>
       </div>

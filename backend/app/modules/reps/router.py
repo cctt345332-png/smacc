@@ -318,7 +318,7 @@ async def post_my_location(
         heading=data.get("heading"),
         battery_level=data.get("battery_level"),
         is_moving=data.get("is_moving", False),
-        recorded_at=datetime.fromisoformat(data["recorded_at"]) if data.get("recorded_at") else datetime.utcnow(),
+        recorded_at=datetime.fromisoformat(data["recorded_at"].replace("Z", "+00:00")).replace(tzinfo=None) if data.get("recorded_at") else datetime.utcnow(),
         created_at=datetime.utcnow(),
     )
     db.add(loc)

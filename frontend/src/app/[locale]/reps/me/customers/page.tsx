@@ -142,7 +142,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
                       </span>
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      <Link href={`/${locale}/reps/invoices/new?customer=${c.id}`}
+                      <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`}
                         style={{ fontSize: 12, color: "#2563EB", fontWeight: 600, textDecoration: "none", padding: "4px 10px", border: "1px solid #BFDBFE", borderRadius: 6, background: "#EFF6FF" }}>
                         {ar ? "فاتورة" : "Invoice"}
                       </Link>
