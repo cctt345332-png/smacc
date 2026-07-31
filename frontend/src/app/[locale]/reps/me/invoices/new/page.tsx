@@ -88,6 +88,15 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
       .catch(() => {});
   }, []);
 
+  // ملء customer_id من query param ?customer=
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const cid = params.get("customer");
+      if (cid) setForm(f => ({ ...f, customer_id: cid }));
+    }
+  }, []);
+
   const setLine = (i: number, field: keyof Omit<Line, "picked">, value: string) =>
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
 
