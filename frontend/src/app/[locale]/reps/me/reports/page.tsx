@@ -93,11 +93,11 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
       </div>
       <div style="text-align:start">
         <div style="font-size:12px;color:#6B7280">إجمالي المبيعات</div>
-        <div style="font-size:16px;font-weight:700;color:#2563EB">${fmt(stmtData.total_invoiced)} SAR</div>
+        <div style="font-size:16px;font-weight:700;color:#2563EB">${fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0)} SAR</div>
         <div style="font-size:12px;color:#6B7280;margin-top:4px">إجمالي المقبوض</div>
-        <div style="font-size:16px;font-weight:700;color:#059669">${fmt(stmtData.total_paid)} SAR</div>
+        <div style="font-size:16px;font-weight:700;color:#059669">${fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0)} SAR</div>
         <div style="font-size:12px;color:#6B7280;margin-top:4px">الرصيد المستحق</div>
-        <div style="font-size:18px;font-weight:800;color:#DC2626">${fmt(stmtData.outstanding)} SAR</div>
+        <div style="font-size:18px;font-weight:800;color:#DC2626">${fmt(stmtData.summary?.closing_balance ?? stmtData.summary?.outstanding ?? stmtData.outstanding ?? 0)} SAR</div>
       </div>
     </div>
     <table>
@@ -417,9 +417,9 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                   {/* ملخص */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[
-                      { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: fmt(stmtData.total_invoiced) + " SAR", color: "#2563EB" },
-                      { label: ar ? "إجمالي المقبوض" : "Total Paid",     value: fmt(stmtData.total_paid) + " SAR",     color: "#059669" },
-                      { label: ar ? "الرصيد المستحق" : "Outstanding",    value: fmt(stmtData.outstanding) + " SAR",    color: "#DC2626" },
+                      { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0) + " SAR", color: "#2563EB" },
+                      { label: ar ? "إجمالي المقبوض" : "Total Paid",     value: fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0) + " SAR",     color: "#059669" },
+                      { label: ar ? "الرصيد المستحق" : "Outstanding",    value: fmt(stmtData.summary?.closing_balance ?? stmtData.summary?.outstanding ?? stmtData.outstanding ?? 0) + " SAR",    color: "#DC2626" },
                     ].map(s => (
                       <div key={s.label} style={{ background: "var(--surface)", borderRadius: 12, padding: "12px", border: "1px solid var(--border)" }}>
                         <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{s.label}</div>
