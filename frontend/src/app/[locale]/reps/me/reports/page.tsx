@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { getMySummary, getMyInvoices, getMyStock } from "@/lib/reps";
+import { getCustomers } from "@/lib/sales";
+import api from "@/lib/api";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
@@ -22,21 +24,104 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
   const [invoices, setInvoices] = useState<any[]>([]);
   const [stock, setStock]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [tab, setTab]           = useState<"summary" | "invoices" | "stock">("summary");
+  const [tab, setTab] = useState<"summary"|"invoices"|"stock"|"statement">("summary");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterMonth, setFilterMonth]   = useState("");
+
+  // كشف حساب العميل
+  const [customers, setCustomers]       = useState<any[]>([]);
+  const [stmtCustomer, setStmtCustomer] = useState("");
+  const [stmtFrom, setStmtFrom]         = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().split("T")[0]);
+  const [stmtTo, setStmtTo]             = useState(new Date().toISOString().split("T")[0]);
+  const [stmtData, setStmtData]         = useState<any>(null);
+  const [stmtLoading, setStmtLoading]   = useState(false);
 
   useEffect(() => {
     Promise.all([
       getMySummary().catch(() => ({ data: null })),
       getMyInvoices().catch(() => ({ data: [] })),
       getMyStock().catch(() => ({ data: [] })),
-    ]).then(([s, i, st]) => {
+      getCustomers().catch(() => ({ data: [] })),
+    ]).then(([s, i, st, c]) => {
       setSummary(s.data);
       setInvoices(Array.isArray(i.data) ? i.data : []);
       setStock(Array.isArray(st.data) ? st.data : []);
+      setCustomers(Array.isArray(c.data) ? c.data : []);
     }).finally(() => setLoading(false));
   }, []);
+
+  /* جلب كشف حساب العميل */
+  const loadStatement = async () => {
+    if (!stmtCustomer) return;
+    setStmtLoading(true); setStmtData(null);
+    try {
+      const res = await api.get(`/sales/customers/${stmtCustomer}/statement`, {
+        params: { from_date: `${stmtFrom}T00:00:00`, to_date: `${stmtTo}T23:59:59` }
+      });
+      setStmtData(res.data);
+    } catch { setStmtData(null); }
+    finally { setStmtLoading(false); }
+  };
+
+  /* طباعة كشف الحساب كـ PDF */
+  const printStatement = () => {
+    if (!stmtData) return;
+    const cust = customers.find(c => c.id === stmtCustomer);
+    const rows = (stmtData.transactions || []).map((t: any) => `
+      <tr style="border-bottom:1px solid #E5E7EB">
+        <td style="padding:7px 12px;font-size:12px">${fmtDate(t.date)}</td>
+        <td style="padding:7px 12px;font-size:12px">${t.description || ""}</td>
+        <td style="padding:7px 12px;font-size:12px;color:#2563EB">${t.type === "invoice" ? fmt(t.amount) + " SAR" : ""}</td>
+        <td style="padding:7px 12px;font-size:12px;color:#059669">${t.type === "payment" ? fmt(t.amount) + " SAR" : ""}</td>
+        <td style="padding:7px 12px;font-size:12px;font-weight:700;color:${t.running_balance > 0 ? "#DC2626" : "#059669"}">${fmt(t.running_balance)} SAR</td>
+      </tr>`).join("");
+
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
+    <title>كشف حساب</title>
+    <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;direction:rtl;padding:24px}
+    @media print{.no-print{display:none!important}@page{margin:10mm}}
+    table{width:100%;border-collapse:collapse}th{padding:10px 12px;background:#F9FAFB;font-size:12px;color:#6B7280;font-weight:600;text-align:start;border-bottom:2px solid #E5E7EB}</style></head>
+    <body>
+    <div class="no-print" style="text-align:center;margin-bottom:20px">
+      <button onclick="window.print()" style="padding:10px 28px;background:#1D4ED8;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">طباعة / حفظ PDF</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1D4ED8">
+      <div>
+        <div style="font-size:20px;font-weight:800;color:#1D4ED8">كشف حساب العميل</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px">${cust?.name_ar || ""}</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:2px">الفترة: ${stmtFrom} — ${stmtTo}</div>
+      </div>
+      <div style="text-align:start">
+        <div style="font-size:12px;color:#6B7280">إجمالي المبيعات</div>
+        <div style="font-size:16px;font-weight:700;color:#2563EB">${fmt(stmtData.total_invoiced)} SAR</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:4px">إجمالي المقبوض</div>
+        <div style="font-size:16px;font-weight:700;color:#059669">${fmt(stmtData.total_paid)} SAR</div>
+        <div style="font-size:12px;color:#6B7280;margin-top:4px">الرصيد المستحق</div>
+        <div style="font-size:18px;font-weight:800;color:#DC2626">${fmt(stmtData.outstanding)} SAR</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>التاريخ</th><th>البيان</th>
+        <th style="color:#2563EB">مدين (فاتورة)</th>
+        <th style="color:#059669">دائن (قبض)</th>
+        <th>الرصيد</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:#F9FAFB;font-weight:700">
+        <td colspan="2" style="padding:10px 12px;font-size:13px">الإجمالي</td>
+        <td style="padding:10px 12px;color:#2563EB;font-size:13px">${fmt(stmtData.total_invoiced)} SAR</td>
+        <td style="padding:10px 12px;color:#059669;font-size:13px">${fmt(stmtData.total_paid)} SAR</td>
+        <td style="padding:10px 12px;color:#DC2626;font-size:14px;font-weight:800">${fmt(stmtData.outstanding)} SAR</td>
+      </tr></tfoot>
+    </table>
+    </body></html>`;
+
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
 
   /* تصدير CSV */
   const exportCSV = () => {
@@ -73,9 +158,10 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
   const pct = targetMonthly > 0 ? Math.min(100, Math.round((totalSales / targetMonthly) * 100)) : null;
 
   const TABS = [
-    { key: "summary",  label: ar ? "الملخص"   : "Summary"  },
-    { key: "invoices", label: ar ? "الفواتير" : "Invoices" },
-    { key: "stock",    label: ar ? "المخزون"  : "Stock"    },
+    { key: "summary",   label: ar ? "الملخص"              : "Summary"          },
+    { key: "invoices",  label: ar ? "الفواتير"            : "Invoices"         },
+    { key: "stock",     label: ar ? "المخزون"             : "Stock"            },
+    { key: "statement", label: ar ? "كشف حساب العميل"    : "Customer Statement"},
   ] as const;
 
   return (
@@ -290,6 +376,86 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                       </div>
                     </div>
                   ))}
+                </>
+              )}
+            </div>
+          )}
+          {/* ── تبويب كشف حساب العميل ── */}
+          {tab === "statement" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {/* فلاتر */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <select style={{ flex: 2, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13 }}
+                  value={stmtCustomer} onChange={e => { setStmtCustomer(e.target.value); setStmtData(null); }}>
+                  <option value="">{ar ? "— اختر العميل —" : "— Select Customer —"}</option>
+                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
+                </select>
+                <input type="date" style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13 }}
+                  value={stmtFrom} onChange={e => setStmtFrom(e.target.value)} />
+                <input type="date" style={{ flex: 1, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13 }}
+                  value={stmtTo} onChange={e => setStmtTo(e.target.value)} />
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={loadStatement} disabled={!stmtCustomer || stmtLoading}
+                  style={{ flex: 2, padding: "11px", borderRadius: 10, border: "none", background: "#2563EB", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: !stmtCustomer ? 0.6 : 1 }}>
+                  {stmtLoading ? (ar ? "جاري التحميل..." : "Loading...") : (ar ? "عرض الكشف" : "Load Statement")}
+                </button>
+                {stmtData && (
+                  <button onClick={printStatement}
+                    style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#2563EB", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    PDF
+                  </button>
+                )}
+              </div>
+
+              {stmtData && (
+                <>
+                  {/* ملخص */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                    {[
+                      { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: fmt(stmtData.total_invoiced) + " SAR", color: "#2563EB" },
+                      { label: ar ? "إجمالي المقبوض" : "Total Paid",     value: fmt(stmtData.total_paid) + " SAR",     color: "#059669" },
+                      { label: ar ? "الرصيد المستحق" : "Outstanding",    value: fmt(stmtData.outstanding) + " SAR",    color: "#DC2626" },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: "var(--surface)", borderRadius: 12, padding: "12px", border: "1px solid var(--border)" }}>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>{s.label}</div>
+                        <div style={{ fontWeight: 800, fontSize: 14, color: s.color }}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* الحركات */}
+                  {(stmtData.transactions || []).length > 0 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {stmtData.transactions.map((t: any, i: number) => (
+                        <div key={i} style={{ background: "var(--surface)", borderRadius: 12, padding: "12px 14px",
+                          border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {t.description || (t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "قبض" : "Payment"))}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{fmtDate(t.date)}</div>
+                          </div>
+                          <div style={{ textAlign: "end", flexShrink: 0, marginInlineStart: 12 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: t.type === "invoice" ? "#2563EB" : "#059669" }}>
+                              {t.type === "invoice" ? "+" : "-"} {fmt(t.amount)} SAR
+                            </div>
+                            <div style={{ fontSize: 11, color: Number(t.running_balance) > 0 ? "#DC2626" : "#059669", fontWeight: 600 }}>
+                              {ar ? "رصيد:" : "Bal:"} {fmt(t.running_balance)} SAR
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+                      {ar ? "لا توجد حركات في هذه الفترة" : "No transactions in this period"}
+                    </div>
+                  )}
                 </>
               )}
             </div>

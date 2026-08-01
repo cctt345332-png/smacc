@@ -243,7 +243,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
             color="#0891B2" href={`${base}/reps/me/customers?action=new`} />
           <ActionCard icon={Icons.reports} label={ar ? "تقاريري" : "My Reports"}
             desc={ar ? "عرض تقارير أدائك" : "View your performance reports"}
-            color="#DC2626" href={`${base}/reps/reports`} />
+            color="#DC2626" href={`${base}/reps/me/reports`} />
         </div>
       </div>
 
