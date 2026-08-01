@@ -71,9 +71,9 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
       <tr style="border-bottom:1px solid #E5E7EB">
         <td style="padding:7px 12px;font-size:12px">${fmtDate(t.date)}</td>
         <td style="padding:7px 12px;font-size:12px">${t.description || ""}</td>
-        <td style="padding:7px 12px;font-size:12px;color:#2563EB">${t.type === "invoice" ? fmt(t.amount) + " SAR" : ""}</td>
-        <td style="padding:7px 12px;font-size:12px;color:#059669">${t.type === "payment" ? fmt(t.amount) + " SAR" : ""}</td>
-        <td style="padding:7px 12px;font-size:12px;font-weight:700;color:${t.running_balance > 0 ? "#DC2626" : "#059669"}">${fmt(t.running_balance)} SAR</td>
+        <td style="padding:7px 12px;font-size:12px;color:#2563EB">${(t.debit || t.amount || 0) > 0 && t.type === "invoice" ? fmt(t.debit || t.amount) + " SAR" : ""}</td>
+        <td style="padding:7px 12px;font-size:12px;color:#059669">${(t.credit || t.amount || 0) > 0 && t.type === "payment" ? fmt(t.credit || t.amount) + " SAR" : ""}</td>
+        <td style="padding:7px 12px;font-size:12px;font-weight:700;color:${(t.balance ?? t.running_balance ?? 0) > 0 ? "#DC2626" : "#059669"}">${fmt(t.balance ?? t.running_balance ?? 0)} SAR</td>
       </tr>`).join("");
 
     const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
@@ -436,16 +436,24 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                           border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {t.description || (t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "قبض" : "Payment"))}
+                              {t.description_ar || t.description || (t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "قبض" : "Payment"))}
                             </div>
                             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{fmtDate(t.date)}</div>
+                            {t.reference && (
+                              <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>{t.reference}</div>
+                            )}
                           </div>
                           <div style={{ textAlign: "end", flexShrink: 0, marginInlineStart: 12 }}>
-                            <div style={{ fontWeight: 700, fontSize: 13, color: t.type === "invoice" ? "#2563EB" : "#059669" }}>
-                              {t.type === "invoice" ? "+" : "-"} {fmt(t.amount)} SAR
+                            <div style={{ fontWeight: 700, fontSize: 13,
+                              color: t.type === "invoice" ? "#2563EB" : "#059669" }}>
+                              {t.type === "invoice"
+                                ? `+ ${fmt(t.debit || t.amount || 0)} SAR`
+                                : `- ${fmt(t.credit || t.amount || 0)} SAR`}
                             </div>
-                            <div style={{ fontSize: 11, color: Number(t.running_balance) > 0 ? "#DC2626" : "#059669", fontWeight: 600 }}>
-                              {ar ? "رصيد:" : "Bal:"} {fmt(t.running_balance)} SAR
+                            <div style={{ fontSize: 11,
+                              color: Number(t.balance ?? t.running_balance ?? 0) > 0 ? "#DC2626" : "#059669",
+                              fontWeight: 600 }}>
+                              {ar ? "رصيد:" : "Bal:"} {fmt(t.balance ?? t.running_balance ?? 0)} SAR
                             </div>
                           </div>
                         </div>

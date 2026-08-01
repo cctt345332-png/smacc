@@ -268,22 +268,10 @@ async def customer_statement(
     customer_id: str,
     from_date: datetime = Query(...),
     to_date: datetime = Query(...),
-    tenant_id=Depends(get_tenant_id),
+    user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await orders_service.get_customer_statement(db, tenant_id, customer_id, from_date, to_date)
-
-
-# ─── Customer Statement ──────────────────────────────────────────────
-@router.get("/customers/{customer_id}/statement")
-async def customer_statement(
-    customer_id: str,
-    from_date: datetime = Query(...),
-    to_date: datetime = Query(...),
-    tenant_id=Depends(get_tenant_id),
-    db: AsyncSession = Depends(get_db),
-):
-    return await orders_service.get_customer_statement(db, tenant_id, customer_id, from_date, to_date)
+    return await orders_service.get_customer_statement(db, user["tenant_id"], customer_id, from_date, to_date)
 
 
 # ─── Invoice PDF (HTML قابل للطباعة) ─────────────────────────────────
