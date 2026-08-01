@@ -266,7 +266,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
                   <option key={c.id} value={c.id}>{c.name_ar}{c.name_en ? ` / ${c.name_en}` : ""}</option>
                 ))}
               </select>
-              <Link href={`${base}/reps/customers?action=new`}
+              <Link href={`${base}/reps/me/customers?action=new`}
                 style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", fontSize: 12, color: "#2563EB", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                 + {ar ? "عميل جديد" : "New"}
               </Link>
