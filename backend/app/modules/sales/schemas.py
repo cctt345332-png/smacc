@@ -36,6 +36,8 @@ class CustomerCreate(BaseModel):
     payment_terms_days: int = 30
     ar_account_id: Optional[str] = None
     notes: Optional[str] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
 
 
 class CustomerUpdate(BaseModel):

@@ -171,7 +171,7 @@ export default function RepLayout({
     return () => clearInterval(id);
   }, [token]);
 
-  /* تتبع الموقع — صامت، كل 5 دقائق */
+  /* تتبع الموقع — صارم، كل دقيقة + عند فتح التطبيق */
   useEffect(() => {
     if (!token) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -191,16 +191,38 @@ export default function RepLayout({
             }).catch(() => {});
           });
         },
-        () => {}, // صمت عند الرفض
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        () => {},
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
       );
     };
 
     // أرسل فوراً عند الفتح
     sendLocation();
-    // ثم كل 5 دقائق
-    const id = setInterval(sendLocation, 5 * 60_000);
-    return () => clearInterval(id);
+    // كل دقيقة
+    const id = setInterval(sendLocation, 60_000);
+
+    // أرسل عند عودة التطبيق للمقدمة
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") sendLocation();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    // أرسل عند تحريك الصفحة (نشاط المستخدم)
+    let activityTimer: any = null;
+    const onActivity = () => {
+      clearTimeout(activityTimer);
+      activityTimer = setTimeout(sendLocation, 5000);
+    };
+    window.addEventListener("touchstart", onActivity, { passive: true });
+    window.addEventListener("click", onActivity);
+
+    return () => {
+      clearInterval(id);
+      clearTimeout(activityTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("touchstart", onActivity);
+      window.removeEventListener("click", onActivity);
+    };
   }, [token]);
 
   const handleLogout = () => {
