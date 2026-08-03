@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getCustomers, createCustomer } from "@/lib/sales";
@@ -12,7 +12,135 @@ const emptyForm = {
   vat_number: "", cr_number: "", national_id: "",
   payment_terms_days: "30", credit_limit: "0",
   notes: "",
+  latitude: "", longitude: "",
 };
+
+/* ── خريطة اختيار موقع العميل ─────────────────────────────────────── */
+function LocationPicker({ locale, onSelect, onClose }: {
+  locale: string;
+  onSelect: (lat: number, lng: number) => void;
+  onClose: () => void;
+}) {
+  const ar = locale === "ar";
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMap = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!mapRef.current || leafletMap.current) return;
+
+    const initMap = async () => {
+      const L = await import("leaflet");
+      // @ts-ignore
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+
+      // حاول تحديد الموقع الحالي
+      let center: [number, number] = [24.7136, 46.6753]; // الرياض افتراضي
+      try {
+        const pos = await new Promise<GeolocationPosition>((res, rej) =>
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 })
+        );
+        center = [pos.coords.latitude, pos.coords.longitude];
+      } catch {}
+
+      const map = L.map(mapRef.current!, { center, zoom: 15 });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      // marker ابتدائي
+      const marker = L.marker(center, { draggable: true }).addTo(map);
+      markerRef.current = marker;
+      setCoords({ lat: center[0], lng: center[1] });
+
+      // تحديث عند سحب الـ marker
+      marker.on("dragend", () => {
+        const { lat, lng } = marker.getLatLng();
+        setCoords({ lat, lng });
+      });
+
+      // تحديث عند الضغط على الخريطة
+      map.on("click", (e: any) => {
+        marker.setLatLng(e.latlng);
+        setCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
+      });
+
+      leafletMap.current = { map, L };
+    };
+
+    // Leaflet CSS
+    const id = "leaflet-css";
+    if (!document.getElementById(id)) {
+      const link = document.createElement("link");
+      link.id = id; link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+
+    initMap();
+    return () => {
+      leafletMap.current?.map?.remove();
+      leafletMap.current = null;
+    };
+  }, []);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: "white", borderRadius: 16, width: "95%", maxWidth: 540,
+        overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+
+        {/* رأس */}
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid #E5E7EB",
+          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>
+            {ar ? "تحديد موقع العميل" : "Pin Customer Location"}
+          </div>
+          <button onClick={onClose}
+            style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid #E5E7EB",
+              background: "transparent", cursor: "pointer", fontSize: 16, color: "#6B7280" }}>×</button>
+        </div>
+
+        {/* الخريطة */}
+        <div ref={mapRef} style={{ width: "100%", height: 360 }} />
+
+        {/* تعليمات والإحداثيات */}
+        <div style={{ padding: "12px 18px", borderTop: "1px solid #E5E7EB" }}>
+          <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 10 }}>
+            {ar ? "اضغط على الخريطة أو اسحب الدبوس لتحديد الموقع" : "Tap map or drag pin to set location"}
+          </div>
+          {coords && (
+            <div style={{ display: "flex", gap: 8, fontSize: 12, fontFamily: "monospace",
+              color: "#374151", marginBottom: 10 }}>
+              <span>{coords.lat.toFixed(6)},</span>
+              <span>{coords.lng.toFixed(6)}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={onClose}
+              style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB",
+                background: "white", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+              {ar ? "إلغاء" : "Cancel"}
+            </button>
+            <button onClick={() => coords && onSelect(coords.lat, coords.lng)}
+              disabled={!coords}
+              style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none",
+                background: "#2563EB", color: "white", cursor: "pointer",
+                fontSize: 13, fontWeight: 700 }}>
+              {ar ? "تأكيد الموقع" : "Confirm Location"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function RepCustomersPage({ params: { locale } }: { params: { locale: string } }) {
   const ar = locale === "ar";
@@ -25,6 +153,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState("");
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   const load = (q?: string) => {
     setLoading(true);
@@ -60,6 +189,8 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
         national_id: form.national_id || null,
         name_en: form.name_en || null,
         notes: form.notes || null,
+        latitude: form.latitude ? parseFloat(form.latitude) : null,
+        longitude: form.longitude ? parseFloat(form.longitude) : null,
       } as any);
       setShowModal(false);
       setForm({ ...emptyForm });
@@ -233,6 +364,45 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
               <textarea className="form-input" rows={2} value={form.notes} onChange={e => upd("notes", e.target.value)} placeholder={ar ? "ملاحظات اختيارية..." : "Optional..."} />
             </div>
 
+            {/* موقع العميل */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>
+                {ar ? "موقع العميل (اختياري)" : "Customer Location (optional)"}
+              </label>
+              {form.latitude && form.longitude ? (
+                <div style={{ display: "flex", gap: 8, alignItems: "center",
+                  background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 14px" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                  </svg>
+                  <span style={{ fontSize: 12, color: "#059669", fontFamily: "monospace", flex: 1 }}>
+                    {parseFloat(form.latitude).toFixed(5)}, {parseFloat(form.longitude).toFixed(5)}
+                  </span>
+                  <button type="button" onClick={() => setShowLocationPicker(true)}
+                    style={{ fontSize: 11, color: "#2563EB", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                    {ar ? "تعديل" : "Edit"}
+                  </button>
+                  <button type="button" onClick={() => upd("latitude", "") || upd("longitude", "")}
+                    style={{ fontSize: 11, color: "#DC2626", background: "none", border: "none", cursor: "pointer" }}>
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setShowLocationPicker(true)}
+                  style={{ width: "100%", padding: "10px", borderRadius: 10,
+                    border: "2px dashed var(--border)", background: "var(--surface)",
+                    color: "#2563EB", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                  </svg>
+                  {ar ? "تحديد موقع العميل على الخريطة" : "Pin customer location on map"}
+                </button>
+              )}
+            </div>
+
             {/* أزرار */}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setShowModal(false)}
@@ -246,6 +416,18 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
             </div>
           </div>
         </div>
+      )}
+
+      {/* Location Picker */}
+      {showLocationPicker && (
+        <LocationPicker
+          locale={locale}
+          onSelect={(lat, lng) => {
+            setForm(f => ({ ...f, latitude: String(lat), longitude: String(lng) }));
+            setShowLocationPicker(false);
+          }}
+          onClose={() => setShowLocationPicker(false)}
+        />
       )}
     </>
   );
