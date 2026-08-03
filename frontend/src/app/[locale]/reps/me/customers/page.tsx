@@ -383,7 +383,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
                     style={{ fontSize: 11, color: "#2563EB", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
                     {ar ? "تعديل" : "Edit"}
                   </button>
-                  <button type="button" onClick={() => upd("latitude", "") || upd("longitude", "")}
+                  <button type="button" onClick={() => { upd("latitude", ""); upd("longitude", ""); }}
                     style={{ fontSize: 11, color: "#DC2626", background: "none", border: "none", cursor: "pointer" }}>
                     ×
                   </button>
