@@ -1,10 +1,4 @@
 "use client";
-/**
- * BarcodeScanner — يفتح كاميرا الجوال ويمسح الباركود/QR
- * يستخدم html5-qrcode
- * onResult(text) — يُستدعى عند نجاح المسح
- * onClose() — عند الإغلاق
- */
 import { useEffect, useRef, useState } from "react";
 
 interface Props {
@@ -18,145 +12,158 @@ export default function BarcodeScanner({ onResult, onClose, locale = "ar" }: Pro
   const scannerRef = useRef<any>(null);
   const [error, setError] = useState("");
   const [scanning, setScanning] = useState(false);
-  const containerId = "barcode-scanner-container";
+  const containerId = "barcode-scanner-container-" + Math.random().toString(36).slice(2);
+  const containerIdRef = useRef(containerId);
+
+  const stopScanner = async () => {
+    try {
+      if (scannerRef.current) {
+        const state = scannerRef.current.getState?.();
+        // 2 = SCANNING
+        if (state === 2) {
+          await scannerRef.current.stop();
+        }
+        scannerRef.current.clear?.();
+        scannerRef.current = null;
+      }
+    } catch { /* صمت */ }
+  };
 
   useEffect(() => {
-    let html5QrCode: any = null;
+    let mounted = true;
 
     const startScanner = async () => {
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
-        html5QrCode = new Html5Qrcode(containerId);
-        scannerRef.current = html5QrCode;
+        if (!mounted) return;
 
+        const html5QrCode = new Html5Qrcode(containerIdRef.current);
+        scannerRef.current = html5QrCode;
         setScanning(true);
+
         await html5QrCode.start(
-          { facingMode: "environment" }, // الكاميرا الخلفية
-          {
-            fps: 15,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-          },
+          { facingMode: "environment" },
+          { fps: 15, qrbox: { width: 240, height: 240 } },
           (decodedText: string) => {
-            // نجح المسح
-            html5QrCode.stop().catch(() => {});
-            onResult(decodedText.trim());
+            if (!mounted) return;
+            stopScanner().then(() => {
+              if (mounted) onResult(decodedText.trim());
+            });
           },
-          () => {} // خطأ عادي أثناء المسح — نتجاهله
+          () => {}
         );
-      } catch (err: any) {
-        setError(ar ? "تعذّر الوصول للكاميرا. تأكد من منح الإذن." : "Camera access denied. Please allow camera.");
-        setScanning(false);
+      } catch {
+        if (mounted) {
+          setError(ar ? "تعذّر الوصول للكاميرا — تأكد من منح الإذن" : "Camera access denied");
+          setScanning(false);
+        }
       }
     };
 
+    // Leaflet CSS — Leaflet ليس مطلوباً هنا لكن نضمن عدم التعارض
     startScanner();
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-        scannerRef.current.clear();
-      }
+      mounted = false;
+      stopScanner();
     };
   }, []);
 
-  const handleClose = () => {
-    if (scannerRef.current) {
-      scannerRef.current.stop().catch(() => {});
-    }
+  const handleClose = async () => {
+    await stopScanner();
     onClose();
   };
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)",
       zIndex: 9999, display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
+      alignItems: "center", justifyContent: "flex-start",
+      paddingTop: 60,
     }}>
       {/* رأس */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0,
-        padding: "16px 20px", display: "flex",
+        padding: "14px 20px", display: "flex",
         justifyContent: "space-between", alignItems: "center",
       }}>
         <div style={{ color: "white", fontWeight: 700, fontSize: 16 }}>
           {ar ? "مسح الباركود" : "Scan Barcode"}
         </div>
         <button onClick={handleClose}
-          style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.4)",
-            background: "rgba(255,255,255,0.1)", color: "white", fontSize: 18, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center" }}>
+          style={{
+            width: 38, height: 38, borderRadius: "50%",
+            border: "2px solid rgba(255,255,255,0.5)",
+            background: "rgba(255,255,255,0.15)",
+            color: "white", fontSize: 20, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
           ×
         </button>
       </div>
 
-      {/* منطقة الكاميرا */}
-      <div style={{ position: "relative", width: "100%", maxWidth: 400 }}>
-        <div id={containerId} style={{ width: "100%" }} />
-
-        {/* إطار التصويب */}
-        {scanning && (
-          <div style={{
-            position: "absolute", inset: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            pointerEvents: "none",
-          }}>
-            <div style={{
-              width: 250, height: 250, position: "relative",
-            }}>
-              {/* زوايا الإطار */}
-              {[
-                { top: 0, left: 0, borderTop: "3px solid #2563EB", borderLeft: "3px solid #2563EB" },
-                { top: 0, right: 0, borderTop: "3px solid #2563EB", borderRight: "3px solid #2563EB" },
-                { bottom: 0, left: 0, borderBottom: "3px solid #2563EB", borderLeft: "3px solid #2563EB" },
-                { bottom: 0, right: 0, borderBottom: "3px solid #2563EB", borderRight: "3px solid #2563EB" },
-              ].map((style, i) => (
-                <div key={i} style={{ position: "absolute", width: 24, height: 24, ...style }} />
-              ))}
-
-              {/* خط المسح */}
-              <div style={{
-                position: "absolute", top: "50%", left: 4, right: 4, height: 2,
-                background: "rgba(37,99,235,0.8)",
-                animation: "scan-line 2s ease-in-out infinite",
-              }} />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* رسالة خطأ */}
-      {error && (
+      {error ? (
         <div style={{
-          marginTop: 20, background: "#FEF2F2", border: "1px solid #FECACA",
-          borderRadius: 10, padding: "12px 20px", color: "#DC2626",
-          fontSize: 13, maxWidth: 340, textAlign: "center",
+          background: "#FEF2F2", borderRadius: 14, padding: "20px 24px",
+          maxWidth: 320, textAlign: "center", margin: "0 20px",
         }}>
-          {error}
-          <div style={{ marginTop: 10 }}>
-            <button onClick={handleClose}
-              style={{ padding: "6px 16px", borderRadius: 8, border: "none",
-                background: "#DC2626", color: "white", fontWeight: 600, cursor: "pointer" }}>
-              {ar ? "إغلاق" : "Close"}
-            </button>
-          </div>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>📷</div>
+          <div style={{ fontSize: 14, color: "#DC2626", fontWeight: 600, marginBottom: 16 }}>{error}</div>
+          <button onClick={handleClose}
+            style={{ padding: "10px 24px", borderRadius: 10, border: "none",
+              background: "#DC2626", color: "white", fontWeight: 700, cursor: "pointer" }}>
+            {ar ? "إغلاق" : "Close"}
+          </button>
+        </div>
+      ) : (
+        <div style={{ position: "relative", width: "100%", maxWidth: 400 }}>
+          {/* container الكاميرا */}
+          <div id={containerIdRef.current} style={{ width: "100%" }} />
+
+          {/* إطار التصويب */}
+          {scanning && (
+            <div style={{
+              position: "absolute", inset: 0, pointerEvents: "none",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <div style={{ width: 240, height: 240, position: "relative" }}>
+                {/* زوايا */}
+                {[
+                  { top: 0, left: 0, borderTop: "3px solid #38BDF8", borderLeft: "3px solid #38BDF8", borderRadius: "4px 0 0 0" },
+                  { top: 0, right: 0, borderTop: "3px solid #38BDF8", borderRight: "3px solid #38BDF8", borderRadius: "0 4px 0 0" },
+                  { bottom: 0, left: 0, borderBottom: "3px solid #38BDF8", borderLeft: "3px solid #38BDF8", borderRadius: "0 0 0 4px" },
+                  { bottom: 0, right: 0, borderBottom: "3px solid #38BDF8", borderRight: "3px solid #38BDF8", borderRadius: "0 0 4px 0" },
+                ].map((s, i) => (
+                  <div key={i} style={{ position: "absolute", width: 28, height: 28, ...s }} />
+                ))}
+                {/* خط المسح */}
+                <div style={{
+                  position: "absolute", left: 6, right: 6, height: 2,
+                  background: "linear-gradient(90deg, transparent, #38BDF8, transparent)",
+                  animation: "scan 2s ease-in-out infinite",
+                  top: "50%",
+                }} />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* تعليمات */}
       {scanning && !error && (
         <div style={{
-          marginTop: 20, color: "rgba(255,255,255,0.8)",
-          fontSize: 13, textAlign: "center", padding: "0 20px",
+          marginTop: 24, color: "rgba(255,255,255,0.75)",
+          fontSize: 13, textAlign: "center", padding: "0 32px", lineHeight: 1.6,
         }}>
-          {ar ? "وجّه الكاميرا نحو باركود السيريال" : "Point camera at serial barcode"}
+          {ar
+            ? "وجّه الكاميرا نحو الباركود\nسيُمسح تلقائياً"
+            : "Point camera at barcode\nIt will scan automatically"}
         </div>
       )}
 
-      {/* أنيميشن خط المسح */}
       <style>{`
-        @keyframes scan-line {
-          0%, 100% { transform: translateY(-60px); opacity: 0.5; }
+        @keyframes scan {
+          0%, 100% { transform: translateY(-60px); opacity: 0.4; }
           50% { transform: translateY(60px); opacity: 1; }
         }
       `}</style>

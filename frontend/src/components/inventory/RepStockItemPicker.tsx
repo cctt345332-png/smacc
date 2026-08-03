@@ -43,13 +43,46 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
   const inputRef = useRef<HTMLInputElement>(null);
   const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
 
-  /* معالجة نتيجة الباركود — يبحث في المخزون بالـ SKU أو serial */
+  /* معالجة نتيجة الباركود */
   const handleBarcodeResult = (text: string) => {
     setShowBarcode(false);
-    // ابحث في المخزون
+    const scanned = text.trim();
+
+    // الحالة 1: صنف serial مختار — الباركود هو رقم السيريال
+    if (value.inventory_item_id && value.mode === "serial") {
+      // نبحث في السيريالات المتاحة بالـ serial number
+      import("@/lib/inventory").then(({ getAvailableSerials }) => {
+        getAvailableSerials(value.inventory_item_id!).then(({ data }) => {
+          const serial = Array.isArray(data)
+            ? data.find((s: any) =>
+                s.serial_number?.toLowerCase() === scanned.toLowerCase()
+              )
+            : null;
+          if (serial) {
+            onChange({
+              ...value,
+              serial_ids: [serial.id],
+              serial_numbers: [serial.serial_number],
+              quantity: 1,
+              description_ar: `${value.item_name} (${serial.serial_number})`,
+              unit_price: serial.sale_price ? Number(serial.sale_price) : value.unit_price,
+            });
+          } else {
+            alert(ar
+              ? `السيريال "${scanned}" غير موجود في مخزونك`
+              : `Serial "${scanned}" not found in your stock`);
+          }
+        }).catch(() => {
+          alert(ar ? "خطأ في جلب السيريالات" : "Error fetching serials");
+        });
+      });
+      return;
+    }
+
+    // الحالة 2: لم يُختر صنف بعد — ابحث بالـ SKU أو اسم الصنف
     const found = stockItems.find(s =>
-      (s.item_sku || s.sku || "").toLowerCase() === text.toLowerCase() ||
-      (s.item_name || s.name_ar || "").toLowerCase().includes(text.toLowerCase())
+      (s.item_sku || s.sku || "").toLowerCase() === scanned.toLowerCase() ||
+      (s.serial_number || "").toLowerCase() === scanned.toLowerCase()
     );
     if (found) {
       const isSerial = found.item_tracking === "serial" || found.tracking_type === "serial";
@@ -63,9 +96,9 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
         available_qty: isSerial ? undefined : Number(found.quantity || found.available_qty || 0),
       });
     } else {
-      // لم يُوجد — أدخله كوصف حر
-      onChange({ mode: "free", description_ar: text, unit_price: 0, quantity: 1 });
-      alert(ar ? `"${text}" — لم يُوجد في مخزونك، أُضيف كوصف حر` : `"${text}" not found in stock, added as free text`);
+      // أدخل كنص في حقل البحث ليبحث المستخدم يدوياً
+      setQuery(scanned);
+      setShowDrop(true);
     }
   };
 
@@ -283,7 +316,32 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
               onClose={() => setShowSerialPicker(false)}
             />
           )}
+
+          {/* زر مسح باركود السيريال */}
+          <button type="button" onClick={() => setShowBarcode(true)}
+            style={{
+              marginTop: 4, width: "100%", padding: "9px", borderRadius: 8,
+              border: "1px dashed #C4B5FD", background: "#FAFAFF",
+              color: "#7C3AED", fontWeight: 600, fontSize: 12, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/>
+              <rect x="3" y="16" width="5" height="5"/>
+              <path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/>
+              <path d="M12 3h.01"/><path d="M16 12h1"/><path d="M12 21v-1"/>
+            </svg>
+            {ar ? "مسح باركود السيريال بالكاميرا" : "Scan serial barcode"}
+          </button>
         </div>
+      )}
+
+      {showBarcode && (
+        <BarcodeScanner
+          locale={locale}
+          onResult={handleBarcodeResult}
+          onClose={() => setShowBarcode(false)}
+        />
       )}
     </div>
   );
