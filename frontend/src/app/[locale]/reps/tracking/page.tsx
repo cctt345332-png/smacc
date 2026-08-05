@@ -1,4 +1,5 @@
 ﻿"use client";
+import { getMapboxTileUrl } from "@/lib/mapConfig";
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { getAllRepsLiveLocations, getReps } from "@/lib/reps";
@@ -99,7 +100,7 @@ export default function RepsTrackingPage({
         zoomControl: true,
       });
 
-      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`, {
+      L.tileLayer(getMapboxTileUrl(), {
         attribution: "Mapbox", tileSize: 512, zoomOffset: -1,
         maxZoom: 19,
       }).addTo(map);
