@@ -17,7 +17,7 @@ import {
 } from "../src/locationService";
 
 // ─── عنوان التطبيق — غيّره للدومين الخاص بك ──────────────────────────
-const APP_URL = "https://api.masa-erp.com";
+const APP_URL = "https://www.masa-erp.com/ar/login";
 const API_URL = "https://api.masa-erp.com";
 // ─────────────────────────────────────────────────────────────────────
 
