@@ -15,9 +15,11 @@ import {
   startBackgroundTracking, stopBackgroundTracking,
   isTrackingActive,
 } from "../src/locationService";
+import { TOKEN_KEY } from "../src/locationTask";
 
-// ─── عنوان التطبيق — غيّره للدومين الخاص بك ──────────────────────────
-const APP_URL = "https://www.masa-erp.com/ar/login";
+// ─── عنوان التطبيق ─────────────────────────────────────────────────
+const APP_URL = "https://www.masa-erp.com/ar/reps/me/dashboard";
+const LOGIN_URL = "https://www.masa-erp.com/ar/login";
 const API_URL = "https://api.masa-erp.com";
 // ─────────────────────────────────────────────────────────────────────
 
@@ -26,9 +28,26 @@ export default function MainScreen() {
   const [loading, setLoading] = useState(true);
   const [tracking, setTracking] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [webUrl, setWebUrl] = useState(LOGIN_URL);
   const appState = useRef(AppState.currentState);
 
-  // ── قراءة التوكن من localStorage بعد تحميل الصفحة ──────────────────
+  // ── عند أول تشغيل: تحقق من وجود توكن محفوظ ─────────────────────────
+  useEffect(() => {
+    const init = async () => {
+      const saved = await SecureStore.getItemAsync(TOKEN_KEY).catch(() => null);
+      if (saved) {
+        setToken(saved);
+        // إذا فيه توكن محفوظ — افتح الداشبورد مباشرة
+        setWebUrl(APP_URL);
+        const started = await startBackgroundTracking();
+        setTracking(started);
+      } else {
+        setWebUrl(LOGIN_URL);
+      }
+    };
+    init();
+    isTrackingActive().then(setTracking);
+  }, []);
   const extractToken = useCallback(() => {
     webRef.current?.injectJavaScript(`
       (function() {
@@ -88,9 +107,30 @@ export default function MainScreen() {
 
   const onLoadEnd = useCallback(() => {
     setLoading(false);
+    // إذا فيه توكن محفوظ — احقنه في localStorage أولاً
+    if (token) {
+      const injectAuth = `
+        (function() {
+          try {
+            const existing = localStorage.getItem('erp-auth');
+            if (!existing) {
+              const authData = JSON.stringify({
+                state: { token: ${JSON.stringify(token)}, user: null },
+                version: 0
+              });
+              localStorage.setItem('erp-auth', authData);
+              // إعادة تحميل لتطبيق التوكن
+              window.location.reload();
+            }
+          } catch(e) {}
+        })();
+        true;
+      `;
+      webRef.current?.injectJavaScript(injectAuth);
+    }
     // انتظر قليلاً ثم استخرج التوكن
-    setTimeout(extractToken, 1500);
-  }, [extractToken]);
+    setTimeout(extractToken, 2000);
+  }, [extractToken, token]);
 
   return (
     <View style={styles.container}>
@@ -110,7 +150,7 @@ export default function MainScreen() {
       {/* WebView */}
       <WebView
         ref={webRef}
-        source={{ uri: APP_URL }}
+        source={{ uri: webUrl }}
         style={styles.webview}
         onLoadEnd={onLoadEnd}
         onMessage={onMessage}

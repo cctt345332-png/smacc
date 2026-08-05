@@ -19,7 +19,12 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "ios": {
@@ -28,7 +33,10 @@
         "NSLocationWhenInUseUsageDescription": "نحتاج موقعك لتتبع مسارك أثناء العمل",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
         "NSLocationAlwaysUsageDescription": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
-        "UIBackgroundModes": ["location", "fetch"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
       }
     },
     "plugins": [
@@ -42,6 +50,14 @@
         }
       ],
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "34817603-40f2-4d3b-ab3f-890c753f4f93"
+      }
+    }
   }
 }
