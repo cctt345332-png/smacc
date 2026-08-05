@@ -131,8 +131,10 @@ export default function RepsTrackingPage({
       }
     });
 
-    visible.forEach((loc, idx) => {
-      const color = PIN_COLORS[idx % PIN_COLORS.length];
+    visible.forEach((loc) => {
+      // لون ثابت لكل مندوب بناءً على rep_id
+      const colorIndex = loc.rep_id.charCodeAt(0) % PIN_COLORS.length;
+      const color = PIN_COLORS[colorIndex];
       const initials = loc.rep_name
         .split(" ")
         .slice(0, 2)
@@ -301,8 +303,9 @@ export default function RepsTrackingPage({
             </div>
           )}
 
-          {visibleLocations.map((loc, idx) => {
-            const color = PIN_COLORS[idx % PIN_COLORS.length];
+          {visibleLocations.map((loc) => {
+            const colorIndex = loc.rep_id.charCodeAt(0) % PIN_COLORS.length;
+            const color = PIN_COLORS[colorIndex];
             const isSelected = selectedRep?.rep_id === loc.rep_id;
             return (
               <div

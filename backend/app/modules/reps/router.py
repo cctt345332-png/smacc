@@ -385,37 +385,47 @@ async def live_locations(
     from sqlalchemy import select
     from sqlalchemy.sql import func
 
-    # نجيب آخر recorded_at لكل مندوب في هذا الـ tenant
-    subq = (
-        select(RepLocation.rep_id, func.max(RepLocation.recorded_at).label("max_rec"))
-        .where(RepLocation.tenant_id == user["tenant_id"])
-        .group_by(RepLocation.rep_id)
-        .subquery()
-    )
+    # نجيب آخر موقع لكل مندوب باستخدام DISTINCT ON (أسرع وأدق)
+    from sqlalchemy import text
 
-    rows = await db.execute(
-        select(RepLocation, SalesRep, User)
-        .join(subq, (RepLocation.rep_id == subq.c.rep_id) & (RepLocation.recorded_at == subq.c.max_rec))
-        .join(SalesRep, SalesRep.id == RepLocation.rep_id)
+    # جلب المناديب النشطين أولاً
+    reps_r = await db.execute(
+        select(SalesRep, User)
         .join(User, User.id == SalesRep.user_id)
-        .where(RepLocation.tenant_id == user["tenant_id"], SalesRep.is_active == True)
+        .where(SalesRep.tenant_id == user["tenant_id"], SalesRep.is_active == True)
     )
+    active_reps = {rep.id: (rep, u) for rep, u in reps_r.all()}
 
+    if not active_reps:
+        return []
+
+    # جلب آخر موقع لكل مندوب
     result = []
-    for loc, rep, u in rows.all():
-        result.append({
-            "rep_id": rep.id,
-            "rep_code": rep.rep_code,
-            "rep_name": u.full_name,
-            "latitude": float(loc.latitude),
-            "longitude": float(loc.longitude),
-            "accuracy": float(loc.accuracy) if loc.accuracy else None,
-            "speed": float(loc.speed) if loc.speed else None,
-            "heading": float(loc.heading) if loc.heading else None,
-            "battery_level": loc.battery_level,
-            "is_moving": loc.is_moving,
-            "recorded_at": loc.recorded_at.isoformat(),
-        })
+    for rep_id_key, (rep, u) in active_reps.items():
+        loc_r = await db.execute(
+            select(RepLocation)
+            .where(
+                RepLocation.rep_id == rep_id_key,
+                RepLocation.tenant_id == user["tenant_id"],
+            )
+            .order_by(RepLocation.recorded_at.desc())
+            .limit(1)
+        )
+        loc = loc_r.scalar_one_or_none()
+        if loc:
+            result.append({
+                "rep_id": rep.id,
+                "rep_code": rep.rep_code,
+                "rep_name": u.full_name,
+                "latitude": float(loc.latitude),
+                "longitude": float(loc.longitude),
+                "accuracy": float(loc.accuracy) if loc.accuracy else None,
+                "speed": float(loc.speed) if loc.speed else None,
+                "heading": float(loc.heading) if loc.heading else None,
+                "battery_level": loc.battery_level,
+                "is_moving": loc.is_moving,
+                "recorded_at": loc.recorded_at.isoformat(),
+            })
 
     return result
 
