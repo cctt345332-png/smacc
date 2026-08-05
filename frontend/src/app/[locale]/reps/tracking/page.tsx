@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { getAllRepsLiveLocations, getReps } from "@/lib/reps";
@@ -99,8 +99,8 @@ export default function RepsTrackingPage({
         zoomControl: true,
       });
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
+      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`, {
+        attribution: "Mapbox", tileSize: 512, zoomOffset: -1,
         maxZoom: 19,
       }).addTo(map);
 

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getRep, getRepSummary, getRepStock, getRepInvoices, getRepTransfers, getRepLocationHistory, updateRep } from "@/lib/reps";
@@ -539,8 +539,8 @@ function TrackingTab({
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
       const map = L.map(mapRef.current!, { center: [24.7136, 46.6753], zoom: 11 });
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors", maxZoom: 19,
+      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`, {
+        attribution: "Mapbox", tileSize: 512, zoomOffset: -1, maxZoom: 19,
       }).addTo(map);
       trackingMap.current = { map, L };
     });
