@@ -278,28 +278,31 @@ export default function RepsTrackingPage({
         </div>
       </div>
 
-      {/* Layout: قائمة جانبية + خريطة */}
-      <div style={{ display: "flex", gap: 16, height: "calc(100vh - 180px)", minHeight: 520 }}>
+      {/* Layout: موبايل = قائمة أفقية فوق + خريطة تحت / ديسك = جانبي */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "calc(100vh - 180px)", minHeight: 520 }}>
 
-        {/* القائمة الجانبية */}
+        {/* قائمة المناديب — أفقية قابلة للـ scroll */}
         <div style={{
-          width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8,
-          overflowY: "auto",
+          display: "flex", gap: 10, overflowX: "auto", overflowY: "hidden",
+          padding: "4px 2px 8px",
+          scrollbarWidth: "none",
+          flexShrink: 0,
         }}>
           {loading && (
-            <div className="card" style={{ padding: 16, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+            <div style={{ padding: "12px 16px", background: "var(--surface)", borderRadius: 12,
+              border: "1px solid var(--border)", fontSize: 13, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
               {ar ? "جاري التحميل..." : "Loading..."}
             </div>
           )}
 
           {!loading && visibleLocations.length === 0 && (
-            <div className="card" style={{ padding: 20, textAlign: "center" }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto" }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              </div>
-              <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                {ar ? "لا توجد مواقع مسجّلة" : "No locations recorded"}
-              </div>
+            <div style={{ padding: "12px 20px", background: "var(--surface)", borderRadius: 12,
+              border: "1px solid var(--border)", fontSize: 13, color: "var(--text-muted)",
+              display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+              </svg>
+              {ar ? "لا توجد مواقع مسجّلة" : "No locations recorded"}
             </div>
           )}
 
@@ -310,71 +313,65 @@ export default function RepsTrackingPage({
             return (
               <div
                 key={loc.rep_id}
-                className="card"
                 onClick={() => setSelectedRep(isSelected ? null : loc)}
                 style={{
-                  padding: "12px 14px",
-                  cursor: "pointer",
+                  flexShrink: 0, width: 160, background: "var(--surface)",
+                  borderRadius: 14, padding: "12px 14px", cursor: "pointer",
                   border: isSelected ? `2px solid ${color}` : "1px solid var(--border)",
-                  transition: "border-color 0.15s",
+                  transition: "all 0.15s", boxShadow: isSelected ? `0 4px 12px ${color}30` : "none",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {/* مؤشر اللون */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <div style={{
-                    width: 10, height: 10, borderRadius: "50%",
-                    background: color, flexShrink: 0,
-                    boxShadow: loc.is_moving ? `0 0 0 3px ${color}33` : "none",
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                    background: color, color: "white",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 800,
+                    boxShadow: loc.is_moving ? `0 0 0 3px ${color}40` : "none",
+                  }}>
+                    {loc.rep_name.split(" ").slice(0, 2).map((w: string) => w[0]).join("").toUpperCase()}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {loc.rep_name}
                     </div>
-                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                      {loc.rep_code}
-                    </div>
+                    <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{loc.rep_code}</div>
                   </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{
                     fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 20,
                     background: loc.is_moving ? "#D1FAE5" : "#F3F4F6",
                     color: loc.is_moving ? "#059669" : "#6B7280",
-                    flexShrink: 0,
                   }}>
                     {loc.is_moving ? (ar ? "متحرك" : "Moving") : (ar ? "ثابت" : "Still")}
                   </span>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                    {fmtTime(loc.recorded_at)}
+                  </span>
                 </div>
-                <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-secondary)", display: "flex", justifyContent: "space-between" }}>
-                  <span>{fmtTime(loc.recorded_at)}</span>
-                  {loc.battery_level != null && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/></svg>
-                      {loc.battery_level}%
-                    </span>
-                  )}
-                </div>
-                <Link
-                  href={`/${locale}/reps/${loc.rep_id}`}
-                  onClick={e => e.stopPropagation()}
-                  style={{ display: "block", marginTop: 8, fontSize: 11, color: "var(--primary)", textDecoration: "none" }}
-                >
-                  {ar ? "عرض ملف المندوب" : "View profile"}
-                </Link>
+                {loc.battery_level != null && (
+                  <div style={{ marginTop: 4, fontSize: 10, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 3 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="18" height="10" rx="2"/><path d="M22 11v2"/></svg>
+                    {loc.battery_level}%
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
 
-        {/* الخريطة */}
-        <div style={{ flex: 1, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative" }}>
+        {/* الخريطة — تملأ باقي المساحة */}
+        <div style={{ flex: 1, borderRadius: 16, overflow: "hidden", border: "1px solid var(--border)", position: "relative", minHeight: 300 }}>
           <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
 
           {/* عدّاد المناديب */}
           <div style={{
-            position: "absolute", top: 12, right: 12, zIndex: 1000,
-            background: "white", borderRadius: 8, padding: "6px 12px",
+            position: "absolute", top: 10, right: 10, zIndex: 1000,
+            background: "white", borderRadius: 8, padding: "5px 12px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.15)", fontSize: 12, fontWeight: 600,
           }}>
-            {visibleLocations.length} {ar ? "مندوب على الخريطة" : "reps on map"}
+            {visibleLocations.length} {ar ? "مندوب" : "reps"}
           </div>
         </div>
       </div>
