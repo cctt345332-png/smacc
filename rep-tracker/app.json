@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "مندوب مبيعات",
+    "slug": "rep-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "rep-tracker",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#2563EB"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#2563EB"
+      },
+      "package": "com.masa.reptracker",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.masa.reptracker",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "نحتاج موقعك لتتبع مسارك أثناء العمل",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
+        "NSLocationAlwaysUsageDescription": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
+        "UIBackgroundModes": ["location", "fetch"]
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "نحتاج موقعك لتتبع مسارك أثناء العمل",
+          "locationAlwaysPermission": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      "expo-router"
+    ]
+  }
+}
