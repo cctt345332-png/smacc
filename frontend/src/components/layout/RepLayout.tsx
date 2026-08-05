@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
@@ -176,7 +176,13 @@ export default function RepLayout({
     if (!token) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
 
+    let lastSent = 0;
+    const MIN_INTERVAL = 30_000;
+
     const sendLocation = () => {
+      const now = Date.now();
+      if (now - lastSent < MIN_INTERVAL) return;
+      lastSent = now;
       navigator.geolocation.getCurrentPosition(
         pos => {
           import("@/lib/reps").then(({ postMyLocation }) => {
@@ -196,32 +202,17 @@ export default function RepLayout({
       );
     };
 
-    // أرسل فوراً عند الفتح
     sendLocation();
-    // كل دقيقة
     const id = setInterval(sendLocation, 60_000);
 
-    // أرسل عند عودة التطبيق للمقدمة
     const onVisibility = () => {
       if (document.visibilityState === "visible") sendLocation();
     };
     document.addEventListener("visibilitychange", onVisibility);
 
-    // أرسل عند تحريك الصفحة (نشاط المستخدم)
-    let activityTimer: any = null;
-    const onActivity = () => {
-      clearTimeout(activityTimer);
-      activityTimer = setTimeout(sendLocation, 5000);
-    };
-    window.addEventListener("touchstart", onActivity, { passive: true });
-    window.addEventListener("click", onActivity);
-
     return () => {
       clearInterval(id);
-      clearTimeout(activityTimer);
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("touchstart", onActivity);
-      window.removeEventListener("click", onActivity);
     };
   }, [token]);
 
