@@ -539,7 +539,7 @@ function TrackingTab({
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
       const map = L.map(mapRef.current!, { center: [24.7136, 46.6753], zoom: 11 });
-      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`, {
+      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`, {
         attribution: "Mapbox", tileSize: 512, zoomOffset: -1, maxZoom: 19,
       }).addTo(map);
       trackingMap.current = { map, L };

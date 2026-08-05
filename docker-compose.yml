@@ -71,6 +71,7 @@ services:
       args:
         # المتصفح يتصل بالـ backend من الخارج (localhost)
         NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+        NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN:-}
     restart: unless-stopped
     ports:
       - "3000:3000"

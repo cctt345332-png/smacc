@@ -50,7 +50,7 @@ function LocationPicker({ locale, onSelect, onClose }: {
       } catch {}
 
       const map = L.map(mapRef.current!, { center, zoom: 15 });
-      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`, {
+      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}@2x?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`, {
         attribution: "Mapbox", tileSize: 512, zoomOffset: -1,
       }).addTo(map);
 
