@@ -43,8 +43,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "نحتاج موقعك لتتبع مسارك أثناء العمل",
-          "locationAlwaysPermission": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
+          "locationAlwaysAndWhenInUsePermission": "يحتاج التطبيق موقعك لتتبع مسارك أثناء العمل",
+          "locationAlwaysPermission": "يحتاج التطبيق موقعك لتتبع مسارك حتى في الخلفية",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
