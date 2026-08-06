@@ -7,6 +7,7 @@
  */
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
+import { Platform, Linking } from "react-native";
 import { LOCATION_TASK_NAME, TOKEN_KEY, API_URL_KEY } from "./locationTask";
 
 export async function saveCredentials(token: string, apiUrl: string) {
@@ -28,6 +29,16 @@ export async function startBackgroundTracking(): Promise<boolean> {
     // 2. أذن الموقع الدائم في الخلفية
     const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
     console.log("[LocationService] BG permission:", bgStatus);
+
+    // 3. Android: افتح إعدادات تحسين البطارية مباشرة بصمت
+    if (Platform.OS === "android") {
+      try {
+        // يفتح إعدادات التطبيق مباشرة — بدون Alert
+        await Linking.sendIntent("android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", [
+          { key: "android.provider.extra.PACKAGE_NAME", value: "com.masa.reptracker" },
+        ]).catch(() => {});
+      } catch {}
+    }
 
     // 3. تحقق هل شغّال
     const isRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME)
