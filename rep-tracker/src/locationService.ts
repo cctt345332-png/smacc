@@ -52,6 +52,13 @@ export async function startBackgroundTracking(): Promise<boolean> {
         activityType: Location.ActivityType.AutomotiveNavigation,
         deferredUpdatesDistance: 0,
         deferredUpdatesTimeout: 0,
+        // Android: استمر حتى بعد إغلاق التطبيق
+        foregroundService: {
+          notificationTitle: "المندوب — نشط",
+          notificationBody: "يتم تتبع موقعك أثناء العمل",
+          notificationColor: "#2563EB",
+          killServiceOnDestroy: false,
+        },
       });
       console.log("[LocationService] Background tracking started");
     }

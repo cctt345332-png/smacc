@@ -133,7 +133,7 @@ export default function App() {
         <View style={styles.badge}>
           <View style={[styles.dot, { backgroundColor: tracking ? "#4ADE80" : "#94A3B8" }]} />
           <Text style={styles.badgeText}>
-            {tracking ? "تتبع نشط" : "جاري التهيئة..."}
+            {tracking ? "نشط" : "..."}
           </Text>
         </View>
       </View>

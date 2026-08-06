@@ -6,8 +6,11 @@
     "orientation": "portrait",
     "scheme": "rep-tracker",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
     "splash": {
-      "backgroundColor": "#2563EB"
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#1E40AF"
     },
     "android": {
       "adaptiveIcon": {
