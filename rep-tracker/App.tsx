@@ -5,11 +5,12 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   View, StyleSheet, ActivityIndicator,
-  Text, AppState, Platform,
+  Text, AppState, Platform, Linking, Alert,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { StatusBar } from "expo-status-bar";
 import * as SecureStore from "expo-secure-store";
+import * as Device from "expo-device";
 import {
   saveCredentials,
   startBackgroundTracking,
@@ -32,6 +33,21 @@ export default function App() {
   useEffect(() => {
     const init = async () => {
       try {
+        // طلب تجاهل تحسين البطارية على Android — ضروري للتتبع المستمر
+        if (Platform.OS === "android" && Device.isDevice) {
+          Alert.alert(
+            "تفعيل التتبع المستمر",
+            "لضمان عمل التتبع حتى عند إغلاق التطبيق، يرجى السماح بـ 'تجاهل تحسين البطارية'",
+            [
+              { text: "تجاهل", style: "cancel" },
+              {
+                text: "الإعدادات",
+                onPress: () => Linking.openSettings(),
+              },
+            ]
+          );
+        }
+
         const saved = await SecureStore.getItemAsync(TOKEN_KEY);
         if (saved) {
           setToken(saved);
