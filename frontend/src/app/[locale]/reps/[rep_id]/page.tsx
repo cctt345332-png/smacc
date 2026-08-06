@@ -540,8 +540,8 @@ function TrackingTab({
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
       const map = L.map(mapRef.current!, { center: [24.7136, 46.6753], zoom: 11 });
-      L.tileLayer(getMapboxTileUrl(), {
-        attribution: "Mapbox", tileSize: 512, zoomOffset: -1, maxZoom: 19,
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: "&copy; OpenStreetMap &copy; CARTO", maxZoom: 19,
       }).addTo(map);
       trackingMap.current = { map, L };
     });
