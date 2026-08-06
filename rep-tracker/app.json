@@ -48,8 +48,7 @@
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
-      ],
-      "expo-router"
+      ]
     ],
     "extra": {
       "router": {
