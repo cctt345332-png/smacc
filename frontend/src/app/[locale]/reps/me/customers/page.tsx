@@ -51,8 +51,8 @@ function LocationPicker({ locale, onSelect, onClose }: {
       } catch {}
 
       const map = L.map(mapRef.current!, { center, zoom: 15 });
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap &copy; CARTO",
+      L.tileLayer(getMapboxTileUrl(), {
+        attribution: "Mapbox", tileSize: 512, zoomOffset: -1,
       }).addTo(map);
 
       // marker ابتدائي

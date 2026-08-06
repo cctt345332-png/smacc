@@ -100,8 +100,8 @@ export default function RepsTrackingPage({
         zoomControl: true,
       });
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: "&copy; OpenStreetMap &copy; CARTO",
+      L.tileLayer(getMapboxTileUrl(), {
+        attribution: "Mapbox", tileSize: 512, zoomOffset: -1,
         maxZoom: 19,
       }).addTo(map);
 
