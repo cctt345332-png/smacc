@@ -51,8 +51,8 @@ function LocationPicker({ locale, onSelect, onClose }: {
       } catch {}
 
       const map = L.map(mapRef.current!, { center, zoom: 15 });
-      L.tileLayer(getMapboxTileUrl(), {
-        attribution: "Mapbox", tileSize: 512, zoomOffset: -1,
+      L.tileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ar", {
+        attribution: "Google Maps",
       }).addTo(map);
 
       // marker ابتدائي

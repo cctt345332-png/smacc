@@ -100,8 +100,8 @@ export default function RepsTrackingPage({
         zoomControl: true,
       });
 
-      L.tileLayer(getMapboxTileUrl(), {
-        attribution: "Mapbox", tileSize: 512, zoomOffset: -1,
+      L.tileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ar", {
+        attribution: "Google Maps",
         maxZoom: 19,
       }).addTo(map);
 
