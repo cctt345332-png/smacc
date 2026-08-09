@@ -24,7 +24,7 @@ async def create_supervisor(db: AsyncSession, tenant_id: str, data: dict) -> dic
     if existing.scalar_one_or_none():
         raise HTTPException(400, "البريد الإلكتروني مستخدم بالفعل")
 
-    # إنشاء المستخدم
+    # إنشاء المستخدم أولاً وحفظه
     user_id = str(uuid.uuid4())
     user = User(
         id=user_id, tenant_id=tenant_id,
@@ -35,8 +35,9 @@ async def create_supervisor(db: AsyncSession, tenant_id: str, data: dict) -> dic
         created_at=datetime.utcnow(),
     )
     db.add(user)
-    await db.flush()  # يُكمّل إضافة الـ user في الـ session قبل الـ supervisor
+    await db.commit()  # commit المستخدم أولاً
 
+    # ثم إنشاء المشرف
     sup_id = str(uuid.uuid4())
     sup = Supervisor(
         id=sup_id, tenant_id=tenant_id, user_id=user_id,
