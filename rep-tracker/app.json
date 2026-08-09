@@ -76,20 +76,7 @@
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
-      ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "نحتاج الكاميرا لمسح الباركود والتقاط صور الوثائق"
-        }
-      ],
-      [
-        "expo-av",
-        {
-          "microphonePermission": "نحتاج الميكروفون لتسجيل الملاحظات الصوتية"
-        }
-      ],
-      "expo-notifications"
+      ]
     ],
     "extra": {
       "router": {
