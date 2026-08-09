@@ -35,6 +35,7 @@ async def create_supervisor(db: AsyncSession, tenant_id: str, data: dict) -> dic
         created_at=datetime.utcnow(),
     )
     db.add(user)
+    await db.flush()  # يُكمّل إضافة الـ user في الـ session قبل الـ supervisor
 
     sup_id = str(uuid.uuid4())
     sup = Supervisor(
