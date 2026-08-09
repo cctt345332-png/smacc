@@ -60,3 +60,28 @@ class RepLocation(Base):
     is_moving: Mapped[bool] = mapped_column(Boolean, default=False)
     recorded_at: Mapped[datetime] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ─── Supervisor (مشرف المناديب) ──────────────────────────────────────
+class Supervisor(Base):
+    __tablename__ = "supervisors"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str] = mapped_column(String(200))
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SupervisorRep(Base):
+    """ربط المشرف بالمناديب — many-to-many"""
+    __tablename__ = "supervisor_reps"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    supervisor_id: Mapped[str] = mapped_column(String, ForeignKey("supervisors.id"), index=True)
+    rep_id: Mapped[str] = mapped_column(String, ForeignKey("sales_reps.id"), index=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

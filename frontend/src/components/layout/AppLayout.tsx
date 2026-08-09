@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
@@ -29,12 +29,19 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
         router.replace(`/${locale}/pos/cashier`);
       }
     }
-    // إذا الدور sales_rep — لا يُسمح له بـ AppLayout، يُوجَّه لواجهته
+    // إذا الدور sales_rep
     if (user.role === "sales_rep") {
       if (!pathname.startsWith(`/${locale}/reps/me`)) {
         router.replace(`/${locale}/reps/me/dashboard`);
       }
-      return; // لا تُكمل
+      return;
+    }
+    // إذا الدور supervisor
+    if (user.role === "supervisor") {
+      if (!pathname.startsWith(`/${locale}/supervisor`)) {
+        router.replace(`/${locale}/supervisor/dashboard`);
+      }
+      return;
     }
   }, [_hasHydrated, token, user, pathname, locale, router]);
 
@@ -72,6 +79,7 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
 
   // المندوب — لا يجب أن يكون هنا، RepLayout يتولى الأمر
   if (user?.role === "sales_rep") return null;
+  if (user?.role === "supervisor") return null;
 
   // الكاشير — شاشة كاملة بدون sidebar أو header، مباشرة للكاشير
   if (user?.role === "cashier") {

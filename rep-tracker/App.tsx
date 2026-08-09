@@ -19,6 +19,7 @@ import { TOKEN_KEY } from "./src/locationTask";
 
 const APP_URL = "https://www.masa-erp.com/ar/login";
 const DASHBOARD_URL = "https://www.masa-erp.com/ar/reps/me/dashboard";
+const SUPERVISOR_URL = "https://www.masa-erp.com/ar/supervisor/dashboard";
 const API_URL = "https://api.masa-erp.com";
 
 export default function App() {
@@ -34,8 +35,16 @@ export default function App() {
       try {
         const saved = await SecureStore.getItemAsync(TOKEN_KEY);
         if (saved) {
-          setToken(saved);
-          setWebUrl(DASHBOARD_URL);
+          // جلب الدور من الـ token
+          try {
+            const parsed = JSON.parse(atob(saved.split('.')[1]));
+            const role = parsed?.role || "sales_rep";
+            setToken(saved);
+            setWebUrl(role === "supervisor" ? SUPERVISOR_URL : DASHBOARD_URL);
+          } catch {
+            setToken(saved);
+            setWebUrl(DASHBOARD_URL);
+          }
           const started = await startBackgroundTracking();
           setTracking(started);
         }
@@ -77,6 +86,11 @@ export default function App() {
       if (msg.type === "token" && msg.token && msg.token !== token) {
         setToken(msg.token);
         await saveCredentials(msg.token, API_URL);
+        // توجيه حسب الدور
+        try {
+          const parsed = JSON.parse(atob(msg.token.split('.')[1]));
+          if (parsed?.role === "supervisor") setWebUrl(SUPERVISOR_URL);
+        } catch {}
         const started = await startBackgroundTracking();
         setTracking(started);
       }

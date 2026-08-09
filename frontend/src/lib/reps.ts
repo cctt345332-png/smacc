@@ -76,3 +76,20 @@ export const getAllRepsLiveLocations = () => api.get("/reps/locations/live");
 
 export const getRepLocationHistory = (repId: string, date?: string) =>
   api.get(`/reps/${repId}/locations${date ? `?date=${date}` : ""}`);
+
+// ─── المشرفون ────────────────────────────────────────────────────────
+
+export const getSupervisors = () => api.get("/supervisors");
+
+export const createSupervisor = (data: {
+  name: string; email: string; password: string; phone?: string;
+}) => api.post("/supervisors", data);
+
+export const assignRepsToSupervisor = (supervisorId: string, repIds: string[]) =>
+  api.post(`/supervisors/${supervisorId}/assign-reps`, { rep_ids: repIds });
+
+// ─── واجهة المشرف الحالي ─────────────────────────────────────────────
+
+export const getSupervisorInvoices = () => api.get("/supervisors/me/invoices");
+export const getSupervisorSummary  = () => api.get("/supervisors/me/summary");
+export const getSupervisorReps     = () => api.get("/supervisors/me/reps");
