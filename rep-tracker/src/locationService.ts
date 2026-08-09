@@ -21,31 +21,10 @@ export async function clearCredentials() {
   await SecureStore.deleteItemAsync(API_URL_KEY);
 }
 
-/** طلب جميع الأذونات اللازمة للتطبيق */
+/** طلب جميع الأذونات اللازمة للتطبيق — فقط الموقع المثبت فعلاً */
 export async function requestAllPermissions(): Promise<void> {
-  // ── الكاميرا ──────────────────────────────────────────────────────
-  try {
-    const Camera = await import("expo-camera");
-    await Camera.Camera.requestCameraPermissionsAsync();
-  } catch {}
-
-  // ── الصوت / الميكروفون ────────────────────────────────────────────
-  try {
-    const AV = await import("expo-av");
-    await AV.Audio.requestPermissionsAsync();
-  } catch {}
-
-  // ── الإشعارات ─────────────────────────────────────────────────────
-  try {
-    const Notifications = await import("expo-notifications");
-    await Notifications.requestPermissionsAsync({
-      ios: {
-        allowAlert: true,
-        allowBadge: true,
-        allowSound: true,
-      },
-    });
-  } catch {}
+  // الموقع فقط — expo-camera/av/notifications غير مثبتة
+  // أذوناتها مُعلنة في app.json وسيطلبها النظام تلقائياً عند الحاجة
 }
 
 export async function startBackgroundTracking(): Promise<boolean> {
