@@ -14,6 +14,7 @@ import {
   saveCredentials,
   startBackgroundTracking,
   isTrackingActive,
+  requestAllPermissions,
 } from "./src/locationService";
 import { TOKEN_KEY } from "./src/locationTask";
 
@@ -32,6 +33,9 @@ export default function App() {
 
   useEffect(() => {
     const init = async () => {
+      // طلب جميع الأذونات عند أول إقلاع
+      await requestAllPermissions();
+
       try {
         const saved = await SecureStore.getItemAsync(TOKEN_KEY);
         if (saved) {

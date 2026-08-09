@@ -2,7 +2,7 @@
 import { getMapboxTileUrl } from "@/lib/mapConfig";
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { getAllRepsLiveLocations, getReps } from "@/lib/reps";
+import { getAllRepsLiveLocations, getReps, getSupervisors } from "@/lib/reps";
 
 /* ------------------------------------------------------------------ */
 /* الألوان المستخدمة للدبابيس — تتناوب حسب ترتيب المندوب              */
@@ -11,6 +11,9 @@ const PIN_COLORS = [
   "#2563EB", "#059669", "#DC2626", "#D97706", "#7C3AED",
   "#0891B2", "#BE185D", "#15803D", "#B45309", "#4338CA",
 ];
+
+/* لون ثابت للمشرفين — بنفسجي داكن مميز */
+const SUPERVISOR_COLOR = "#6D28D9";
 
 /* تنسيق الوقت */
 const fmtTime = (iso: string) => {
@@ -32,6 +35,7 @@ interface LiveLocation {
   rep_id: string;
   rep_code: string;
   rep_name: string;
+  person_type?: "rep" | "supervisor"; // جديد
   latitude: number;
   longitude: number;
   accuracy?: number;
@@ -57,7 +61,9 @@ export default function RepsTrackingPage({
 
   const [locations, setLocations] = useState<LiveLocation[]>([]);
   const [allReps, setAllReps] = useState<any[]>([]);
+  const [allSupervisors, setAllSupervisors] = useState<any[]>([]);
   const [filterRep, setFilterRep] = useState<string>("all");
+  const [filterType, setFilterType] = useState<"all" | "rep" | "supervisor">("all");
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [selectedRep, setSelectedRep] = useState<LiveLocation | null>(null);
@@ -76,6 +82,9 @@ export default function RepsTrackingPage({
   useEffect(() => {
     getReps()
       .then(r => setAllReps(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {});
+    getSupervisors()
+      .then(r => setAllSupervisors(Array.isArray(r.data) ? r.data : []))
       .catch(() => {});
   }, []);
 
@@ -120,7 +129,7 @@ export default function RepsTrackingPage({
     const { map, L } = leafletMap.current;
 
     const visible = filterRep === "all"
-      ? locations
+      ? (filterType === "all" ? locations : locations.filter(l => (l.person_type ?? "rep") === filterType))
       : locations.filter(l => l.rep_id === filterRep);
 
     // إزالة دبابيس المناديب المحجوبين
@@ -133,9 +142,11 @@ export default function RepsTrackingPage({
     });
 
     visible.forEach((loc) => {
-      // لون ثابت لكل مندوب بناءً على rep_id
-      const colorIndex = loc.rep_id.charCodeAt(0) % PIN_COLORS.length;
-      const color = PIN_COLORS[colorIndex];
+      const isSup = loc.person_type === "supervisor";
+      // المشرف: لون ثابت بنفسجي — المندوب: لون متناوب حسب ID
+      const color = isSup
+        ? SUPERVISOR_COLOR
+        : PIN_COLORS[loc.rep_id.charCodeAt(0) % PIN_COLORS.length];
       const initials = loc.rep_name
         .split(" ")
         .slice(0, 2)
@@ -143,20 +154,37 @@ export default function RepsTrackingPage({
         .join("")
         .toUpperCase();
 
-      const iconHtml = `
-        <div style="
-          background:${color};
-          color:white;
-          border-radius:50% 50% 50% 0;
-          transform:rotate(-45deg);
-          width:36px;height:36px;
-          display:flex;align-items:center;justify-content:center;
-          box-shadow:0 2px 6px rgba(0,0,0,0.35);
-          border:2px solid white;
-          font-size:11px;font-weight:700;
-        ">
-          <span style="transform:rotate(45deg)">${initials}</span>
-        </div>`;
+      // المشرف: شكل مربع مائل مع نجمة — المندوب: دبوس دائري
+      const iconHtml = isSup
+        ? `<div style="
+            background:${color};
+            color:white;
+            border-radius:6px;
+            transform:rotate(45deg);
+            width:38px;height:38px;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 2px 8px rgba(109,40,217,0.5);
+            border:2.5px solid white;
+            font-size:10px;font-weight:800;
+          ">
+            <span style="transform:rotate(-45deg);display:flex;flex-direction:column;align-items:center;gap:1px">
+              <span style="font-size:9px">★</span>
+              <span>${initials}</span>
+            </span>
+          </div>`
+        : `<div style="
+            background:${color};
+            color:white;
+            border-radius:50% 50% 50% 0;
+            transform:rotate(-45deg);
+            width:36px;height:36px;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 2px 6px rgba(0,0,0,0.35);
+            border:2px solid white;
+            font-size:11px;font-weight:700;
+          ">
+            <span style="transform:rotate(45deg)">${initials}</span>
+          </div>`;
 
       const icon = L.divIcon({
         html: iconHtml,
@@ -168,8 +196,14 @@ export default function RepsTrackingPage({
 
       const popupContent = `
         <div style="font-family:inherit;min-width:180px;padding:4px 0">
-          <div style="font-weight:700;font-size:14px;margin-bottom:6px;color:${color}">${loc.rep_name}</div>
-          <div style="font-size:12px;color:#6B7280;margin-bottom:4px">${loc.rep_code}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div style="font-weight:700;font-size:14px;color:${color}">${loc.rep_name}</div>
+            ${isSup
+              ? `<span style="background:#EDE9FE;color:#6D28D9;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px">${ar ? "مشرف" : "Supervisor"}</span>`
+              : `<span style="background:#DBEAFE;color:#1D4ED8;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px">${ar ? "مندوب" : "Rep"}</span>`
+            }
+          </div>
+          <div style="font-size:12px;color:#6B7280;margin-bottom:4px">${loc.rep_code !== "SUP" ? loc.rep_code : ""}</div>
           <hr style="margin:6px 0;border-color:#E5E7EB"/>
           <div style="font-size:12px;margin-bottom:3px">
             <span style="color:#6B7280">${ar ? "آخر تحديث:" : "Last update:"}</span>
@@ -224,9 +258,10 @@ export default function RepsTrackingPage({
     }
   }, []);
 
-  /* ── المناديب المعروضون ─────────────────────────────────────────── */
-  const visibleLocations =
-    filterRep === "all" ? locations : locations.filter(l => l.rep_id === filterRep);
+  /* ── المناديب والمشرفون المعروضون ──────────────────────────────── */
+  const visibleLocations = filterRep === "all"
+    ? (filterType === "all" ? locations : locations.filter(l => (l.person_type ?? "rep") === filterType))
+    : locations.filter(l => l.rep_id === filterRep);
 
   /* ================================================================ */
   return (
@@ -250,20 +285,53 @@ export default function RepsTrackingPage({
           )}
         </div>
 
-        {/* فلتر المندوب */}
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {/* فلاتر */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+
+          {/* فلتر النوع: الكل / مناديب / مشرفون */}
+          <div style={{ display: "flex", borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)" }}>
+            {(["all", "rep", "supervisor"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => { setFilterType(t); setFilterRep("all"); }}
+                style={{
+                  padding: "6px 12px", fontSize: 12, fontWeight: 600,
+                  background: filterType === t ? "var(--primary)" : "var(--surface)",
+                  color: filterType === t ? "white" : "var(--text-muted)",
+                  border: "none", cursor: "pointer",
+                }}
+              >
+                {t === "all" ? (ar ? "الكل" : "All") : t === "rep" ? (ar ? "مناديب" : "Reps") : (ar ? "مشرفون" : "Supervisors")}
+              </button>
+            ))}
+          </div>
+
+          {/* فلتر شخص محدد */}
           <select
             className="form-input"
             style={{ minWidth: 180 }}
             value={filterRep}
             onChange={e => setFilterRep(e.target.value)}
           >
-            <option value="all">{ar ? "جميع المناديب" : "All Reps"}</option>
-            {allReps.map((r: any) => (
-              <option key={r.id} value={r.id}>
-                {r.full_name} ({r.rep_code})
-              </option>
-            ))}
+            <option value="all">{ar ? "— جميع —" : "— All —"}</option>
+            {(filterType === "all" || filterType === "rep") && allReps.length > 0 && (
+              <optgroup label={ar ? "المناديب" : "Reps"}>
+                {allReps.map((r: any) => (
+                  <option key={r.id} value={r.id}>
+                    {r.full_name} ({r.rep_code})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {(filterType === "all" || filterType === "supervisor") && allSupervisors.length > 0 && (
+              <optgroup label={ar ? "المشرفون" : "Supervisors"}>
+                {allSupervisors.map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    ★ {s.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
 
           <button
@@ -308,8 +376,10 @@ export default function RepsTrackingPage({
           )}
 
           {visibleLocations.map((loc) => {
-            const colorIndex = loc.rep_id.charCodeAt(0) % PIN_COLORS.length;
-            const color = PIN_COLORS[colorIndex];
+            const isSup = loc.person_type === "supervisor";
+            const color = isSup
+              ? SUPERVISOR_COLOR
+              : PIN_COLORS[loc.rep_id.charCodeAt(0) % PIN_COLORS.length];
             const isSelected = selectedRep?.rep_id === loc.rep_id;
             return (
               <div
@@ -324,19 +394,26 @@ export default function RepsTrackingPage({
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                   <div style={{
-                    width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                    width: 32, height: 32,
+                    borderRadius: isSup ? "6px" : "50%",
+                    flexShrink: 0,
                     background: color, color: "white",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 11, fontWeight: 800,
                     boxShadow: loc.is_moving ? `0 0 0 3px ${color}40` : "none",
+                    transform: isSup ? "rotate(45deg)" : "none",
                   }}>
-                    {loc.rep_name.split(" ").slice(0, 2).map((w: string) => w[0]).join("").toUpperCase()}
+                    <span style={{ transform: isSup ? "rotate(-45deg)" : "none" }}>
+                      {isSup ? "★" : loc.rep_name.split(" ").slice(0, 2).map((w: string) => w[0]).join("").toUpperCase()}
+                    </span>
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {loc.rep_name}
                     </div>
-                    <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{loc.rep_code}</div>
+                    <div style={{ fontSize: 10, color: isSup ? SUPERVISOR_COLOR : "var(--text-muted)", fontWeight: isSup ? 700 : 400 }}>
+                      {isSup ? (ar ? "مشرف" : "Supervisor") : loc.rep_code}
+                    </div>
                   </div>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

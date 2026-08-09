@@ -24,17 +24,31 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
+        "FOREGROUND_SERVICE_CAMERA",
+        "FOREGROUND_SERVICE_MICROPHONE",
         "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "WAKE_LOCK",
         "RECEIVE_BOOT_COMPLETED",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE_CAMERA",
+        "android.permission.FOREGROUND_SERVICE_MICROPHONE",
         "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "android.permission.WAKE_LOCK",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
       ]
     },
     "ios": {
@@ -43,9 +57,13 @@
         "NSLocationWhenInUseUsageDescription": "نحتاج موقعك لتتبع مسارك أثناء العمل",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
         "NSLocationAlwaysUsageDescription": "نحتاج موقعك لتتبع مسارك حتى في الخلفية",
+        "NSCameraUsageDescription": "نحتاج الكاميرا لمسح الباركود والتقاط صور الوثائق",
+        "NSMicrophoneUsageDescription": "نحتاج الميكروفون لتسجيل الملاحظات الصوتية",
+        "NSUserNotificationsUsageDescription": "نرسل إشعارات عن الطلبات والمهام الجديدة",
         "UIBackgroundModes": [
           "location",
-          "fetch"
+          "fetch",
+          "remote-notification"
         ]
       }
     },
@@ -58,7 +76,20 @@
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "نحتاج الكاميرا لمسح الباركود والتقاط صور الوثائق"
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "نحتاج الميكروفون لتسجيل الملاحظات الصوتية"
+        }
+      ],
+      "expo-notifications"
     ],
     "extra": {
       "router": {

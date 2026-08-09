@@ -377,35 +377,26 @@ async def live_locations(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    آخر موقع لكل مندوب نشط — للخريطة الحية.
-    يعيد: [{rep_id, rep_name, latitude, longitude, recorded_at, is_moving, battery_level}]
+    آخر موقع لكل مندوب ومشرف نشط — للخريطة الحية.
+    يعيد: [{rep_id, rep_name, rep_code, person_type, latitude, longitude, ...}]
     """
-    from app.models.reps import SalesRep, RepLocation
+    from app.models.reps import SalesRep, RepLocation, Supervisor
     from app.models.user import User
     from sqlalchemy import select
-    from sqlalchemy.sql import func
 
-    # نجيب آخر موقع لكل مندوب باستخدام DISTINCT ON (أسرع وأدق)
-    from sqlalchemy import text
+    result = []
 
-    # جلب المناديب النشطين أولاً
+    # ── 1. المناديب النشطين ───────────────────────────────────────────
     reps_r = await db.execute(
         select(SalesRep, User)
         .join(User, User.id == SalesRep.user_id)
         .where(SalesRep.tenant_id == user["tenant_id"], SalesRep.is_active == True)
     )
-    active_reps = {rep.id: (rep, u) for rep, u in reps_r.all()}
-
-    if not active_reps:
-        return []
-
-    # جلب آخر موقع لكل مندوب
-    result = []
-    for rep_id_key, (rep, u) in active_reps.items():
+    for rep, u in reps_r.all():
         loc_r = await db.execute(
             select(RepLocation)
             .where(
-                RepLocation.rep_id == rep_id_key,
+                RepLocation.rep_id == rep.id,
                 RepLocation.tenant_id == user["tenant_id"],
             )
             .order_by(RepLocation.recorded_at.desc())
@@ -417,6 +408,40 @@ async def live_locations(
                 "rep_id": rep.id,
                 "rep_code": rep.rep_code,
                 "rep_name": u.full_name,
+                "person_type": "rep",
+                "latitude": float(loc.latitude),
+                "longitude": float(loc.longitude),
+                "accuracy": float(loc.accuracy) if loc.accuracy else None,
+                "speed": float(loc.speed) if loc.speed else None,
+                "heading": float(loc.heading) if loc.heading else None,
+                "battery_level": loc.battery_level,
+                "is_moving": loc.is_moving,
+                "recorded_at": loc.recorded_at.isoformat(),
+            })
+
+    # ── 2. المشرفون النشطين ───────────────────────────────────────────
+    sups_r = await db.execute(
+        select(Supervisor, User)
+        .join(User, User.id == Supervisor.user_id)
+        .where(Supervisor.tenant_id == user["tenant_id"], Supervisor.is_active == True)
+    )
+    for sup, u in sups_r.all():
+        loc_r = await db.execute(
+            select(RepLocation)
+            .where(
+                RepLocation.rep_id == sup.id,    # supervisor.id مخزّن هنا
+                RepLocation.tenant_id == user["tenant_id"],
+            )
+            .order_by(RepLocation.recorded_at.desc())
+            .limit(1)
+        )
+        loc = loc_r.scalar_one_or_none()
+        if loc:
+            result.append({
+                "rep_id": sup.id,
+                "rep_code": "SUP",
+                "rep_name": sup.name,
+                "person_type": "supervisor",
                 "latitude": float(loc.latitude),
                 "longitude": float(loc.longitude),
                 "accuracy": float(loc.accuracy) if loc.accuracy else None,

@@ -60,6 +60,51 @@ async def my_summary(
     return await service.get_supervisor_summary(db, user["tenant_id"], user["user_id"])
 
 
+@router.post("/me/location", status_code=201)
+async def post_my_location(
+    data: dict,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """المشرف يرسل موقعه — يُحفظ في rep_locations كـ type=supervisor"""
+    from app.models.reps import Supervisor, RepLocation
+    from sqlalchemy import select
+    import uuid
+    from datetime import datetime
+
+    sup_r = await db.execute(
+        select(Supervisor).where(
+            Supervisor.user_id == user["user_id"],
+            Supervisor.tenant_id == user["tenant_id"],
+        )
+    )
+    sup = sup_r.scalar_one_or_none()
+    if not sup:
+        from fastapi import HTTPException
+        raise HTTPException(403, "هذا الحساب ليس مشرفاً")
+
+    loc = RepLocation(
+        id=str(uuid.uuid4()),
+        tenant_id=user["tenant_id"],
+        rep_id=sup.id,          # نستخدم supervisor.id كـ rep_id
+        latitude=data["latitude"],
+        longitude=data["longitude"],
+        accuracy=data.get("accuracy"),
+        speed=data.get("speed"),
+        heading=data.get("heading"),
+        battery_level=data.get("battery_level"),
+        is_moving=data.get("is_moving", False),
+        recorded_at=(
+            datetime.fromisoformat(data["recorded_at"].replace("Z", "+00:00")).replace(tzinfo=None)
+            if data.get("recorded_at") else datetime.utcnow()
+        ),
+        created_at=datetime.utcnow(),
+    )
+    db.add(loc)
+    await db.commit()
+    return {"id": loc.id, "supervisor_id": sup.id, "recorded_at": loc.recorded_at.isoformat()}
+
+
 @router.get("/me/reps")
 async def my_reps(
     user=Depends(get_current_user),
