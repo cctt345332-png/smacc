@@ -12,10 +12,29 @@ export const API_URL_KEY = "rep_api_url";
 export const TOKEN_KEY = "rep_auth_token";
 export const USER_ROLE_KEY = "rep_user_role";   // جديد — نخزن الدور
 
-/** استخراج الدور من JWT بدون مكتبة خارجية */
+/** استخراج الدور من JWT — بدون atob (غير متوفرة في RN native layer) */
 function getRoleFromToken(token: string): string {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const base64 = token.split(".")[1];
+    // React Native لا يدعم atob — نستخدم Buffer أو decode يدوي
+    const base64Fixed = base64.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64Fixed.padEnd(
+      base64Fixed.length + ((4 - (base64Fixed.length % 4)) % 4), "="
+    );
+    // decode base64 يدوياً بدون atob
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    let str = "";
+    let i = 0;
+    while (i < padded.length) {
+      const c1 = chars.indexOf(padded[i++]);
+      const c2 = chars.indexOf(padded[i++]);
+      const c3 = chars.indexOf(padded[i++]);
+      const c4 = chars.indexOf(padded[i++]);
+      str += String.fromCharCode((c1 << 2) | (c2 >> 4));
+      if (c3 !== 64) str += String.fromCharCode(((c2 & 15) << 4) | (c3 >> 2));
+      if (c4 !== 64) str += String.fromCharCode(((c3 & 3) << 6) | c4);
+    }
+    const payload = JSON.parse(str);
     return payload?.role ?? "sales_rep";
   } catch {
     return "sales_rep";

@@ -18,7 +18,28 @@ import {
 } from "./src/locationService";
 import { TOKEN_KEY } from "./src/locationTask";
 
-const APP_URL = "https://www.masa-erp.com/ar/login";
+/** decode JWT payload بدون atob — React Native native layer */
+function decodeJwtRole(token: string): string {
+  try {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    let str = "";
+    let i = 0;
+    while (i < padded.length) {
+      const c1 = chars.indexOf(padded[i++]);
+      const c2 = chars.indexOf(padded[i++]);
+      const c3 = chars.indexOf(padded[i++]);
+      const c4 = chars.indexOf(padded[i++]);
+      str += String.fromCharCode((c1 << 2) | (c2 >> 4));
+      if (c3 !== 64) str += String.fromCharCode(((c2 & 15) << 4) | (c3 >> 2));
+      if (c4 !== 64) str += String.fromCharCode(((c3 & 3) << 6) | c4);
+    }
+    return JSON.parse(str)?.role ?? "sales_rep";
+  } catch {
+    return "sales_rep";
+  }
+}
 const DASHBOARD_URL = "https://www.masa-erp.com/ar/reps/me/dashboard";
 const SUPERVISOR_URL = "https://www.masa-erp.com/ar/supervisor/dashboard";
 const API_URL = "https://api.masa-erp.com";
@@ -39,10 +60,8 @@ export default function App() {
       try {
         const saved = await SecureStore.getItemAsync(TOKEN_KEY);
         if (saved) {
-          // جلب الدور من الـ token
           try {
-            const parsed = JSON.parse(atob(saved.split('.')[1]));
-            const role = parsed?.role || "sales_rep";
+            const role = decodeJwtRole(saved);
             setToken(saved);
             setWebUrl(role === "supervisor" ? SUPERVISOR_URL : DASHBOARD_URL);
           } catch {
@@ -90,10 +109,8 @@ export default function App() {
       if (msg.type === "token" && msg.token && msg.token !== token) {
         setToken(msg.token);
         await saveCredentials(msg.token, API_URL);
-        // توجيه حسب الدور
         try {
-          const parsed = JSON.parse(atob(msg.token.split('.')[1]));
-          if (parsed?.role === "supervisor") setWebUrl(SUPERVISOR_URL);
+          if (decodeJwtRole(msg.token) === "supervisor") setWebUrl(SUPERVISOR_URL);
         } catch {}
         const started = await startBackgroundTracking();
         setTracking(started);
