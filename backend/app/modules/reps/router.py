@@ -378,12 +378,15 @@ async def live_locations(
 ):
     """
     آخر موقع لكل مندوب ومشرف نشط — للخريطة الحية.
-    يعيد: [{rep_id, rep_name, rep_code, person_type, latitude, longitude, ...}]
+    يُخفي من لم يرسل موقعه منذ أكثر من ساعتين (التطبيق مغلق).
     """
     from app.models.reps import SalesRep, RepLocation, Supervisor
     from app.models.user import User
     from sqlalchemy import select
+    from datetime import datetime, timedelta
 
+    # حد الوقت — 2 ساعة
+    cutoff = datetime.utcnow() - timedelta(hours=2)
     result = []
 
     # ── 1. المناديب النشطين ───────────────────────────────────────────
@@ -398,6 +401,7 @@ async def live_locations(
             .where(
                 RepLocation.rep_id == rep.id,
                 RepLocation.tenant_id == user["tenant_id"],
+                RepLocation.recorded_at >= cutoff,
             )
             .order_by(RepLocation.recorded_at.desc())
             .limit(1)
@@ -429,8 +433,9 @@ async def live_locations(
         loc_r = await db.execute(
             select(RepLocation)
             .where(
-                RepLocation.rep_id == sup.id,    # supervisor.id مخزّن هنا
+                RepLocation.rep_id == sup.id,
                 RepLocation.tenant_id == user["tenant_id"],
+                RepLocation.recorded_at >= cutoff,
             )
             .order_by(RepLocation.recorded_at.desc())
             .limit(1)
