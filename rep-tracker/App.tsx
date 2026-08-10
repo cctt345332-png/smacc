@@ -18,14 +18,19 @@ import {
 } from "./src/locationService";
 import { TOKEN_KEY } from "./src/locationTask";
 
-/** decode JWT payload بدون atob — React Native native layer */
+const APP_URL        = "https://www.masa-erp.com/ar/login";
+const DASHBOARD_URL  = "https://www.masa-erp.com/ar/reps/me/dashboard";
+const SUPERVISOR_URL = "https://www.masa-erp.com/ar/supervisor/dashboard";
+const API_URL        = "https://api.masa-erp.com";
+
+/** decode JWT payload بدون atob — غير متوفرة في RN native layer */
 function decodeJwtRole(token: string): string {
   try {
     const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    const padded  = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const chars   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     let str = "";
-    let i = 0;
+    let i   = 0;
     while (i < padded.length) {
       const c1 = chars.indexOf(padded[i++]);
       const c2 = chars.indexOf(padded[i++]);
@@ -40,34 +45,25 @@ function decodeJwtRole(token: string): string {
     return "sales_rep";
   }
 }
-const DASHBOARD_URL = "https://www.masa-erp.com/ar/reps/me/dashboard";
-const SUPERVISOR_URL = "https://www.masa-erp.com/ar/supervisor/dashboard";
-const API_URL = "https://api.masa-erp.com";
 
 export default function App() {
-  const webRef = useRef<any>(null);
-  const [loading, setLoading] = useState(true);
+  const webRef   = useRef<any>(null);
+  const [loading,  setLoading]  = useState(true);
   const [tracking, setTracking] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [webUrl, setWebUrl] = useState(APP_URL);
+  const [token,    setToken]    = useState<string | null>(null);
+  const [webUrl,   setWebUrl]   = useState(APP_URL);
   const appState = useRef(AppState.currentState);
 
+  /* ── إقلاع ─────────────────────────────────────────────────────── */
   useEffect(() => {
     const init = async () => {
-      // طلب جميع الأذونات عند أول إقلاع
       await requestAllPermissions();
-
       try {
         const saved = await SecureStore.getItemAsync(TOKEN_KEY);
         if (saved) {
-          try {
-            const role = decodeJwtRole(saved);
-            setToken(saved);
-            setWebUrl(role === "supervisor" ? SUPERVISOR_URL : DASHBOARD_URL);
-          } catch {
-            setToken(saved);
-            setWebUrl(DASHBOARD_URL);
-          }
+          const role = decodeJwtRole(saved);
+          setToken(saved);
+          setWebUrl(role === "supervisor" ? SUPERVISOR_URL : DASHBOARD_URL);
           const started = await startBackgroundTracking();
           setTracking(started);
         }
@@ -77,6 +73,7 @@ export default function App() {
     isTrackingActive().then(setTracking).catch(() => {});
   }, []);
 
+  /* ── رصد حالة التطبيق ──────────────────────────────────────────── */
   useEffect(() => {
     const sub = AppState.addEventListener("change", nextState => {
       if (appState.current.match(/inactive|background/) && nextState === "active") {
@@ -87,6 +84,7 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
+  /* ── استخراج الـ token من WebView ──────────────────────────────── */
   const extractToken = useCallback(() => {
     webRef.current?.injectJavaScript(`
       (function() {
@@ -103,15 +101,15 @@ export default function App() {
     `);
   }, []);
 
+  /* ── معالجة الرسائل من WebView ─────────────────────────────────── */
   const onMessage = useCallback(async (event: any) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === "token" && msg.token && msg.token !== token) {
         setToken(msg.token);
         await saveCredentials(msg.token, API_URL);
-        try {
-          if (decodeJwtRole(msg.token) === "supervisor") setWebUrl(SUPERVISOR_URL);
-        } catch {}
+        const role = decodeJwtRole(msg.token);
+        if (role === "supervisor") setWebUrl(SUPERVISOR_URL);
         const started = await startBackgroundTracking();
         setTracking(started);
       }
@@ -123,9 +121,9 @@ export default function App() {
     setTimeout(extractToken, 1500);
   }, [extractToken]);
 
+  /* ── JS يُحقن في WebView ────────────────────────────────────────── */
   const INJECT_JS = `
     (function() {
-      // مراقبة تسجيل الدخول
       const orig = Storage.prototype.setItem;
       Storage.prototype.setItem = function(key, value) {
         orig.apply(this, arguments);
@@ -137,23 +135,18 @@ export default function App() {
           } catch(e) {}
         }
       };
-      // منع تسجيل الخروج
       const origRemove = Storage.prototype.removeItem;
       Storage.prototype.removeItem = function(key) {
         if (key === 'erp-auth') return;
         origRemove.apply(this, arguments);
       };
-      // إخفاء زر تسجيل الخروج
       const hideLogout = () => {
         document.querySelectorAll('button, a, [role="button"]').forEach(el => {
           const text = el.textContent?.trim();
-          if (text === 'تسجيل الخروج' || text === 'Logout') {
-            el.style.display = 'none';
-          }
+          if (text === 'تسجيل الخروج' || text === 'Logout') el.style.display = 'none';
         });
       };
-      const obs = new MutationObserver(hideLogout);
-      obs.observe(document.documentElement, { childList: true, subtree: true });
+      new MutationObserver(hideLogout).observe(document.documentElement, { childList: true, subtree: true });
     })();
     true;
   `;
@@ -162,14 +155,11 @@ export default function App() {
     <View style={styles.container}>
       <StatusBar style="light" backgroundColor="#1E40AF" />
 
-      {/* شريط الحالة */}
       <View style={styles.topBar}>
         <Text style={styles.title}>نظام المناديب</Text>
         <View style={styles.badge}>
           <View style={[styles.dot, { backgroundColor: tracking ? "#4ADE80" : "#94A3B8" }]} />
-          <Text style={styles.badgeText}>
-            {tracking ? "نشط" : "..."}
-          </Text>
+          <Text style={styles.badgeText}>{tracking ? "نشط" : "..."}</Text>
         </View>
       </View>
 
@@ -211,15 +201,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  title: { color: "white", fontWeight: "bold", fontSize: 16 },
+  title:     { color: "white", fontWeight: "bold", fontSize: 16 },
   badge: {
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: "rgba(255,255,255,0.15)",
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
+  dot:       { width: 8, height: 8, borderRadius: 4 },
   badgeText: { color: "white", fontSize: 12, fontWeight: "600" },
-  webview: { flex: 1 },
+  webview:   { flex: 1 },
   loader: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "white",

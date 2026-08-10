@@ -1,13 +1,11 @@
 /**
- * locationService.ts — تتبع قوي لا يتوقف
- * الحل متعدد الطبقات:
- * 1. Foreground Service مع killServiceOnDestroy=false
- * 2. timeInterval صغير + distanceInterval=0 لضمان الإرسال
- * 3. طلب إذن "تجاهل تحسين البطارية" من المستخدم
- * 4. طلب أذونات الكاميرا والصوت والإشعارات عند الإقلاع
+ * locationService.ts — تتبع الموقع في الخلفية
  */
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
+import * as Camera from "expo-camera";
+import * as AV from "expo-av";
+import * as Notifications from "expo-notifications";
 import { Platform, Linking } from "react-native";
 import { LOCATION_TASK_NAME, TOKEN_KEY, API_URL_KEY } from "./locationTask";
 
@@ -23,21 +21,9 @@ export async function clearCredentials() {
 
 /** طلب جميع الأذونات عند الإقلاع */
 export async function requestAllPermissions(): Promise<void> {
-  // ── الكاميرا ──────────────────────────────────────────────────────
+  try { await Camera.requestCameraPermissionsAsync(); } catch {}
+  try { await AV.Audio.requestPermissionsAsync(); } catch {}
   try {
-    const { Camera } = await import("expo-camera");
-    await Camera.requestCameraPermissionsAsync();
-  } catch {}
-
-  // ── الميكروفون / الصوت ────────────────────────────────────────────
-  try {
-    const { Audio } = await import("expo-av");
-    await Audio.requestPermissionsAsync();
-  } catch {}
-
-  // ── الإشعارات ─────────────────────────────────────────────────────
-  try {
-    const Notifications = await import("expo-notifications");
     await Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowBadge: true, allowSound: true },
     });
@@ -46,15 +32,11 @@ export async function requestAllPermissions(): Promise<void> {
 
 export async function startBackgroundTracking(): Promise<boolean> {
   try {
-    // 1. أذن الموقع الأمامي
     const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
     if (fgStatus !== "granted") return false;
 
-    // 2. أذن الموقع الدائم في الخلفية
-    const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-    console.log("[LocationService] BG permission:", bgStatus);
+    await Location.requestBackgroundPermissionsAsync();
 
-    // 3. Android: افتح إعدادات تحسين البطارية مباشرة بصمت
     if (Platform.OS === "android") {
       try {
         await Linking.sendIntent("android.settings.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS", [
@@ -63,7 +45,6 @@ export async function startBackgroundTracking(): Promise<boolean> {
       } catch {}
     }
 
-    // 4. تحقق هل شغّال
     const isRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME)
       .catch(() => false);
 
@@ -84,9 +65,6 @@ export async function startBackgroundTracking(): Promise<boolean> {
         deferredUpdatesDistance: 0,
         deferredUpdatesTimeout: 0,
       });
-      console.log("[LocationService] Started ✓");
-    } else {
-      console.log("[LocationService] Already running");
     }
     return true;
   } catch (e: any) {
