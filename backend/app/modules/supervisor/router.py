@@ -10,55 +10,9 @@ from app.modules.supervisor import service
 router = APIRouter(prefix="/supervisors", tags=["supervisors"])
 
 
-# ── إدارة المشرفين (للمدير فقط) ─────────────────────────────────────
-
-@router.get("")
-async def list_supervisors(
-    user=Depends(require_role(["manager", "admin"])),
-    db: AsyncSession = Depends(get_db),
-):
-    return await service.get_supervisors(db, user["tenant_id"])
-
-
-@router.post("", status_code=201)
-async def create_supervisor(
-    data: dict,
-    user=Depends(require_role(["manager", "admin"])),
-    db: AsyncSession = Depends(get_db),
-):
-    return await service.create_supervisor(db, user["tenant_id"], data)
-
-
-@router.post("/{supervisor_id}/assign-reps")
-async def assign_reps(
-    supervisor_id: str,
-    data: dict,
-    user=Depends(require_role(["manager", "admin"])),
-    db: AsyncSession = Depends(get_db),
-):
-    """تعيين قائمة مناديب للمشرف — body: {"rep_ids": [...]}"""
-    return await service.assign_reps(
-        db, user["tenant_id"], supervisor_id, data.get("rep_ids", [])
-    )
-
-
-# ── واجهة المشرف نفسه ───────────────────────────────────────────────
-
-@router.get("/me/invoices")
-async def my_invoices(
-    user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    return await service.get_supervisor_invoices(db, user["tenant_id"], user["user_id"])
-
-
-@router.get("/me/summary")
-async def my_summary(
-    user=Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    return await service.get_supervisor_summary(db, user["tenant_id"], user["user_id"])
-
+# ══════════════════════════════════════════════════════════════════
+# واجهة المشرف نفسه — يجب أن تكون قبل /{supervisor_id}
+# ══════════════════════════════════════════════════════════════════
 
 @router.post("/me/location", status_code=201)
 async def post_my_location(
@@ -66,7 +20,7 @@ async def post_my_location(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """المشرف يرسل موقعه — يُحفظ في rep_locations كـ type=supervisor"""
+    """المشرف يرسل موقعه — يُحفظ في rep_locations"""
     from app.models.reps import Supervisor, RepLocation
     from sqlalchemy import select
     import uuid
@@ -86,7 +40,7 @@ async def post_my_location(
     loc = RepLocation(
         id=str(uuid.uuid4()),
         tenant_id=user["tenant_id"],
-        rep_id=sup.id,          # نستخدم supervisor.id كـ rep_id
+        rep_id=sup.id,
         latitude=data["latitude"],
         longitude=data["longitude"],
         accuracy=data.get("accuracy"),
@@ -103,6 +57,22 @@ async def post_my_location(
     db.add(loc)
     await db.commit()
     return {"id": loc.id, "supervisor_id": sup.id, "recorded_at": loc.recorded_at.isoformat()}
+
+
+@router.get("/me/invoices")
+async def my_invoices(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_supervisor_invoices(db, user["tenant_id"], user["user_id"])
+
+
+@router.get("/me/summary")
+async def my_summary(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_supervisor_summary(db, user["tenant_id"], user["user_id"])
 
 
 @router.get("/me/reps")
@@ -134,3 +104,37 @@ async def my_reps(
         }
         for rep, u in r.all()
     ]
+
+
+# ══════════════════════════════════════════════════════════════════
+# إدارة المشرفين — للمدير فقط — بعد /me/*
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("")
+async def list_supervisors(
+    user=Depends(require_role(["manager", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_supervisors(db, user["tenant_id"])
+
+
+@router.post("", status_code=201)
+async def create_supervisor(
+    data: dict,
+    user=Depends(require_role(["manager", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.create_supervisor(db, user["tenant_id"], data)
+
+
+@router.post("/{supervisor_id}/assign-reps")
+async def assign_reps(
+    supervisor_id: str,
+    data: dict,
+    user=Depends(require_role(["manager", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """تعيين قائمة مناديب للمشرف — body: {"rep_ids": [...]}"""
+    return await service.assign_reps(
+        db, user["tenant_id"], supervisor_id, data.get("rep_ids", [])
+    )
