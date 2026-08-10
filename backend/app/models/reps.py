@@ -50,7 +50,7 @@ class RepLocation(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
-    rep_id: Mapped[str] = mapped_column(String, ForeignKey("sales_reps.id"), index=True)
+    rep_id: Mapped[str] = mapped_column(String, index=True)  # بدون FK — يخزن rep_id أو supervisor_id
     latitude: Mapped[Decimal] = mapped_column(Numeric(10, 7))
     longitude: Mapped[Decimal] = mapped_column(Numeric(10, 7))
     accuracy: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
