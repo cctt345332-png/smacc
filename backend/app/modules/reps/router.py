@@ -468,33 +468,34 @@ async def rep_location_history(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    مسار مندوب خلال يوم محدد (YYYY-MM-DD).
+    مسار مندوب أو مشرف خلال يوم محدد (YYYY-MM-DD).
     إذا لم يُحدَّد التاريخ يُعاد اليوم الحالي.
     """
-    from app.models.reps import SalesRep, RepLocation
+    from app.models.reps import SalesRep, RepLocation, Supervisor
     from sqlalchemy import select
     from datetime import datetime, date as date_type
 
-    # تحقق أن المندوب موجود
+    # تحقق أن المعرّف ينتمي لمندوب أو مشرف
     rep_r = await db.execute(
-        select(SalesRep).where(
-            SalesRep.id == rep_id,
-            SalesRep.tenant_id == user["tenant_id"],
-        )
+        select(SalesRep).where(SalesRep.id == rep_id, SalesRep.tenant_id == user["tenant_id"])
     )
-    rep = rep_r.scalar_one_or_none()
-    if not rep:
+    entity = rep_r.scalar_one_or_none()
+    if not entity:
+        sup_r = await db.execute(
+            select(Supervisor).where(Supervisor.id == rep_id, Supervisor.tenant_id == user["tenant_id"])
+        )
+        entity = sup_r.scalar_one_or_none()
+    if not entity:
         from fastapi import HTTPException
-        raise HTTPException(404, "المندوب غير موجود")
+        raise HTTPException(404, "المندوب أو المشرف غير موجود")
 
-    # تحديد نطاق التاريخ
     if date:
         target = datetime.strptime(date, "%Y-%m-%d").date()
     else:
         target = date_type.today()
 
     day_start = datetime(target.year, target.month, target.day, 0, 0, 0)
-    day_end = datetime(target.year, target.month, target.day, 23, 59, 59)
+    day_end   = datetime(target.year, target.month, target.day, 23, 59, 59)
 
     locs_r = await db.execute(
         select(RepLocation)
