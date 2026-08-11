@@ -130,20 +130,71 @@ export default function RepsTrackingPage({params:{locale}}:{params:{locale:strin
       const color=isSup?SUPERVISOR_COLOR:PIN_COLORS[loc.rep_id.charCodeAt(0)%PIN_COLORS.length];
       const spd=loc.speed!=null?Math.round(loc.speed as number):null;
 
+      // أيقونة سيارة 3D من الأعلى (top-view) للمندوب
+      const carSvg=`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">
+        <defs>
+          <linearGradient id="cg${loc.rep_id.slice(0,4)}" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:${color};stop-opacity:1"/>
+            <stop offset="100%" style="stop-color:${color}cc;stop-opacity:1"/>
+          </linearGradient>
+          <filter id="cs${loc.rep_id.slice(0,4)}">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.4)"/>
+          </filter>
+        </defs>
+        <!-- جسم السيارة -->
+        <g filter="url(#cs${loc.rep_id.slice(0,4)})">
+          <!-- الهيكل الخارجي -->
+          <path d="M6,38 C4,38 3,36 3,34 L3,20 C3,17 4,15 6,14 L8,13 L9,8 C9.5,6 11,5 13,5 L19,5 C21,5 22.5,6 23,8 L24,13 L26,14 C28,15 29,17 29,20 L29,34 C29,36 28,38 26,38 L24,39 L24,41 C24,42.5 23,43 22,43 L10,43 C9,43 8,42.5 8,41 L8,39 Z" fill="url(#cg${loc.rep_id.slice(0,4)})"/>
+          <!-- سقف السيارة (كابينة) -->
+          <path d="M10,13 L10,22 C10,23 11,24 12,24 L20,24 C21,24 22,23 22,22 L22,13 C22,12 21.5,11 21,10.5 L19,9 L13,9 L11,10.5 C10.5,11 10,12 10,13 Z" fill="white" opacity="0.15"/>
+          <!-- الزجاج الأمامي -->
+          <path d="M11,13.5 L11,20 C11,20.8 11.5,21.5 12.5,21.5 L19.5,21.5 C20.5,21.5 21,20.8 21,20 L21,13.5 C21,12.8 20.5,12 20,11.5 L18.5,10.5 L13.5,10.5 L12,11.5 C11.5,12 11,12.8 11,13.5 Z" fill="white" opacity="0.25"/>
+          <!-- خط وسط السيارة -->
+          <line x1="16" y1="5" x2="16" y2="43" stroke="white" stroke-width="0.5" opacity="0.2"/>
+          <!-- إطار أمامي أيسر -->
+          <ellipse cx="8" cy="38" rx="3.5" ry="3" fill="#111" opacity="0.9"/>
+          <ellipse cx="8" cy="38" rx="2" ry="1.8" fill="#333"/>
+          <ellipse cx="8" cy="38" rx="1" ry="0.9" fill="#555"/>
+          <!-- إطار أمامي أيمن -->
+          <ellipse cx="24" cy="38" rx="3.5" ry="3" fill="#111" opacity="0.9"/>
+          <ellipse cx="24" cy="38" rx="2" ry="1.8" fill="#333"/>
+          <ellipse cx="24" cy="38" rx="1" ry="0.9" fill="#555"/>
+          <!-- إطار خلفي أيسر -->
+          <ellipse cx="7" cy="14" rx="3" ry="3.5" fill="#111" opacity="0.9"/>
+          <ellipse cx="7" cy="14" rx="1.8" ry="2" fill="#333"/>
+          <ellipse cx="7" cy="14" rx="0.9" ry="1" fill="#555"/>
+          <!-- إطار خلفي أيمن -->
+          <ellipse cx="25" cy="14" rx="3" ry="3.5" fill="#111" opacity="0.9"/>
+          <ellipse cx="25" cy="14" rx="1.8" ry="2" fill="#333"/>
+          <ellipse cx="25" cy="14" rx="0.9" ry="1" fill="#555"/>
+          <!-- مصابيح أمامية -->
+          <rect x="4" y="37.5" width="5" height="1.5" rx="0.7" fill="#FFE566" opacity="0.9"/>
+          <rect x="23" y="37.5" width="5" height="1.5" rx="0.7" fill="#FFE566" opacity="0.9"/>
+          <!-- مصابيح خلفية -->
+          <rect x="4" y="13" width="4.5" height="1.5" rx="0.7" fill="#FF4444" opacity="0.9"/>
+          <rect x="23.5" y="13" width="4.5" height="1.5" rx="0.7" fill="#FF4444" opacity="0.9"/>
+          <!-- لمعة السيارة -->
+          <path d="M13,7 Q16,6 19,7 Q18,10 13,10 Z" fill="white" opacity="0.1"/>
+        </g>
+        <!-- مؤشر الاتجاه (سهم للأعلى = اتجاه الحركة) -->
+        ${spd!=null&&spd>2?`<polygon points="16,1 13,6 19,6" fill="${color}" stroke="white" stroke-width="1" opacity="0.9"/>`:""}
+      </svg>`;
+
       const iconHtml=isSup
-        ?`<div style="background:${color};color:white;border-radius:5px;transform:rotate(45deg);width:26px;height:26px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(0,0,0,0.4);border:2px solid white;font-size:11px">★</div>`
-        :`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
+        ?`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
             ${spd!=null&&spd>0?`<div style="background:${color};color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-bottom:1px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.25)">${spd}</div>`:""}
-            <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.3))">
-              <rect x="3" y="8" width="18" height="9" rx="2.5" fill="${color}"/>
-              <rect x="5" y="5" width="14" height="6" rx="2" fill="${color}" opacity=".85"/>
-              <circle cx="7" cy="17.5" r="2" fill="white" stroke="${color}" stroke-width="1.2"/>
-              <circle cx="17" cy="17.5" r="2" fill="white" stroke="${color}" stroke-width="1.2"/>
-            </svg>
+            <div style="background:${color};color:white;border-radius:5px;transform:rotate(45deg);width:30px;height:30px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,0.4);border:2px solid white;font-size:13px;font-weight:800">
+              <span style="transform:rotate(-45deg)">★</span>
+            </div>
+          </div>`
+        :`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
+            ${spd!=null&&spd>0?`<div style="background:${color};color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-bottom:1px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.25)">${spd} km/h</div>`:""}
+            ${carSvg}
           </div>`;
 
-      const iconH=spd!=null&&spd>0&&!isSup?38:26;
-      const icon=L.divIcon({html:iconHtml,iconSize:[26,iconH],iconAnchor:[13,iconH],className:""});
+      const iconH=spd!=null&&spd>0&&!isSup?48+18:isSup&&spd!=null&&spd>0?30+18:isSup?30:48;
+      const iconW=isSup?30:32;
+      const icon=L.divIcon({html:iconHtml,iconSize:[iconW,iconH],iconAnchor:[iconW/2,iconH],className:""});
 
       const handleClick=(e:any)=>{ L.DomEvent.stopPropagation(e); setQuickCard(loc); setTripPanel(null); };
 
