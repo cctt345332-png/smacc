@@ -130,54 +130,23 @@ export default function RepsTrackingPage({params:{locale}}:{params:{locale:strin
       const color=isSup?SUPERVISOR_COLOR:PIN_COLORS[loc.rep_id.charCodeAt(0)%PIN_COLORS.length];
       const spd=loc.speed!=null?Math.round(loc.speed as number):null;
 
-      // أيقونة سيارة 3D من الأعلى (top-view) للمندوب
-      const carSvg=`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="48" viewBox="0 0 32 48">
-        <defs>
-          <linearGradient id="cg${loc.rep_id.slice(0,4)}" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:${color};stop-opacity:1"/>
-            <stop offset="100%" style="stop-color:${color}cc;stop-opacity:1"/>
-          </linearGradient>
-          <filter id="cs${loc.rep_id.slice(0,4)}">
-            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.4)"/>
-          </filter>
-        </defs>
-        <!-- جسم السيارة -->
-        <g filter="url(#cs${loc.rep_id.slice(0,4)})">
-          <!-- الهيكل الخارجي -->
-          <path d="M6,38 C4,38 3,36 3,34 L3,20 C3,17 4,15 6,14 L8,13 L9,8 C9.5,6 11,5 13,5 L19,5 C21,5 22.5,6 23,8 L24,13 L26,14 C28,15 29,17 29,20 L29,34 C29,36 28,38 26,38 L24,39 L24,41 C24,42.5 23,43 22,43 L10,43 C9,43 8,42.5 8,41 L8,39 Z" fill="url(#cg${loc.rep_id.slice(0,4)})"/>
-          <!-- سقف السيارة (كابينة) -->
-          <path d="M10,13 L10,22 C10,23 11,24 12,24 L20,24 C21,24 22,23 22,22 L22,13 C22,12 21.5,11 21,10.5 L19,9 L13,9 L11,10.5 C10.5,11 10,12 10,13 Z" fill="white" opacity="0.15"/>
-          <!-- الزجاج الأمامي -->
-          <path d="M11,13.5 L11,20 C11,20.8 11.5,21.5 12.5,21.5 L19.5,21.5 C20.5,21.5 21,20.8 21,20 L21,13.5 C21,12.8 20.5,12 20,11.5 L18.5,10.5 L13.5,10.5 L12,11.5 C11.5,12 11,12.8 11,13.5 Z" fill="white" opacity="0.25"/>
-          <!-- خط وسط السيارة -->
-          <line x1="16" y1="5" x2="16" y2="43" stroke="white" stroke-width="0.5" opacity="0.2"/>
-          <!-- إطار أمامي أيسر -->
-          <ellipse cx="8" cy="38" rx="3.5" ry="3" fill="#111" opacity="0.9"/>
-          <ellipse cx="8" cy="38" rx="2" ry="1.8" fill="#333"/>
-          <ellipse cx="8" cy="38" rx="1" ry="0.9" fill="#555"/>
-          <!-- إطار أمامي أيمن -->
-          <ellipse cx="24" cy="38" rx="3.5" ry="3" fill="#111" opacity="0.9"/>
-          <ellipse cx="24" cy="38" rx="2" ry="1.8" fill="#333"/>
-          <ellipse cx="24" cy="38" rx="1" ry="0.9" fill="#555"/>
-          <!-- إطار خلفي أيسر -->
-          <ellipse cx="7" cy="14" rx="3" ry="3.5" fill="#111" opacity="0.9"/>
-          <ellipse cx="7" cy="14" rx="1.8" ry="2" fill="#333"/>
-          <ellipse cx="7" cy="14" rx="0.9" ry="1" fill="#555"/>
-          <!-- إطار خلفي أيمن -->
-          <ellipse cx="25" cy="14" rx="3" ry="3.5" fill="#111" opacity="0.9"/>
-          <ellipse cx="25" cy="14" rx="1.8" ry="2" fill="#333"/>
-          <ellipse cx="25" cy="14" rx="0.9" ry="1" fill="#555"/>
-          <!-- مصابيح أمامية -->
-          <rect x="4" y="37.5" width="5" height="1.5" rx="0.7" fill="#FFE566" opacity="0.9"/>
-          <rect x="23" y="37.5" width="5" height="1.5" rx="0.7" fill="#FFE566" opacity="0.9"/>
-          <!-- مصابيح خلفية -->
-          <rect x="4" y="13" width="4.5" height="1.5" rx="0.7" fill="#FF4444" opacity="0.9"/>
-          <rect x="23.5" y="13" width="4.5" height="1.5" rx="0.7" fill="#FF4444" opacity="0.9"/>
-          <!-- لمعة السيارة -->
-          <path d="M13,7 Q16,6 19,7 Q18,10 13,10 Z" fill="white" opacity="0.1"/>
-        </g>
-        <!-- مؤشر الاتجاه (سهم للأعلى = اتجاه الحركة) -->
-        ${spd!=null&&spd>2?`<polygon points="16,1 13,6 19,6" fill="${color}" stroke="white" stroke-width="1" opacity="0.9"/>`:""}
+      // أيقونة سيارة Lucide (car-front) — MIT License — مع لون ديناميكي وحجم صغير
+      const carSvg=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
+        fill="${color}" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"
+        style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45));display:block">
+        <!-- car-front icon — Lucide Icons — MIT License -->
+        <path d="M7 17h10"/>
+        <path d="M5 17v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2"/>
+        <path d="M15 17v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2"/>
+        <path d="M3 11V9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2"/>
+        <path d="M5 11h14"/>
+        <path d="M3 11l2-4"/>
+        <path d="M19 11l2-4"/>
+        <rect x="3" y="11" width="18" height="6" rx="2"/>
+        <circle cx="7.5" cy="17.5" r="1.5" fill="white" stroke="${color}" stroke-width="1"/>
+        <circle cx="16.5" cy="17.5" r="1.5" fill="white" stroke="${color}" stroke-width="1"/>
+        <rect x="7" y="7" width="10" height="4" rx="1" fill="${color}" stroke="white" stroke-width="0.8"/>
+        <line x1="12" y1="7" x2="12" y2="11" stroke="white" stroke-width="0.8" opacity="0.5"/>
       </svg>`;
 
       const iconHtml=isSup
@@ -192,8 +161,8 @@ export default function RepsTrackingPage({params:{locale}}:{params:{locale:strin
             ${carSvg}
           </div>`;
 
-      const iconH=spd!=null&&spd>0&&!isSup?48+18:isSup&&spd!=null&&spd>0?30+18:isSup?30:48;
-      const iconW=isSup?30:32;
+      const iconH=spd!=null&&spd>0&&!isSup?28+16:isSup&&spd!=null&&spd>0?30+16:isSup?30:28;
+      const iconW=isSup?30:28;
       const icon=L.divIcon({html:iconHtml,iconSize:[iconW,iconH],iconAnchor:[iconW/2,iconH],className:""});
 
       const handleClick=(e:any)=>{ L.DomEvent.stopPropagation(e); setQuickCard(loc); setTripPanel(null); };
