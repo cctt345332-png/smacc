@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getVendors, createBill, confirmBill, getPurchaseOrders } from "@/lib/purchases";
+import { createBill, confirmBill, getPurchaseOrders } from "@/lib/purchases";
 import { getFiscalYears } from "@/lib/accounting";
+import { getWarehouses, getStockByWarehouse } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
 
@@ -41,12 +42,15 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
   const preOrderId = searchParams.get("order_id") || "";
 
   const [vendors, setVendors] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [warehouseStock, setWarehouseStock] = useState<Record<string, number>>({});
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     vendor_id: "",
+    warehouse_id: "",
     vendor_invoice_number: "",
     payment_type: "cash",
     credit_days: "30",
@@ -78,11 +82,27 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
   useEffect(() => {
-    Promise.all([getVendors(), getFiscalYears(), getPurchaseOrders({ status: "confirmed" })])
-      .then(([vRes, fyRes, poRes]) => {
-        setVendors(vRes.data);
+    Promise.all([getWarehouses(), getFiscalYears(), getPurchaseOrders({ status: "confirmed" })])
+
+  // جلب كميات المستودع عند تغييره
+  useEffect(() => {
+    if (!form.warehouse_id) return;
+    getStockByWarehouse(form.warehouse_id)
+      .then(r => {
+        const stock: Record<string, number> = {};
+        (Array.isArray(r.data) ? r.data : []).forEach((s: any) => {
+          if (s.product_id) stock[s.product_id] = Number(s.quantity_on_hand ?? 0);
+        });
+        setWarehouseStock(stock);
+      })
+      .catch(() => {});
+  }, [form.warehouse_id]);      .then(([whRes, fyRes, poRes]) => {
+        setWarehouses(whRes.data);
         setFiscalYears(fyRes.data);
         setPurchaseOrders(poRes.data);
+        // اختر المستودع الافتراضي تلقائياً
+        const defWh = whRes.data.find((w: any) => w.is_default) || whRes.data[0];
+        if (defWh) setForm(f => ({ ...f, warehouse_id: defWh.id }));
         if (fyRes.data.length > 0) {
           const active = fyRes.data.find((fy: any) => fy.status === "open") || fyRes.data[0];
           setForm(f => ({ ...f, fiscal_year_id: active.id }));
@@ -107,6 +127,8 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
 
   const buildPayload = () => ({
     ...form,
+    vendor_id: null,                             // لا مورد — مستودع داخلي
+    warehouse_id: form.warehouse_id || null,
     fiscal_year_id: form.fiscal_year_id || null,
     due_date: form.due_date || null,
     purchase_order_id: form.purchase_order_id || null,
@@ -139,7 +161,7 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
   });
 
   const validate = () => {
-    if (!form.vendor_id) { alert(ar ? "يرجى اختيار المورد" : "Please select a vendor"); return false; }
+    if (!form.warehouse_id) { alert(ar ? "يرجى اختيار المستودع" : "Please select a warehouse"); return false; }
     if (lines.length === 0) { alert(ar ? "يجب إضافة سطر واحد على الأقل" : "At least one line is required"); return false; }
     for (const l of lines) {
       if (!l.picked.description_ar) { alert(ar ? "يرجى إدخال وصف لجميع الأسطر" : "Please enter description for all lines"); return false; }
@@ -207,15 +229,25 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
           </div>
           <div className="card-body">
             <div className="form-group">
-              <label className="form-label">{ar ? "المورد" : "Vendor"} <span className="required">*</span></label>
-              <select className="form-input form-select" value={form.vendor_id} onChange={e => setForm(f => ({ ...f, vendor_id: e.target.value }))}>
-                <option value="">{ar ? "— اختر المورد —" : "— Select Vendor —"}</option>
-                {vendors.map(v => <option key={v.id} value={v.id}>{v.name_ar}</option>)}
+              <label className="form-label">{ar ? "المستودع المستلِم" : "Receiving Warehouse"} <span className="required">*</span></label>
+              <select className="form-input form-select" value={form.warehouse_id} onChange={e => setForm(f => ({ ...f, warehouse_id: e.target.value }))}>
+                <option value="">{ar ? "— اختر المستودع —" : "— Select Warehouse —"}</option>
+                {warehouses.map(w => (
+                  <option key={w.id} value={w.id}>
+                    {w.name_ar}{w.is_default ? (ar ? " (افتراضي)" : " (Default)") : ""}
+                  </option>
+                ))}
               </select>
+              {form.warehouse_id && (
+                <div style={{ marginTop: 6, fontSize: 11, color: "#6B7280", display: "flex", alignItems: "center", gap: 4 }}>
+                  <Icon name="warehouse" size={13} />
+                  {ar ? "المخزون سيُضاف لهذا المستودع عند التأكيد" : "Stock will be added to this warehouse on confirm"}
+                </div>
+              )}
             </div>
             <div className="form-group">
-              <label className="form-label">{ar ? "رقم فاتورة المورد" : "Vendor Invoice Number"}</label>
-              <input className="form-input" value={form.vendor_invoice_number} onChange={e => setForm(f => ({ ...f, vendor_invoice_number: e.target.value }))} placeholder={ar ? "رقم الفاتورة الصادرة من المورد" : "Vendor's invoice reference"} />
+              <label className="form-label">{ar ? "رقم المرجع / الإذن" : "Reference / Permit Number"}</label>
+              <input className="form-input" value={form.vendor_invoice_number} onChange={e => setForm(f => ({ ...f, vendor_invoice_number: e.target.value }))} placeholder={ar ? "رقم الإذن أو المرجع الداخلي (اختياري)" : "Internal reference or permit number (optional)"} />
             </div>
 
             <div className="form-group">
@@ -291,7 +323,7 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
               <label className="form-label">{ar ? "أمر الشراء المرتبط (اختياري)" : "Linked Purchase Order (optional)"}</label>
               <select className="form-input form-select" value={form.purchase_order_id} onChange={e => setForm(f => ({ ...f, purchase_order_id: e.target.value }))}>
                 <option value="">{ar ? "— بدون ربط —" : "— None —"}</option>
-                {purchaseOrders.map(po => <option key={po.id} value={po.id}>{po.order_number} — {po.vendor?.name_ar}</option>)}
+                {purchaseOrders.map(po => <option key={po.id} value={po.id}>{po.order_number}</option>)}
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>

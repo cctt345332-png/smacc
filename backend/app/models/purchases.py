@@ -162,6 +162,7 @@ class Bill(Base):
     purchase_order_id: Mapped[str | None] = mapped_column(String, ForeignKey("purchase_orders.id"), nullable=True)
     fiscal_year_id: Mapped[str | None] = mapped_column(String, ForeignKey("fiscal_years.id"), nullable=True)
     journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    warehouse_id: Mapped[str | None] = mapped_column(String, ForeignKey("warehouses.id"), nullable=True)  # المستودع المستلم
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))

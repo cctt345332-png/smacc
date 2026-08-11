@@ -213,7 +213,10 @@ async def get_bill(db: AsyncSession, tenant_id: str, bill_id: str):
 
 
 async def create_bill(db: AsyncSession, tenant_id: str, user_id: str, data: dict):
-    vendor = await get_vendor(db, tenant_id, data["vendor_id"])
+    # vendor اختياري — نستخدم snapshot فارغ إذا لم يُحدَّد
+    vendor = None
+    if data.get("vendor_id"):
+        vendor = await get_vendor(db, tenant_id, data["vendor_id"])
 
     bill_date = datetime.fromisoformat(data["bill_date"]).replace(tzinfo=None)
     supply_date = datetime.fromisoformat(data["supply_date"]).replace(tzinfo=None)
@@ -228,27 +231,37 @@ async def create_bill(db: AsyncSession, tenant_id: str, user_id: str, data: dict
         subtotal += gross; disc_total += disc; vat_total += vat; grand_total += tot
         lines_data.append((line, gross, disc, taxable, vat, tot))
 
-    # بيانات المورد snapshot
-    vendor_address = "، ".join(p for p in [
-        vendor.address_building, vendor.address_street,
-        vendor.address_district, vendor.address_city, vendor.address_postal
-    ] if p)
+    # بيانات المورد snapshot — فارغة إذا لم يُحدَّد مورد
+    if vendor:
+        vendor_address = "، ".join(p for p in [
+            vendor.address_building, vendor.address_street,
+            vendor.address_district, vendor.address_city, vendor.address_postal
+        ] if p)
+        vendor_name_ar    = vendor.name_ar
+        vendor_vat_number = vendor.vat_number
+        vendor_cr_number  = vendor.cr_number
+    else:
+        vendor_address    = None
+        vendor_name_ar    = data.get("warehouse_name") or "مستودع داخلي"
+        vendor_vat_number = None
+        vendor_cr_number  = None
 
     bill = Bill(
         id=bill_id, tenant_id=tenant_id,
         bill_number=await _next_bill_number(db, tenant_id),
         vendor_invoice_number=data.get("vendor_invoice_number"),
-        vendor_id=data["vendor_id"],
+        vendor_id=data.get("vendor_id"),
         bill_date=bill_date, supply_date=supply_date, due_date=due_date,
-        vendor_name_ar=vendor.name_ar,
-        vendor_vat_number=vendor.vat_number,
-        vendor_cr_number=vendor.cr_number,
+        vendor_name_ar=vendor_name_ar,
+        vendor_vat_number=vendor_vat_number,
+        vendor_cr_number=vendor_cr_number,
         vendor_address=vendor_address,
         subtotal=subtotal, discount_amount=disc_total,
         taxable_amount=subtotal - disc_total,
         vat_amount=vat_total, total=grand_total,
         purchase_order_id=data.get("purchase_order_id"),
         fiscal_year_id=data.get("fiscal_year_id"),
+        warehouse_id=data.get("warehouse_id"),
         notes=data.get("notes"),
         created_by=user_id,
     )
@@ -314,6 +327,9 @@ async def _add_inventory_for_bill(
     from app.models.inventory import InventoryItem
     import json
 
+    # المستودع المحدد في الفاتورة — أو المستودع الافتراضي
+    wh_id = bill.warehouse_id or None  # add_stock/add_serial تأخذ None → تستخدم الافتراضي
+
     lines_r = await db.execute(
         select(BillLine).where(BillLine.bill_id == bill.id)
     )
@@ -343,6 +359,7 @@ async def _add_inventory_for_bill(
                         cost_price=line.unit_price,
                         sale_price=sale_price,
                         purchase_bill_id=bill.id,
+                        warehouse_id=wh_id,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة السيريال {sn}: {e.detail}")
@@ -358,6 +375,7 @@ async def _add_inventory_for_bill(
                     cost_price=line.unit_price,
                     sale_price=Decimal(str(line.new_serial_sale_price)) if line.new_serial_sale_price else None,
                     purchase_bill_id=bill.id,
+                    warehouse_id=wh_id,
                 )
             except HTTPException as e:
                 raise HTTPException(400, f"خطأ في إضافة السيريال: {e.detail}")
@@ -377,6 +395,7 @@ async def _add_inventory_for_bill(
                         cost_price=line.unit_price,
                         expiry_date=expiry_date,
                         purchase_bill_id=bill.id,
+                        warehouse_id=wh_id,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة التشغيلة: {e.detail}")
@@ -391,6 +410,7 @@ async def _add_inventory_for_bill(
                         reference_type="bill",
                         reference_id=bill.id,
                         user_id=user_id,
+                        warehouse_id=wh_id,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة المخزون: {e.detail}")
