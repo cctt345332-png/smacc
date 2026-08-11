@@ -241,7 +241,7 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
               </select>
               {form.warehouse_id && (
                 <div style={{ marginTop: 6, fontSize: 11, color: "#6B7280", display: "flex", alignItems: "center", gap: 4 }}>
-                  <Icon name="warehouse" size={13} />
+                  <Icon name="bank" size={13} />
                   {ar ? "المخزون سيُضاف لهذا المستودع عند التأكيد" : "Stock will be added to this warehouse on confirm"}
                 </div>
               )}
