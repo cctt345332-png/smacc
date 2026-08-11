@@ -6,8 +6,8 @@ import { getAllRepsLiveLocations, getReps, getSupervisors, getRepLocationHistory
 const PIN_COLORS = ["#2563EB","#059669","#DC2626","#D97706","#7C3AED","#0891B2","#BE185D","#15803D","#B45309","#4338CA"];
 const SUPERVISOR_COLOR = "#6D28D9";
 
-const fmtTime = (iso:string) => { try { return new Date(iso).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}); } catch { return "—"; } };
-const fmtDateTime = (iso:string) => { try { return new Date(iso).toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); } catch { return "—"; } };
+const fmtTime = (iso:string) => { try { return new Date(iso.endsWith("Z")?iso:iso+"Z").toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}); } catch { return "—"; } };
+const fmtDateTime = (iso:string) => { try { return new Date(iso.endsWith("Z")?iso:iso+"Z").toLocaleString("ar-SA",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}); } catch { return "—"; } };
 const fmtDur = (m:number) => { const h=Math.floor(m/60); return h>0?`${h}h ${m%60}m`:`${m}m`; };
 const todayStr = () => new Date().toISOString().slice(0,10);
 

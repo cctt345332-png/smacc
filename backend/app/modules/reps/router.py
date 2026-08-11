@@ -420,7 +420,7 @@ async def live_locations(
                 "heading": float(loc.heading) if loc.heading else None,
                 "battery_level": loc.battery_level,
                 "is_moving": loc.is_moving,
-                "recorded_at": loc.recorded_at.isoformat(),
+                "recorded_at": loc.recorded_at.isoformat() + "Z",
             })
 
     # ── 2. المشرفون النشطين ───────────────────────────────────────────
@@ -454,7 +454,7 @@ async def live_locations(
                 "heading": float(loc.heading) if loc.heading else None,
                 "battery_level": loc.battery_level,
                 "is_moving": loc.is_moving,
-                "recorded_at": loc.recorded_at.isoformat(),
+                "recorded_at": loc.recorded_at.isoformat() + "Z",
             })
 
     return result
