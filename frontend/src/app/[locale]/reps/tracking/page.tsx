@@ -130,14 +130,15 @@ export default function RepsTrackingPage({params:{locale}}:{params:{locale:strin
       const color=isSup?SUPERVISOR_COLOR:PIN_COLORS[loc.rep_id.charCodeAt(0)%PIN_COLORS.length];
       const spd=loc.speed!=null?Math.round(loc.speed as number):null;
 
-      // أيقونة السيارة المخصصة — نفس الأيقونة للمنادي والمشرف، حجم 30×30
-      const iconHtml=`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
+      // أيقونة السيارة المخصصة — حجم ثابت 30×30
+      const iconHtml=`<div style="position:relative;display:inline-flex;flex-direction:column;align-items:center">
         ${spd!=null&&spd>0?`<div style="background:${color};color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-bottom:1px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.3)">${spd} km/h</div>`:""}
-        <div style="position:relative;width:30px;height:30px">
-          <img src="/car-icon.png" width="30" height="30"
-            style="display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45)) hue-rotate(${isSup?240:loc.rep_id.charCodeAt(0)%360}deg) saturate(1.8) brightness(1.05)"
+        <div style="position:relative;width:30px;height:30px;overflow:hidden;flex-shrink:0">
+          <img src="/car-icon.png"
+            style="width:30px;height:30px;object-fit:contain;display:block;
+              filter:drop-shadow(0 1px 3px rgba(0,0,0,0.4)) hue-rotate(${isSup?240:loc.rep_id.charCodeAt(0)%360}deg) saturate(1.8)"
           />
-          ${isSup?`<div style="position:absolute;top:-5px;right:-5px;background:#6D28D9;color:white;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;border:1px solid white;line-height:1">★</div>`:""}
+          ${isSup?`<div style="position:absolute;top:-4px;right:-4px;background:#6D28D9;color:white;border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;border:1px solid white;line-height:1">★</div>`:""}
         </div>
       </div>`;
 
