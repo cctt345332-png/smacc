@@ -130,39 +130,19 @@ export default function RepsTrackingPage({params:{locale}}:{params:{locale:strin
       const color=isSup?SUPERVISOR_COLOR:PIN_COLORS[loc.rep_id.charCodeAt(0)%PIN_COLORS.length];
       const spd=loc.speed!=null?Math.round(loc.speed as number):null;
 
-      // أيقونة سيارة Lucide (car-front) — MIT License — مع لون ديناميكي وحجم صغير
-      const carSvg=`<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24"
-        fill="${color}" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"
-        style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45));display:block">
-        <!-- car-front icon — Lucide Icons — MIT License -->
-        <path d="M7 17h10"/>
-        <path d="M5 17v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2"/>
-        <path d="M15 17v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2"/>
-        <path d="M3 11V9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2"/>
-        <path d="M5 11h14"/>
-        <path d="M3 11l2-4"/>
-        <path d="M19 11l2-4"/>
-        <rect x="3" y="11" width="18" height="6" rx="2"/>
-        <circle cx="7.5" cy="17.5" r="1.5" fill="white" stroke="${color}" stroke-width="1"/>
-        <circle cx="16.5" cy="17.5" r="1.5" fill="white" stroke="${color}" stroke-width="1"/>
-        <rect x="7" y="7" width="10" height="4" rx="1" fill="${color}" stroke="white" stroke-width="0.8"/>
-        <line x1="12" y1="7" x2="12" y2="11" stroke="white" stroke-width="0.8" opacity="0.5"/>
-      </svg>`;
+      // أيقونة السيارة المخصصة — نفس الأيقونة للمنادي والمشرف، حجم 30×30
+      const iconHtml=`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
+        ${spd!=null&&spd>0?`<div style="background:${color};color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-bottom:1px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.3)">${spd} km/h</div>`:""}
+        <div style="position:relative;width:30px;height:30px">
+          <img src="/car-icon.png" width="30" height="30"
+            style="display:block;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.45)) hue-rotate(${isSup?240:loc.rep_id.charCodeAt(0)%360}deg) saturate(1.8) brightness(1.05)"
+          />
+          ${isSup?`<div style="position:absolute;top:-5px;right:-5px;background:#6D28D9;color:white;border-radius:50%;width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;border:1px solid white;line-height:1">★</div>`:""}
+        </div>
+      </div>`;
 
-      const iconHtml=isSup
-        ?`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
-            ${spd!=null&&spd>0?`<div style="background:${color};color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-bottom:1px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.25)">${spd}</div>`:""}
-            <div style="background:${color};color:white;border-radius:5px;transform:rotate(45deg);width:30px;height:30px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,0.4);border:2px solid white;font-size:13px;font-weight:800">
-              <span style="transform:rotate(-45deg)">★</span>
-            </div>
-          </div>`
-        :`<div style="position:relative;display:flex;flex-direction:column;align-items:center">
-            ${spd!=null&&spd>0?`<div style="background:${color};color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-bottom:1px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.25)">${spd} km/h</div>`:""}
-            ${carSvg}
-          </div>`;
-
-      const iconH=spd!=null&&spd>0&&!isSup?28+16:isSup&&spd!=null&&spd>0?30+16:isSup?30:28;
-      const iconW=isSup?30:28;
+      const iconH=spd!=null&&spd>0?30+16:30;
+      const iconW=30;
       const icon=L.divIcon({html:iconHtml,iconSize:[iconW,iconH],iconAnchor:[iconW/2,iconH],className:""});
 
       const handleClick=(e:any)=>{ L.DomEvent.stopPropagation(e); setQuickCard(loc); setTripPanel(null); };
