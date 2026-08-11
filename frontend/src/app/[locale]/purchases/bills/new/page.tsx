@@ -83,20 +83,7 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
 
   useEffect(() => {
     Promise.all([getWarehouses(), getFiscalYears(), getPurchaseOrders({ status: "confirmed" })])
-
-  // جلب كميات المستودع عند تغييره
-  useEffect(() => {
-    if (!form.warehouse_id) return;
-    getStockByWarehouse(form.warehouse_id)
-      .then(r => {
-        const stock: Record<string, number> = {};
-        (Array.isArray(r.data) ? r.data : []).forEach((s: any) => {
-          if (s.product_id) stock[s.product_id] = Number(s.quantity_on_hand ?? 0);
-        });
-        setWarehouseStock(stock);
-      })
-      .catch(() => {});
-  }, [form.warehouse_id]);      .then(([whRes, fyRes, poRes]) => {
+      .then(([whRes, fyRes, poRes]) => {
         setWarehouses(whRes.data);
         setFiscalYears(fyRes.data);
         setPurchaseOrders(poRes.data);
@@ -110,6 +97,20 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
       })
       .catch(() => {});
   }, []);
+
+  // جلب كميات المستودع عند تغييره
+  useEffect(() => {
+    if (!form.warehouse_id) return;
+    getStockByWarehouse(form.warehouse_id)
+      .then(r => {
+        const stock: Record<string, number> = {};
+        (Array.isArray(r.data) ? r.data : []).forEach((s: any) => {
+          if (s.product_id) stock[s.product_id] = Number(s.quantity_on_hand ?? 0);
+        });
+        setWarehouseStock(stock);
+      })
+      .catch(() => {});
+  }, [form.warehouse_id]);
 
   const setLine = (i: number, k: keyof Omit<Line, "picked">, v: string) =>
     setLines(p => p.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
