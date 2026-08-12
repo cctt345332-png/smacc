@@ -5,13 +5,16 @@ interface Props {
   onResult: (text: string) => void;
   onClose: () => void;
   locale?: string;
+  continuous?: boolean;  // إذا true: الكاميرا تبقى شغالة بعد كل مسح
 }
 
-export default function BarcodeScanner({ onResult, onClose, locale = "ar" }: Props) {
+export default function BarcodeScanner({ onResult, onClose, locale = "ar", continuous = false }: Props) {
   const ar = locale === "ar";
   const scannerRef = useRef<any>(null);
   const [error, setError] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [lastScanned, setLastScanned] = useState("");
+  const lastScannedRef = useRef("");
   const containerId = "barcode-scanner-container-" + Math.random().toString(36).slice(2);
   const containerIdRef = useRef(containerId);
 
@@ -43,12 +46,25 @@ export default function BarcodeScanner({ onResult, onClose, locale = "ar" }: Pro
 
         await html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 15, qrbox: { width: 240, height: 240 } },
+          { fps: 10, qrbox: { width: 240, height: 240 } },
           (decodedText: string) => {
             if (!mounted) return;
-            stopScanner().then(() => {
-              if (mounted) onResult(decodedText.trim());
-            });
+            const text = decodedText.trim();
+            if (continuous) {
+              // وضع المتواصل: لا توقف الكاميرا، أرسل فقط إذا اختلف عن السابق
+              if (text !== lastScannedRef.current) {
+                lastScannedRef.current = text;
+                setLastScanned(text);
+                onResult(text);
+                // بعد ثانية امسح التمييز لقبول نفس الرقم مرة ثانية
+                setTimeout(() => { lastScannedRef.current = ""; setLastScanned(""); }, 1500);
+              }
+            } else {
+              // وضع عادي: أوقف الكاميرا بعد أول مسح
+              stopScanner().then(() => {
+                if (mounted) onResult(text);
+              });
+            }
           },
           () => {}
         );
@@ -155,9 +171,17 @@ export default function BarcodeScanner({ onResult, onClose, locale = "ar" }: Pro
           marginTop: 24, color: "rgba(255,255,255,0.75)",
           fontSize: 13, textAlign: "center", padding: "0 32px", lineHeight: 1.6,
         }}>
-          {ar
-            ? "وجّه الكاميرا نحو الباركود\nسيُمسح تلقائياً"
-            : "Point camera at barcode\nIt will scan automatically"}
+          {ar ? "وجّه الكاميرا نحو الباركود\nسيُمسح تلقائياً" : "Point camera at barcode\nIt will scan automatically"}
+          {continuous && lastScanned && (
+            <div style={{ marginTop: 10, background: "#059669", color: "white", borderRadius: 8, padding: "6px 16px", fontFamily: "monospace", fontSize: 14, fontWeight: 700 }}>
+              ✅ {lastScanned}
+            </div>
+          )}
+          {continuous && (
+            <div style={{ marginTop: 8, color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+              {ar ? "اضغط ✕ عند الانتهاء" : "Press ✕ when done"}
+            </div>
+          )}
         </div>
       )}
 

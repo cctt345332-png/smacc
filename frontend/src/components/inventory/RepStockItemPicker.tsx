@@ -45,12 +45,11 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
 
   /* معالجة نتيجة الباركود */
   const handleBarcodeResult = (text: string) => {
-    setShowBarcode(false);
+    // في وضع continuous لا نُغلق الكاميرا هنا — تُغلق عند ✕
     const scanned = text.trim();
 
-    // الحالة 1: صنف serial مختار — الباركود هو رقم السيريال
+    // الحالة 1: صنف serial مختار — الباركود هو رقم السيريال → أضفه للقائمة
     if (value.inventory_item_id && value.mode === "serial") {
-      // نبحث في السيريالات المتاحة بالـ serial number
       import("@/lib/inventory").then(({ getAvailableSerials }) => {
         getAvailableSerials(value.inventory_item_id!).then(({ data }) => {
           const serial = Array.isArray(data)
@@ -59,12 +58,16 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
               )
             : null;
           if (serial) {
+            // أضف للقائمة الموجودة بدل الاستبدال
+            const existingIds = value.serial_ids || [];
+            const existingNums = value.serial_numbers || [];
+            if (existingIds.includes(serial.id)) return; // تجنب التكرار
             onChange({
               ...value,
-              serial_ids: [serial.id],
-              serial_numbers: [serial.serial_number],
-              quantity: 1,
-              description_ar: `${value.item_name} (${serial.serial_number})`,
+              serial_ids: [...existingIds, serial.id],
+              serial_numbers: [...existingNums, serial.serial_number],
+              quantity: existingIds.length + 1,
+              description_ar: `${value.item_name} (${existingNums.length + 1} سيريال)`,
               unit_price: serial.sale_price ? Number(serial.sale_price) : value.unit_price,
             });
           } else {
@@ -79,7 +82,8 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
       return;
     }
 
-    // الحالة 2: لم يُختر صنف بعد — ابحث بالـ SKU أو اسم الصنف
+    // الحالة 2: بحث بالـ SKU
+    setShowBarcode(false);
     const found = stockItems.find(s =>
       (s.item_sku || s.sku || "").toLowerCase() === scanned.toLowerCase() ||
       (s.serial_number || "").toLowerCase() === scanned.toLowerCase()
@@ -96,7 +100,6 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
         available_qty: isSerial ? undefined : Number(found.quantity || found.available_qty || 0),
       });
     } else {
-      // أدخل كنص في حقل البحث ليبحث المستخدم يدوياً
       setQuery(scanned);
       setShowDrop(true);
     }
@@ -341,6 +344,7 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
           locale={locale}
           onResult={handleBarcodeResult}
           onClose={() => setShowBarcode(false)}
+          continuous={!!(value.inventory_item_id && value.mode === "serial")}
         />
       )}
     </div>
