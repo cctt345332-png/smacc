@@ -135,7 +135,7 @@ class Bill(Base):
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
     bill_number: Mapped[str] = mapped_column(String(50), index=True)  # رقمنا الداخلي
     vendor_invoice_number: Mapped[str | None] = mapped_column(String(100), nullable=True)  # رقم فاتورة المورد
-    vendor_id: Mapped[str] = mapped_column(String, ForeignKey("vendors.id"))
+    vendor_id: Mapped[str | None] = mapped_column(String, ForeignKey("vendors.id"), nullable=True)
     status: Mapped[BillStatus] = mapped_column(SAEnum(BillStatus), default=BillStatus.DRAFT)
 
     # التواريخ
@@ -143,8 +143,8 @@ class Bill(Base):
     supply_date: Mapped[datetime] = mapped_column(DateTime)     # تاريخ التوريد
     due_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    # بيانات المورد snapshot — متطلبات زاتكا
-    vendor_name_ar: Mapped[str] = mapped_column(String(300))
+    # بيانات المورد snapshot — متطلبات زاتكا (اختيارية إذا لم يكن هناك مورد)
+    vendor_name_ar: Mapped[str | None] = mapped_column(String(300), nullable=True)
     vendor_vat_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     vendor_cr_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
     vendor_address: Mapped[str | None] = mapped_column(Text, nullable=True)

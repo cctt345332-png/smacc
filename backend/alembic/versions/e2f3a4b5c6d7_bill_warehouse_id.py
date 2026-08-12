@@ -18,6 +18,14 @@ depends_on = None
 def upgrade():
     bind = op.get_bind()
     inspector = Inspector.from_engine(bind)
+
+    # 1. اجعل vendor_id nullable
+    op.alter_column("bills", "vendor_id", nullable=True)
+
+    # 2. اجعل vendor_name_ar nullable
+    op.alter_column("bills", "vendor_name_ar", nullable=True, server_default=None)
+
+    # 3. أضف warehouse_id إذا لم يكن موجوداً
     cols = [c["name"] for c in inspector.get_columns("bills")]
     if "warehouse_id" not in cols:
         op.add_column("bills", sa.Column(
