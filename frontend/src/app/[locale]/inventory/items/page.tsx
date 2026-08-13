@@ -103,6 +103,57 @@ export default function ItemsPage({ params: { locale } }: { params: { locale: st
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
   };
 
+  const exportToPDF = () => {
+    const filtered = items.filter(item => {
+      const q = search.toLowerCase();
+      return !q || item.name_ar?.toLowerCase().includes(q) || item.sku?.toLowerCase().includes(q) || item.barcode?.toLowerCase().includes(q);
+    });
+
+    const rows = filtered.map(item => `
+      <tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px">${item.sku || "—"}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px">${item.barcode || "—"}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:500">${item.name_ar || ""}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280">${item.name_en || ""}</td>
+      </tr>`).join("");
+
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar">
+    <head><meta charset="UTF-8"><title>${ar ? "قائمة الأصناف" : "Items List"}</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #111; }
+      h1 { font-size: 18px; margin-bottom: 4px; }
+      .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; }
+      thead tr { background: #2563EB; color: white; }
+      thead th { padding: 8px 10px; font-size: 12px; font-weight: 700; text-align: start; }
+      tbody tr:nth-child(even) { background: #f9fafb; }
+      @media print {
+        @page { margin: 15mm; size: A4 portrait; }
+        body { padding: 0; }
+      }
+    </style></head>
+    <body>
+      <h1>${ar ? "قائمة الأصناف" : "Items List"}</h1>
+      <p class="sub">${ar ? "الإجمالي:" : "Total:"} ${filtered.length} ${ar ? "صنف" : "items"} — ${new Date().toLocaleDateString("ar-SA")}</p>
+      <table>
+        <thead><tr>
+          <th>SKU</th>
+          <th>${ar ? "الباركود" : "Barcode"}</th>
+          <th>${ar ? "اسم الصنف" : "Item Name"}</th>
+          <th>${ar ? "الاسم بالإنجليزي" : "English Name"}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </body></html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => { win.print(); };
+  };
+
   const getTrackingInfo = (type: string) => TRACKING_TYPES.find(t => t.value === type);
 
   return (
@@ -120,6 +171,15 @@ export default function ItemsPage({ params: { locale } }: { params: { locale: st
         <div style={{ display: "flex", gap: 8 }}>
           {/* زر إضافة سيريالات — يظهر فقط لنشاط الجوالات */}
           <SerialsButton locale={locale} ar={ar} />
+          <button className="btn btn-secondary" onClick={exportToPDF} title={ar ? "تصدير PDF" : "Export PDF"} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="12" x2="12" y2="18"/>
+              <polyline points="9 15 12 18 15 15"/>
+            </svg>
+            {ar ? "تصدير PDF" : "Export PDF"}
+          </button>
           <Link href={`/${locale}/inventory/items/new`} className="btn btn-primary">
             <Icon name="plus" size={16} /> {ar ? "+ صنف جديد" : "+ New Item"}
           </Link>
