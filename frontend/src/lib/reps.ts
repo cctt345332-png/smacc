@@ -93,3 +93,7 @@ export const assignRepsToSupervisor = (supervisorId: string, repIds: string[]) =
 export const getSupervisorInvoices = () => api.get("/supervisors/me/invoices");
 export const getSupervisorSummary  = () => api.get("/supervisors/me/summary");
 export const getSupervisorReps     = () => api.get("/supervisors/me/reps");
+
+// ─── الدخول كمندوب (impersonation) ───────────────────────────────
+export const getRepImpersonationToken = (repId: string) =>
+  api.post(`/reps/${repId}/impersonate-token`);

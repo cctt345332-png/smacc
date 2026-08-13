@@ -227,12 +227,33 @@ export default function RepLayout({
   };
 
   if (!mounted) {
-    // عرض skeleton بسيط بدل شاشة بيضاء — بدون انتظار
     return (
       <div style={{ minHeight: "100vh", background: "var(--bg)" }} />
     );
   }
   if (!token) return null;
+
+  /* هل المدير يتصفح كمندوب؟ */
+  const isImpersonating = typeof window !== "undefined" && !!sessionStorage.getItem("prev_token");
+
+  const handleExitImpersonation = () => {
+    const prevToken = sessionStorage.getItem("prev_token");
+    const prevUser = JSON.parse(sessionStorage.getItem("prev_user") || "null");
+    const prevPath = sessionStorage.getItem("prev_path") || `/${locale}/reps/manage`;
+    sessionStorage.removeItem("prev_token");
+    sessionStorage.removeItem("prev_user");
+    sessionStorage.removeItem("prev_path");
+    if (prevToken && prevUser) {
+      logout();
+      // نعيد التوكن الأصلي
+      import("@/store/authStore").then(({ useAuthStore }) => {
+        useAuthStore.getState().setAuth(prevToken, prevUser);
+        router.replace(prevPath);
+      });
+    } else {
+      router.replace(`/${locale}/reps/manage`);
+    }
+  };
 
   /* Bottom nav items */
   const navItems = [
@@ -252,6 +273,28 @@ export default function RepLayout({
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+
+      {/* ── شريط تنبيه الدخول كمندوب ───────────────────────────── */}
+      {isImpersonating && (
+        <div style={{
+          background: "#7C3AED", color: "white",
+          padding: "8px 16px",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          fontSize: 13, fontWeight: 600, flexShrink: 0,
+          zIndex: 200,
+        }}>
+          <span>👁 {ar ? "أنت تتصفح لوحة المندوب — البيانات حقيقية" : "Viewing rep dashboard — real data"}</span>
+          <button
+            onClick={handleExitImpersonation}
+            style={{
+              background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)",
+              borderRadius: 8, color: "white", padding: "4px 14px",
+              cursor: "pointer", fontWeight: 700, fontSize: 12,
+            }}>
+            {ar ? "← الخروج للإدارة" : "← Back to Admin"}
+          </button>
+        </div>
+      )}
 
       {/* ── Top Bar ────────────────────────────────────────────────── */}
       <header style={{

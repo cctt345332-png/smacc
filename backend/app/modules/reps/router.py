@@ -117,7 +117,48 @@ async def create_rep(
     return await service.create_rep(db, user["tenant_id"], data)
 
 
-@router.get("/{rep_id}")
+@router.post("/{rep_id}/impersonate-token")
+async def impersonate_rep(
+    rep_id: str,
+    user=Depends(require_role(["manager", "accountant", "admin"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """يُولّد توكن مؤقت (2 ساعة) للمدير/المحاسب للدخول كمندوب"""
+    from app.models.reps import SalesRep
+    from app.models.user import User
+    from sqlalchemy import select
+    from datetime import datetime, timedelta
+    from jose import jwt
+    from app.core.config import settings
+
+    r = await db.execute(
+        select(SalesRep, User)
+        .join(User, SalesRep.user_id == User.id)
+        .where(SalesRep.id == rep_id, SalesRep.tenant_id == user["tenant_id"])
+    )
+    row = r.one_or_none()
+    if not row:
+        from fastapi import HTTPException
+        raise HTTPException(404, "المندوب غير موجود")
+    rep, rep_user = row
+
+    payload = {
+        "sub": rep_user.id,
+        "tenant_id": rep_user.tenant_id,
+        "role": "sales_rep",
+        "exp": datetime.utcnow() + timedelta(hours=2),
+        "impersonated_by": user["user_id"],
+    }
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return {
+        "access_token": token,
+        "rep_id": rep.id,
+        "rep_code": rep.rep_code,
+        "full_name": rep_user.full_name,
+    }
+
+
+
 async def get_rep(
     rep_id: str,
     user=Depends(require_role(["manager", "accountant", "sales"])),

@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getReps, createRep, updateRep, getRepSummary } from "@/lib/reps";
+import { getReps, createRep, updateRep, getRepSummary, getRepImpersonationToken } from "@/lib/reps";
+import { useAuthStore } from "@/store/authStore";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtNum = (n: any) => Number(n || 0).toLocaleString("en-US");
@@ -21,6 +23,8 @@ const EMPTY_FORM = {
 
 export default function ManageRepsPage({ params: { locale } }: { params: { locale: string } }) {
   const ar = locale === "ar";
+  const router = useRouter();
+  const { token: currentToken, user: currentUser, setAuth } = useAuthStore();
   const [reps, setReps] = useState<any[]>([]);
   const [summaries, setSummaries] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
@@ -49,6 +53,30 @@ export default function ManageRepsPage({ params: { locale } }: { params: { local
   };
 
   useEffect(() => { load(); }, []);
+
+  /* الدخول كمندوب — يحفظ التوكن الحالي ويُبدّله بتوكن المندوب */
+  const handleViewAsRep = async (rep: any) => {
+    try {
+      const res = await getRepImpersonationToken(rep.id);
+      const { access_token, full_name } = res.data;
+      // حفظ بيانات المدير للرجوع لاحقاً
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("prev_token", currentToken || "");
+        sessionStorage.setItem("prev_user", JSON.stringify(currentUser));
+        sessionStorage.setItem("prev_path", `/${locale}/reps/manage`);
+      }
+      // تبديل التوكن لتوكن المندوب
+      setAuth(access_token, {
+        id: rep.user_id,
+        tenantId: rep.tenant_id || currentUser?.tenantId || "",
+        role: "sales_rep",
+        fullName: full_name,
+      });
+      router.push(`/${locale}/reps/me/dashboard`);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "فشل الدخول كمندوب" : "Failed to view as rep"));
+    }
+  };
 
   const openAdd = () => { setForm({ ...EMPTY_FORM }); setEditRep(null); setShowAdd(true); setError(""); };
   const openEdit = (rep: any) => {
@@ -247,6 +275,20 @@ export default function ManageRepsPage({ params: { locale } }: { params: { local
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
                           <Link href={`/${locale}/reps/${rep.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "تفاصيل" : "Details"}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          </Link>
+                          <button
+                            className="btn btn-ghost btn-sm btn-icon"
+                            title={ar ? "الدخول كمندوب" : "View as Rep"}
+                            onClick={() => handleViewAsRep(rep)}
+                            style={{ color: "#7C3AED" }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                              <polyline points="10 17 15 12 10 7"/>
+                              <line x1="15" y1="12" x2="3" y2="12"/>
+                            </svg>
+                          </button>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                           </Link>
                           <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "تعديل" : "Edit"} onClick={() => openEdit(rep)}>
