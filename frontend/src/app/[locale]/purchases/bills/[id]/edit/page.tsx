@@ -172,7 +172,7 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
           {!isDraft && (
             <div style={{ marginTop: 6, padding: "6px 12px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#92400E", fontWeight: 600, display: "inline-flex", gap: 6, alignItems: "center" }}>
               <Icon name="warning" size={13} />
-              {ar ? "الفاتورة مؤكدة — يمكن تعديل التواريخ والملاحظات والمستودع فقط" : "Confirmed — only dates, notes and warehouse can be edited"}
+              {ar ? "الفاتورة مؤكدة — التعديل سيُحدّث المبالغ والأسطر" : "Confirmed — editing will update amounts and lines"}
             </div>
           )}
         </div>
@@ -248,18 +248,15 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "#6B7280" }}>{ar ? "الحالة:" : "Status:"}</span>
                 <span style={{ fontWeight: 700, color: isDraft ? "#D97706" : "#059669" }}>
-                  {isDraft ? (ar ? "مسودة" : "Draft") : (ar ? "مؤكدة" : "Confirmed")}
-                </span>
+                  {isDraft ? (ar ? "مسودة" : "Draft") : (ar ? "مؤكدة" : "Confirmed")}                </span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "#6B7280" }}>{ar ? "الإجمالي الحالي:" : "Current Total:"}</span>
                 <span style={{ fontWeight: 700 }}>{fmt(bill.total)} SAR</span>
               </div>
               {!isDraft && (
-                <div style={{ marginTop: 8, padding: 10, background: "#FEF3C7", borderRadius: 8, fontSize: 11, color: "#92400E" }}>
-                  {ar
-                    ? "الفاتورة مؤكدة — لتعديل الأسطر يجب إلغاؤها أولاً أو إنشاء إشعار مدين"
-                    : "Bill is confirmed — to edit lines, cancel it first or create a debit note"}
+                <div style={{ marginTop: 8, padding: 10, background: "#D1FAE5", borderRadius: 8, fontSize: 11, color: "#065F46" }}>
+                  {ar ? "الفاتورة مؤكدة — التعديل سيحدث الأسطر والمبالغ مباشرة" : "Confirmed bill — changes will update lines and amounts directly"}
                 </div>
               )}
             </div>
@@ -267,9 +264,8 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
         </div>
       </div>
 
-      {/* الأسطر — فقط للمسودات */}
-      {isDraft && (
-        <div className="card" style={{ marginBottom: 20 }}>
+      {/* الأسطر — متاحة لجميع الحالات */}
+      <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-header">
             <span className="card-title">{ar ? "أسطر الفاتورة" : "Bill Lines"}</span>
             <button className="btn btn-secondary btn-sm" onClick={addLine}><Icon name="plus" size={14} /> {ar ? "إضافة سطر" : "Add Line"}</button>
@@ -345,19 +341,16 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
             </div>
           </div>
         </div>
-      )}
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingBottom: 32 }}>
         <Link href={`/${locale}/purchases/bills/${id}`} className="btn btn-secondary">{ar ? "إلغاء" : "Cancel"}</Link>
         <button className="btn btn-secondary" onClick={handleSave} disabled={saving}>
           <Icon name="draft" size={16} /> {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ التعديلات" : "Save Changes")}
         </button>
-        {isDraft && (
-          <button className="btn btn-primary" onClick={handleSaveConfirm} disabled={saving}>
-            <Icon name="check" size={16} />
-            {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ وتأكيد" : "Save & Confirm")}
-          </button>
-        )}
+        <button className="btn btn-primary" onClick={handleSaveConfirm} disabled={saving}>
+          <Icon name="check" size={16} />
+          {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ وتأكيد" : "Save & Confirm")}
+        </button>
       </div>
     </>
   );
