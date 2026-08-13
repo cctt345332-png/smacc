@@ -139,6 +139,11 @@ export default function BillDetailPage({ params: { locale, id } }: { params: { l
           <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
             <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
           </button>
+          {bill.status !== "paid" && bill.status !== "cancelled" && (
+            <Link href={`/${locale}/purchases/bills/${id}/edit`} className="btn btn-secondary btn-sm">
+              <Icon name="edit" size={14} /> {ar ? "تعديل" : "Edit"}
+            </Link>
+          )}
           {bill.status === "draft" && (
             <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={acting}>
               <Icon name="check" size={14} /> {ar ? "تأكيد الفاتورة" : "Confirm Bill"}

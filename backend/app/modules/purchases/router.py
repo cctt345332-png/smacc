@@ -68,6 +68,12 @@ async def get_bill(bill_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSess
 async def create_bill(data: dict, user=Depends(require_role(["manager","purchaser","accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.create_bill(db, user["tenant_id"], user["user_id"], data)
 
+@router.patch("/bills/{bill_id}")
+async def update_bill(bill_id: str, data: dict, user=Depends(require_role(["manager","purchaser","accountant"])), db: AsyncSession = Depends(get_db)):
+    """تعديل فاتورة — كامل للمسودة، حقول مختارة للمؤكدة"""
+    return await service.update_bill(db, user["tenant_id"], user["user_id"], bill_id, data)
+
+
 @router.post("/bills/{bill_id}/confirm")
 async def confirm_bill(bill_id: str, user=Depends(require_role(["manager","purchaser","accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.confirm_bill(db, user["tenant_id"], user["user_id"], bill_id)

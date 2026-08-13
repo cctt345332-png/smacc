@@ -18,6 +18,7 @@ export const convertOrderToBill = (id: string) => api.post(`/purchases/orders/${
 export const getBills = (params?: any) => api.get("/purchases/bills", { params });
 export const getBill = (id: string) => api.get(`/purchases/bills/${id}`);
 export const createBill = (data: any) => api.post("/purchases/bills", data);
+export const updateBill = (id: string, data: any) => api.patch(`/purchases/bills/${id}`, data);
 export const confirmBill = (id: string) => api.post(`/purchases/bills/${id}/confirm`);
 export const cancelBill = (id: string) => api.post(`/purchases/bills/${id}/cancel`);
 export const getBillPayments = (id: string) => api.get(`/purchases/bills/${id}/payments`);

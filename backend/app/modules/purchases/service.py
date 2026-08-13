@@ -493,8 +493,85 @@ async def _create_bill_journal(db, tenant_id, user_id, bill: Bill):
     return entry.id
 
 
-async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
+async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: str, data: dict):
+    """
+    تعديل فاتورة المشتريات:
+    - مسودة: تعديل كامل (الرأس + الأسطر)
+    - مؤكدة: تعديل الحقول غير المالية فقط (التواريخ / الملاحظات / المرجع / المستودع)
+    """
     bill = await get_bill(db, tenant_id, bill_id)
+
+    if bill.status == BillStatus.CANCELLED:
+        raise HTTPException(400, "لا يمكن تعديل فاتورة ملغاة")
+
+    is_draft = bill.status == BillStatus.DRAFT
+
+    # ─── تحديث الحقول المشتركة (متاحة دائماً) ────────────────────
+    if data.get("vendor_invoice_number") is not None:
+        bill.vendor_invoice_number = data["vendor_invoice_number"] or None
+    if data.get("notes") is not None:
+        bill.notes = data["notes"] or None
+    if data.get("warehouse_id") is not None:
+        bill.warehouse_id = data["warehouse_id"] or None
+
+    # التواريخ
+    if data.get("bill_date"):
+        bill.bill_date = datetime.fromisoformat(data["bill_date"]).replace(tzinfo=None)
+    if data.get("supply_date"):
+        bill.supply_date = datetime.fromisoformat(data["supply_date"]).replace(tzinfo=None)
+    if "due_date" in data:
+        bill.due_date = datetime.fromisoformat(data["due_date"]).replace(tzinfo=None) if data["due_date"] else None
+
+    # ─── تعديل الأسطر — مسموح فقط للمسودات ──────────────────────
+    if is_draft and "lines" in data:
+        # حذف الأسطر القديمة
+        old_lines_r = await db.execute(select(BillLine).where(BillLine.bill_id == bill_id))
+        for old_line in old_lines_r.scalars().all():
+            await db.delete(old_line)
+
+        subtotal = disc_total = vat_total = grand_total = Decimal("0")
+        for i, line in enumerate(data.get("lines", [])):
+            gross, disc, taxable, vat, tot = _calc(
+                line["quantity"], line["unit_price"],
+                line.get("discount_pct", 0), line.get("vat_rate", 15)
+            )
+            subtotal += gross; disc_total += disc; vat_total += vat; grand_total += tot
+
+            import json as _json
+            new_serial_numbers = line.get("new_serial_numbers")
+            qty_val = len(new_serial_numbers) if new_serial_numbers else line["quantity"]
+
+            db.add(BillLine(
+                id=str(uuid.uuid4()), bill_id=bill_id, line_order=i,
+                description_ar=line["description_ar"], description_en=line.get("description_en"),
+                quantity=Decimal(str(qty_val)), unit=line.get("unit"),
+                unit_price=Decimal(str(line["unit_price"])),
+                discount_pct=Decimal(str(line.get("discount_pct", 0))),
+                discount_amount=disc,
+                vat_rate=Decimal(str(line.get("vat_rate", 15))),
+                vat_category=line.get("vat_category", "S"),
+                subtotal=gross, vat_amount=vat, total=tot,
+                inventory_item_id=line.get("inventory_item_id"),
+                serial_item_id=line.get("serial_item_id"),
+                new_serial_number=line.get("new_serial_number"),
+                new_serial_condition=line.get("new_serial_condition"),
+                new_serial_sale_price=Decimal(str(line["new_serial_sale_price"])) if line.get("new_serial_sale_price") else None,
+                new_serial_numbers_json=_json.dumps(new_serial_numbers) if new_serial_numbers else None,
+                batch_number=line.get("batch_number"),
+                batch_expiry_date=line.get("batch_expiry_date"),
+            ))
+
+        bill.subtotal = subtotal
+        bill.discount_amount = disc_total
+        bill.taxable_amount = subtotal - disc_total
+        bill.vat_amount = vat_total
+        bill.total = grand_total
+
+    await db.commit()
+    return await get_bill(db, tenant_id, bill_id)
+
+
+async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):    bill = await get_bill(db, tenant_id, bill_id)
     if bill.status in (BillStatus.PAID, BillStatus.CANCELLED):
         raise HTTPException(400, "Cannot cancel this bill")
     bill.status = BillStatus.CANCELLED
