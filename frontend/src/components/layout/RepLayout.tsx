@@ -244,14 +244,14 @@ export default function RepLayout({
     sessionStorage.removeItem("prev_user");
     sessionStorage.removeItem("prev_path");
     if (prevToken && prevUser) {
-      logout();
-      // نعيد التوكن الأصلي
+      // استعادة التوكن الأصلي مباشرة بدون logout
       import("@/store/authStore").then(({ useAuthStore }) => {
         useAuthStore.getState().setAuth(prevToken, prevUser);
-        router.replace(prevPath);
       });
+      router.replace(prevPath);
     } else {
-      router.replace(`/${locale}/reps/manage`);
+      logout();
+      router.replace(`/${locale}/login`);
     }
   };
 
