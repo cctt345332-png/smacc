@@ -565,6 +565,7 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
         bill.total = grand_total
 
     await db.commit()
+    await db.expire_all()  # امسح الـ cache لتجنب circular references
     return await get_bill(db, tenant_id, bill_id)
 
 
