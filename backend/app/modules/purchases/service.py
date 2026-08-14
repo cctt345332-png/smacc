@@ -566,7 +566,47 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
     await db.commit()
     await db.expire_all()  # امسح الـ cache لتجنب circular references
-    return await get_bill(db, tenant_id, bill_id)
+
+    # أرجع الفاتورة كـ dict صريح لتجنب RecursionError
+    r = await db.execute(
+        select(Bill).where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
+    )
+    updated = r.scalar_one()
+    lines_r = await db.execute(select(BillLine).where(BillLine.bill_id == bill_id).order_by(BillLine.line_order))
+    updated_lines = lines_r.scalars().all()
+
+    return {
+        "id": updated.id,
+        "bill_number": updated.bill_number,
+        "status": updated.status.value if hasattr(updated.status, "value") else updated.status,
+        "warehouse_id": updated.warehouse_id,
+        "vendor_invoice_number": updated.vendor_invoice_number,
+        "bill_date": updated.bill_date.isoformat() if updated.bill_date else None,
+        "supply_date": updated.supply_date.isoformat() if updated.supply_date else None,
+        "due_date": updated.due_date.isoformat() if updated.due_date else None,
+        "notes": updated.notes,
+        "subtotal": float(updated.subtotal),
+        "discount_amount": float(updated.discount_amount),
+        "taxable_amount": float(updated.taxable_amount),
+        "vat_amount": float(updated.vat_amount),
+        "total": float(updated.total),
+        "paid_amount": float(updated.paid_amount),
+        "lines": [
+            {
+                "id": l.id,
+                "description_ar": l.description_ar,
+                "quantity": float(l.quantity),
+                "unit_price": float(l.unit_price),
+                "discount_pct": float(l.discount_pct),
+                "vat_rate": float(l.vat_rate),
+                "subtotal": float(l.subtotal),
+                "vat_amount": float(l.vat_amount),
+                "total": float(l.total),
+                "inventory_item_id": l.inventory_item_id,
+            }
+            for l in updated_lines
+        ],
+    }
 
 
 async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
