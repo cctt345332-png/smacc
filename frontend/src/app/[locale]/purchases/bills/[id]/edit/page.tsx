@@ -126,8 +126,7 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
         new_serial_sale_price: l.picked.new_serial_sale_price || null,
         batch_number: l.picked.batch_number || null,
         batch_expiry_date: l.picked.batch_expiry_date || null,
-      }));
-    }
+    }));
     return base;
   };
 
@@ -342,6 +341,7 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
             </div>
           </div>
         </div>
+      </div>
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingBottom: 32 }}>
         <Link href={`/${locale}/purchases/bills/${id}`} className="btn btn-secondary">{ar ? "إلغاء" : "Cancel"}</Link>
