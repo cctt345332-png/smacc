@@ -112,8 +112,8 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
       bill_date: form.bill_date, supply_date: form.supply_date,
       due_date: form.due_date || null, notes: form.notes || null,
     };
-    if (isDraft) {
-      base.lines = lines.map((l, i) => ({
+    // أرسل الأسطر دائماً — لجميع حالات الفاتورة
+    base.lines = lines.map((l, i) => ({
         description_ar: l.picked.description_ar || (ar ? "صنف" : "Item"),
         quantity: l.picked.quantity || 1, unit_price: l.picked.unit_price || 0,
         discount_pct: parseFloat(l.discount_pct) || 0, vat_rate: parseFloat(l.vat_rate) || 15,
