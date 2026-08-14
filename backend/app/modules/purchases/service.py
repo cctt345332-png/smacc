@@ -496,9 +496,14 @@ async def _create_bill_journal(db, tenant_id, user_id, bill: Bill):
 async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: str, data: dict):
     """
     تعديل فاتورة المشتريات — كامل حتى للمؤكدة
-    يحذف الأسطر القديمة ويضيف الجديدة، ويعيد حساب المجاميع
     """
-    bill = await get_bill(db, tenant_id, bill_id)
+    # نجلب الفاتورة بدون selectinload لتجنب recursion في SQLAlchemy identity map
+    r = await db.execute(
+        select(Bill).where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
+    )
+    bill = r.scalar_one_or_none()
+    if not bill:
+        raise HTTPException(404, "Bill not found")
 
     if bill.status == BillStatus.CANCELLED:
         raise HTTPException(400, "لا يمكن تعديل فاتورة ملغاة")
@@ -520,11 +525,9 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
     # ─── تعديل الأسطر — مسموح لجميع الحالات ما عدا الملغاة ──────
     if "lines" in data:
-        # حذف الأسطر القديمة
-        old_lines_r = await db.execute(select(BillLine).where(BillLine.bill_id == bill_id))
-        for old_line in old_lines_r.scalars().all():
-            await db.delete(old_line)
-        await db.flush()
+        # حذف الأسطر القديمة بـ SQL مباشر لتجنب ORM recursion
+        from sqlalchemy import delete as sql_delete
+        await db.execute(sql_delete(BillLine).where(BillLine.bill_id == bill_id))
 
         subtotal = disc_total = vat_total = grand_total = Decimal("0")
         for i, line in enumerate(data.get("lines", [])):
