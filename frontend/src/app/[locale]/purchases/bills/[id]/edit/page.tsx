@@ -341,7 +341,6 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
             </div>
           </div>
         </div>
-      </div>
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingBottom: 32 }}>
         <Link href={`/${locale}/purchases/bills/${id}`} className="btn btn-secondary">{ar ? "إلغاء" : "Cancel"}</Link>
