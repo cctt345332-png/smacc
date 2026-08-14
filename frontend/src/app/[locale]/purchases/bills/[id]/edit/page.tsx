@@ -146,7 +146,8 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
     setSaving(true);
     try {
       await updateBill(id, buildPayload());
-      await confirmBill(id);
+      // نؤكد فقط إذا كانت مسودة
+      if (isDraft) await confirmBill(id);
       router.push(`/${locale}/purchases/bills/${id}`);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setSaving(false); }
@@ -349,7 +350,7 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
         </button>
         <button className="btn btn-primary" onClick={handleSaveConfirm} disabled={saving}>
           <Icon name="check" size={16} />
-          {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ وتأكيد" : "Save & Confirm")}
+          {saving ? (ar ? "جاري الحفظ..." : "Saving...") : isDraft ? (ar ? "حفظ وتأكيد" : "Save & Confirm") : (ar ? "حفظ التعديلات" : "Save Changes")}
         </button>
       </div>
     </>
