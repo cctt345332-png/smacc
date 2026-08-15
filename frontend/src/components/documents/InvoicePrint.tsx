@@ -192,7 +192,8 @@ export default function InvoicePrint({ doc, company, party, locale, type }: Prop
         }
         @media print {
           .no-print { display: none !important; }
-          body { background: #fff; padding: 0; }
+          body, body * { visibility: visible !important; }
+          body { background: #fff !important; padding: 0 !important; }
           @page { size: A4 portrait; margin: 0; }
           .print-page { padding: 10mm 14mm; }
         }

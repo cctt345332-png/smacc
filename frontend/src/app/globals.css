@@ -890,15 +890,19 @@ tbody tr:hover { background: #FAFBFC; }
 .auth-subtitle { font-size: 13px; color: var(--text-secondary); margin-bottom: 28px; }
 
 /* ── Thermal Receipt Print Styles ───────────────────────────────────── */
+/* هذه الأنماط تُفعَّل فقط عند وجود .thermal-print-area في الصفحة     */
+/* صفحات الطباعة (A4) تحتوي على @media print خاص بها في InvoicePrint  */
+
 @media print {
-  /* إخفاء كل شيء */
-  body * { visibility: hidden !important; }
+  /* إخفاء كل شيء فقط في صفحات الكاشير — يتحكم فيها JS بإضافة class */
+  body.thermal-print-mode * { visibility: hidden !important; }
 
-  /* إظهار منطقة الطباعة فقط */
-  .thermal-print-area,
-  .thermal-print-area * { visibility: visible !important; }
+  body.thermal-print-mode .thermal-print-area,
+  body.thermal-print-mode .thermal-print-area * {
+    visibility: visible !important;
+  }
 
-  .thermal-print-area {
+  body.thermal-print-mode .thermal-print-area {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
@@ -907,21 +911,32 @@ tbody tr:hover { background: #FAFBFC; }
     z-index: 99999 !important;
   }
 
-  /* إعدادات الصفحة للطباعة الحرارية */
-  @page {
-    size: 80mm auto;
-    margin: 0;
-  }
+  /* إخفاء زر الطباعة في صفحات A4 */
+  .no-print { display: none !important; }
+}
 
-  .thermal-receipt {
+/* الكاشير — حجم 80mm */
+body.thermal-print-mode {
+  @media print {
+    @page { size: 80mm auto; margin: 0; }
+  }
+}
+
+.thermal-receipt {
+  width: 80mm;
+  font-size: 10pt;
+  color: #000;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media print {
+  body.thermal-print-mode .thermal-receipt {
     width: 80mm !important;
     margin: 0 !important;
     padding: 4mm 3mm !important;
     font-size: 10pt !important;
-    color: #000 !important;
-    background: #fff !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 }
 

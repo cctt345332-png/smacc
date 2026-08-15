@@ -1001,9 +1001,13 @@ export default function POSCashierPage() {
                   const printArea = document.getElementById("thermal-print-area");
                   if (printArea) {
                     printArea.style.display = "block";
+                    document.body.classList.add("thermal-print-mode");
                     setTimeout(() => {
                       window.print();
-                      setTimeout(() => { printArea.style.display = "none"; }, 1000);
+                      setTimeout(() => {
+                        printArea.style.display = "none";
+                        document.body.classList.remove("thermal-print-mode");
+                      }, 1000);
                     }, 100);
                   }
                 }}
