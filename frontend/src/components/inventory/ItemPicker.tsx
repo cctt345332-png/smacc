@@ -153,7 +153,12 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
       variant_id: undefined,
       item_name: item.name_ar,
       description_ar: item.name_ar,
-      unit_price: isSerial ? 0 : Number(purchaseMode ? item.cost_price : item.sale_price),
+      // للسيريال في المشتريات: unit_price = cost_price (تكلفة الشراء للوحدة)
+      // sale_price لكل سيريال يُدخل منفصلاً داخل PurchaseSerialInput
+      // للسيريال في البيع: unit_price = 0 (يتحدد عند اختيار السيريال الموجود)
+      unit_price: purchaseMode
+        ? Number(item.cost_price || 0)
+        : (isSerial ? 0 : Number(item.sale_price || 0)),
       quantity: 1,
       available_qty: (isSerial || isBatch || isVariant) ? undefined : Number(item.quantity_on_hand ?? 0),
     });

@@ -1,4 +1,5 @@
 import uuid
+import json
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -213,88 +214,108 @@ async def get_bill(db: AsyncSession, tenant_id: str, bill_id: str):
 
 
 async def create_bill(db: AsyncSession, tenant_id: str, user_id: str, data: dict):
-    # vendor اختياري — نستخدم snapshot فارغ إذا لم يُحدَّد
+    """
+    إنشاء فاتورة مشتريات جديدة.
+    - vendor اختياري — إذا لم يُحدَّد تُحفظ الفاتورة بدون snapshot مورد
+    - للسيريالات: unit_price = تكلفة الشراء، sale_price لكل سيريال منفصل داخل new_serial_numbers
+    - الكمية في السطر = عدد السيريالات الفعلي (len(new_serial_numbers))
+    """
     vendor = None
     if data.get("vendor_id"):
         vendor = await get_vendor(db, tenant_id, data["vendor_id"])
 
-    bill_date = datetime.fromisoformat(data["bill_date"]).replace(tzinfo=None)
+    bill_date   = datetime.fromisoformat(data["bill_date"]).replace(tzinfo=None)
     supply_date = datetime.fromisoformat(data["supply_date"]).replace(tzinfo=None)
-    due_date = datetime.fromisoformat(data["due_date"]).replace(tzinfo=None) if data.get("due_date") else None
+    due_date    = datetime.fromisoformat(data["due_date"]).replace(tzinfo=None) if data.get("due_date") else None
 
-    subtotal = disc_total = vat_total = grand_total = Decimal("0")
+    gross_total = disc_total = taxable_total = vat_total = grand_total = Decimal("0")
     bill_id = str(uuid.uuid4())
-    lines_data = []
+    lines_data: list = []
 
     for line in data.get("lines", []):
-        gross, disc, taxable, vat, tot = _calc(line["quantity"], line["unit_price"], line.get("discount_pct", 0), line.get("vat_rate", 15))
-        subtotal += gross; disc_total += disc; vat_total += vat; grand_total += tot
-        lines_data.append((line, gross, disc, taxable, vat, tot))
+        # الكمية الفعلية: عدد السيريالات إذا وُجدت، وإلا الكمية المُدخلة
+        new_serials: list | None = line.get("new_serial_numbers")
+        qty = len(new_serials) if new_serials else line["quantity"]
 
-    # بيانات المورد snapshot — فارغة إذا لم يُحدَّد مورد
+        gross, disc, taxable, vat, tot = _calc(
+            qty, line["unit_price"],
+            line.get("discount_pct", 0), line.get("vat_rate", 15),
+        )
+        gross_total   += gross
+        disc_total    += disc
+        taxable_total += taxable
+        vat_total     += vat
+        grand_total   += tot
+        lines_data.append((line, qty, gross, disc, taxable, vat, tot))
+
+    # ── snapshot بيانات المورد ────────────────────────────────────────
     if vendor:
-        vendor_address = "، ".join(p for p in [
-            vendor.address_building, vendor.address_street,
-            vendor.address_district, vendor.address_city, vendor.address_postal
-        ] if p)
+        vendor_address = "، ".join(
+            p for p in [
+                vendor.address_building, vendor.address_street,
+                vendor.address_district, vendor.address_city, vendor.address_postal,
+            ] if p
+        )
         vendor_name_ar    = vendor.name_ar
         vendor_vat_number = vendor.vat_number
         vendor_cr_number  = vendor.cr_number
     else:
         vendor_address    = None
-        vendor_name_ar    = data.get("warehouse_name") or "مستودع داخلي"
+        vendor_name_ar    = None
         vendor_vat_number = None
         vendor_cr_number  = None
 
     bill = Bill(
         id=bill_id, tenant_id=tenant_id,
         bill_number=await _next_bill_number(db, tenant_id),
-        vendor_invoice_number=data.get("vendor_invoice_number"),
-        vendor_id=data.get("vendor_id"),
+        vendor_invoice_number=data.get("vendor_invoice_number") or None,
+        vendor_id=data.get("vendor_id") or None,
         bill_date=bill_date, supply_date=supply_date, due_date=due_date,
         vendor_name_ar=vendor_name_ar,
         vendor_vat_number=vendor_vat_number,
         vendor_cr_number=vendor_cr_number,
         vendor_address=vendor_address,
-        subtotal=subtotal, discount_amount=disc_total,
-        taxable_amount=subtotal - disc_total,
-        vat_amount=vat_total, total=grand_total,
-        purchase_order_id=data.get("purchase_order_id"),
-        fiscal_year_id=data.get("fiscal_year_id"),
-        warehouse_id=data.get("warehouse_id"),
-        notes=data.get("notes"),
+        # gross_total = الإجمالي قبل الخصم
+        subtotal=gross_total,
+        discount_amount=disc_total,
+        taxable_amount=taxable_total,
+        vat_amount=vat_total,
+        total=grand_total,
+        purchase_order_id=data.get("purchase_order_id") or None,
+        fiscal_year_id=data.get("fiscal_year_id") or None,
+        warehouse_id=data.get("warehouse_id") or None,
+        notes=data.get("notes") or None,
         created_by=user_id,
     )
     db.add(bill)
 
-    for i, (line, gross, disc, taxable, vat, tot) in enumerate(lines_data):
-        import json as _json
-        # دعم قائمة السيريالات الجماعية
-        new_serial_numbers = line.get("new_serial_numbers")
-        new_serial_numbers_json = _json.dumps(new_serial_numbers) if new_serial_numbers else None
-        # إذا قائمة → الكمية = عدد السيريالات
-        qty_val = len(new_serial_numbers) if new_serial_numbers else line["quantity"]
+    for i, (line, qty, gross, disc, taxable, vat, tot) in enumerate(lines_data):
+        new_serials = line.get("new_serial_numbers")
+        new_serials_json = json.dumps(new_serials, ensure_ascii=False) if new_serials else None
 
         db.add(BillLine(
             id=str(uuid.uuid4()), bill_id=bill_id, line_order=i,
-            description_ar=line["description_ar"], description_en=line.get("description_en"),
-            quantity=Decimal(str(qty_val)), unit=line.get("unit"),
+            description_ar=line["description_ar"],
+            description_en=line.get("description_en"),
+            quantity=Decimal(str(qty)),
+            unit=line.get("unit"),
+            # unit_price = تكلفة الشراء (cost_price) — لا يُخلط مع sale_price السيريال
             unit_price=Decimal(str(line["unit_price"])),
             discount_pct=Decimal(str(line.get("discount_pct", 0))),
             discount_amount=disc,
             vat_rate=Decimal(str(line.get("vat_rate", 15))),
             vat_category=line.get("vat_category", "S"),
-            subtotal=gross, vat_amount=vat, total=tot,
-            inventory_item_id=line.get("inventory_item_id"),
-            serial_item_id=line.get("serial_item_id"),
-            # سيريال واحد — legacy
-            new_serial_number=line.get("new_serial_number"),
-            new_serial_condition=line.get("new_serial_condition"),
-            new_serial_sale_price=Decimal(str(line["new_serial_sale_price"])) if line.get("new_serial_sale_price") else None,
-            # سيريالات جماعية — جديد
-            new_serial_numbers_json=new_serial_numbers_json,
-            batch_number=line.get("batch_number"),
-            batch_expiry_date=line.get("batch_expiry_date"),
+            subtotal=gross,
+            vat_amount=vat,
+            total=tot,
+            inventory_item_id=line.get("inventory_item_id") or None,
+            serial_item_id=line.get("serial_item_id") or None,
+            # سيريالات جماعية — الطريقة المعتمدة
+            # كل عنصر: {"serial_number": str, "condition": str, "sale_price": float|null}
+            new_serial_numbers_json=new_serials_json,
+            # تشغيلة (صيدلية)
+            batch_number=line.get("batch_number") or None,
+            batch_expiry_date=line.get("batch_expiry_date") or None,
         ))
 
     await db.commit()
@@ -322,13 +343,21 @@ async def confirm_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: 
 async def _add_inventory_for_bill(
     db: AsyncSession, tenant_id: str, user_id: str, bill: Bill
 ):
-    """إضافة المخزون عند تأكيد فاتورة المشتريات"""
+    """
+    إضافة المخزون عند تأكيد فاتورة المشتريات.
+
+    للسيريالات:
+        - cost_price = line.unit_price  (تكلفة الشراء المُدخلة في الفاتورة)
+        - sale_price = القيمة المُدخلة لكل سيريال في new_serial_numbers_json
+          (منفصلة تماماً — يمكن تركها None إذا لم تُحدَّد بعد)
+
+    للكمية العادية / التشغيلة:
+        - unit_cost = line.unit_price
+    """
     from app.modules.inventory.service import add_serial, add_stock, add_batch
     from app.models.inventory import InventoryItem
-    import json
 
-    # المستودع المحدد في الفاتورة — أو المستودع الافتراضي
-    wh_id = bill.warehouse_id or None  # add_stock/add_serial تأخذ None → تستخدم الافتراضي
+    wh_id = bill.warehouse_id or None
 
     lines_r = await db.execute(
         select(BillLine).where(BillLine.bill_id == bill.id)
@@ -336,56 +365,55 @@ async def _add_inventory_for_bill(
     lines = lines_r.scalars().all()
 
     for line in lines:
-        if line.inventory_item_id and line.serial_item_id:
-            pass  # سيريال موجود مسبقاً (legacy)
+        if not line.inventory_item_id:
+            continue  # سطر نصي حر — بدون مخزون
 
-        elif line.inventory_item_id and line.new_serial_numbers_json:
-            # ── سيريالات جماعية (الطريقة الجديدة) ────────────────────────
-            serial_entries = json.loads(line.new_serial_numbers_json)
-            # كل عنصر: {"serial_number": "...", "condition": "new", "sale_price": 0}
-            for entry in serial_entries:
-                sn = entry.get("serial_number") or entry if isinstance(entry, str) else None
+        # ── سيريالات جماعية (JSON) ────────────────────────────────
+        if line.new_serial_numbers_json:
+            entries: list = json.loads(line.new_serial_numbers_json)
+            for entry in entries:
+                if isinstance(entry, str):
+                    # صيغة قديمة: سلسلة نصية مجردة
+                    sn        = entry
+                    condition = "new"
+                    sale_price_raw = None
+                else:
+                    sn             = entry.get("serial_number", "").strip()
+                    condition      = entry.get("condition") or "new"
+                    sale_price_raw = entry.get("sale_price")
+
                 if not sn:
                     continue
-                condition = entry.get("condition", "new") if isinstance(entry, dict) else "new"
-                sale_price_raw = entry.get("sale_price") if isinstance(entry, dict) else None
-                sale_price = Decimal(str(sale_price_raw)) if sale_price_raw else None
+
+                # sale_price: None يعني لم يُحدَّد بعد — يُعدَّل لاحقاً
+                sale_price = (
+                    Decimal(str(sale_price_raw))
+                    if sale_price_raw is not None and sale_price_raw != 0
+                    else None
+                )
+
                 try:
                     await add_serial(
                         db=db, tenant_id=tenant_id,
                         product_id=line.inventory_item_id,
                         serial_number=sn,
                         condition=condition,
-                        cost_price=line.unit_price,
-                        sale_price=sale_price,
+                        cost_price=line.unit_price,   # تكلفة الشراء من سطر الفاتورة
+                        sale_price=sale_price,         # سعر البيع المُحدَّد لهذا السيريال
                         purchase_bill_id=bill.id,
                         warehouse_id=wh_id,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة السيريال {sn}: {e.detail}")
 
-        elif line.inventory_item_id and line.new_serial_number:
-            # ── سيريال واحد — legacy ───────────────────────────────────────
-            try:
-                await add_serial(
-                    db=db, tenant_id=tenant_id,
-                    product_id=line.inventory_item_id,
-                    serial_number=line.new_serial_number,
-                    condition=line.new_serial_condition or "new",
-                    cost_price=line.unit_price,
-                    sale_price=Decimal(str(line.new_serial_sale_price)) if line.new_serial_sale_price else None,
-                    purchase_bill_id=bill.id,
-                    warehouse_id=wh_id,
-                )
-            except HTTPException as e:
-                raise HTTPException(400, f"خطأ في إضافة السيريال: {e.detail}")
-        elif line.inventory_item_id:
-            # تحقق من نوع التتبع
+        # ── بدون سيريالات — كمية عادية أو تشغيلة ─────────────────
+        else:
             item = await db.get(InventoryItem, line.inventory_item_id)
-            if item and item.tracking_type == "batch":
-                # صيدلية — إضافة تشغيلة
-                batch_number = getattr(line, 'batch_number', None) or f"BILL-{bill.bill_number}"
-                expiry_date = getattr(line, 'batch_expiry_date', None)
+            if not item:
+                continue
+
+            if item.tracking_type == "batch":
+                batch_number = line.batch_number or f"BILL-{bill.bill_number}"
                 try:
                     await add_batch(
                         db=db, tenant_id=tenant_id,
@@ -393,14 +421,13 @@ async def _add_inventory_for_bill(
                         batch_number=batch_number,
                         quantity=line.quantity,
                         cost_price=line.unit_price,
-                        expiry_date=expiry_date,
+                        expiry_date=line.batch_expiry_date,
                         purchase_bill_id=bill.id,
                         warehouse_id=wh_id,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة التشغيلة: {e.detail}")
             else:
-                # كمية عادية
                 try:
                     await add_stock(
                         db=db, tenant_id=tenant_id,
@@ -495,27 +522,40 @@ async def _create_bill_journal(db, tenant_id, user_id, bill: Bill):
 
 async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: str, data: dict):
     """
-    تعديل فاتورة المشتريات — كامل حتى للمؤكدة
+    تعديل فاتورة المشتريات.
+    - مسموح لجميع الحالات ما عدا الملغاة.
+    - تعديل الأسطر على فاتورة مؤكدة لا يُعيد إضافة المخزون (يحتاج تعديل يدوي للمخزون).
     """
-    # نجلب الفاتورة بدون selectinload لتجنب recursion في SQLAlchemy identity map
+    from sqlalchemy import delete as sql_delete
+
     r = await db.execute(
         select(Bill).where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
     )
     bill = r.scalar_one_or_none()
     if not bill:
         raise HTTPException(404, "Bill not found")
-
     if bill.status == BillStatus.CANCELLED:
         raise HTTPException(400, "لا يمكن تعديل فاتورة ملغاة")
 
-    # ─── تحديث الحقول الرئيسية ────────────────────────────────────
-    if data.get("vendor_invoice_number") is not None:
-        bill.vendor_invoice_number = data["vendor_invoice_number"] or None
-    if data.get("notes") is not None:
-        bill.notes = data["notes"] or None
-    if data.get("warehouse_id") is not None:
-        bill.warehouse_id = data["warehouse_id"] or None
+    # ── حقول رأس الفاتورة ─────────────────────────────────────────
+    if "vendor_id" in data:
+        bill.vendor_id = data["vendor_id"] or None
+        if data.get("vendor_id"):
+            vendor = await get_vendor(db, tenant_id, data["vendor_id"])
+            bill.vendor_name_ar    = vendor.name_ar
+            bill.vendor_vat_number = vendor.vat_number
+            bill.vendor_cr_number  = vendor.cr_number
+        else:
+            bill.vendor_name_ar    = None
+            bill.vendor_vat_number = None
+            bill.vendor_cr_number  = None
 
+    if "vendor_invoice_number" in data:
+        bill.vendor_invoice_number = data["vendor_invoice_number"] or None
+    if "notes" in data:
+        bill.notes = data["notes"] or None
+    if "warehouse_id" in data:
+        bill.warehouse_id = data["warehouse_id"] or None
     if data.get("bill_date"):
         bill.bill_date = datetime.fromisoformat(data["bill_date"]).replace(tzinfo=None)
     if data.get("supply_date"):
@@ -523,53 +563,54 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
     if "due_date" in data:
         bill.due_date = datetime.fromisoformat(data["due_date"]).replace(tzinfo=None) if data["due_date"] else None
 
-    # ─── تعديل الأسطر — مسموح لجميع الحالات ما عدا الملغاة ──────
+    # ── تعديل الأسطر ──────────────────────────────────────────────
     if "lines" in data:
-        # حذف الأسطر القديمة بـ SQL مباشر لتجنب ORM recursion
-        from sqlalchemy import delete as sql_delete
         await db.execute(sql_delete(BillLine).where(BillLine.bill_id == bill_id))
 
-        subtotal = disc_total = vat_total = grand_total = Decimal("0")
-        for i, line in enumerate(data.get("lines", [])):
-            gross, disc, taxable, vat, tot = _calc(
-                line["quantity"], line["unit_price"],
-                line.get("discount_pct", 0), line.get("vat_rate", 15)
-            )
-            subtotal += gross; disc_total += disc; vat_total += vat; grand_total += tot
+        gross_total = disc_total = taxable_total = vat_total = grand_total = Decimal("0")
 
-            import json as _json
-            new_serial_numbers = line.get("new_serial_numbers")
-            qty_val = len(new_serial_numbers) if new_serial_numbers else line["quantity"]
+        for i, line in enumerate(data.get("lines", [])):
+            new_serials: list | None = line.get("new_serial_numbers")
+            qty = len(new_serials) if new_serials else line["quantity"]
+
+            gross, disc, taxable, vat, tot = _calc(
+                qty, line["unit_price"],
+                line.get("discount_pct", 0), line.get("vat_rate", 15),
+            )
+            gross_total   += gross
+            disc_total    += disc
+            taxable_total += taxable
+            vat_total     += vat
+            grand_total   += tot
+
+            new_serials_json = json.dumps(new_serials, ensure_ascii=False) if new_serials else None
 
             db.add(BillLine(
                 id=str(uuid.uuid4()), bill_id=bill_id, line_order=i,
-                description_ar=line["description_ar"], description_en=line.get("description_en"),
-                quantity=Decimal(str(qty_val)), unit=line.get("unit"),
+                description_ar=line["description_ar"],
+                description_en=line.get("description_en"),
+                quantity=Decimal(str(qty)),
+                unit=line.get("unit"),
                 unit_price=Decimal(str(line["unit_price"])),
                 discount_pct=Decimal(str(line.get("discount_pct", 0))),
                 discount_amount=disc,
                 vat_rate=Decimal(str(line.get("vat_rate", 15))),
                 vat_category=line.get("vat_category", "S"),
                 subtotal=gross, vat_amount=vat, total=tot,
-                inventory_item_id=line.get("inventory_item_id"),
-                serial_item_id=line.get("serial_item_id"),
-                new_serial_number=line.get("new_serial_number"),
-                new_serial_condition=line.get("new_serial_condition"),
-                new_serial_sale_price=Decimal(str(line["new_serial_sale_price"])) if line.get("new_serial_sale_price") else None,
-                new_serial_numbers_json=_json.dumps(new_serial_numbers) if new_serial_numbers else None,
-                batch_number=line.get("batch_number"),
-                batch_expiry_date=line.get("batch_expiry_date"),
+                inventory_item_id=line.get("inventory_item_id") or None,
+                serial_item_id=line.get("serial_item_id") or None,
+                new_serial_numbers_json=new_serials_json,
+                batch_number=line.get("batch_number") or None,
+                batch_expiry_date=line.get("batch_expiry_date") or None,
             ))
 
-        bill.subtotal = subtotal
+        bill.subtotal        = gross_total
         bill.discount_amount = disc_total
-        bill.taxable_amount = subtotal - disc_total
-        bill.vat_amount = vat_total
-        bill.total = grand_total
+        bill.taxable_amount  = taxable_total
+        bill.vat_amount      = vat_total
+        bill.total           = grand_total
 
     await db.commit()
-
-    # نرجع dict بسيط جداً — FastAPI لا تحتاج تحويل ORM
     return {"id": bill_id, "updated": True}
 
 
@@ -586,11 +627,9 @@ async def get_bill_serials(
     db: AsyncSession, tenant_id: str, bill_id: str, product_id: str | None = None
 ):
     """جلب السيريالات المرتبطة بفاتورة مشتريات — للاستخدام في المرتجع"""
-    import json
     from app.models.inventory import SerialItem
 
-    # تحقق من ملكية الفاتورة
-    bill = await get_bill(db, tenant_id, bill_id)
+    await get_bill(db, tenant_id, bill_id)  # تحقق من الملكية
 
     lines_r = await db.execute(
         select(BillLine).where(BillLine.bill_id == bill_id)
@@ -601,38 +640,18 @@ async def get_bill_serials(
     for line in lines:
         if product_id and line.inventory_item_id != product_id:
             continue
+        if not line.new_serial_numbers_json:
+            continue
 
-        # سيريالات جماعية (الطريقة الجديدة)
-        if line.new_serial_numbers_json:
-            entries = json.loads(line.new_serial_numbers_json)
-            for entry in entries:
-                sn = entry.get("serial_number") if isinstance(entry, dict) else entry
-                if not sn:
-                    continue
-                # جلب السيريال من المخزون بالرقم
-                serial_r = await db.execute(
-                    select(SerialItem).where(
-                        SerialItem.product_id == line.inventory_item_id,
-                        SerialItem.serial_number == sn,
-                    )
-                )
-                serial = serial_r.scalar_one_or_none()
-                if serial:
-                    result.append({
-                        "id": serial.id,
-                        "serial_number": serial.serial_number,
-                        "condition": serial.condition,
-                        "status": serial.status,
-                        "cost_price": float(serial.cost_price),
-                        "product_id": serial.product_id,
-                    })
-
-        # سيريال واحد (legacy)
-        elif line.new_serial_number:
+        entries: list = json.loads(line.new_serial_numbers_json)
+        for entry in entries:
+            sn = entry.get("serial_number") if isinstance(entry, dict) else entry
+            if not sn:
+                continue
             serial_r = await db.execute(
                 select(SerialItem).where(
                     SerialItem.product_id == line.inventory_item_id,
-                    SerialItem.serial_number == line.new_serial_number,
+                    SerialItem.serial_number == sn,
                 )
             )
             serial = serial_r.scalar_one_or_none()
@@ -643,6 +662,7 @@ async def get_bill_serials(
                     "condition": serial.condition,
                     "status": serial.status,
                     "cost_price": float(serial.cost_price),
+                    "sale_price": float(serial.sale_price) if serial.sale_price else None,
                     "product_id": serial.product_id,
                 })
 
@@ -789,10 +809,9 @@ async def create_debit_note(db: AsyncSession, tenant_id: str, user_id: str, data
     )
     db.add(dn)
 
-    import json as _json
     for i, (line, taxable, vat, tot) in enumerate(lines_data):
         serial_ids = line.get("serial_ids")
-        serial_ids_json = _json.dumps(serial_ids) if serial_ids else None
+        serial_ids_json = json.dumps(serial_ids, ensure_ascii=False) if serial_ids else None
         # إذا سيريالات → الكمية = عددها
         qty_val = len(serial_ids) if serial_ids else line["quantity"]
 
@@ -821,7 +840,6 @@ async def create_debit_note(db: AsyncSession, tenant_id: str, user_id: str, data
 
 async def _return_inventory_for_debit_note(db: AsyncSession, tenant_id: str, dn):
     """إرجاع السيريالات للمخزون عند إنشاء مرتجع مشتريات"""
-    import json
     from app.models.inventory import SerialItem, StockMovement, MovementType
 
     lines_r = await db.execute(
