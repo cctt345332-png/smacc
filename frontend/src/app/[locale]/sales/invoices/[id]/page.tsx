@@ -160,7 +160,10 @@ export default function InvoiceDetailPage({ params: { locale, id } }: { params: 
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => window.open(`/${locale}/sales/invoices/${id}/print`, "_blank")}
+          >
             <Icon name="print" size={14} />
             {ar ? "طباعة" : "Print"}
           </button>

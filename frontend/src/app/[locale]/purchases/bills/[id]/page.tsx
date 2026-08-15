@@ -136,7 +136,10 @@ export default function BillDetailPage({ params: { locale, id } }: { params: { l
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => window.open(`/${locale}/purchases/bills/${id}/print`, "_blank")}
+          >
             <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
           </button>
           {bill.status !== "paid" && bill.status !== "cancelled" && (
