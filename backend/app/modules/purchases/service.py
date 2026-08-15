@@ -569,8 +569,8 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
     await db.commit()
 
-    # نرجع فقط معرف الفاتورة — الفرونت يعيد الجلب بنفسه
-    return {"id": bill_id, "bill_number": bill.bill_number, "status": str(bill.status.value if hasattr(bill.status, 'value') else bill.status)}
+    # نرجع dict بسيط جداً — FastAPI لا تحتاج تحويل ORM
+    return {"id": bill_id, "updated": True}
 
 
 async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
