@@ -398,10 +398,11 @@ async def _add_inventory_for_bill(
                         product_id=line.inventory_item_id,
                         serial_number=sn,
                         condition=condition,
-                        cost_price=line.unit_price,   # تكلفة الشراء من سطر الفاتورة
-                        sale_price=sale_price,         # سعر البيع المُحدَّد لهذا السيريال
+                        cost_price=line.unit_price,
+                        sale_price=sale_price,
                         purchase_bill_id=bill.id,
                         warehouse_id=wh_id,
+                        auto_commit=False,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة السيريال {sn}: {e.detail}")
@@ -424,6 +425,7 @@ async def _add_inventory_for_bill(
                         expiry_date=line.batch_expiry_date,
                         purchase_bill_id=bill.id,
                         warehouse_id=wh_id,
+                        auto_commit=False,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة التشغيلة: {e.detail}")
@@ -438,6 +440,7 @@ async def _add_inventory_for_bill(
                         reference_id=bill.id,
                         user_id=user_id,
                         warehouse_id=wh_id,
+                        auto_commit=False,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة المخزون: {e.detail}")

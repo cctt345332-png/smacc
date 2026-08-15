@@ -323,6 +323,7 @@ async def add_serial(
     warehouse_id: str | None = None,
     purchase_bill_id: str | None = None,
     notes: str | None = None,
+    auto_commit: bool = True,
 ) -> SerialItem:
     """إضافة سيريال جديد للمخزون"""
     item = await get_item(db, tenant_id, product_id)
@@ -372,8 +373,9 @@ async def add_serial(
         reference_id=purchase_bill_id,
     ))
 
-    await db.commit()
-    await db.refresh(serial)
+    if auto_commit:
+        await db.commit()
+        await db.refresh(serial)
     return serial
 
 
@@ -431,6 +433,7 @@ async def add_stock(
     reference_type: str | None = None,
     reference_id: str | None = None,
     user_id: str | None = None,
+    auto_commit: bool = True,
 ):
     """إضافة كمية للمخزون (للمنتجات العادية)"""
     item = await get_item(db, tenant_id, product_id)
@@ -466,8 +469,9 @@ async def add_stock(
         created_by=user_id,
     ))
 
-    await db.commit()
-    await db.refresh(item)
+    if auto_commit:
+        await db.commit()
+        await db.refresh(item)
     return item
 async def deduct_stock(
     db: AsyncSession, tenant_id: str, product_id: str,
@@ -1413,6 +1417,7 @@ async def add_batch(
     manufacture_date: str | None = None,
     warehouse_id: str | None = None,
     purchase_bill_id: str | None = None,
+    auto_commit: bool = True,
 ) -> BatchItem:
     """إضافة تشغيلة جديدة للمخزون"""
     item = await get_item(db, tenant_id, product_id)
@@ -1466,8 +1471,9 @@ async def add_batch(
         reference_id=purchase_bill_id,
     ))
 
-    await db.commit()
-    await db.refresh(batch)
+    if auto_commit:
+        await db.commit()
+        await db.refresh(batch)
     return batch
 
 
