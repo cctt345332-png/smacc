@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import { getMapboxTileUrl } from "@/lib/mapConfig";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";

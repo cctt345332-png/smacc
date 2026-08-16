@@ -626,6 +626,169 @@ async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
     return bill
 
 
+async def reprocess_bill_inventory(
+    db: AsyncSession, tenant_id: str, user_id: str, bill_id: str
+):
+    """
+    إعادة معالجة المخزون لفاتورة مؤكدة — لإصلاح الفواتير القديمة.
+
+    الفرق عن _add_inventory_for_bill:
+    - لا يشترط أن تكون الفاتورة draft
+    - يتجاوز السيريالات الموجودة مسبقاً بصمت (بدلاً من رمي خطأ)
+    - يُسجِّل كل ما تم ويرجعه كتقرير
+    """
+    from app.modules.inventory.service import add_stock, add_batch
+    from app.models.inventory import InventoryItem, SerialItem, StockMovement
+
+    bill = await get_bill(db, tenant_id, bill_id)
+    if bill.status not in (BillStatus.CONFIRMED, BillStatus.PAID, BillStatus.PARTIAL):
+        raise HTTPException(400, "الفاتورة يجب أن تكون مؤكدة أو مدفوعة")
+
+    wh_id = bill.warehouse_id or None
+
+    lines_r = await db.execute(
+        select(BillLine).where(BillLine.bill_id == bill.id)
+    )
+    lines = lines_r.scalars().all()
+
+    added_serials = []
+    skipped_serials = []
+    added_stock = []
+    errors = []
+
+    for line in lines:
+        if not line.inventory_item_id:
+            continue
+
+        # ── سيريالات جماعية ────────────────────────────────────────
+        if line.new_serial_numbers_json:
+            entries: list = json.loads(line.new_serial_numbers_json)
+            for entry in entries:
+                if isinstance(entry, str):
+                    sn, condition, sale_price_raw = entry, "new", None
+                else:
+                    sn             = entry.get("serial_number", "").strip()
+                    condition      = entry.get("condition") or "new"
+                    sale_price_raw = entry.get("sale_price")
+
+                if not sn:
+                    continue
+
+                # تحقق: هل السيريال موجود مسبقاً؟
+                existing_r = await db.execute(
+                    select(SerialItem).where(
+                        SerialItem.product_id == line.inventory_item_id,
+                        SerialItem.serial_number == sn,
+                    )
+                )
+                if existing_r.scalar_one_or_none():
+                    skipped_serials.append(sn)
+                    continue
+
+                sale_price = (
+                    Decimal(str(sale_price_raw))
+                    if sale_price_raw is not None and sale_price_raw != 0
+                    else None
+                )
+
+                # تحقق من وجود المستودع
+                effective_wh = wh_id
+                if not effective_wh:
+                    from app.modules.inventory.service import _get_default_warehouse_id
+                    effective_wh = await _get_default_warehouse_id(db, tenant_id)
+
+                try:
+                    serial = SerialItem(
+                        id=str(uuid.uuid4()),
+                        product_id=line.inventory_item_id,
+                        warehouse_id=effective_wh,
+                        serial_number=sn,
+                        condition=condition,
+                        status="in_stock",
+                        cost_price=line.unit_price,
+                        sale_price=sale_price,
+                        purchase_bill_id=bill.id,
+                        purchased_at=datetime.utcnow(),
+                    )
+                    db.add(serial)
+                    db.add(StockMovement(
+                        id=str(uuid.uuid4()),
+                        tenant_id=tenant_id,
+                        product_id=line.inventory_item_id,
+                        warehouse_id=effective_wh,
+                        movement_type="purchase",
+                        quantity=Decimal("1"),
+                        unit_cost=line.unit_price,
+                        serial_item_id=serial.id,
+                        reference_type="bill",
+                        reference_id=bill.id,
+                    ))
+                    added_serials.append(sn)
+                except Exception as e:
+                    errors.append(f"سيريال {sn}: {str(e)}")
+
+        # ── كمية عادية أو تشغيلة ──────────────────────────────────
+        else:
+            item = await db.get(InventoryItem, line.inventory_item_id)
+            if not item:
+                continue
+
+            # تحقق: هل هناك حركة مخزون مسجلة لهذا السطر من هذه الفاتورة؟
+            existing_move_r = await db.execute(
+                select(StockMovement).where(
+                    StockMovement.reference_type == "bill",
+                    StockMovement.reference_id == bill.id,
+                    StockMovement.product_id == line.inventory_item_id,
+                )
+            )
+            if existing_move_r.scalar_one_or_none():
+                skipped_serials.append(f"{item.name_ar} (موجود)")
+                continue
+
+            try:
+                if item.tracking_type == "batch":
+                    await add_batch(
+                        db=db, tenant_id=tenant_id,
+                        product_id=line.inventory_item_id,
+                        batch_number=line.batch_number or f"BILL-{bill.bill_number}",
+                        quantity=line.quantity,
+                        cost_price=line.unit_price,
+                        expiry_date=line.batch_expiry_date,
+                        purchase_bill_id=bill.id,
+                        warehouse_id=wh_id,
+                        auto_commit=False,
+                    )
+                else:
+                    await add_stock(
+                        db=db, tenant_id=tenant_id,
+                        product_id=line.inventory_item_id,
+                        quantity=line.quantity,
+                        unit_cost=line.unit_price,
+                        reference_type="bill",
+                        reference_id=bill.id,
+                        user_id=user_id,
+                        warehouse_id=wh_id,
+                        auto_commit=False,
+                    )
+                added_stock.append(item.name_ar)
+            except Exception as e:
+                errors.append(f"{item.name_ar}: {str(e)}")
+
+    await db.commit()
+
+    return {
+        "bill_id": bill_id,
+        "bill_number": bill.bill_number,
+        "added_serials": added_serials,
+        "added_serials_count": len(added_serials),
+        "skipped_serials": skipped_serials,
+        "skipped_count": len(skipped_serials),
+        "added_stock_items": added_stock,
+        "errors": errors,
+        "status": "completed" if not errors else "completed_with_errors",
+    }
+
+
 async def get_bill_serials(
     db: AsyncSession, tenant_id: str, bill_id: str, product_id: str | None = None
 ):

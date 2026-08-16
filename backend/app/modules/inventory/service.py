@@ -992,6 +992,183 @@ async def transfer_stock(
     return {"message": f"تم تحويل {quantity} وحدة بنجاح", "from_qty": float(from_stock.quantity), "to_qty": float(to_stock.quantity)}
 
 
+async def transfer_stock_bulk(
+    db: AsyncSession, tenant_id: str, user_id: str,
+    from_warehouse_id: str, to_warehouse_id: str,
+    items: list[dict],  # كل عنصر: {item_id, quantity} أو {item_id, serial_ids: [...]}
+    notes: str | None = None,
+):
+    """
+    تحويل أكثر من صنف في عملية واحدة بين مستودعين.
+    كل صنف يمكن أن يكون:
+      - {item_id, quantity}             ← صنف عادي (كمية)
+      - {item_id, serial_ids: [...]}    ← صنف سيريال (قائمة سيريالات)
+    يُرجع تقريراً شاملاً بكل الأصناف: ناجح / أخطاء.
+    """
+    if from_warehouse_id == to_warehouse_id:
+        raise HTTPException(400, "المستودع المصدر والهدف لا يمكن أن يكونا نفس المستودع")
+    if not items:
+        raise HTTPException(400, "يرجى تحديد صنف واحد على الأقل")
+
+    # التحقق من المستودعين
+    from_wh = await db.get(Warehouse, from_warehouse_id)
+    to_wh = await db.get(Warehouse, to_warehouse_id)
+    if not from_wh or from_wh.tenant_id != tenant_id:
+        raise HTTPException(404, "المستودع المصدر غير موجود")
+    if not to_wh or to_wh.tenant_id != tenant_id:
+        raise HTTPException(404, "المستودع الهدف غير موجود")
+
+    results = []
+    total_transferred = 0
+    total_errors = 0
+
+    for line in items:
+        item_id = line.get("item_id")
+        serial_ids = line.get("serial_ids")  # قائمة أو None
+        qty_raw = line.get("quantity")
+
+        if not item_id:
+            results.append({"item_id": None, "success": False, "error": "item_id مطلوب"})
+            total_errors += 1
+            continue
+
+        try:
+            item = await get_item(db, tenant_id, item_id)
+        except Exception:
+            results.append({"item_id": item_id, "success": False, "error": "الصنف غير موجود"})
+            total_errors += 1
+            continue
+
+        # ─── صنف سيريال ───────────────────────────────────────────────
+        if item.tracking_type == "serial":
+            if not serial_ids:
+                results.append({
+                    "item_id": item_id, "item_name": item.name_ar,
+                    "success": False, "error": "يجب تحديد serial_ids للمنتجات ذات السيريال",
+                })
+                total_errors += 1
+                continue
+
+            transferred_serials = []
+            line_errors = []
+            for sid in serial_ids:
+                r = await db.execute(
+                    select(SerialItem)
+                    .join(InventoryItem, SerialItem.product_id == InventoryItem.id)
+                    .where(SerialItem.id == sid, InventoryItem.tenant_id == tenant_id)
+                )
+                serial = r.scalar_one_or_none()
+                if not serial:
+                    line_errors.append({"serial_id": sid, "error": "غير موجود"})
+                    continue
+                if serial.status != "in_stock":
+                    line_errors.append({"serial_id": sid, "serial_number": serial.serial_number, "error": f"الوضع: {serial.status}"})
+                    continue
+                if serial.warehouse_id == to_warehouse_id:
+                    line_errors.append({"serial_id": sid, "serial_number": serial.serial_number, "error": "موجود في المستودع الهدف مسبقاً"})
+                    continue
+
+                serial.warehouse_id = to_warehouse_id
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()),
+                    tenant_id=tenant_id,
+                    product_id=item_id,
+                    warehouse_id=from_warehouse_id,
+                    to_warehouse_id=to_warehouse_id,
+                    movement_type="transfer",
+                    quantity=Decimal("1"),
+                    unit_cost=serial.cost_price,
+                    serial_item_id=serial.id,
+                    notes=notes,
+                    created_by=user_id,
+                ))
+                transferred_serials.append({"serial_id": serial.id, "serial_number": serial.serial_number})
+
+            results.append({
+                "item_id": item_id, "item_name": item.name_ar,
+                "tracking_type": "serial",
+                "success": len(transferred_serials) > 0,
+                "transferred_count": len(transferred_serials),
+                "error_count": len(line_errors),
+                "transferred": transferred_serials,
+                "errors": line_errors,
+            })
+            total_transferred += len(transferred_serials)
+            if line_errors:
+                total_errors += len(line_errors)
+
+        # ─── صنف عادي (كمية) ──────────────────────────────────────────
+        else:
+            if qty_raw is None:
+                results.append({
+                    "item_id": item_id, "item_name": item.name_ar,
+                    "success": False, "error": "الكمية مطلوبة",
+                })
+                total_errors += 1
+                continue
+
+            quantity = Decimal(str(qty_raw))
+            if quantity <= 0:
+                results.append({
+                    "item_id": item_id, "item_name": item.name_ar,
+                    "success": False, "error": "الكمية يجب أن تكون أكبر من صفر",
+                })
+                total_errors += 1
+                continue
+
+            from_stock = await _get_or_create_stock(db, tenant_id, item_id, from_warehouse_id)
+            if from_stock.quantity < quantity:
+                results.append({
+                    "item_id": item_id, "item_name": item.name_ar,
+                    "tracking_type": item.tracking_type,
+                    "success": False,
+                    "error": f"الكمية المتاحة {float(from_stock.quantity)} أقل من المطلوب {float(quantity)}",
+                })
+                total_errors += 1
+                continue
+
+            to_stock = await _get_or_create_stock(db, tenant_id, item_id, to_warehouse_id)
+            from_stock.quantity -= quantity
+            from_stock.updated_at = datetime.utcnow()
+            to_stock.quantity += quantity
+            to_stock.updated_at = datetime.utcnow()
+
+            db.add(StockMovement(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant_id,
+                product_id=item_id,
+                warehouse_id=from_warehouse_id,
+                to_warehouse_id=to_warehouse_id,
+                movement_type="transfer",
+                quantity=quantity,
+                unit_cost=item.cost_price,
+                notes=notes,
+                created_by=user_id,
+            ))
+
+            results.append({
+                "item_id": item_id, "item_name": item.name_ar,
+                "tracking_type": item.tracking_type,
+                "success": True,
+                "transferred_count": float(quantity),
+            })
+            total_transferred += float(quantity)
+
+    # commit واحد لكل العمليات الناجحة
+    if any(r.get("success") for r in results):
+        await db.commit()
+
+    return {
+        "from_warehouse": from_wh.name_ar,
+        "to_warehouse": to_wh.name_ar,
+        "total_lines": len(items),
+        "total_transferred": total_transferred,
+        "total_errors": total_errors,
+        "notes": notes,
+        "results": results,
+    }
+
+
 async def transfer_serials(
     db: AsyncSession, tenant_id: str, user_id: str,
     serial_ids: list[str], to_warehouse_id: str,

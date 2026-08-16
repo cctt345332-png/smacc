@@ -431,6 +431,18 @@ async def transfer_serials(data: dict, user=Depends(get_current_user), db: Async
     )
 
 
+@router.post("/stock/transfer-bulk")
+async def transfer_stock_bulk(data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """تحويل أكثر من صنف في عملية واحدة بين مستودعين"""
+    return await service.transfer_stock_bulk(
+        db, user["tenant_id"], user["user_id"],
+        from_warehouse_id=data["from_warehouse_id"],
+        to_warehouse_id=data["to_warehouse_id"],
+        items=data["items"],  # list of {item_id, quantity} or {item_id, serial_ids}
+        notes=data.get("notes"),
+    )
+
+
 @router.get("/serials/by-warehouse")
 async def serials_by_warehouse(
     warehouse_id: str,

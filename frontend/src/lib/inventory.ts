@@ -61,6 +61,17 @@ export const getItemStockLevels = (itemId: string) =>
 export const transferStock = (data: any) =>
   api.post("/inventory/stock/transfer", data);
 
+// نقل أكثر من صنف في عملية واحدة
+export const transferStockBulk = (data: {
+  from_warehouse_id: string;
+  to_warehouse_id: string;
+  items: Array<
+    | { item_id: string; quantity: number }           // صنف عادي
+    | { item_id: string; serial_ids: string[] }       // صنف سيريال
+  >;
+  notes?: string;
+}) => api.post("/inventory/stock/transfer-bulk", data);
+
 export const transferSerials = (data: {
   serial_ids: string[];
   to_warehouse_id: string;

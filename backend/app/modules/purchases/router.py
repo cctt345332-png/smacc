@@ -82,6 +82,21 @@ async def confirm_bill(bill_id: str, user=Depends(require_role(["manager","purch
 async def cancel_bill(bill_id: str, user=Depends(require_role(["manager","accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.cancel_bill(db, user["tenant_id"], bill_id)
 
+
+@router.post("/bills/{bill_id}/reprocess-inventory")
+async def reprocess_bill_inventory(
+    bill_id: str,
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    إعادة معالجة المخزون لفاتورة مؤكدة.
+    يُستخدم لإصلاح الفواتير القديمة التي أُكِّدت قبل إصلاح bug إضافة المخزون.
+    - يتجاهل السيريالات الموجودة مسبقاً (يتخطاها بصمت)
+    - يُضيف فقط السيريالات غير الموجودة
+    """
+    return await service.reprocess_bill_inventory(db, user["tenant_id"], user["user_id"], bill_id)
+
 @router.get("/bills/{bill_id}/serials")
 async def get_bill_serials(
     bill_id: str,
