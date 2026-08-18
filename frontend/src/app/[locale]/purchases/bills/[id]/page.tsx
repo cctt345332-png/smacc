@@ -234,7 +234,7 @@ export default function BillDetailPage({ params: { locale, id } }: { params: { l
                 <th style={{ textAlign: "end" }}>{ar ? "سعر الوحدة" : "Unit Price"}</th>
                 <th style={{ textAlign: "end" }}>{ar ? "الخصم" : "Disc."}</th>
                 <th style={{ textAlign: "end" }}>{ar ? "قبل الضريبة" : "Taxable"}</th>
-                <th style={{ textAlign: "end" }}>{ar ? "ضريبة 15%" : "VAT 15%"}</th>
+                <th style={{ textAlign: "end" }}>{ar ? "ضريبة%" : "VAT%"}</th>
                 <th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th>
               </tr>
             </thead>
@@ -249,7 +249,12 @@ export default function BillDetailPage({ params: { locale, id } }: { params: { l
                     {Number(line.discount_pct) > 0 ? `${line.discount_pct}%` : "—"}
                   </td>
                   <td style={{ textAlign: "end" }}>{fmt(line.subtotal)}</td>
-                  <td style={{ textAlign: "end", color: "#D97706" }}>{fmt(line.vat_amount)}</td>
+                  <td style={{ textAlign: "end", color: "#D97706" }}>
+                    {Number(line.vat_rate) > 0
+                      ? <>{fmt(line.vat_amount)} <span style={{ fontSize: 10, color: "#9CA3AF" }}>({Number(line.vat_rate)}%)</span></>
+                      : <span style={{ color: "var(--text-muted)" }}>—</span>
+                    }
+                  </td>
                   <td style={{ textAlign: "end", fontWeight: 700 }}>{fmt(line.total)}</td>
                 </tr>
               ))}
@@ -271,7 +276,7 @@ export default function BillDetailPage({ params: { locale, id } }: { params: { l
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#D97706", fontWeight: 600 }}>
-              <span>{ar ? "ضريبة القيمة المضافة (15%)" : "VAT (15%)"}</span>
+              <span>{ar ? "ضريبة القيمة المضافة" : "VAT"}</span>
               <span>{fmt(bill.vat_amount)} SAR</span>
             </div>
             <div style={{ height: 1, background: "var(--border)" }} />

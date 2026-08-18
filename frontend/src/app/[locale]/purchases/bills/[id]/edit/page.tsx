@@ -18,7 +18,9 @@ interface Line { picked: PickedItem; discount_pct: string; vat_rate: string; }
 
 function calcLine(l: Line) {
   const qty = l.picked.quantity || 0, price = l.picked.unit_price || 0;
-  const disc = parseFloat(l.discount_pct) || 0, vat = parseFloat(l.vat_rate) || 0;
+  const disc = parseFloat(l.discount_pct) || 0;
+  const vatStr = l.vat_rate === "" ? "15" : l.vat_rate;
+  const vat = isNaN(parseFloat(vatStr)) ? 15 : parseFloat(vatStr);
   const gross = qty * price, discAmt = gross * disc / 100, taxable = gross - discAmt;
   const vatAmt = taxable * vat / 100;
   return { gross, discAmt, taxable, vatAmt, total: taxable + vatAmt };
@@ -116,7 +118,8 @@ export default function EditBillPage({ params: { locale, id } }: { params: { loc
     base.lines = lines.map((l, i) => ({
         description_ar: l.picked.description_ar || (ar ? "صنف" : "Item"),
         quantity: l.picked.quantity || 1, unit_price: l.picked.unit_price || 0,
-        discount_pct: parseFloat(l.discount_pct) || 0, vat_rate: parseFloat(l.vat_rate) || 15,
+        discount_pct: parseFloat(l.discount_pct) || 0,
+        vat_rate: l.vat_rate === "" ? 15 : (isNaN(parseFloat(l.vat_rate)) ? 15 : parseFloat(l.vat_rate)),
         vat_category: "S", line_order: i,
         inventory_item_id: l.picked.inventory_item_id || null,
         serial_item_id: l.picked.serial_item_id || null,

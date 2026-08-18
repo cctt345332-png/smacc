@@ -34,7 +34,8 @@ function calcLine(l: Line) {
   const qty   = lineQty(l);
   const price = l.picked.unit_price || 0;
   const disc  = parseFloat(l.discount_pct) || 0;
-  const vat   = parseFloat(l.vat_rate) || 0;
+  const vatStr = l.vat_rate === "" ? "15" : l.vat_rate;
+  const vat    = isNaN(parseFloat(vatStr)) ? 15 : parseFloat(vatStr);
   const gross   = qty * price;
   const discAmt = gross * disc / 100;
   const taxable = gross - discAmt;
@@ -173,7 +174,7 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
         // sale_price لكل سيريال يأتي داخل new_serial_numbers منفصلاً
         unit_price:       l.picked.unit_price || 0,
         discount_pct:     parseFloat(l.discount_pct) || 0,
-        vat_rate:         parseFloat(l.vat_rate)      || 15,
+        vat_rate:         l.vat_rate === "" ? 15 : (isNaN(parseFloat(l.vat_rate)) ? 15 : parseFloat(l.vat_rate)),
         vat_category:     "S",
         inventory_item_id: l.picked.inventory_item_id || null,
         // سيريالات — كل عنصر: { serial_number, condition, sale_price }

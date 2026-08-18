@@ -117,7 +117,7 @@ async def get_reps(db: AsyncSession, tenant_id: str) -> list:
     r = await db.execute(
         select(SalesRep, User, Warehouse)
         .join(User, SalesRep.user_id == User.id)
-        .join(Warehouse, SalesRep.warehouse_id == Warehouse.id)
+        .outerjoin(Warehouse, SalesRep.warehouse_id == Warehouse.id)
         .where(SalesRep.tenant_id == tenant_id)
         .order_by(SalesRep.rep_code)
     )
@@ -129,7 +129,7 @@ async def get_reps(db: AsyncSession, tenant_id: str) -> list:
             "rep_code": rep.rep_code,
             "user_id": rep.user_id,
             "warehouse_id": rep.warehouse_id,
-            "warehouse_name": wh.name_ar,
+            "warehouse_name": wh.name_ar if wh else None,
             "full_name": user.full_name,
             "email": user.email,
             "phone": rep.phone,
@@ -153,7 +153,7 @@ async def get_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
     r = await db.execute(
         select(SalesRep, User, Warehouse)
         .join(User, SalesRep.user_id == User.id)
-        .join(Warehouse, SalesRep.warehouse_id == Warehouse.id)
+        .outerjoin(Warehouse, SalesRep.warehouse_id == Warehouse.id)
         .where(SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id)
     )
     row = r.one_or_none()
@@ -165,7 +165,7 @@ async def get_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         "rep_code": rep.rep_code,
         "user_id": rep.user_id,
         "warehouse_id": rep.warehouse_id,
-        "warehouse_name": wh.name_ar,
+        "warehouse_name": wh.name_ar if wh else None,
         "full_name": user.full_name,
         "email": user.email,
         "phone": rep.phone,

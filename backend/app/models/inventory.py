@@ -62,13 +62,14 @@ class SerialStatus(str, enum.Enum):
 
 
 class MovementType(str, enum.Enum):
-    PURCHASE    = "purchase"    # شراء
-    SALE        = "sale"        # بيع
-    RETURN_IN   = "return_in"   # مرتجع وارد
-    RETURN_OUT  = "return_out"  # مرتجع صادر
-    ADJUSTMENT  = "adjustment"  # تسوية
-    TRANSFER    = "transfer"    # تحويل بين مستودعات
-    DAMAGE      = "damage"      # تلف
+    PURCHASE          = "purchase"           # شراء
+    SALE              = "sale"               # بيع
+    RETURN_IN         = "return_in"          # مرتجع وارد
+    RETURN_OUT        = "return_out"         # مرتجع صادر
+    ADJUSTMENT        = "adjustment"         # تسوية
+    TRANSFER          = "transfer"           # تحويل بين مستودعات
+    DAMAGE            = "damage"             # تلف
+    PURCHASE_EDIT_REV = "purchase_edit_rev"  # عكس شراء عند تعديل فاتورة
 
 
 # ─── Warehouse (المستودعات) ──────────────────────────────────────────

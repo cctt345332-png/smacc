@@ -22,6 +22,28 @@ def _calc(qty, price, disc, vat):
     return gross, disc_amt, taxable, vat_amt, taxable + vat_amt
 
 
+def _vat(line: dict, default: int = 15) -> float:
+    """يقرأ vat_rate من السطر — يقبل 0 كقيمة صحيحة، يرجع default فقط لو مفقود نهائياً."""
+    v = line.get("vat_rate")
+    if v is None:
+        return default
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _disc(line: dict) -> float:
+    """يقرأ discount_pct — يقبل 0 كقيمة صحيحة."""
+    v = line.get("discount_pct")
+    if v is None:
+        return 0
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0
+
+
 # ─── Vendors ─────────────────────────────────────────────────────────
 async def _next_vendor_number(db, tenant_id):
     r = await db.execute(select(func.count(Vendor.id)).where(Vendor.tenant_id == tenant_id))
@@ -99,7 +121,7 @@ async def create_purchase_order(db: AsyncSession, tenant_id: str, user_id: str, 
     lines_data = []
 
     for line in data.get("lines", []):
-        gross, disc, taxable, vat, tot = _calc(line["quantity"], line["unit_price"], line.get("discount_pct", 0), line.get("vat_rate", 15))
+        gross, disc, taxable, vat, tot = _calc(line["quantity"], line["unit_price"], _disc(line), _vat(line))
         subtotal += taxable; vat_total += vat; grand_total += tot
         lines_data.append((line, taxable, vat, tot))
 
@@ -120,8 +142,8 @@ async def create_purchase_order(db: AsyncSession, tenant_id: str, user_id: str, 
             description_ar=line["description_ar"], description_en=line.get("description_en"),
             quantity=Decimal(str(line["quantity"])), unit=line.get("unit"),
             unit_price=Decimal(str(line["unit_price"])),
-            discount_pct=Decimal(str(line.get("discount_pct", 0))),
-            vat_rate=Decimal(str(line.get("vat_rate", 15))),
+            discount_pct=Decimal(str(_disc(line))),
+            vat_rate=Decimal(str(_vat(line))),
             subtotal=taxable, vat_amount=vat, total=tot,
         ))
 
@@ -239,7 +261,7 @@ async def create_bill(db: AsyncSession, tenant_id: str, user_id: str, data: dict
 
         gross, disc, taxable, vat, tot = _calc(
             qty, line["unit_price"],
-            line.get("discount_pct", 0), line.get("vat_rate", 15),
+            _disc(line), _vat(line),
         )
         gross_total   += gross
         disc_total    += disc
@@ -301,9 +323,9 @@ async def create_bill(db: AsyncSession, tenant_id: str, user_id: str, data: dict
             unit=line.get("unit"),
             # unit_price = تكلفة الشراء (cost_price) — لا يُخلط مع sale_price السيريال
             unit_price=Decimal(str(line["unit_price"])),
-            discount_pct=Decimal(str(line.get("discount_pct", 0))),
+            discount_pct=Decimal(str(_disc(line))),
             discount_amount=disc,
-            vat_rate=Decimal(str(line.get("vat_rate", 15))),
+            vat_rate=Decimal(str(_vat(line))),
             vat_category=line.get("vat_category", "S"),
             subtotal=gross,
             vat_amount=vat,
@@ -523,22 +545,141 @@ async def _create_bill_journal(db, tenant_id, user_id, bill: Bill):
     return entry.id
 
 
+async def _reverse_bill_inventory(
+    db: AsyncSession, tenant_id: str, user_id: str, bill: Bill
+):
+    """
+    عكس المخزون لفاتورة مؤكدة قبل تعديل أسطرها.
+    - للسيريالات: يحذف SerialItem المرتبط بالفاتورة ويُسجّل حركة عكسية.
+    - للكميات العادية والتشغيلات: يُسجّل حركة خروج عكسية بنفس الكمية.
+    """
+    from app.models.inventory import (
+        SerialItem, StockMovement, InventoryItem, InventoryStock,
+        BatchItem, MovementType,
+    )
+
+    lines_r = await db.execute(
+        select(BillLine).where(BillLine.bill_id == bill.id)
+    )
+    old_lines = lines_r.scalars().all()
+    wh_id = bill.warehouse_id
+
+    for line in old_lines:
+        if not line.inventory_item_id:
+            continue
+
+        # ── عكس السيريالات الجماعية ────────────────────────────────
+        if line.new_serial_numbers_json:
+            entries: list = json.loads(line.new_serial_numbers_json)
+            for entry in entries:
+                sn = entry if isinstance(entry, str) else entry.get("serial_number", "").strip()
+                if not sn:
+                    continue
+                # احذف SerialItem المرتبط بهذه الفاتورة + هذا الرقم
+                serial_r = await db.execute(
+                    select(SerialItem).where(
+                        SerialItem.product_id == line.inventory_item_id,
+                        SerialItem.serial_number == sn,
+                        SerialItem.purchase_bill_id == bill.id,
+                    )
+                )
+                serial = serial_r.scalar_one_or_none()
+                if serial:
+                    db.add(StockMovement(
+                        id=str(uuid.uuid4()), tenant_id=tenant_id,
+                        product_id=line.inventory_item_id,
+                        warehouse_id=wh_id,
+                        movement_type=MovementType.PURCHASE_EDIT_REV,
+                        quantity=Decimal("-1"),
+                        unit_cost=line.unit_price,
+                        reference_type="bill_edit",
+                        reference_id=bill.id,
+                        notes=f"عكس عند تعديل الفاتورة — سيريال {sn}",
+                        created_by=user_id,
+                    ))
+                    await db.delete(serial)
+
+        # ── عكس كمية عادية أو تشغيلة ──────────────────────────────
+        else:
+            item = await db.get(InventoryItem, line.inventory_item_id)
+            if not item:
+                continue
+
+            qty = Decimal(str(line.quantity))
+
+            if item.tracking_type == "batch" and line.batch_number:
+                batch_r = await db.execute(
+                    select(BatchItem).where(
+                        BatchItem.product_id == line.inventory_item_id,
+                        BatchItem.batch_number == line.batch_number,
+                        BatchItem.purchase_bill_id == bill.id,
+                    )
+                )
+                batch = batch_r.scalar_one_or_none()
+                if batch:
+                    db.add(StockMovement(
+                        id=str(uuid.uuid4()), tenant_id=tenant_id,
+                        product_id=line.inventory_item_id,
+                        warehouse_id=wh_id,
+                        movement_type=MovementType.PURCHASE_EDIT_REV,
+                        quantity=-qty,
+                        unit_cost=line.unit_price,
+                        reference_type="bill_edit",
+                        reference_id=bill.id,
+                        notes=f"عكس عند تعديل الفاتورة — تشغيلة {line.batch_number}",
+                        created_by=user_id,
+                    ))
+                    batch.quantity = max(Decimal("0"), batch.quantity - qty)
+                    if batch.quantity == 0:
+                        await db.delete(batch)
+
+            elif item.tracking_type != "serial":
+                # كمية عادية — خصم من InventoryStock
+                stock_r = await db.execute(
+                    select(InventoryStock).where(
+                        InventoryStock.item_id == line.inventory_item_id,
+                        InventoryStock.warehouse_id == wh_id,
+                    )
+                )
+                stock_row = stock_r.scalar_one_or_none()
+                if stock_row:
+                    stock_row.quantity = max(Decimal("0"), stock_row.quantity - qty)
+
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    product_id=line.inventory_item_id,
+                    warehouse_id=wh_id,
+                    movement_type=MovementType.PURCHASE_EDIT_REV,
+                    quantity=-qty,
+                    unit_cost=line.unit_price,
+                    reference_type="bill_edit",
+                    reference_id=bill.id,
+                    notes="عكس عند تعديل الفاتورة",
+                    created_by=user_id,
+                ))
+
+
 async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: str, data: dict):
     """
-    تعديل فاتورة المشتريات.
-    - مسموح لجميع الحالات ما عدا الملغاة.
-    - تعديل الأسطر على فاتورة مؤكدة لا يُعيد إضافة المخزون (يحتاج تعديل يدوي للمخزون).
+    تعديل فاتورة المشتريات — يعمل كإعادة إنشاء كاملة للأسطر.
+    - للفاتورة المؤكدة: يعكس المخزون القديم أولاً ثم يُضيف الجديد.
+    - للمسودة: تعديل مباشر بدون أثر على المخزون.
     """
     from sqlalchemy import delete as sql_delete
 
     r = await db.execute(
-        select(Bill).where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
+        select(Bill).options(selectinload(Bill.lines))
+        .where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
     )
     bill = r.scalar_one_or_none()
     if not bill:
         raise HTTPException(404, "Bill not found")
     if bill.status == BillStatus.CANCELLED:
         raise HTTPException(400, "لا يمكن تعديل فاتورة ملغاة")
+
+    is_confirmed = bill.status in (
+        BillStatus.CONFIRMED, BillStatus.PARTIAL, BillStatus.PAID
+    )
 
     # ── حقول رأس الفاتورة ─────────────────────────────────────────
     if "vendor_id" in data:
@@ -568,9 +709,16 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
     # ── تعديل الأسطر ──────────────────────────────────────────────
     if "lines" in data:
+
+        # 1) عكس المخزون القديم للفواتير المؤكدة
+        if is_confirmed:
+            await _reverse_bill_inventory(db, tenant_id, user_id, bill)
+
+        # 2) حذف الأسطر القديمة وإنشاء الجديدة
         await db.execute(sql_delete(BillLine).where(BillLine.bill_id == bill_id))
 
         gross_total = disc_total = taxable_total = vat_total = grand_total = Decimal("0")
+        new_lines_data: list = []
 
         for i, line in enumerate(data.get("lines", [])):
             new_serials: list | None = line.get("new_serial_numbers")
@@ -578,7 +726,7 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
             gross, disc, taxable, vat, tot = _calc(
                 qty, line["unit_price"],
-                line.get("discount_pct", 0), line.get("vat_rate", 15),
+                _disc(line), _vat(line),
             )
             gross_total   += gross
             disc_total    += disc
@@ -588,16 +736,16 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
             new_serials_json = json.dumps(new_serials, ensure_ascii=False) if new_serials else None
 
-            db.add(BillLine(
+            new_line = BillLine(
                 id=str(uuid.uuid4()), bill_id=bill_id, line_order=i,
                 description_ar=line["description_ar"],
                 description_en=line.get("description_en"),
                 quantity=Decimal(str(qty)),
                 unit=line.get("unit"),
                 unit_price=Decimal(str(line["unit_price"])),
-                discount_pct=Decimal(str(line.get("discount_pct", 0))),
+                discount_pct=Decimal(str(_disc(line))),
                 discount_amount=disc,
-                vat_rate=Decimal(str(line.get("vat_rate", 15))),
+                vat_rate=Decimal(str(_vat(line))),
                 vat_category=line.get("vat_category", "S"),
                 subtotal=gross, vat_amount=vat, total=tot,
                 inventory_item_id=line.get("inventory_item_id") or None,
@@ -605,7 +753,9 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
                 new_serial_numbers_json=new_serials_json,
                 batch_number=line.get("batch_number") or None,
                 batch_expiry_date=line.get("batch_expiry_date") or None,
-            ))
+            )
+            db.add(new_line)
+            new_lines_data.append(new_line)
 
         bill.subtotal        = gross_total
         bill.discount_amount = disc_total
@@ -613,8 +763,16 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
         bill.vat_amount      = vat_total
         bill.total           = grand_total
 
+        # 3) أضف المخزون الجديد للفواتير المؤكدة
+        if is_confirmed:
+            # نحتاج flush أولاً حتى تُحفظ الأسطر الجديدة في الـ session
+            await db.flush()
+            # حدّث bill.lines مؤقتاً للـ _add_inventory_for_bill
+            bill.lines = new_lines_data
+            await _add_inventory_for_bill(db, tenant_id, user_id, bill)
+
     await db.commit()
-    return {"id": bill_id, "updated": True}
+    return await get_bill(db, tenant_id, bill_id)
 
 
 async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
@@ -957,7 +1115,7 @@ async def create_debit_note(db: AsyncSession, tenant_id: str, user_id: str, data
     lines_data = []
 
     for line in data.get("lines", []):
-        _, _, taxable, vat, tot = _calc(line["quantity"], line["unit_price"], 0, line.get("vat_rate", 15))
+        _, _, taxable, vat, tot = _calc(line["quantity"], line["unit_price"], 0, _vat(line))
         subtotal += taxable; vat_total += vat; grand_total += tot
         lines_data.append((line, taxable, vat, tot))
 
@@ -986,7 +1144,7 @@ async def create_debit_note(db: AsyncSession, tenant_id: str, user_id: str, data
             description_ar=line["description_ar"],
             quantity=Decimal(str(qty_val)),
             unit_price=Decimal(str(line["unit_price"])),
-            vat_rate=Decimal(str(line.get("vat_rate", 15))),
+            vat_rate=Decimal(str(_vat(line))),
             subtotal=taxable, vat_amount=vat, total=tot,
             inventory_item_id=line.get("inventory_item_id"),
             serial_ids_json=serial_ids_json,

@@ -427,7 +427,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                       ...value,
                       new_serials: newSerials,
                       quantity: newSerials.length,
-                      description_ar: `${value.item_name} (${newSerials.length} ${ar ? "سيريال" : "serials"})`,
+                      description_ar: value.item_name || value.description_ar,
                     });
                     setShowPurchaseSerialInput(false);
                   }}
@@ -487,7 +487,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                       serial_ids: selected.map(s => s.id),
                       serial_numbers: selected.map(s => s.serial_number),
                       quantity: selected.length,
-                      description_ar: `${value.item_name} (${selected.length} ${ar ? "سيريال" : "serials"})`,
+                      description_ar: value.item_name || value.description_ar,
                     });
                     setShowSerialPicker(false);
                   }}
