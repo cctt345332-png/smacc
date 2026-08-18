@@ -158,7 +158,7 @@ async def impersonate_rep(
     }
 
 
-
+@router.get("/{rep_id}")
 async def get_rep(
     rep_id: str,
     user=Depends(require_role(["manager", "accountant", "sales"])),
