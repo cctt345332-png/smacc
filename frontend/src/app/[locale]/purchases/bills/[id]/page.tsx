@@ -80,6 +80,20 @@ export default function BillDetailPage({ params: { locale, id } }: { params: { l
     finally { setActing(false); }
   };
 
+  const handleReprocess = async () => {
+    if (!confirm(ar ? "إعادة معالجة المخزون لهذه الفاتورة؟ سيتم إضافة السيريالات والكميات الناقصة فقط." : "Reprocess inventory for this bill?")) return;
+    setActing(true);
+    try {
+      const res = await import("@/lib/api").then(m => m.default.post(`/purchases/bills/${id}/reprocess-inventory`));
+      alert(ar
+        ? `✅ تمت المعالجة — ${res.data.added_serials ?? 0} سيريال، ${res.data.added_stock ?? 0} وحدة`
+        : `✅ Done — ${res.data.added_serials ?? 0} serials, ${res.data.added_stock ?? 0} units`
+      );
+      load();
+    } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+    finally { setActing(false); }
+  };
+
   const handleAddPayment = async () => {
     if (!payForm.amount || parseFloat(payForm.amount) <= 0) {
       return alert(ar ? "يرجى إدخال مبلغ صحيح" : "Please enter a valid amount");
@@ -142,6 +156,13 @@ export default function BillDetailPage({ params: { locale, id } }: { params: { l
           >
             <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
           </button>
+          {["confirmed","partial","paid"].includes(bill.status) && (
+            <button className="btn btn-secondary btn-sm" onClick={handleReprocess} disabled={acting}
+              title={ar ? "إعادة إضافة المخزون للفواتير القديمة" : "Reprocess missing inventory"}
+              style={{ color: "#D97706", borderColor: "#D97706" }}>
+              🔄 {ar ? "معالجة المخزون" : "Reprocess Stock"}
+            </button>
+          )}
           {bill.status !== "paid" && bill.status !== "cancelled" && (
             <Link href={`/${locale}/purchases/bills/${id}/edit`} className="btn btn-secondary btn-sm">
               <Icon name="edit" size={14} /> {ar ? "تعديل" : "Edit"}
