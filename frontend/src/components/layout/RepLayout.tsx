@@ -171,9 +171,12 @@ export default function RepLayout({
     return () => clearInterval(id);
   }, [token]);
 
-  /* تتبع الموقع — صارم، كل دقيقة + عند فتح التطبيق */
+  /* تتبع الموقع — فقط للمناديب، كل دقيقة + عند فتح التطبيق */
   useEffect(() => {
     if (!token) return;
+    // لا ترسل الموقع إلا إذا كان المستخدم مندوباً فعلاً
+    const userRole = (user as any)?.role;
+    if (userRole && userRole !== "rep" && userRole !== "sales_rep") return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
 
     let lastSent = 0;
