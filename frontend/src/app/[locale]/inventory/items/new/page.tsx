@@ -386,14 +386,14 @@ export default function NewItemPage({ params: { locale } }: { params: { locale: 
               <label className="form-label">
                 {ar ? "سعر البيع (ر.س)" : "Sale Price (SAR)"}
                 {useSerial
-                  ? <span style={{ fontSize: 11, color: "var(--text-muted)", marginInlineStart: 6 }}>{ar ? "— يُحدد لكل سيريال" : "— Set per serial"}</span>
+                  ? <span style={{ fontSize: 11, color: "#D97706", marginInlineStart: 6 }}>{ar ? "— سعر افتراضي للمنتج (يمكن تعديله لكل سيريال)" : "— Default price (can override per serial)"}</span>
                   : <span className="required"> *</span>
                 }
               </label>
               <input type="number" className="form-input" value={form.sale_price}
                 onChange={e => upd("sale_price", e.target.value)} min="0" step="0.01"
-                disabled={useSerial}
-                style={useSerial ? { background: "#F1F5F9", color: "var(--text-muted)" } : {}} />
+                onFocus={e => e.target.select()}
+                placeholder="0.00" />
             </div>
             <div className="form-group">
               <label className="form-label">{ar ? "ضريبة القيمة المضافة %" : "VAT %"}</label>

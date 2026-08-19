@@ -381,6 +381,8 @@ function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categ
             <div className="form-group">
               <label className="form-label">{ar ? "سعر البيع" : "Sale Price"}</label>
               <input type="number" className="form-input" value={form.sale_price}
+                onFocus={e => (e.target as HTMLInputElement).select()}
+                placeholder="0.00"
                 onChange={e => setForm((f: any) => ({ ...f, sale_price: e.target.value }))} />
             </div>
             <div className="form-group">

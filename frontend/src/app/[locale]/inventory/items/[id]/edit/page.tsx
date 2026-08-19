@@ -209,12 +209,21 @@ export default function EditItemPage({ params: { locale, id } }: { params: { loc
               />
             </div>
             <div className="form-group">
-              <label className="form-label">{ar ? "سعر البيع" : "Sale Price"}</label>
+              <label className="form-label">
+                {ar ? "سعر البيع" : "Sale Price"}
+                {item?.tracking_type === "serial" && (
+                  <span style={{ fontSize: 11, color: "#D97706", marginInlineStart: 6 }}>
+                    {ar ? "— سعر افتراضي (يُستخدم في فواتير المندوب)" : "— Default price (used in rep invoices)"}
+                  </span>
+                )}
+              </label>
               <input
                 type="number"
                 className="form-input"
                 value={form.sale_price}
                 onChange={e => setForm((f: any) => ({ ...f, sale_price: e.target.value }))}
+                onFocus={e => e.target.select()}
+                placeholder="0.00"
                 min="0"
                 step="0.01"
               />
