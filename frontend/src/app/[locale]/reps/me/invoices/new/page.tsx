@@ -412,8 +412,11 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
                     </td>
                     <td style={{ padding: "10px 8px", verticalAlign: "top" }}>
                       <input type="number" className="form-input" style={{ width: 100 }}
-                        value={line.picked.unit_price} min="0" step="0.01"
-                        onChange={e => setPicked(i, { ...line.picked, unit_price: Number(e.target.value) })} />
+                        value={line.picked.unit_price || ""}
+                        placeholder="0.00"
+                        min="0" step="0.01"
+                        onFocus={e => e.target.select()}
+                        onChange={e => setPicked(i, { ...line.picked, unit_price: e.target.value === "" ? 0 : Number(e.target.value) })} />
                     </td>
                     <td style={{ padding: "10px 8px", verticalAlign: "top" }}>
                       <input type="number" className="form-input" style={{ width: 66 }}

@@ -385,9 +385,11 @@ export default function NewInvoicePage({ params: { locale } }: { params: { local
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input
                         type="number" className="form-input" style={{ width: 100 }}
-                        value={line.picked.unit_price}
+                        value={line.picked.unit_price || ""}
+                        placeholder="0.00"
                         min="0"
-                        onChange={e => setPicked(i, { ...line.picked, unit_price: parseFloat(e.target.value) || 0 })}
+                        onFocus={e => e.target.select()}
+                        onChange={e => setPicked(i, { ...line.picked, unit_price: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })}
                       />
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>

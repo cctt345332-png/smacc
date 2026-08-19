@@ -640,9 +640,12 @@ export default function NewBillPage({ params: { locale } }: { params: { locale: 
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input
                         type="number" className="form-input" style={{ width: 110 }}
-                        value={line.picked.unit_price} min="0" step="0.01"
+                        value={line.picked.unit_price || ""}
+                        placeholder="0.00"
+                        min="0" step="0.01"
+                        onFocus={e => e.target.select()}
                         onChange={e =>
-                          setPicked(i, { ...line.picked, unit_price: parseFloat(e.target.value) || 0 })
+                          setPicked(i, { ...line.picked, unit_price: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0 })
                         }
                       />
                       {isSerial && (
