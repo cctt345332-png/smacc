@@ -31,14 +31,19 @@ const emptyLine = (): Line => ({
 
 function calcLine(line: Line) {
   const qty = line.picked.quantity || 0;
-  const price = line.picked.unit_price || 0;
+  const priceInclVat = line.picked.unit_price || 0;  // السعر شامل الضريبة
   const disc = parseFloat(line.discount_pct) || 0;
   const taxRate = parseFloat(line.vat_rate) || 0;
-  const gross = qty * price;
+
+  // استخراج السعر قبل الضريبة من السعر الشامل
+  const divisor = taxRate > 0 ? (1 + taxRate / 100) : 1;
+  const priceExcl = priceInclVat / divisor;
+
+  const gross = qty * priceExcl;
   const discAmt = gross * (disc / 100);
   const taxable = gross - discAmt;
   const tax = taxable * (taxRate / 100);
-  return { gross, discAmt, taxable, tax, total: taxable + tax };
+  return { gross, discAmt, taxable, tax, total: taxable + tax, priceExcl };
 }
 
 export default function RepNewInvoicePage({ params: { locale } }: { params: { locale: string } }) {
@@ -148,18 +153,25 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
     notes: form.notes || null,
     lines: lines
       .filter(l => l.picked.description_ar || l.picked.inventory_item_id)
-      .map((l, i) => ({
-        description_ar: l.picked.description_ar || l.picked.item_name || (ar ? "صنف" : "Item"),
-        quantity: l.picked.quantity || 1,
-        unit_price: l.picked.unit_price || 0,
-        discount_pct: parseFloat(l.discount_pct) || 0,
-        vat_rate: parseFloat(l.vat_rate) || 15,
-        vat_category: "S",
-        line_order: i,
-        inventory_item_id: l.picked.inventory_item_id || null,
-        serial_item_id: l.picked.serial_item_id || null,
-        serial_ids: l.picked.serial_ids || null,
-      })),
+      .map((l, i) => {
+        const taxRate = parseFloat(l.vat_rate) || 0;
+        const priceInclVat = l.picked.unit_price || 0;
+        // استخراج السعر قبل الضريبة
+        const divisor = taxRate > 0 ? (1 + taxRate / 100) : 1;
+        const priceExcl = priceInclVat / divisor;
+        return {
+          description_ar: l.picked.description_ar || l.picked.item_name || (ar ? "صنف" : "Item"),
+          quantity: l.picked.quantity || 1,
+          unit_price: priceExcl,
+          discount_pct: parseFloat(l.discount_pct) || 0,
+          vat_rate: taxRate,
+          vat_category: "S",
+          line_order: i,
+          inventory_item_id: l.picked.inventory_item_id || null,
+          serial_item_id: l.picked.serial_item_id || null,
+          serial_ids: l.picked.serial_ids || null,
+        };
+      }),
   });
 
   /* حفظ مسودة */
@@ -384,7 +396,10 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
               <tr style={{ background: "var(--bg)" }}>
                 <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 600, color: "var(--text-secondary)", minWidth: 240 }}>{ar ? "الصنف / الوصف" : "Item / Description"}</th>
                 <th style={{ padding: "10px 8px", width: 80, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الكمية" : "Qty"}</th>
-                <th style={{ padding: "10px 8px", width: 110, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "سعر الوحدة" : "Unit Price"}</th>
+                <th style={{ padding: "10px 8px", width: 110, fontWeight: 600, color: "var(--text-secondary)" }}>
+                  <div>{ar ? "السعر النهائي" : "Final Price"}</div>
+                  <div style={{ fontSize: 10, color: "#D97706", fontWeight: 400 }}>{ar ? "شامل الضريبة" : "incl. VAT"}</div>
+                </th>
                 <th style={{ padding: "10px 8px", width: 80, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "خصم%" : "Disc%"}</th>
                 <th style={{ padding: "10px 8px", width: 80, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "ضريبة%" : "VAT%"}</th>
                 <th style={{ padding: "10px 16px", width: 120, textAlign: "end", fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الإجمالي" : "Total"}</th>
