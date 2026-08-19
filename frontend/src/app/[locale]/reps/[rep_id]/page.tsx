@@ -44,6 +44,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
   const [rejectModal, setRejectModal] = useState<any>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
   const load = async () => {
     setLoading(true);
