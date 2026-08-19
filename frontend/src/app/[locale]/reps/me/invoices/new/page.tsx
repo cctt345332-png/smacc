@@ -346,7 +346,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
           {[
             { label: ar ? "المبلغ قبل الخصم" : "Subtotal",  value: `${fmt(totals.subtotal)} SAR`, color: "var(--text-primary)" },
             { label: ar ? "الخصم" : "Discount",              value: `- ${fmt(totals.discount)} SAR`, color: "#DC2626" },
-            { label: ar ? "الوعاء الضريبي" : "Taxable",      value: `${fmt(totals.taxable)} SAR`, color: "var(--text-secondary)" },
+            { label: ar ? "المبلغ الخاضع للضريبة" : "Taxable",      value: `${fmt(totals.taxable)} SAR`, color: "var(--text-secondary)" },
             { label: ar ? "ضريبة القيمة المضافة" : "VAT",    value: `${fmt(totals.vat)} SAR`, color: "#D97706" },
           ].map(r => (
             <div key={r.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: r.color }}>
