@@ -18,7 +18,8 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
 
   useEffect(() => {
     if (_hasHydrated && !token) router.replace(`/${locale}/login`);
-  }, [_hasHydrated, token, locale, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_hasHydrated, token]);
 
   // إذا الدور cashier — يُسمح فقط بصفحة الكاشير
   useEffect(() => {
@@ -43,7 +44,8 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
       }
       return;
     }
-  }, [_hasHydrated, token, user, pathname, locale, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_hasHydrated, token, pathname]);
 
   // جلب بيانات الباقة ونوع النشاط وحفظها في الـ store
   useEffect(() => {

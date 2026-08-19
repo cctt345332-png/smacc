@@ -155,20 +155,32 @@ export default function RepLayout({
 
   useEffect(() => { setMounted(true); }, []);
 
-  /* auth guard — بعد الـ mount فقط */
+  /* auth guard — بعد الـ mount فقط، مرة واحدة */
   useEffect(() => {
     if (!mounted) return;
     if (!token) router.replace(`/${locale}/login`);
-  }, [mounted, token]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted]);
 
-  /* جلب التنبيهات */
+  /* مراقبة token — لو انتهى أثناء الجلسة */
+  useEffect(() => {
+    if (mounted && !token) router.replace(`/${locale}/login`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  /* جلب التنبيهات — مرة عند التحميل ثم كل دقيقة */
   useEffect(() => {
     if (!token) return;
-    getUnreadCount().then(r => setUnread(r.data.count)).catch(() => {});
-    const id = setInterval(() => {
-      getUnreadCount().then(r => setUnread(r.data.count)).catch(() => {});
-    }, 60_000);
-    return () => clearInterval(id);
+    let cancelled = false;
+    const fetch = () => {
+      getUnreadCount()
+        .then(r => { if (!cancelled) setUnread(r.data.count); })
+        .catch(() => {});
+    };
+    fetch();
+    const id = setInterval(fetch, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   /* تتبع الموقع — فقط للمناديب، كل دقيقة + عند فتح التطبيق */
