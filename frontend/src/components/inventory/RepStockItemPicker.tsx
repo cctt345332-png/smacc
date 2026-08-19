@@ -307,12 +307,18 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
               productName={value.item_name || ""}
               warehouseId={warehouseId}
               onConfirm={selected => {
+                // احسب متوسط سعر البيع من السيريالات المختارة
+                const prices = selected.map(s => Number((s as any).sale_price || 0)).filter(p => p > 0);
+                const avgPrice = prices.length > 0
+                  ? prices.reduce((a, b) => a + b, 0) / prices.length
+                  : value.unit_price || 0;
                 onChange({
                   ...value,
                   serial_ids: selected.map(s => s.id),
                   serial_numbers: selected.map(s => s.serial_number),
                   quantity: selected.length,
-                  description_ar: `${value.item_name} (${selected.length} ${ar ? "سيريال" : "serials"})`,
+                  unit_price: avgPrice,
+                  description_ar: value.item_name || value.description_ar,
                 });
                 setShowSerialPicker(false);
               }}

@@ -13,7 +13,7 @@ interface Props {
   productName: string;
   warehouseId?: string;   // مستودع المندوب أو null للعام
   maxQty?: number;
-  onConfirm: (serials: { id: string; serial_number: string }[]) => void;
+  onConfirm: (serials: { id: string; serial_number: string; sale_price?: number | null }[]) => void;
   onClose: () => void;
 }
 
@@ -76,7 +76,7 @@ export default function SerialPicker({ locale, productId, productName, warehouse
   const handleConfirm = () => {
     const serials = available
       .filter((s: any) => selected.includes(s.id))
-      .map((s: any) => ({ id: s.id, serial_number: s.serial_number }));
+      .map((s: any) => ({ id: s.id, serial_number: s.serial_number, sale_price: s.sale_price ?? null }));
     onConfirm(serials);
   };
 

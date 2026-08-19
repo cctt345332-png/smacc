@@ -83,8 +83,8 @@ export default function RepStockPage({ params: { locale } }: { params: { locale:
             const qty = Number(s.quantity || 0);
             const val = qty * Number(s.sale_price || 0);
             const isSerial = s.item_tracking === "serial" || s.tracking_type === "serial";
-            const isLow = !isSerial && qty <= 3 && qty > 0;
-            const isEmpty = !isSerial && qty <= 0;
+            const isLow = qty <= 3 && qty > 0;
+            const isEmpty = qty <= 0;
             return (
               <div key={s.item_id || s.id} style={{
                 background: "var(--surface)", borderRadius: 14,
@@ -105,7 +105,7 @@ export default function RepStockPage({ params: { locale } }: { params: { locale:
                   </div>
                   <div style={{ textAlign: "end", flexShrink: 0, marginInlineStart: 12 }}>
                     <div style={{ fontWeight: 800, fontSize: 18, color: isEmpty ? "#DC2626" : isLow ? "#D97706" : "#059669" }}>
-                      {isSerial ? "—" : fmt(qty)}
+                      {fmt(qty)}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "قطعة" : "units"}</div>
                   </div>
@@ -115,7 +115,7 @@ export default function RepStockPage({ params: { locale } }: { params: { locale:
                     <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{ar ? "سعر البيع" : "Sale Price"}</div>
                     <div style={{ fontWeight: 700, fontSize: 13, color: "#2563EB" }}>{fmt(s.sale_price)} SAR</div>
                   </div>
-                  {!isSerial && qty > 0 && (
+                  {qty > 0 && (
                     <div style={{ textAlign: "end" }}>
                       <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{ar ? "القيمة" : "Value"}</div>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{fmt(val)} SAR</div>
