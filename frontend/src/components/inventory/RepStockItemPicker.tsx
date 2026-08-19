@@ -144,7 +144,6 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
       available_qty: isSerial ? undefined : Number(s.quantity || s.available_qty || 0),
     });
   };
-
   const clear = () => {
     setQuery("");
     onChange({ mode: "free", description_ar: "", unit_price: 0, quantity: 1 });
@@ -307,17 +306,29 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
               productName={value.item_name || ""}
               warehouseId={warehouseId}
               onConfirm={selected => {
-                // احسب متوسط سعر البيع من السيريالات المختارة
+                // 1. حاول تأخذ السعر من السيريالات المختارة مباشرة
                 const prices = selected.map(s => Number((s as any).sale_price || 0)).filter(p => p > 0);
-                const avgPrice = prices.length > 0
+                let finalPrice = prices.length > 0
                   ? prices.reduce((a, b) => a + b, 0) / prices.length
-                  : value.unit_price || 0;
+                  : 0;
+
+                // 2. لو ما في سعر في السيريالات، خذه من stockItems (sale_price المنتج)
+                if (!finalPrice && value.inventory_item_id) {
+                  const stockItem = stockItems.find(s =>
+                    (s.item_id || s.id) === value.inventory_item_id
+                  );
+                  if (stockItem) finalPrice = Number(stockItem.sale_price || 0);
+                }
+
+                // 3. احتفظ بالسعر القديم لو ما في شيء
+                if (!finalPrice) finalPrice = value.unit_price || 0;
+
                 onChange({
                   ...value,
                   serial_ids: selected.map(s => s.id),
                   serial_numbers: selected.map(s => s.serial_number),
                   quantity: selected.length,
-                  unit_price: avgPrice,
+                  unit_price: finalPrice,
                   description_ar: value.item_name || value.description_ar,
                 });
                 setShowSerialPicker(false);

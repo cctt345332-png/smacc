@@ -728,3 +728,46 @@ async def get_variant_stock_report(
     """تقرير المخزون مع تفصيل كل متغير — للمدير والعميل"""
     from app.modules.inventory.options_service import get_variant_stock_report as _report
     return await _report(db, tenant_id, product_id)
+
+
+# ─── Fix Serial Item Sale Prices ────────────────────────────────────────────
+@router.post("/fix-serial-sale-prices", status_code=200)
+async def fix_serial_sale_prices(
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    يُحدّث sale_price على InventoryItem لكل المنتجات السيريالية
+    من أول سيريال موجود له سعر — لإصلاح البيانات القديمة.
+    """
+    from app.models.inventory import InventoryItem, SerialItem
+    from sqlalchemy import select
+
+    tenant_id = user["tenant_id"]
+
+    # جلب كل المنتجات السيريالية التي sale_price = 0
+    items_r = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.tenant_id == tenant_id,
+            InventoryItem.tracking_type == "serial",
+            InventoryItem.sale_price == 0,
+        )
+    )
+    items = items_r.scalars().all()
+
+    updated = []
+    for item in items:
+        # جلب أول سيريال له sale_price > 0
+        serial_r = await db.execute(
+            select(SerialItem).where(
+                SerialItem.product_id == item.id,
+                SerialItem.sale_price > 0,
+            ).limit(1)
+        )
+        serial = serial_r.scalar_one_or_none()
+        if serial and serial.sale_price:
+            item.sale_price = serial.sale_price
+            updated.append({"item_id": item.id, "name": item.name_ar, "sale_price": float(serial.sale_price)})
+
+    await db.commit()
+    return {"updated": len(updated), "items": updated}

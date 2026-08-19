@@ -393,9 +393,10 @@ async def _add_inventory_for_bill(
         # ── سيريالات جماعية (JSON) ────────────────────────────────
         if line.new_serial_numbers_json:
             entries: list = json.loads(line.new_serial_numbers_json)
+            first_sale_price: Decimal | None = None  # نحفظ أول سعر نجده
+
             for entry in entries:
                 if isinstance(entry, str):
-                    # صيغة قديمة: سلسلة نصية مجردة
                     sn        = entry
                     condition = "new"
                     sale_price_raw = None
@@ -407,12 +408,15 @@ async def _add_inventory_for_bill(
                 if not sn:
                     continue
 
-                # sale_price: None يعني لم يُحدَّد بعد — يُعدَّل لاحقاً
                 sale_price = (
                     Decimal(str(sale_price_raw))
                     if sale_price_raw is not None and sale_price_raw != 0
                     else None
                 )
+
+                # احفظ أول سعر موجود
+                if sale_price and first_sale_price is None:
+                    first_sale_price = sale_price
 
                 try:
                     await add_serial(
@@ -428,6 +432,12 @@ async def _add_inventory_for_bill(
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة السيريال {sn}: {e.detail}")
+
+            # حدّث sale_price على InventoryItem من أول سيريال عنده سعر
+            if first_sale_price:
+                item = await db.get(InventoryItem, line.inventory_item_id)
+                if item:
+                    item.sale_price = first_sale_price
 
         # ── بدون سيريالات — كمية عادية أو تشغيلة ─────────────────
         else:
@@ -882,6 +892,13 @@ async def reprocess_bill_inventory(
                         reference_id=bill.id,
                     ))
                     added_serials.append(sn)
+
+                    # حدّث sale_price على InventoryItem من أول سيريال عنده سعر
+                    if sale_price:
+                        item_obj = await db.get(InventoryItem, line.inventory_item_id)
+                        if item_obj and (not item_obj.sale_price or item_obj.sale_price == 0):
+                            item_obj.sale_price = sale_price
+
                 except Exception as e:
                     errors.append(f"سيريال {sn}: {str(e)}")
 
