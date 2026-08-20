@@ -97,16 +97,12 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
       if (filterZone)  params.set("zone",   filterZone);
       if (filterMonth) params.set("month",  filterMonth);
 
-      const token = typeof window !== "undefined"
-        ? (() => { try { return JSON.parse(localStorage.getItem("auth-storage") || "{}").state?.token || ""; } catch { return ""; } })()
-        : "";
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/reps/report/pdf?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (!res.ok) throw new Error("فشل تحميل التقرير");
-      const blob = await res.blob();
+      // استخدام axios مع التوكن التلقائي
+      const { default: api } = await import("@/lib/api");
+      const res = await api.get(`/reps/report/pdf?${params.toString()}`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href     = url;
@@ -114,7 +110,7 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: any) {
-      alert(ar ? "خطأ في تحميل التقرير: " + e.message : "PDF download failed: " + e.message);
+      alert(ar ? "خطأ في تحميل التقرير" : "PDF download failed");
     } finally {
       setPdfLoading(false);
     }
@@ -226,22 +222,14 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
           <h1 className="page-title">{ar ? "تقارير المناديب" : "Sales Rep Reports"}</h1>
           <p className="page-subtitle">{ar ? "أداء المناديب — المبيعات والتحصيل والمخزون والفواتير" : "Performance — sales, collection, stock and invoices"}</p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8 }}>
           <button onClick={downloadPDF} disabled={pdfLoading}
-            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #FCA5A5", background: pdfLoading ? "#F1F5F9" : "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: pdfLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 6, opacity: pdfLoading ? 0.7 : 1 }}>
-            {pdfLoading ? "⏳" : "📥"} {ar ? (pdfLoading ? "جاري التحميل..." : "تحميل PDF") : (pdfLoading ? "Loading..." : "Download PDF")}
+            style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #FCA5A5", background: pdfLoading ? "#F1F5F9" : "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: pdfLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            {pdfLoading ? "⏳" : "📥"} {ar ? (pdfLoading ? "جاري..." : "PDF") : (pdfLoading ? "Loading..." : "PDF")}
           </button>
           <button onClick={handlePrint}
-            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#F8FAFC", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#F8FAFC", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
             🖨️ {ar ? "طباعة" : "Print"}
-          </button>
-          <button onClick={exportPerformance}
-            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #BBF7D0", background: "#F0FDF4", color: "#059669", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            ⬇️ {ar ? "أداء Excel" : "Performance CSV"}
-          </button>
-          <button onClick={exportInvoices}
-            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#2563EB", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-            ⬇️ {ar ? "فواتير Excel" : "Invoices CSV"}
           </button>
         </div>
       </div>
