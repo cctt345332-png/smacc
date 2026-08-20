@@ -86,6 +86,40 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
   /* ── طباعة ──────────────────────────────────────────────────────── */
   const handlePrint = () => window.print();
 
+  /* ── تحميل PDF من الباكند ───────────────────────────────────────── */
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const downloadPDF = async () => {
+    setPdfLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filterRep)   params.set("rep_id", filterRep);
+      if (filterZone)  params.set("zone",   filterZone);
+      if (filterMonth) params.set("month",  filterMonth);
+
+      const token = typeof window !== "undefined"
+        ? (() => { try { return JSON.parse(localStorage.getItem("auth-storage") || "{}").state?.token || ""; } catch { return ""; } })()
+        : "";
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/reps/report/pdf?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!res.ok) throw new Error("فشل تحميل التقرير");
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `reps-report-${filterMonth || new Date().toISOString().slice(0, 7)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(ar ? "خطأ في تحميل التقرير: " + e.message : "PDF download failed: " + e.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -193,6 +227,10 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
           <p className="page-subtitle">{ar ? "أداء المناديب — المبيعات والتحصيل والمخزون والفواتير" : "Performance — sales, collection, stock and invoices"}</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={downloadPDF} disabled={pdfLoading}
+            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #FCA5A5", background: pdfLoading ? "#F1F5F9" : "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: pdfLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 6, opacity: pdfLoading ? 0.7 : 1 }}>
+            {pdfLoading ? "⏳" : "📥"} {ar ? (pdfLoading ? "جاري التحميل..." : "تحميل PDF") : (pdfLoading ? "Loading..." : "Download PDF")}
+          </button>
           <button onClick={handlePrint}
             style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#F8FAFC", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
             🖨️ {ar ? "طباعة" : "Print"}

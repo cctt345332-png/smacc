@@ -14,6 +14,106 @@ router = APIRouter(prefix="/reps", tags=["reps"])
 
 
 # ══════════════════════════════════════════════════════════════════
+# تقرير PDF — يجب أن يكون قبل /{rep_id}
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/report/pdf")
+async def reps_pdf_report(
+    rep_id: str = "",
+    zone: str = "",
+    month: str = "",
+    user=Depends(require_role(["manager", "accountant", "sales"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    توليد تقرير PDF للمناديب
+    - rep_id: فلتر مندوب واحد (اختياري)
+    - zone: فلتر منطقة (اختياري)
+    - month: فلتر شهر YYYY-MM (اختياري)
+    """
+    from fastapi.responses import Response
+    from app.modules.reps.pdf_report import generate_reps_summary_pdf
+    from app.models.sales import Invoice
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    tenant_id = user["tenant_id"]
+
+    # جلب المناديب مع ملخصاتهم
+    reps_list = await service.get_reps(db, tenant_id)
+    reps_with_summary = []
+    for rep in reps_list:
+        if zone and rep.get("zone", "") != zone:
+            continue
+        try:
+            summary = await service.get_rep_summary(db, tenant_id, rep["id"])
+            reps_with_summary.append({**rep, **summary})
+        except Exception:
+            reps_with_summary.append(rep)
+
+    # جلب الفواتير
+    q = select(Invoice).where(
+        Invoice.tenant_id == tenant_id,
+        Invoice.rep_id.isnot(None),
+    ).order_by(Invoice.issue_date.desc())
+
+    if rep_id:
+        q = q.where(Invoice.rep_id == rep_id)
+    if month:
+        q = q.where(Invoice.issue_date.between(
+            f"{month}-01", f"{month}-31"
+        ))
+
+    inv_r = await db.execute(q)
+    invoices_raw = inv_r.scalars().all()
+
+    # تحويل للـ dict
+    invoices = []
+    for inv in invoices_raw:
+        invoices.append({
+            "id": inv.id,
+            "invoice_number": inv.invoice_number,
+            "rep_id": inv.rep_id,
+            "buyer_name_ar": inv.buyer_name_ar,
+            "status": inv.status.value if hasattr(inv.status, "value") else str(inv.status),
+            "issue_date": inv.issue_date.isoformat() if inv.issue_date else None,
+            "total": float(inv.total or 0),
+            "paid_amount": float(inv.paid_amount or 0),
+            "invoice_payment_method": inv.invoice_payment_method.value if inv.invoice_payment_method and hasattr(inv.invoice_payment_method, "value") else str(inv.invoice_payment_method or ""),
+            "credit_days": inv.credit_days,
+            "submitted_at": inv.submitted_at.isoformat() if inv.submitted_at else None,
+            "rejection_note": inv.rejection_note,
+        })
+
+    # جلب اسم الشركة
+    company_name = ""
+    try:
+        from app.models.tenant import Tenant
+        t = await db.get(Tenant, tenant_id)
+        if t:
+            company_name = t.name or ""
+    except Exception:
+        pass
+
+    # توليد الـ PDF
+    pdf_bytes = generate_reps_summary_pdf(
+        reps_data=reps_with_summary,
+        invoices=invoices,
+        company_name=company_name,
+        filter_rep_id=rep_id,
+        filter_zone=zone,
+        filter_month=month,
+    )
+
+    filename = f"reps-report-{month or 'all'}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ══════════════════════════════════════════════════════════════════
 # واجهة المندوب نفسه — يجب أن تكون قبل routes /{rep_id}
 # ══════════════════════════════════════════════════════════════════
 
