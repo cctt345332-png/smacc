@@ -49,7 +49,7 @@ def _fmt(n) -> str:
 
 def _date(d) -> str:
     if not d:
-        return "—"
+        return "-"
     try:
         if isinstance(d, str):
             d = datetime.fromisoformat(d.split("T")[0])
@@ -86,10 +86,10 @@ class RepsPDF(FPDF):
         self._subtitle   = subtitle
         self._page_title = _ar(title)
 
-        # تسجيل الخط
+        # تسجيل الخط — نستخدم نفس الخط للعادي والبولد (Variable font)
         if _USE_ARABIC_FONT:
-            self.add_font("Arabic", "",   _FONT_REGULAR, uni=True)
-            self.add_font("Arabic", "B",  _FONT_BOLD,    uni=True)
+            self.add_font("Arabic", "",  _FONT_REGULAR, uni=True)
+            self.add_font("Arabic", "B", _FONT_REGULAR, uni=True)
             self._font = "Arabic"
         else:
             self._font = "Helvetica"
@@ -270,7 +270,7 @@ def generate_reps_summary_pdf(
     pdf.table_header(cols)
 
     sorted_reps = sorted(reps_data, key=lambda r: float(r.get("total_sales", 0)), reverse=True)
-    medals = ["🥇", "🥈", "🥉"]
+    medals = ["1.", "2.", "3."]
 
     for idx, rep in enumerate(sorted_reps):
         sales     = float(rep.get("total_sales", 0))
