@@ -1,15 +1,14 @@
 """
-تقرير PDF للمناديب — يُولَّد بـ fpdf2 مع دعم العربية
+تقرير PDF للمناديب — fpdf2 مع دعم العربية الصحيح (RTL)
 """
 from __future__ import annotations
 from io import BytesIO
 from datetime import datetime
-from decimal import Decimal
 import os
 
 from fpdf import FPDF
 
-# ── مساعد العربية ──────────────────────────────────────────────────────────
+# ── مكتبات العربية ─────────────────────────────────────────────────────────
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
@@ -17,27 +16,35 @@ try:
 except ImportError:
     _HAS_ARABIC = False
 
+# ── مسار الخط ──────────────────────────────────────────────────────────────
+_FONT_DIR     = os.path.join(os.path.dirname(__file__), "fonts")
+_FONT_REGULAR = os.path.join(_FONT_DIR, "NotoSansArabic-Regular.ttf")
+_USE_FONT     = os.path.exists(_FONT_REGULAR)
+
 
 def _ar(text: str | None) -> str:
-    """تحويل النص العربي لعرضه صحيحاً في PDF"""
+    """تحويل النص العربي لعرضه صحيحاً في PDF (reshape + bidi)"""
     if not text:
         return ""
     text = str(text)
-    if not _USE_ARABIC_FONT:
-        # بدون خط Unicode نعيد النص كما هو لكن نستبدل الحروف غير Latin
-        # نحاول encode آمن — إذا فشل نعيد نص بديل
+    if not _USE_FONT or not _HAS_ARABIC:
+        # بدون خط عربي — نعيد ASCII فقط
         try:
             return text.encode("latin-1").decode("latin-1")
         except (UnicodeEncodeError, UnicodeDecodeError):
-            # نحذف الأحرف غير Latin أو نستبدلها بـ ?
             return text.encode("latin-1", errors="replace").decode("latin-1")
-    if not _HAS_ARABIC:
-        return text
     try:
         reshaped = arabic_reshaper.reshape(text)
         return get_display(reshaped)
     except Exception:
         return text
+
+
+def _safe(text: str | None) -> str:
+    """نص آمن — أرقام وتواريخ وكودات (ASCII فقط)"""
+    if not text:
+        return ""
+    return str(text)
 
 
 def _fmt(n) -> str:
@@ -58,331 +65,299 @@ def _date(d) -> str:
         return str(d)
 
 
-# ── مسار الخط ──────────────────────────────────────────────────────────────
-_FONT_DIR = os.path.join(os.path.dirname(__file__), "fonts")
-_FONT_REGULAR = os.path.join(_FONT_DIR, "NotoSansArabic-Regular.ttf")
-_FONT_BOLD    = os.path.join(_FONT_DIR, "NotoSansArabic-Bold.ttf")
-
-# نتحقق من وجود الخط — لو ما موجود نستخدم Helvetica (بدون عربية)
-_USE_ARABIC_FONT = os.path.exists(_FONT_REGULAR)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 class RepsPDF(FPDF):
-    """PDF مخصص لتقرير المناديب"""
+    C_BLUE   = (37,  99,  235)
+    C_GREEN  = (5,  150, 105)
+    C_RED    = (220, 38,  38)
+    C_AMBER  = (217,119,   6)
+    C_PURPLE = (124, 58, 237)
+    C_DARK   = (30,  41,  59)
+    C_MUTED  = (100,116, 139)
+    C_ALT    = (248,250, 252)
+    C_WHITE  = (255,255, 255)
 
-    TITLE_COLOR  = (30, 41, 59)    # slate-800
-    HEADER_COLOR = (37, 99, 235)   # blue-600
-    ACCENT_COLOR = (5, 150, 105)   # green-600
-    WARN_COLOR   = (220, 38, 38)   # red-600
-    MUTED_COLOR  = (100, 116, 139) # slate-500
-    ROW_ALT      = (248, 250, 252) # slate-50
-
-    def __init__(self, title: str = "تقرير المناديب", subtitle: str = ""):
+    def __init__(self):
         super().__init__(orientation="L", unit="mm", format="A4")
-        self.set_auto_page_break(auto=True, margin=15)
-        self.set_margins(12, 12, 12)
-        self._title_ar   = title
-        self._subtitle   = subtitle
-        self._page_title = _ar(title)
-
-        # تسجيل الخط — نستخدم نفس الخط للعادي والبولد (Variable font)
-        if _USE_ARABIC_FONT:
-            self.add_font("Arabic", "",  _FONT_REGULAR, uni=True)
-            self.add_font("Arabic", "B", _FONT_REGULAR, uni=True)
-            self._font = "Arabic"
+        self.set_auto_page_break(auto=True, margin=14)
+        self.set_margins(10, 10, 10)
+        # تسجيل الخط
+        if _USE_FONT:
+            self.add_font("Ar", "",  _FONT_REGULAR, uni=True)
+            self.add_font("Ar", "B", _FONT_REGULAR, uni=True)
+            self._f = "Ar"
         else:
-            self._font = "Helvetica"
+            self._f = "Helvetica"
 
-    # ── Header / Footer ────────────────────────────────────────────────────
+    # ── header / footer ────────────────────────────────────────────────────
     def header(self):
-        # شريط علوي
-        self.set_fill_color(*self.HEADER_COLOR)
-        self.rect(0, 0, self.w, 14, "F")
-        self.set_text_color(255, 255, 255)
-        self.set_font(self._font, "B", 13)
-        self.set_y(2)
-        self.cell(0, 10, self._page_title, align="C")
-        self.set_y(16)
-        self.set_text_color(*self.TITLE_COLOR)
+        self.set_fill_color(*self.C_BLUE)
+        self.rect(0, 0, self.w, 12, "F")
+        self.set_text_color(*self.C_WHITE)
+        self.set_font(self._f, "B", 12)
+        self.set_y(1)
+        self.cell(0, 10, _ar(getattr(self, "_title", "Rep Report")), align="C")
+        self.set_y(14)
+        self.set_text_color(*self.C_DARK)
 
     def footer(self):
-        self.set_y(-12)
-        self.set_font(self._font, "", 8)
-        self.set_text_color(*self.MUTED_COLOR)
-        now = datetime.now().strftime("%Y/%m/%d %H:%M")
-        self.cell(0, 6, f"{now}  —  {_ar('تاريخ الطباعة')}  |  {self.page_no()}", align="C")
+        self.set_y(-11)
+        self.set_font(self._f, "", 7)
+        self.set_text_color(*self.C_MUTED)
+        ts = datetime.now().strftime("%Y/%m/%d %H:%M")
+        pg = self.page_no()
+        self.cell(0, 6, f"{ts}   |   {pg}", align="C")
 
     # ── helpers ────────────────────────────────────────────────────────────
-    def section_title(self, text: str):
-        self.ln(4)
-        self.set_fill_color(*self.HEADER_COLOR)
-        self.set_text_color(255, 255, 255)
-        self.set_font(self._font, "B", 10)
-        self.cell(0, 8, f"  {_ar(text)}", fill=True, ln=True)
-        self.set_text_color(*self.TITLE_COLOR)
+    def sec(self, label: str, color=None):
+        """عنوان قسم"""
+        self.ln(3)
+        c = color or self.C_BLUE
+        self.set_fill_color(*c)
+        self.set_text_color(*self.C_WHITE)
+        self.set_font(self._f, "B", 9)
+        self.cell(0, 7, f"  {_ar(label)}", fill=True, ln=True)
+        self.set_text_color(*self.C_DARK)
         self.ln(1)
 
-    def kv_row(self, label: str, value: str, x: float = None, w: float = 80):
-        """صف بيانات ثنائي (تسمية: قيمة)"""
-        if x is not None:
-            self.set_x(x)
-        self.set_font(self._font, "", 9)
-        self.set_text_color(*self.MUTED_COLOR)
-        self.cell(35, 6, _ar(label + ":"), align="R")
-        self.set_text_color(*self.TITLE_COLOR)
-        self.set_font(self._font, "B", 9)
-        self.cell(w, 6, _ar(str(value)), align="R")
-        self.set_font(self._font, "", 9)
-
-    def table_header(self, cols: list[dict]):
-        """رأس جدول — cols: [{text, w, align}]"""
-        self.set_fill_color(*self.HEADER_COLOR)
-        self.set_text_color(255, 255, 255)
-        self.set_font(self._font, "B", 8)
-        for col in cols:
-            self.cell(col["w"], 7, _ar(col["text"]), border=0, fill=True, align=col.get("align", "C"))
+    def th(self, cols):
+        """رأس جدول — cols: list[{ar, w, align?}]
+        نعكس ترتيب الأعمدة لـ RTL"""
+        self.set_fill_color(*self.C_DARK)
+        self.set_text_color(*self.C_WHITE)
+        self.set_font(self._f, "B", 7.5)
+        for col in reversed(cols):
+            self.cell(col["w"], 6, _ar(col["ar"]),
+                      border=0, fill=True, align=col.get("align", "C"))
         self.ln()
-        self.set_text_color(*self.TITLE_COLOR)
+        self.set_text_color(*self.C_DARK)
 
-    def table_row(self, cells: list[dict], alt: bool = False):
-        """صف جدول — cells: [{text, w, align, color?}]"""
-        if alt:
-            self.set_fill_color(*self.ROW_ALT)
-        else:
-            self.set_fill_color(255, 255, 255)
-        self.set_font(self._font, "", 8)
-        for cell in cells:
-            if "color" in cell:
-                self.set_text_color(*cell["color"])
-            else:
-                self.set_text_color(*self.TITLE_COLOR)
-            self.cell(cell["w"], 6, _ar(str(cell.get("text", ""))), border=0,
-                      fill=True, align=cell.get("align", "R"))
+    def tr(self, cols, cells, alt=False):
+        """صف جدول — cells: list[{text, color?, align?}] بنفس ترتيب cols
+        نعكس الاثنين معاً لـ RTL"""
+        bg = self.C_ALT if alt else self.C_WHITE
+        self.set_fill_color(*bg)
+        self.set_font(self._f, "", 7.5)
+        for col, cell in zip(reversed(cols), reversed(cells)):
+            clr = cell.get("color", self.C_DARK)
+            self.set_text_color(*clr)
+            txt = cell.get("text", "")
+            # النص العربي يحتاج _ar، الأرقام يبقون _safe
+            rendered = _ar(str(txt)) if txt else ""
+            self.cell(col["w"], 5.5, rendered,
+                      border=0, fill=True, align=col.get("align", "R"))
         self.ln()
-        self.set_text_color(*self.TITLE_COLOR)
+        self.set_text_color(*self.C_DARK)
 
-    def summary_box(self, items: list[dict]):
-        """صناديق ملخص في صف — items: [{label, value, color}]"""
-        box_w = (self.w - 24) / len(items)
-        x_start = 12
+    def stat_row(self, items):
+        """صف صناديق إحصاء — items: [{label, value, color}]"""
+        n = len(items)
+        bw = (self.w - 20) / n
+        y0 = self.get_y()
         for i, item in enumerate(items):
-            x = x_start + i * box_w
-            # إطار
+            x = 10 + i * bw
             self.set_fill_color(248, 250, 252)
-            self.rect(x + 1, self.get_y(), box_w - 2, 18, "F")
+            self.rect(x + 0.5, y0, bw - 1, 17, "F")
             self.set_draw_color(226, 232, 240)
-            self.rect(x + 1, self.get_y(), box_w - 2, 18)
-            # تسمية
-            self.set_font(self._font, "", 7)
-            self.set_text_color(*self.MUTED_COLOR)
-            self.set_xy(x + 1, self.get_y() + 2)
-            self.cell(box_w - 2, 5, _ar(item["label"]), align="C")
-            # قيمة
-            color = item.get("color", self.TITLE_COLOR)
-            self.set_font(self._font, "B", 10)
-            self.set_text_color(*color)
-            self.set_xy(x + 1, self.get_y() + 5)
-            self.cell(box_w - 2, 7, _ar(str(item["value"])), align="C")
-        self.ln(22)
+            self.rect(x + 0.5, y0, bw - 1, 17)
+            # label
+            self.set_font(self._f, "", 6.5)
+            self.set_text_color(*self.C_MUTED)
+            self.set_xy(x + 0.5, y0 + 1.5)
+            self.cell(bw - 1, 5, _ar(item["label"]), align="C")
+            # value
+            self.set_font(self._f, "B", 9)
+            clr = item.get("color", self.C_DARK)
+            self.set_text_color(*clr)
+            self.set_xy(x + 0.5, y0 + 7)
+            self.cell(bw - 1, 7, _ar(str(item["value"])), align="C")
         self.set_draw_color(0, 0, 0)
+        self.ln(20)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# دالة توليد تقرير جميع المناديب
 # ══════════════════════════════════════════════════════════════════════════════
 def generate_reps_summary_pdf(
-    reps_data: list[dict],          # قائمة المناديب مع الملخص
-    invoices: list[dict],           # كل الفواتير
+    reps_data: list[dict],
+    invoices: list[dict],
     company_name: str = "",
     filter_rep_id: str = "",
     filter_zone: str = "",
     filter_month: str = "",
 ) -> bytes:
-    """
-    يُولّد PDF مجدول بـ:
-    - صفحة 1: ملخص أداء الفريق + جدول كل المناديب
-    - صفحة 2+: لكل مندوب (لو filter_rep_id) أو تفاصيل الفواتير
-    """
-    now_str = datetime.now().strftime("%Y/%m/%d")
 
-    # بناء عنوان فرعي
-    parts = []
-    if filter_zone:   parts.append(f"المنطقة: {filter_zone}")
-    if filter_month:  parts.append(f"الشهر: {filter_month}")
-    if not parts:     parts.append(now_str)
+    pdf = RepsPDF()
+    pdf._title = "تقرير المناديب — أداء المبيعات"
 
-    pdf = RepsPDF(
-        title="تقرير المناديب — أداء المبيعات",
-        subtitle=" | ".join(parts),
-    )
+    today = datetime.now().strftime("%Y/%m/%d")
+    sub_parts = []
+    if filter_zone:  sub_parts.append(f"المنطقة: {filter_zone}")
+    if filter_month: sub_parts.append(f"الشهر: {filter_month}")
+    if not sub_parts: sub_parts.append(today)
 
-    # ─── الصفحة 1: ملخص الفريق ───────────────────────────────────────────
+    # ══ صفحة 1: ملخص الفريق + جدول الأداء ══════════════════════════════════
     pdf.add_page()
 
-    # اسم الشركة + التاريخ
+    # اسم الشركة
     if company_name:
-        pdf.set_font(pdf._font, "B", 11)
-        pdf.set_text_color(*pdf.TITLE_COLOR)
-        pdf.cell(0, 7, _ar(company_name), align="C", ln=True)
-    pdf.set_font(pdf._font, "", 8)
-    pdf.set_text_color(*pdf.MUTED_COLOR)
-    pdf.cell(0, 5, _ar(" | ".join(parts)), align="C", ln=True)
-    pdf.ln(3)
+        pdf.set_font(pdf._f, "B", 10)
+        pdf.cell(0, 6, _ar(company_name), align="C", ln=True)
+    pdf.set_font(pdf._f, "", 7.5)
+    pdf.set_text_color(*pdf.C_MUTED)
+    pdf.cell(0, 5, _ar("  |  ".join(sub_parts)), align="C", ln=True)
+    pdf.set_text_color(*pdf.C_DARK)
+    pdf.ln(2)
 
-    # ── بطاقات الملخص العام ────────────────────────────────────────────────
-    active_reps = [r for r in reps_data if r.get("is_active", True)]
-    total_sales      = sum(float(r.get("total_sales", 0))     for r in reps_data)
-    total_collected  = sum(float(r.get("total_collected", 0)) for r in reps_data)
-    total_outstanding= sum(float(r.get("outstanding", 0))     for r in reps_data)
+    # ── إحصاءات ──────────────────────────────────────────────────────────────
+    total_sales      = sum(float(r.get("total_sales",      0)) for r in reps_data)
+    total_collected  = sum(float(r.get("total_collected",  0)) for r in reps_data)
+    total_outstanding= sum(float(r.get("outstanding",      0)) for r in reps_data)
     total_commission = sum(
         float(r.get("total_sales", 0)) * float(r.get("commission_pct", 0)) / 100
         for r in reps_data
     )
     pending_count = len([i for i in invoices if i.get("status") == "submitted"])
 
-    pdf.summary_box([
-        {"label": "عدد المناديب",         "value": str(len(active_reps)),              "color": pdf.HEADER_COLOR},
-        {"label": "إجمالي المبيعات (SAR)", "value": _fmt(total_sales),                  "color": pdf.HEADER_COLOR},
-        {"label": "المحصّل (SAR)",          "value": _fmt(total_collected),              "color": pdf.ACCENT_COLOR},
-        {"label": "المستحق (SAR)",          "value": _fmt(total_outstanding),            "color": pdf.WARN_COLOR if total_outstanding > 0 else pdf.ACCENT_COLOR},
-        {"label": "العمولات (SAR)",         "value": _fmt(total_commission),             "color": (124, 58, 237)},
-        {"label": "فواتير بانتظار المراجعة","value": str(pending_count),                "color": (217, 119, 6) if pending_count > 0 else pdf.ACCENT_COLOR},
+    pdf.stat_row([
+        {"label": "عدد المناديب",           "value": str(len(reps_data)),       "color": pdf.C_BLUE},
+        {"label": "إجمالي المبيعات SAR",    "value": _fmt(total_sales),          "color": pdf.C_BLUE},
+        {"label": "المحصّل SAR",             "value": _fmt(total_collected),      "color": pdf.C_GREEN},
+        {"label": "المستحق SAR",             "value": _fmt(total_outstanding),    "color": pdf.C_RED if total_outstanding > 0 else pdf.C_GREEN},
+        {"label": "العمولات SAR",            "value": _fmt(total_commission),     "color": pdf.C_PURPLE},
+        {"label": "فواتير انتظار المراجعة", "value": str(pending_count),         "color": pdf.C_AMBER if pending_count > 0 else pdf.C_GREEN},
     ])
 
-    # ── جدول أداء المناديب ────────────────────────────────────────────────
-    pdf.section_title("مقارنة أداء المناديب")
+    # ── جدول الأداء ──────────────────────────────────────────────────────────
+    pdf.sec("مقارنة أداء المناديب")
 
-    cols = [
-        {"text": "#",               "w": 8,  "align": "C"},
-        {"text": "المندوب",          "w": 38, "align": "R"},
-        {"text": "الكود",            "w": 20, "align": "C"},
-        {"text": "المنطقة",          "w": 25, "align": "R"},
-        {"text": "الهدف (SAR)",      "w": 28, "align": "R"},
-        {"text": "المبيعات (SAR)",   "w": 32, "align": "R"},
-        {"text": "التحقق%",          "w": 18, "align": "C"},
-        {"text": "المحصّل (SAR)",     "w": 28, "align": "R"},
-        {"text": "المستحق (SAR)",    "w": 28, "align": "R"},
-        {"text": "الفواتير",         "w": 16, "align": "C"},
-        {"text": "المعلقة",          "w": 16, "align": "C"},
-        {"text": "العمولة (SAR)",    "w": 25, "align": "R"},
+    perf_cols = [
+        {"ar": "#",            "w": 7,  "align": "C"},
+        {"ar": "المندوب",      "w": 35, "align": "R"},
+        {"ar": "الكود",        "w": 18, "align": "C"},
+        {"ar": "المنطقة",      "w": 22, "align": "R"},
+        {"ar": "الهدف SAR",    "w": 26, "align": "R"},
+        {"ar": "المبيعات SAR", "w": 28, "align": "R"},
+        {"ar": "التحقق",       "w": 16, "align": "C"},
+        {"ar": "المحصّل SAR",  "w": 26, "align": "R"},
+        {"ar": "المستحق SAR",  "w": 26, "align": "R"},
+        {"ar": "الفواتير",     "w": 14, "align": "C"},
+        {"ar": "المعلقة",      "w": 14, "align": "C"},
+        {"ar": "العمولة SAR",  "w": 25, "align": "R"},
     ]
-    pdf.table_header(cols)
+    pdf.th(perf_cols)
 
     sorted_reps = sorted(reps_data, key=lambda r: float(r.get("total_sales", 0)), reverse=True)
-    medals = ["1.", "2.", "3."]
 
     for idx, rep in enumerate(sorted_reps):
-        sales     = float(rep.get("total_sales", 0))
-        collected = float(rep.get("total_collected", 0))
-        outstanding = float(rep.get("outstanding", 0))
-        target    = float(rep.get("target_monthly", 0))
-        pct       = round(min(100, sales / target * 100)) if target > 0 else 0
-        commission= sales * float(rep.get("commission_pct", 0)) / 100
-        pending   = len([i for i in invoices if i.get("rep_id") == rep.get("id") and i.get("status") == "submitted"])
-        inv_count = rep.get("invoice_count", 0)
+        sales       = float(rep.get("total_sales",     0))
+        collected   = float(rep.get("total_collected", 0))
+        outstanding = float(rep.get("outstanding",     0))
+        target      = float(rep.get("target_monthly",  0))
+        pct         = round(min(100, sales / target * 100)) if target > 0 else 0
+        commission  = sales * float(rep.get("commission_pct", 0)) / 100
+        inv_count   = rep.get("invoice_count", 0)
+        pending     = len([i for i in invoices
+                           if i.get("rep_id") == rep.get("id")
+                           and i.get("status") == "submitted"])
 
-        rank = medals[idx] if idx < 3 else str(idx + 1)
+        rank_str = f"{idx+1}."
+        pct_clr  = pdf.C_GREEN if pct >= 100 else (pdf.C_AMBER if pct >= 70 else pdf.C_RED)
+        out_clr  = pdf.C_RED if outstanding > 0 else pdf.C_GREEN
 
-        pct_color = pdf.ACCENT_COLOR if pct >= 100 else ((217,119,6) if pct >= 70 else pdf.WARN_COLOR)
-        out_color = pdf.WARN_COLOR if outstanding > 0 else pdf.ACCENT_COLOR
-
-        pdf.table_row([
-            {"text": rank,                    "w": 8,  "align": "C"},
-            {"text": rep.get("full_name",""), "w": 38, "align": "R"},
-            {"text": rep.get("rep_code",""),  "w": 20, "align": "C"},
-            {"text": rep.get("zone","—"),     "w": 25, "align": "R"},
-            {"text": _fmt(target) if target > 0 else "—", "w": 28, "align": "R"},
-            {"text": _fmt(sales),             "w": 32, "align": "R", "color": pdf.HEADER_COLOR},
-            {"text": f"{pct}%" if target > 0 else "—", "w": 18, "align": "C", "color": pct_color},
-            {"text": _fmt(collected),         "w": 28, "align": "R", "color": pdf.ACCENT_COLOR},
-            {"text": _fmt(outstanding),       "w": 28, "align": "R", "color": out_color},
-            {"text": str(inv_count),          "w": 16, "align": "C"},
-            {"text": str(pending) if pending > 0 else "—", "w": 16, "align": "C",
-             "color": (217,119,6) if pending > 0 else pdf.TITLE_COLOR},
-            {"text": _fmt(commission) if commission > 0 else "—", "w": 25, "align": "R", "color": (124,58,237)},
+        pdf.tr(perf_cols, [
+            {"text": rank_str,                                   "color": pdf.C_MUTED,  "align": "C"},
+            {"text": rep.get("full_name", ""),                   "align": "R"},
+            {"text": rep.get("rep_code",  ""),                   "align": "C"},
+            {"text": rep.get("zone", "-"),                       "align": "R"},
+            {"text": _fmt(target) if target > 0 else "-",        "align": "R"},
+            {"text": _fmt(sales),                                "color": pdf.C_BLUE,   "align": "R"},
+            {"text": f"{pct}%" if target > 0 else "-",          "color": pct_clr,      "align": "C"},
+            {"text": _fmt(collected),                            "color": pdf.C_GREEN,  "align": "R"},
+            {"text": _fmt(outstanding),                          "color": out_clr,      "align": "R"},
+            {"text": str(inv_count),                             "align": "C"},
+            {"text": str(pending) if pending > 0 else "-",      "color": pdf.C_AMBER if pending > 0 else pdf.C_DARK, "align": "C"},
+            {"text": _fmt(commission) if commission > 0 else "-","color": pdf.C_PURPLE, "align": "R"},
         ], alt=idx % 2 == 1)
 
-    # ── سطر الإجمالي ──────────────────────────────────────────────────────
-    total_inv = sum(r.get("invoice_count", 0) for r in reps_data)
-    total_pend= sum(len([i for i in invoices if i.get("rep_id") == r.get("id") and i.get("status") == "submitted"]) for r in reps_data)
+    # صف الإجمالي
+    total_inv  = sum(r.get("invoice_count", 0) for r in reps_data)
+    total_pend = sum(len([i for i in invoices
+                          if i.get("rep_id") == r.get("id")
+                          and i.get("status") == "submitted"])
+                     for r in reps_data)
 
-    pdf.set_fill_color(30, 41, 59)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font(pdf._font, "B", 8)
-    summary_cells = [
-        {"text": "", "w": 8},
-        {"text": _ar("الإجمالي"), "w": 38, "align": "R"},
-        {"text": "", "w": 20},
-        {"text": "", "w": 25},
-        {"text": "", "w": 28},
-        {"text": _fmt(total_sales),       "w": 32, "align": "R"},
-        {"text": "", "w": 18},
-        {"text": _fmt(total_collected),   "w": 28, "align": "R"},
-        {"text": _fmt(total_outstanding), "w": 28, "align": "R"},
-        {"text": str(total_inv),          "w": 16, "align": "C"},
-        {"text": str(total_pend) if total_pend > 0 else "—", "w": 16, "align": "C"},
-        {"text": _fmt(total_commission),  "w": 25, "align": "R"},
+    pdf.set_fill_color(*pdf.C_DARK)
+    pdf.set_text_color(*pdf.C_WHITE)
+    pdf.set_font(pdf._f, "B", 7.5)
+    totals_row = [
+        {"text": "",                                    "w": 7},
+        {"text": _ar("الإجمالي"),                       "w": 35, "align": "R"},
+        {"text": "",                                    "w": 18},
+        {"text": "",                                    "w": 22},
+        {"text": "",                                    "w": 26},
+        {"text": _fmt(total_sales),                    "w": 28, "align": "R"},
+        {"text": "",                                    "w": 16},
+        {"text": _fmt(total_collected),                "w": 26, "align": "R"},
+        {"text": _fmt(total_outstanding),              "w": 26, "align": "R"},
+        {"text": str(total_inv),                       "w": 14, "align": "C"},
+        {"text": str(total_pend) if total_pend > 0 else "-", "w": 14, "align": "C"},
+        {"text": _fmt(total_commission),               "w": 25, "align": "R"},
     ]
-    for c in summary_cells:
-        pdf.cell(c["w"], 7, c.get("text",""), border=0, fill=True, align=c.get("align","R"))
+    for c in reversed(totals_row):
+        pdf.cell(c["w"], 6, c.get("text", ""), border=0, fill=True, align=c.get("align", "R"))
     pdf.ln()
-    pdf.set_text_color(*pdf.TITLE_COLOR)
+    pdf.set_text_color(*pdf.C_DARK)
 
-    # ─── الصفحة 2: جدول الفواتير التفصيلية ─────────────────────────────
+    # ══ صفحة 2: الفواتير التفصيلية ══════════════════════════════════════════
     STATUS_AR = {
-        "draft": "مسودة", "submitted": "بانتظار", "approved": "موافق",
+        "draft": "مسودة", "submitted": "بانتظار المراجعة", "approved": "موافق عليها",
         "rejected": "مرفوضة", "confirmed": "مؤكدة", "paid": "مدفوعة",
         "partial": "جزئي", "cancelled": "ملغاة",
     }
-    STATUS_COLOR = {
-        "draft": pdf.MUTED_COLOR, "submitted": (217,119,6), "approved": pdf.HEADER_COLOR,
-        "rejected": pdf.WARN_COLOR, "confirmed": pdf.ACCENT_COLOR, "paid": pdf.ACCENT_COLOR,
-        "partial": (217,119,6), "cancelled": pdf.MUTED_COLOR,
+    STATUS_CLR = {
+        "draft": pdf.C_MUTED, "submitted": pdf.C_AMBER, "approved": pdf.C_BLUE,
+        "rejected": pdf.C_RED, "confirmed": pdf.C_GREEN, "paid": pdf.C_GREEN,
+        "partial": pdf.C_AMBER, "cancelled": pdf.C_MUTED,
     }
     PAY_AR = {"cash": "نقد", "credit": "آجل", "cheque": "شيك", "transfer": "تحويل"}
 
-    # بناء map للمناديب
     rep_map = {r["id"]: r for r in reps_data}
-
-    # فلتر الفواتير — فقط فواتير المناديب
     inv_list = [i for i in invoices if i.get("rep_id")]
 
     if inv_list:
         pdf.add_page()
-        pdf.set_font(pdf._font, "B", 10)
-        pdf.set_text_color(*pdf.TITLE_COLOR)
-        pdf.ln(2)
-        pdf.section_title("الفواتير التفصيلية — جميع المناديب")
+        pdf.sec("الفواتير التفصيلية")
 
         # ملخص صغير
-        total_inv_amount = sum(float(i.get("total", 0)) for i in inv_list)
-        total_paid_amount = sum(float(i.get("paid_amount", 0)) for i in inv_list)
-        total_remaining  = total_inv_amount - total_paid_amount
-
-        pdf.set_font(pdf._font, "", 8)
-        pdf.set_text_color(*pdf.MUTED_COLOR)
-        pdf.cell(0, 5, _ar(f"إجمالي الفواتير: {len(inv_list)}  |  المجموع: {_fmt(total_inv_amount)} SAR  |  المحصّل: {_fmt(total_paid_amount)} SAR  |  المتبقي: {_fmt(total_remaining)} SAR"), align="C", ln=True)
-        pdf.ln(2)
+        t_amt  = sum(float(i.get("total",       0)) for i in inv_list)
+        t_paid = sum(float(i.get("paid_amount", 0)) for i in inv_list)
+        t_rem  = t_amt - t_paid
+        pdf.set_font(pdf._f, "", 7.5)
+        pdf.set_text_color(*pdf.C_MUTED)
+        pdf.cell(0, 5,
+                 _ar(f"عدد الفواتير: {len(inv_list)}  |  الإجمالي: {_fmt(t_amt)} SAR  |  المحصّل: {_fmt(t_paid)} SAR  |  المتبقي: {_fmt(t_rem)} SAR"),
+                 align="C", ln=True)
+        pdf.set_text_color(*pdf.C_DARK)
+        pdf.ln(1)
 
         inv_cols = [
-            {"text": "رقم الفاتورة", "w": 28, "align": "C"},
-            {"text": "المندوب",       "w": 35, "align": "R"},
-            {"text": "العميل",        "w": 40, "align": "R"},
-            {"text": "الحالة",        "w": 22, "align": "C"},
-            {"text": "طريقة الدفع",  "w": 20, "align": "C"},
-            {"text": "التاريخ",       "w": 22, "align": "C"},
-            {"text": "الإجمالي",      "w": 28, "align": "R"},
-            {"text": "المدفوع",       "w": 25, "align": "R"},
-            {"text": "المتبقي",       "w": 27, "align": "R"},
+            {"ar": "رقم الفاتورة", "w": 25, "align": "C"},
+            {"ar": "المندوب",      "w": 30, "align": "R"},
+            {"ar": "العميل",       "w": 38, "align": "R"},
+            {"ar": "الحالة",       "w": 25, "align": "C"},
+            {"ar": "طريقة الدفع", "w": 18, "align": "C"},
+            {"ar": "التاريخ",      "w": 20, "align": "C"},
+            {"ar": "الإجمالي",     "w": 26, "align": "R"},
+            {"ar": "المدفوع",      "w": 22, "align": "R"},
+            {"ar": "المتبقي",      "w": 23, "align": "R"},
         ]
 
-        # نجمع الفواتير مجمعة حسب الحالة للترتيب: submitted أولاً
-        status_order = {"submitted": 0, "approved": 1, "confirmed": 2, "partial": 3,
-                        "paid": 4, "rejected": 5, "draft": 6, "cancelled": 7}
+        status_order = {
+            "submitted": 0, "approved": 1, "confirmed": 2,
+            "partial": 3, "paid": 4, "rejected": 5, "draft": 6, "cancelled": 7,
+        }
         sorted_invs = sorted(inv_list, key=lambda i: (
-            status_order.get(i.get("status",""), 9),
-            i.get("issue_date", "") or ""
+            status_order.get(i.get("status", ""), 9),
+            i.get("issue_date") or ""
         ))
 
         current_status = None
@@ -391,89 +366,99 @@ def generate_reps_summary_pdf(
         for inv in sorted_invs:
             status = inv.get("status", "")
 
-            # فاصل الحالة
             if status != current_status:
                 current_status = status
                 pdf.ln(2)
                 st_label = STATUS_AR.get(status, status)
-                st_color = STATUS_COLOR.get(status, pdf.MUTED_COLOR)
-                pdf.set_fill_color(*st_color)
-                pdf.set_text_color(255, 255, 255)
-                pdf.set_font(pdf._font, "B", 8)
-                pdf.cell(0, 6, f"  {_ar(st_label)}  ({len([x for x in sorted_invs if x.get('status') == status])})", fill=True, ln=True)
-                pdf.set_text_color(*pdf.TITLE_COLOR)
-                pdf.table_header(inv_cols)
+                st_color = STATUS_CLR.get(status, pdf.C_MUTED)
+                count_st = len([x for x in sorted_invs if x.get("status") == status])
+                pdf.sec(f"{st_label}  ({count_st})", color=st_color)
+                pdf.th(inv_cols)
                 row_idx = 0
 
-            rep   = rep_map.get(inv.get("rep_id", ""), {})
-            remaining = max(0, float(inv.get("total", 0)) - float(inv.get("paid_amount", 0)))
+            rep       = rep_map.get(inv.get("rep_id", ""), {})
+            remaining = max(0.0, float(inv.get("total", 0)) - float(inv.get("paid_amount", 0)))
+            out_clr   = pdf.C_RED if remaining > 0.01 else pdf.C_GREEN
 
-            pdf.table_row([
-                {"text": inv.get("invoice_number", ""), "w": 28, "align": "C"},
-                {"text": rep.get("full_name", "—"),      "w": 35, "align": "R"},
-                {"text": inv.get("buyer_name_ar", "—"), "w": 40, "align": "R"},
-                {"text": STATUS_AR.get(status, status), "w": 22, "align": "C",
-                 "color": STATUS_COLOR.get(status, pdf.TITLE_COLOR)},
-                {"text": PAY_AR.get(inv.get("invoice_payment_method",""), "—"), "w": 20, "align": "C"},
-                {"text": _date(inv.get("issue_date")),  "w": 22, "align": "C"},
-                {"text": _fmt(inv.get("total", 0)),     "w": 28, "align": "R"},
-                {"text": _fmt(inv.get("paid_amount",0)),"w": 25, "align": "R", "color": pdf.ACCENT_COLOR},
-                {"text": _fmt(remaining),               "w": 27, "align": "R",
-                 "color": pdf.WARN_COLOR if remaining > 0.01 else pdf.ACCENT_COLOR},
+            pdf.tr(inv_cols, [
+                {"text": inv.get("invoice_number", ""), "align": "C"},
+                {"text": rep.get("full_name", "-"),     "align": "R"},
+                {"text": inv.get("buyer_name_ar", "-"), "align": "R"},
+                {"text": STATUS_AR.get(status, status), "color": STATUS_CLR.get(status, pdf.C_DARK), "align": "C"},
+                {"text": PAY_AR.get(inv.get("invoice_payment_method", ""), "-"), "align": "C"},
+                {"text": _date(inv.get("issue_date")),  "align": "C"},
+                {"text": _fmt(inv.get("total",        0)), "align": "R"},
+                {"text": _fmt(inv.get("paid_amount",  0)), "color": pdf.C_GREEN, "align": "R"},
+                {"text": _fmt(remaining),                  "color": out_clr,     "align": "R"},
             ], alt=row_idx % 2 == 1)
             row_idx += 1
 
-    # ─── صفحة تفاصيل لكل مندوب (لو طُلب مندوب واحد) ─────────────────────
+    # ══ صفحة 3+: تفاصيل مندوب واحد (إذا طُلب) ══════════════════════════════
     if filter_rep_id:
+        rep_info     = rep_map.get(filter_rep_id, {})
         rep_invoices = [i for i in invoices if i.get("rep_id") == filter_rep_id]
-        rep_info = rep_map.get(filter_rep_id, {})
 
-        if rep_info and rep_invoices:
+        if rep_info:
             pdf.add_page()
-            pdf.section_title(f"تقرير مفصل — {rep_info.get('full_name','')}")
+            pdf.sec(f"تقرير مفصل  -  {rep_info.get('full_name', '')}")
 
-            # بيانات المندوب
-            pdf.set_font(pdf._font, "", 9)
-            y = pdf.get_y()
-            col_w = (pdf.w - 24) / 2
-            info_rows = [
-                [("الاسم", rep_info.get("full_name","")),       ("الكود", rep_info.get("rep_code",""))],
-                [("المنطقة", rep_info.get("zone","—")),          ("الجوال", rep_info.get("phone","—"))],
-                [("المستودع", rep_info.get("warehouse_name","—")),("السيارة", rep_info.get("vehicle_plate","—"))],
-                [("الهدف الشهري", f"{_fmt(rep_info.get('target_monthly',0))} SAR"),
-                 ("نسبة العمولة", f"{rep_info.get('commission_pct',0)}%")],
+            # بيانات المندوب — جدولان جنباً إلى جنب
+            half = (pdf.w - 20) / 2
+            rows_a = [
+                ("الاسم",        rep_info.get("full_name",       "-")),
+                ("الكود",        rep_info.get("rep_code",        "-")),
+                ("المنطقة",      rep_info.get("zone",            "-")),
+                ("الجوال",       rep_info.get("phone",           "-")),
             ]
-            for row in info_rows:
-                for j, (label, val) in enumerate(row):
-                    pdf.set_x(12 + j * col_w)
-                    pdf.kv_row(label, str(val), w=col_w - 40)
-                pdf.ln(6)
+            rows_b = [
+                ("المستودع",     rep_info.get("warehouse_name",  "-")),
+                ("السيارة",      rep_info.get("vehicle_plate",   "-")),
+                ("الهدف الشهري", f"{_fmt(rep_info.get('target_monthly', 0))} SAR"),
+                ("العمولة",      f"{rep_info.get('commission_pct', 0)}%"),
+            ]
+            pdf.set_font(pdf._f, "", 8)
+            y0 = pdf.get_y()
+            for i, (lbl, val) in enumerate(rows_a):
+                pdf.set_xy(10, y0 + i * 6)
+                pdf.set_text_color(*pdf.C_MUTED)
+                pdf.cell(28, 5, _ar(lbl + ":"), align="R")
+                pdf.set_text_color(*pdf.C_DARK)
+                pdf.set_font(pdf._f, "B", 8)
+                pdf.cell(half - 30, 5, _ar(str(val)), align="R")
+                pdf.set_font(pdf._f, "", 8)
 
-            # إحصائيات الفواتير حسب الحالة
-            pdf.ln(2)
-            pdf.section_title("إحصائيات الفواتير")
+            for i, (lbl, val) in enumerate(rows_b):
+                pdf.set_xy(10 + half, y0 + i * 6)
+                pdf.set_text_color(*pdf.C_MUTED)
+                pdf.cell(28, 5, _ar(lbl + ":"), align="R")
+                pdf.set_text_color(*pdf.C_DARK)
+                pdf.set_font(pdf._f, "B", 8)
+                pdf.cell(half - 30, 5, _ar(str(val)), align="R")
+                pdf.set_font(pdf._f, "", 8)
 
-            status_groups: dict[str, list] = {}
-            for inv in rep_invoices:
-                s = inv.get("status", "other")
-                status_groups.setdefault(s, []).append(inv)
+            pdf.set_y(y0 + len(rows_a) * 6 + 4)
 
-            stat_boxes = []
-            for status, invs in sorted(status_groups.items(), key=lambda x: status_order.get(x[0], 9)):
-                total_s = sum(float(i.get("total", 0)) for i in invs)
-                stat_boxes.append({
-                    "label": f"{STATUS_AR.get(status, status)} ({len(invs)})",
-                    "value": f"{_fmt(total_s)} SAR",
-                    "color": STATUS_COLOR.get(status, pdf.TITLE_COLOR),
-                })
+            # إحصاءات الفواتير حسب الحالة
+            if rep_invoices:
+                pdf.sec("إحصائيات الفواتير")
+                groups: dict[str, list] = {}
+                for inv in rep_invoices:
+                    s = inv.get("status", "other")
+                    groups.setdefault(s, []).append(inv)
 
-            if stat_boxes:
-                # نقسمها على 4 في صف
-                for chunk_start in range(0, len(stat_boxes), 4):
-                    chunk = stat_boxes[chunk_start:chunk_start+4]
-                    pdf.summary_box(chunk)
+                boxes = []
+                for status, invs in sorted(groups.items(), key=lambda x: status_order.get(x[0], 9)):
+                    total_s = sum(float(i.get("total", 0)) for i in invs)
+                    boxes.append({
+                        "label": f"{STATUS_AR.get(status, status)} ({len(invs)})",
+                        "value": f"{_fmt(total_s)} SAR",
+                        "color": STATUS_CLR.get(status, pdf.C_DARK),
+                    })
 
-    # ── تجميع الـ bytes ────────────────────────────────────────────────────
+                for chunk_start in range(0, len(boxes), 5):
+                    pdf.stat_row(boxes[chunk_start:chunk_start + 5])
+
+    # ── output ────────────────────────────────────────────────────────────────
     buf = BytesIO()
     pdf.output(buf)
     return buf.getvalue()
