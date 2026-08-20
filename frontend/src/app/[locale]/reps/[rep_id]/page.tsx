@@ -9,43 +9,49 @@ const fmt  = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractio
 const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US") : "—";
 
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
-  draft:     { ar: "مسودة",        color: "#6B7280", bg: "#F3F4F6" },
+  draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FFFBEB" },
-  approved:  { ar: "موافق عليها",  color: "#2563EB", bg: "#EFF6FF" },
-  rejected:  { ar: "مرفوضة",       color: "#DC2626", bg: "#FEF2F2" },
-  confirmed: { ar: "مؤكدة",        color: "#059669", bg: "#F0FDF4" },
-  paid:      { ar: "مدفوعة",       color: "#059669", bg: "#F0FDF4" },
-  partial:   { ar: "جزئي",         color: "#D97706", bg: "#FFFBEB" },
-  unpaid:    { ar: "غير مدفوعة",   color: "#DC2626", bg: "#FEF2F2" },
-  cancelled: { ar: "ملغاة",        color: "#6B7280", bg: "#F3F4F6" },
+  approved:  { ar: "موافق عليها",      color: "#2563EB", bg: "#EFF6FF" },
+  rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
+  confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
+  paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+  partial:   { ar: "جزئي",             color: "#D97706", bg: "#FFFBEB" },
+  unpaid:    { ar: "غير مدفوعة",       color: "#DC2626", bg: "#FEF2F2" },
+  cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
 };
 
 const PAY_METHOD: Record<string, string> = {
   cash: "نقد", credit: "آجل", cheque: "شيك", transfer: "تحويل",
 };
 
+/* ══════════════════════════════════════════════════════════════════
+   الصفحة الرئيسية: تفاصيل المندوب
+   ══════════════════════════════════════════════════════════════════ */
 export default function RepDetailPage({ params: { locale, rep_id } }: { params: { locale: string; rep_id: string } }) {
   const ar = locale === "ar";
-  const [rep, setRep] = useState<any>(null);
-  const [summary, setSummary] = useState<any>(null);
-  const [stock, setStock] = useState<any[]>([]);
+
+  // ── State ────────────────────────────────────────────────────────
+  const [rep, setRep]           = useState<any>(null);
+  const [summary, setSummary]   = useState<any>(null);
+  const [stock, setStock]       = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
-  const [tab, setTab] = useState<"info" | "stock" | "invoices" | "review" | "transfers" | "tracking">("info");
-
-  // ── تتبع الموقع ─────────────────────────────────────────────────────
-  const mapRef = useRef<HTMLDivElement>(null);
-  const trackingMap = useRef<any>(null);
-  const [trackDate, setTrackDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [trackPoints, setTrackPoints] = useState<any[]>([]);
-  const [trackLoading, setTrackLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab]           = useState<"info"|"invoices"|"review"|"stock"|"transfers"|"tracking">("info");
+  const [loading, setLoading]   = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [rejectModal, setRejectModal] = useState<any>(null);
-  const [rejectNote, setRejectNote] = useState("");
-  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [rejectModal, setRejectModal]     = useState<any>(null);
+  const [rejectNote, setRejectNote]       = useState("");
+  const [msg, setMsg]           = useState<{ type: "ok"|"err"; text: string } | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
+  // ── تتبع الموقع (props للـ TrackingTab) ─────────────────────────
+  const mapRef      = useRef<HTMLDivElement>(null);
+  const trackingMap = useRef<any>(null);
+  const [trackDate,    setTrackDate]    = useState(() => new Date().toISOString().split("T")[0]);
+  const [trackPoints,  setTrackPoints]  = useState<any[]>([]);
+  const [trackLoading, setTrackLoading] = useState(false);
+
+  // ── جلب البيانات ─────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
     try {
@@ -53,15 +59,18 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         getRep(rep_id), getRepSummary(rep_id), getRepStock(rep_id),
         getRepInvoices(rep_id), getRepTransfers(rep_id),
       ]);
-      setRep(repRes.data); setSummary(sumRes.data);
+      setRep(repRes.data);
+      setSummary(sumRes.data);
       setStock(Array.isArray(stockRes.data) ? stockRes.data : []);
       setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
       setTransfers(Array.isArray(trRes.data) ? trRes.data : []);
-    } catch { } finally { setLoading(false); }
+    } catch { }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [rep_id]);
 
+  // ── إجراءات الفواتير ──────────────────────────────────────────────
   const doApprove = async (invId: string) => {
     setActionLoading(invId);
     try {
@@ -78,7 +87,8 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
     try {
       await api.post(`/sales/invoices/${rejectModal.id}/reject`, { rejection_note: rejectNote });
       setMsg({ type: "ok", text: "تم رفض الفاتورة" });
-      setRejectModal(null); setRejectNote("");
+      setRejectModal(null);
+      setRejectNote("");
       load();
     } catch (e: any) { setMsg({ type: "err", text: e.response?.data?.detail || "خطأ" }); }
     finally { setActionLoading(null); }
@@ -94,8 +104,13 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
     finally { setActionLoading(null); }
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>;
-  if (!rep) return <div style={{ padding: 40, textAlign: "center", color: "#DC2626" }}>{ar ? "المندوب غير موجود" : "Rep not found"}</div>;
+  // ── Render guards ─────────────────────────────────────────────────
+  if (loading) {
+    return <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>;
+  }
+  if (!rep) {
+    return <div style={{ padding: 40, textAlign: "center", color: "#DC2626" }}>{ar ? "المندوب غير موجود" : "Rep not found"}</div>;
+  }
 
   const submittedInvoices = invoices.filter(i => i.status === "submitted");
   const pct = rep.target_monthly > 0
@@ -104,16 +119,16 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
 
   const TABS = [
     { key: "info",      label: ar ? "الملف الشخصي" : "Profile" },
-    { key: "invoices",  label: ar ? "الفواتير" : "Invoices", count: invoices.length },
-    { key: "review",    label: ar ? "للمراجعة" : "Review", count: submittedInvoices.length, alert: submittedInvoices.length > 0 },
-    { key: "stock",     label: ar ? "المخزون" : "Stock", count: stock.length },
-    { key: "transfers", label: ar ? "المناقلات" : "Transfers", count: transfers.length },
+    { key: "invoices",  label: ar ? "الفواتير" : "Invoices",     count: invoices.length },
+    { key: "review",    label: ar ? "للمراجعة" : "Review",       count: submittedInvoices.length, alert: submittedInvoices.length > 0 },
+    { key: "stock",     label: ar ? "المخزون" : "Stock",         count: stock.length },
+    { key: "transfers", label: ar ? "المناقلات" : "Transfers",   count: transfers.length },
     { key: "tracking",  label: ar ? "التتبع" : "Tracking" },
   ] as const;
 
   return (
     <>
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="page-header">
         <div>
           <div className="breadcrumb">
@@ -140,7 +155,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       </div>
 
-      {/* رسائل */}
+      {/* ── رسائل ── */}
       {msg && (
         <div style={{ background: msg.type === "ok" ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${msg.type === "ok" ? "#BBF7D0" : "#FECACA"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: msg.type === "ok" ? "#059669" : "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
           <span>{msg.text}</span>
@@ -148,15 +163,15 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* بطاقات الإحصائيات */}
+      {/* ── بطاقات الإحصائيات ── */}
       {summary && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
           {[
             { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(summary.total_sales) + " SAR", color: "#2563EB" },
-            { label: ar ? "عدد الفواتير" : "Invoices", value: summary.invoice_count, color: "#7C3AED" },
-            { label: ar ? "المحصّل" : "Collected", value: fmt(summary.total_collected) + " SAR", color: "#059669" },
-            { label: ar ? "المستحق" : "Outstanding", value: fmt(summary.outstanding) + " SAR", color: Number(summary.outstanding) > 0 ? "#DC2626" : "#059669" },
-            { label: ar ? "المخزون" : "Stock Qty", value: Number(summary.stock_qty || 0).toLocaleString("en-US"), color: "#D97706" },
+            { label: ar ? "عدد الفواتير" : "Invoices",       value: summary.invoice_count,             color: "#7C3AED" },
+            { label: ar ? "المحصّل" : "Collected",            value: fmt(summary.total_collected) + " SAR", color: "#059669" },
+            { label: ar ? "المستحق" : "Outstanding",          value: fmt(summary.outstanding) + " SAR",     color: Number(summary.outstanding) > 0 ? "#DC2626" : "#059669" },
+            { label: ar ? "المخزون" : "Stock Qty",            value: Number(summary.stock_qty || 0).toLocaleString("en-US"), color: "#D97706" },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
               <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -166,33 +181,32 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* شريط التبويبات */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+      {/* ── شريط التبويبات ── */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key as any)}
             style={{ padding: "8px 16px", border: "none", borderBottom: tab === t.key ? "2px solid var(--primary)" : "2px solid transparent", background: "none", cursor: "pointer", fontSize: 13, fontWeight: tab === t.key ? 700 : 400, color: tab === t.key ? "var(--primary)" : "var(--text-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
             {t.label}
-            {"count" in t && t.count! > 0 && (
-              <span style={{ background: "alert" in t && t.alert ? "#FEF3C7" : "var(--secondary)", color: "alert" in t && t.alert ? "#D97706" : "var(--text-secondary)", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 600 }}>
-                {t.count}
+            {"count" in t && (t as any).count > 0 && (
+              <span style={{ background: "alert" in t && (t as any).alert ? "#FEF3C7" : "var(--secondary)", color: "alert" in t && (t as any).alert ? "#D97706" : "var(--text-secondary)", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 600 }}>
+                {(t as any).count}
               </span>
             )}
           </button>
         ))}
       </div>
 
-      {/* تبويب: الملف الشخصي */}
+      {/* ══ تبويب: الملف الشخصي ══ */}
       {tab === "info" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {/* بيانات أساسية */}
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 14 }}>{ar ? "البيانات الأساسية" : "Basic Info"}</div>
             {[
-              { label: ar ? "البريد الإلكتروني" : "Email", value: rep.email },
-              { label: ar ? "الجوال" : "Phone", value: rep.phone || "—" },
-              { label: ar ? "المنطقة / المسار" : "Zone / Route", value: rep.zone || "—" },
-              { label: ar ? "المستودع" : "Warehouse", value: rep.warehouse_name },
-              { label: ar ? "تاريخ الإنشاء" : "Created", value: fmtD(rep.created_at) },
+              { label: ar ? "البريد الإلكتروني" : "Email",        value: rep.email },
+              { label: ar ? "الجوال" : "Phone",                   value: rep.phone || "—" },
+              { label: ar ? "المنطقة / المسار" : "Zone / Route",  value: rep.zone || "—" },
+              { label: ar ? "المستودع" : "Warehouse",             value: rep.warehouse_name || "—" },
+              { label: ar ? "تاريخ الإنشاء" : "Created",          value: fmtD(rep.created_at) },
             ].map(f => (
               <div key={f.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
                 <span style={{ fontWeight: 600 }}>{f.value}</span>
@@ -201,13 +215,12 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
             ))}
           </div>
 
-          {/* بيانات الهوية والسيارة */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div className="card" style={{ padding: 20 }}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 14 }}>{ar ? "الهوية" : "Identity"}</div>
               {[
-                { label: ar ? "رقم الهوية" : "ID Number", value: rep.id_number || "—" },
-                { label: ar ? "انتهاء الهوية" : "ID Expiry", value: fmtD(rep.id_expiry) },
+                { label: ar ? "رقم الهوية" : "ID Number",         value: rep.id_number || "—" },
+                { label: ar ? "انتهاء الهوية" : "ID Expiry",      value: fmtD(rep.id_expiry) },
                 { label: ar ? "انتهاء الرخصة" : "License Expiry", value: fmtD(rep.license_expiry) },
               ].map(f => (
                 <div key={f.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
@@ -219,19 +232,18 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
             <div className="card" style={{ padding: 20 }}>
               <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 14 }}>{ar ? "السيارة" : "Vehicle"}</div>
               {[
-                { label: ar ? "لوحة السيارة" : "Plate", value: rep.vehicle_plate || "—" },
-                { label: ar ? "النوع" : "Type", value: rep.vehicle_type || "—" },
-                { label: ar ? "اللون" : "Color", value: rep.vehicle_color || "—" },
+                { label: ar ? "لوحة السيارة" : "Plate", value: rep.vehicle_plate || "—", mono: true },
+                { label: ar ? "النوع" : "Type",          value: rep.vehicle_type  || "—" },
+                { label: ar ? "اللون" : "Color",         value: rep.vehicle_color || "—" },
               ].map(f => (
                 <div key={f.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)", fontSize: 13 }}>
-                  <span style={{ fontWeight: 600, fontFamily: f.label.includes("لوحة") || f.label === "Plate" ? "monospace" : undefined }}>{f.value}</span>
+                  <span style={{ fontWeight: 600, fontFamily: f.mono ? "monospace" : undefined }}>{f.value}</span>
                   <span style={{ color: "var(--text-secondary)" }}>{f.label}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* الأهداف */}
           <div className="card" style={{ padding: 20, gridColumn: "1 / -1" }}>
             <div style={{ fontWeight: 700, marginBottom: 14, fontSize: 14 }}>{ar ? "الأهداف والعمولة" : "Targets & Commission"}</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
@@ -246,7 +258,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
                 </div>
                 {pct !== null && (
                   <div style={{ marginTop: 6, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB", borderRadius: 3, transition: "width 0.3s" }} />
+                    <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB", borderRadius: 3, transition: "width 0.3s" }} />
                   </div>
                 )}
               </div>
@@ -264,7 +276,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* تبويب: للمراجعة */}
+      {/* ══ تبويب: للمراجعة ══ */}
       {tab === "review" && (
         <div>
           {submittedInvoices.length === 0 ? (
@@ -303,16 +315,12 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
                           {inv.invoice_payment_method === "credit" && inv.credit_days && (
                             <span style={{ fontSize: 11, color: "var(--text-muted)", marginInlineStart: 4 }}>{inv.credit_days} {ar ? "يوم" : "days"}</span>
                           )}
-                          {inv.invoice_payment_method === "cheque" && inv.cheque_number && (
-                            <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace" }}>{inv.cheque_number}</div>
-                          )}
                         </td>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmtD(inv.submitted_at)}</td>
                         <td style={{ textAlign: "end", fontWeight: 700 }}>{fmt(inv.total)} SAR</td>
                         <td>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedInvoice(inv)} title={ar ? "عرض التفاصيل" : "View details"}
-                              style={{ fontSize: 12 }}>👁</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedInvoice(inv)} style={{ fontSize: 12 }}>👁</button>
                             <button className="btn btn-primary btn-sm" disabled={actionLoading === inv.id} onClick={() => doApprove(inv.id)}>
                               {actionLoading === inv.id ? "..." : (ar ? "موافقة" : "Approve")}
                             </button>
@@ -332,7 +340,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* تبويب: الفواتير */}
+      {/* ══ تبويب: الفواتير ══ */}
       {tab === "invoices" && (
         <div className="card">
           <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
@@ -358,16 +366,12 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
                     const remaining = Number(inv.total || 0) - Number(inv.paid_amount || 0);
                     return (
                       <tr key={inv.id} style={{ cursor: "pointer" }} onClick={() => setSelectedInvoice(inv)}>
-                        <td>
-                          <span style={{ fontWeight: 600, color: "var(--primary)", fontFamily: "monospace" }}>{inv.invoice_number}</span>
-                        </td>
+                        <td style={{ fontWeight: 600, color: "var(--primary)", fontFamily: "monospace" }}>{inv.invoice_number}</td>
                         <td>{inv.buyer_name_ar}</td>
                         <td>
                           <span style={{ background: st.bg, color: st.color, padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{st.ar}</span>
                           {inv.status === "rejected" && inv.rejection_note && (
-                            <div style={{ fontSize: 11, color: "#DC2626", marginTop: 2 }} title={inv.rejection_note}>
-                              {inv.rejection_note.substring(0, 40)}{inv.rejection_note.length > 40 ? "..." : ""}
-                            </div>
+                            <div style={{ fontSize: 11, color: "#DC2626", marginTop: 2 }}>{inv.rejection_note.substring(0, 40)}{inv.rejection_note.length > 40 ? "..." : ""}</div>
                           )}
                         </td>
                         <td style={{ fontSize: 12 }}>{PAY_METHOD[inv.invoice_payment_method] || "—"}</td>
@@ -377,8 +381,9 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
                           {remaining > 0.01 ? fmt(remaining) : "0.00"} SAR
                         </td>
                         <td>
-                          <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setSelectedInvoice(inv); }}
-                            style={{ fontSize: 13 }}>👁 {ar ? "عرض" : "View"}</button>
+                          <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setSelectedInvoice(inv); }} style={{ fontSize: 13 }}>
+                            👁 {ar ? "عرض" : "View"}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -390,7 +395,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* تبويب: المخزون */}
+      {/* ══ تبويب: المخزون ══ */}
       {tab === "stock" && (
         <div className="card">
           <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
@@ -401,7 +406,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
                 <thead>
                   <tr>
                     <th>{ar ? "الصنف" : "Item"}</th>
-                    <th>{ar ? "SKU" : "SKU"}</th>
+                    <th>SKU</th>
                     <th>{ar ? "النوع" : "Type"}</th>
                     <th style={{ textAlign: "end" }}>{ar ? "الكمية" : "Qty"}</th>
                     <th style={{ textAlign: "end" }}>{ar ? "المتاح" : "Available"}</th>
@@ -432,7 +437,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* تبويب: المناقلات */}
+      {/* ══ تبويب: المناقلات ══ */}
       {tab === "transfers" && (
         <div className="card">
           <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
@@ -472,7 +477,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* تبويب: التتبع */}
+      {/* ══ تبويب: التتبع ══ */}
       {tab === "tracking" && (
         <TrackingTab
           locale={locale}
@@ -488,7 +493,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         />
       )}
 
-      {/* Modal الرفض */}
+      {/* ══ Modal: رفض الفاتورة ══ */}
       {rejectModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "white", borderRadius: 14, width: "100%", maxWidth: 460, padding: 24 }}>
@@ -503,8 +508,8 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
               <button className="btn btn-secondary" onClick={() => setRejectModal(null)}>{ar ? "إلغاء" : "Cancel"}</button>
-              <button className="btn btn-danger" onClick={doReject} disabled={!rejectNote.trim() || actionLoading === rejectModal.id}
-                style={{ background: "#DC2626", color: "white" }}>
+              <button onClick={doReject} disabled={!rejectNote.trim() || actionLoading === rejectModal.id}
+                style={{ padding: "8px 16px", borderRadius: 8, background: "#DC2626", color: "white", border: "none", cursor: "pointer", fontWeight: 600 }}>
                 {actionLoading === rejectModal.id ? "..." : (ar ? "تأكيد الرفض" : "Confirm Reject")}
               </button>
             </div>
@@ -512,47 +517,74 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
         </div>
       )}
 
-      {/* ══ Modal تفاصيل الفاتورة ══ */}
+      {/* ══ Modal: تفاصيل الفاتورة ══ */}
       {selectedInvoice && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
           onClick={() => setSelectedInvoice(null)}>
           <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "92vh", overflowY: "auto" }}
             onClick={e => e.stopPropagation()}>
+
+            {/* رأس الـ modal */}
             <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontWeight: 800, fontSize: 17, fontFamily: "monospace" }}>{selectedInvoice.invoice_number}</span>
-                {(() => { const st = STATUS[selectedInvoice.status] || STATUS.draft; return <span style={{ background: st.bg, color: st.color, padding: "3px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{st.ar}</span>; })()}
+                {(() => {
+                  const st = STATUS[selectedInvoice.status] || STATUS.draft;
+                  return <span style={{ background: st.bg, color: st.color, padding: "3px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{st.ar}</span>;
+                })()}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <Link href={`/${locale}/sales/invoices/${selectedInvoice.id}`} target="_blank" className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>🔗 {ar ? "صفحة كاملة" : "Full page"}</Link>
+                <Link href={`/${locale}/sales/invoices/${selectedInvoice.id}`} target="_blank" className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>
+                  🔗 {ar ? "صفحة كاملة" : "Full page"}
+                </Link>
                 <button className="btn btn-ghost btn-icon" onClick={() => setSelectedInvoice(null)}>✕</button>
               </div>
             </div>
+
             <div style={{ padding: "20px 24px" }}>
+              {/* معلومات */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20, background: "#F8FAFC", borderRadius: 10, padding: 14 }}>
-                <div><div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "العميل" : "Customer"}</div><div style={{ fontWeight: 700 }}>{selectedInvoice.buyer_name_ar || "—"}</div></div>
-                <div><div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "التاريخ" : "Date"}</div><div style={{ fontWeight: 600 }}>{fmtD(selectedInvoice.issue_date)}</div></div>
-                <div><div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "الدفع" : "Payment"}</div><div style={{ fontWeight: 600 }}>{PAY_METHOD[selectedInvoice.invoice_payment_method] || "—"}{selectedInvoice.credit_days ? ` (${selectedInvoice.credit_days}d)` : ""}</div></div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "العميل" : "Customer"}</div>
+                  <div style={{ fontWeight: 700 }}>{selectedInvoice.buyer_name_ar || "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "التاريخ" : "Date"}</div>
+                  <div style={{ fontWeight: 600 }}>{fmtD(selectedInvoice.issue_date)}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "طريقة الدفع" : "Payment"}</div>
+                  <div style={{ fontWeight: 600 }}>{PAY_METHOD[selectedInvoice.invoice_payment_method] || "—"}{selectedInvoice.credit_days ? ` (${selectedInvoice.credit_days}d)` : ""}</div>
+                </div>
                 {selectedInvoice.status === "rejected" && selectedInvoice.rejection_note && (
                   <div style={{ gridColumn: "1/-1", background: "#FEF2F2", borderRadius: 8, padding: "8px 12px" }}>
                     <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700 }}>{ar ? "سبب الرفض:" : "Rejection:"}</div>
                     <div style={{ fontSize: 13, color: "#DC2626" }}>{selectedInvoice.rejection_note}</div>
                   </div>
                 )}
-                {selectedInvoice.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? "ملاحظات" : "Notes"}</div><div style={{ fontSize: 13 }}>{selectedInvoice.notes}</div></div>}
+                {selectedInvoice.notes && (
+                  <div style={{ gridColumn: "1/-1" }}>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? "ملاحظات" : "Notes"}</div>
+                    <div style={{ fontSize: 13 }}>{selectedInvoice.notes}</div>
+                  </div>
+                )}
               </div>
+
+              {/* أسطر الفاتورة */}
               {(selectedInvoice.lines || []).length > 0 && (
                 <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr style={{ background: "#F8FAFC" }}>
-                      {["#", ar?"الوصف":"Desc", ar?"الكمية":"Qty", ar?"السعر":"Price", ar?"الضريبة":"VAT", ar?"الإجمالي":"Total"].map((h,i) => (
-                        <th key={i} style={{ padding: "8px 12px", textAlign: i > 1 ? "end" : "start", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{h}</th>
-                      ))}
-                    </tr></thead>
+                    <thead>
+                      <tr style={{ background: "#F8FAFC" }}>
+                        {["#", ar?"الوصف":"Desc", ar?"الكمية":"Qty", ar?"السعر":"Price", ar?"الضريبة":"VAT", ar?"الإجمالي":"Total"].map((h, i) => (
+                          <th key={i} style={{ padding: "8px 12px", textAlign: i > 1 ? "end" : "start", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
                     <tbody>
                       {(selectedInvoice.lines || []).map((line: any, i: number) => (
                         <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                          <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-muted)" }}>{i+1}</td>
+                          <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-muted)" }}>{i + 1}</td>
                           <td style={{ padding: "8px 12px" }}>{line.description_ar}</td>
                           <td style={{ padding: "8px 12px", textAlign: "end" }}>{fmt(line.quantity)}</td>
                           <td style={{ padding: "8px 12px", textAlign: "end" }}>{fmt(line.unit_price)} SAR</td>
@@ -564,21 +596,43 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
                   </table>
                 </div>
               )}
+
+              {/* الإجماليات */}
               <div style={{ display: "flex", justifyContent: "flex-end" }}>
                 <div style={{ minWidth: 260, display: "flex", flexDirection: "column", gap: 6, background: "#F8FAFC", borderRadius: 10, padding: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--text-secondary)" }}>{ar ? "قبل الضريبة" : "Subtotal"}</span><span>{fmt(selectedInvoice.subtotal)} SAR</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#D97706" }}><span>{ar ? "الضريبة" : "VAT"}</span><span>{fmt(selectedInvoice.vat_amount)} SAR</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={{ color: "var(--text-secondary)" }}>{ar ? "قبل الضريبة" : "Subtotal"}</span>
+                    <span>{fmt(selectedInvoice.subtotal)} SAR</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#D97706" }}>
+                    <span>{ar ? "الضريبة" : "VAT"}</span>
+                    <span>{fmt(selectedInvoice.vat_amount)} SAR</span>
+                  </div>
                   <div style={{ height: 1, background: "var(--border)" }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 17, fontWeight: 800 }}><span>{ar ? "الإجمالي" : "Total"}</span><span style={{ color: "var(--primary)" }}>{fmt(selectedInvoice.total)} SAR</span></div>
-                  {Number(selectedInvoice.paid_amount) > 0 && <>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#059669" }}><span>{ar ? "المدفوع" : "Paid"}</span><span>{fmt(selectedInvoice.paid_amount)} SAR</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#059669" }}><span>{ar ? "المتبقي" : "Remaining"}</span><span>{fmt(Math.max(0, Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)))} SAR</span></div>
-                  </>}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 17, fontWeight: 800 }}>
+                    <span>{ar ? "الإجمالي" : "Total"}</span>
+                    <span style={{ color: "var(--primary)" }}>{fmt(selectedInvoice.total)} SAR</span>
+                  </div>
+                  {Number(selectedInvoice.paid_amount) > 0 && (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#059669" }}>
+                        <span>{ar ? "المدفوع" : "Paid"}</span>
+                        <span>{fmt(selectedInvoice.paid_amount)} SAR</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#059669" }}>
+                        <span>{ar ? "المتبقي" : "Remaining"}</span>
+                        <span>{fmt(Math.max(0, Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)))} SAR</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
+
+              {/* أزرار الموافقة/الرفض */}
               {selectedInvoice.status === "submitted" && (
                 <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center" }}>
-                  <button className="btn btn-primary" disabled={actionLoading === selectedInvoice.id} onClick={() => { doApprove(selectedInvoice.id); setSelectedInvoice(null); }}>
+                  <button className="btn btn-primary" disabled={actionLoading === selectedInvoice.id}
+                    onClick={() => { doApprove(selectedInvoice.id); setSelectedInvoice(null); }}>
                     {actionLoading === selectedInvoice.id ? "..." : (ar ? "✅ موافقة" : "✅ Approve")}
                   </button>
                   <button className="btn btn-secondary" style={{ color: "#DC2626" }} disabled={actionLoading === selectedInvoice.id}
@@ -593,17 +647,24 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
       )}
     </>
   );
-}                                                   */
-/* ================================================================== */
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   مكوّن تبويب التتبع (منفصل لتجنب إعادة تهيئة الخريطة)
+   ══════════════════════════════════════════════════════════════════ */
 function TrackingTab({
   locale, repId, trackDate, setTrackDate,
   trackPoints, setTrackPoints, trackLoading, setTrackLoading,
   mapRef, trackingMap,
 }: {
-  locale: string; repId: string;
-  trackDate: string; setTrackDate: (d: string) => void;
-  trackPoints: any[]; setTrackPoints: (p: any[]) => void;
-  trackLoading: boolean; setTrackLoading: (b: boolean) => void;
+  locale: string;
+  repId: string;
+  trackDate: string;
+  setTrackDate: (d: string) => void;
+  trackPoints: any[];
+  setTrackPoints: (p: any[]) => void;
+  trackLoading: boolean;
+  setTrackLoading: (b: boolean) => void;
   mapRef: React.RefObject<HTMLDivElement>;
   trackingMap: React.MutableRefObject<any>;
 }) {
@@ -614,7 +675,8 @@ function TrackingTab({
     const id = "leaflet-css";
     if (!document.getElementById(id)) {
       const link = document.createElement("link");
-      link.id = id; link.rel = "stylesheet";
+      link.id = id;
+      link.rel = "stylesheet";
       link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
       document.head.appendChild(link);
     }
@@ -637,7 +699,10 @@ function TrackingTab({
       }).addTo(map);
       trackingMap.current = { map, L };
     });
-    return () => { trackingMap.current?.map?.remove(); trackingMap.current = null; };
+    return () => {
+      trackingMap.current?.map?.remove();
+      trackingMap.current = null;
+    };
   }, []);
 
   /* رسم المسار */
@@ -645,40 +710,29 @@ function TrackingTab({
     if (!trackingMap.current || trackPoints.length === 0) return;
     const { map, L } = trackingMap.current;
 
-    // إزالة الطبقات السابقة
-    map.eachLayer((l: any) => {
-      if (l._isTrackLayer) map.removeLayer(l);
-    });
+    map.eachLayer((l: any) => { if (l._isTrackLayer) map.removeLayer(l); });
 
     const coords: [number, number][] = trackPoints.map(p => [p.latitude, p.longitude]);
-
-    // خط المسار
     const polyline = L.polyline(coords, { color: "#2563EB", weight: 3, opacity: 0.8 });
     polyline._isTrackLayer = true;
     polyline.addTo(map);
 
-    // نقطة البداية
     if (coords.length > 0) {
       const start = L.circleMarker(coords[0], { radius: 8, color: "#059669", fillColor: "#059669", fillOpacity: 1, weight: 2 });
       start._isTrackLayer = true;
       start.bindTooltip(ar ? "نقطة البداية" : "Start", { permanent: false }).addTo(map);
     }
 
-    // نقطة النهاية
     if (coords.length > 1) {
       const end = L.circleMarker(coords[coords.length - 1], { radius: 8, color: "#DC2626", fillColor: "#DC2626", fillOpacity: 1, weight: 2 });
       end._isTrackLayer = true;
       end.bindTooltip(ar ? "آخر موقع" : "Last", { permanent: false }).addTo(map);
     }
 
-    // نقاط متوسطة (كل 5 نقاط)
     trackPoints.forEach((p, i) => {
-      if (i === 0 || i === trackPoints.length - 1) return;
-      if (i % 5 !== 0) return;
+      if (i === 0 || i === trackPoints.length - 1 || i % 5 !== 0) return;
       const time = new Date(p.recorded_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-      const dot = L.circleMarker([p.latitude, p.longitude], {
-        radius: 5, color: "#7C3AED", fillColor: "#7C3AED", fillOpacity: 0.7, weight: 1,
-      });
+      const dot = L.circleMarker([p.latitude, p.longitude], { radius: 5, color: "#7C3AED", fillColor: "#7C3AED", fillOpacity: 0.7, weight: 1 });
       dot._isTrackLayer = true;
       dot.bindTooltip(time, { permanent: false }).addTo(map);
     });
@@ -702,27 +756,16 @@ function TrackingTab({
     <div>
       {/* شريط التحكم */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
-        <input
-          type="date"
-          className="form-input"
-          style={{ width: 160 }}
-          value={trackDate}
-          onChange={e => {
-            setTrackDate(e.target.value);
-            fetchTrack(e.target.value);
-          }}
-        />
-        <button className="btn btn-secondary" onClick={() => fetchTrack(trackDate)}
-          style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <input type="date" className="form-input" style={{ width: 160 }} value={trackDate}
+          onChange={e => { setTrackDate(e.target.value); fetchTrack(e.target.value); }} />
+        <button className="btn btn-secondary" onClick={() => fetchTrack(trackDate)} style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
           {ar ? "تحديث" : "Refresh"}
         </button>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {trackLoading
-            ? (ar ? "جاري التحميل..." : "Loading...")
-            : `${trackPoints.length} ${ar ? "نقطة" : "points"}`}
+          {trackLoading ? (ar ? "جاري التحميل..." : "Loading...") : `${trackPoints.length} ${ar ? "نقطة" : "points"}`}
         </span>
       </div>
 
@@ -730,16 +773,11 @@ function TrackingTab({
       <div style={{ height: 480, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative" }}>
         <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
         {trackPoints.length === 0 && !trackLoading && (
-          <div style={{
-            position: "absolute", inset: 0, display: "flex", alignItems: "center",
-            justifyContent: "center", background: "rgba(255,255,255,0.85)", flexDirection: "column", gap: 8,
-          }}>
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.85)", flexDirection: "column", gap: 8 }}>
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
             </svg>
-            <div style={{ fontSize: 14, color: "var(--text-muted)" }}>
-              {ar ? "لا توجد بيانات لهذا اليوم" : "No data for this day"}
-            </div>
+            <div style={{ fontSize: 14, color: "var(--text-muted)" }}>{ar ? "لا توجد بيانات لهذا اليوم" : "No data for this day"}</div>
           </div>
         )}
       </div>
@@ -764,20 +802,14 @@ function TrackingTab({
               <tbody>
                 {trackPoints.map((p, i) => (
                   <tr key={i}>
-                    <td style={{ fontSize: 12, fontFamily: "monospace" }}>
-                      {new Date(p.recorded_at).toLocaleTimeString("en-US")}
-                    </td>
+                    <td style={{ fontSize: 12, fontFamily: "monospace" }}>{new Date(p.recorded_at).toLocaleTimeString("en-US")}</td>
                     <td style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-secondary)" }}>
                       {Number(p.latitude).toFixed(5)}, {Number(p.longitude).toFixed(5)}
                     </td>
                     <td style={{ fontSize: 12 }}>{p.speed != null ? `${p.speed} km/h` : "—"}</td>
                     <td style={{ fontSize: 12 }}>{p.battery_level != null ? `${p.battery_level}%` : "—"}</td>
                     <td>
-                      <span style={{
-                        fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20,
-                        background: p.is_moving ? "#D1FAE5" : "#F3F4F6",
-                        color: p.is_moving ? "#059669" : "#6B7280",
-                      }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: p.is_moving ? "#D1FAE5" : "#F3F4F6", color: p.is_moving ? "#059669" : "#6B7280" }}>
                         {p.is_moving ? (ar ? "متحرك" : "Moving") : (ar ? "ثابت" : "Still")}
                       </span>
                     </td>
@@ -788,6 +820,6 @@ function TrackingTab({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
