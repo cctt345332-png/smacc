@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { getMapboxTileUrl } from "@/lib/mapConfig";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -511,12 +511,89 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
           </div>
         </div>
       )}
+
+      {/* ══ Modal تفاصيل الفاتورة ══ */}
+      {selectedInvoice && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+          onClick={() => setSelectedInvoice(null)}>
+          <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "92vh", overflowY: "auto" }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontWeight: 800, fontSize: 17, fontFamily: "monospace" }}>{selectedInvoice.invoice_number}</span>
+                {(() => { const st = STATUS[selectedInvoice.status] || STATUS.draft; return <span style={{ background: st.bg, color: st.color, padding: "3px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{st.ar}</span>; })()}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Link href={`/${locale}/sales/invoices/${selectedInvoice.id}`} target="_blank" className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>🔗 {ar ? "صفحة كاملة" : "Full page"}</Link>
+                <button className="btn btn-ghost btn-icon" onClick={() => setSelectedInvoice(null)}>✕</button>
+              </div>
+            </div>
+            <div style={{ padding: "20px 24px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20, background: "#F8FAFC", borderRadius: 10, padding: 14 }}>
+                <div><div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "العميل" : "Customer"}</div><div style={{ fontWeight: 700 }}>{selectedInvoice.buyer_name_ar || "—"}</div></div>
+                <div><div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "التاريخ" : "Date"}</div><div style={{ fontWeight: 600 }}>{fmtD(selectedInvoice.issue_date)}</div></div>
+                <div><div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "الدفع" : "Payment"}</div><div style={{ fontWeight: 600 }}>{PAY_METHOD[selectedInvoice.invoice_payment_method] || "—"}{selectedInvoice.credit_days ? ` (${selectedInvoice.credit_days}d)` : ""}</div></div>
+                {selectedInvoice.status === "rejected" && selectedInvoice.rejection_note && (
+                  <div style={{ gridColumn: "1/-1", background: "#FEF2F2", borderRadius: 8, padding: "8px 12px" }}>
+                    <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700 }}>{ar ? "سبب الرفض:" : "Rejection:"}</div>
+                    <div style={{ fontSize: 13, color: "#DC2626" }}>{selectedInvoice.rejection_note}</div>
+                  </div>
+                )}
+                {selectedInvoice.notes && <div style={{ gridColumn: "1/-1" }}><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? "ملاحظات" : "Notes"}</div><div style={{ fontSize: 13 }}>{selectedInvoice.notes}</div></div>}
+              </div>
+              {(selectedInvoice.lines || []).length > 0 && (
+                <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead><tr style={{ background: "#F8FAFC" }}>
+                      {["#", ar?"الوصف":"Desc", ar?"الكمية":"Qty", ar?"السعر":"Price", ar?"الضريبة":"VAT", ar?"الإجمالي":"Total"].map((h,i) => (
+                        <th key={i} style={{ padding: "8px 12px", textAlign: i > 1 ? "end" : "start", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {(selectedInvoice.lines || []).map((line: any, i: number) => (
+                        <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                          <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-muted)" }}>{i+1}</td>
+                          <td style={{ padding: "8px 12px" }}>{line.description_ar}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "end" }}>{fmt(line.quantity)}</td>
+                          <td style={{ padding: "8px 12px", textAlign: "end" }}>{fmt(line.unit_price)} SAR</td>
+                          <td style={{ padding: "8px 12px", textAlign: "end", color: "#D97706" }}>{fmt(line.vat_amount)} SAR</td>
+                          <td style={{ padding: "8px 12px", textAlign: "end", fontWeight: 700 }}>{fmt(line.total)} SAR</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={{ minWidth: 260, display: "flex", flexDirection: "column", gap: 6, background: "#F8FAFC", borderRadius: 10, padding: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}><span style={{ color: "var(--text-secondary)" }}>{ar ? "قبل الضريبة" : "Subtotal"}</span><span>{fmt(selectedInvoice.subtotal)} SAR</span></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#D97706" }}><span>{ar ? "الضريبة" : "VAT"}</span><span>{fmt(selectedInvoice.vat_amount)} SAR</span></div>
+                  <div style={{ height: 1, background: "var(--border)" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 17, fontWeight: 800 }}><span>{ar ? "الإجمالي" : "Total"}</span><span style={{ color: "var(--primary)" }}>{fmt(selectedInvoice.total)} SAR</span></div>
+                  {Number(selectedInvoice.paid_amount) > 0 && <>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#059669" }}><span>{ar ? "المدفوع" : "Paid"}</span><span>{fmt(selectedInvoice.paid_amount)} SAR</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#059669" }}><span>{ar ? "المتبقي" : "Remaining"}</span><span>{fmt(Math.max(0, Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)))} SAR</span></div>
+                  </>}
+                </div>
+              </div>
+              {selectedInvoice.status === "submitted" && (
+                <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center" }}>
+                  <button className="btn btn-primary" disabled={actionLoading === selectedInvoice.id} onClick={() => { doApprove(selectedInvoice.id); setSelectedInvoice(null); }}>
+                    {actionLoading === selectedInvoice.id ? "..." : (ar ? "✅ موافقة" : "✅ Approve")}
+                  </button>
+                  <button className="btn btn-secondary" style={{ color: "#DC2626" }} disabled={actionLoading === selectedInvoice.id}
+                    onClick={() => { setRejectModal(selectedInvoice); setRejectNote(""); setSelectedInvoice(null); }}>
+                    {ar ? "❌ رفض" : "❌ Reject"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
-}
-
-/* ================================================================== */
-/* مكوّن تبويب التتبع                                                   */
+}                                                   */
 /* ================================================================== */
 function TrackingTab({
   locale, repId, trackDate, setTrackDate,
@@ -711,166 +788,6 @@ function TrackingTab({
           </div>
         </div>
       )}
-
-      {/* ══ Modal تفاصيل الفاتورة ══ */}
-      {selectedInvoice && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-          onClick={() => setSelectedInvoice(null)}>
-          <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 780, maxHeight: "92vh", overflowY: "auto" }}
-            onClick={e => e.stopPropagation()}>
-
-            {/* Header */}
-            <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "white", zIndex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontWeight: 800, fontSize: 17, fontFamily: "monospace" }}>{selectedInvoice.invoice_number}</span>
-                {(() => {
-                  const st = STATUS[selectedInvoice.status] || STATUS.draft;
-                  return <span style={{ background: st.bg, color: st.color, padding: "3px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>{st.ar}</span>;
-                })()}
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <Link href={`/${locale}/sales/invoices/${selectedInvoice.id}`} target="_blank"
-                  className="btn btn-secondary btn-sm" style={{ fontSize: 12 }}>
-                  🔗 {ar ? "فتح في صفحة كاملة" : "Open full page"}
-                </Link>
-                <button className="btn btn-ghost btn-icon" onClick={() => setSelectedInvoice(null)}>✕</button>
-              </div>
-            </div>
-
-            <div style={{ padding: "20px 24px" }}>
-
-              {/* معلومات الفاتورة */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20, background: "#F8FAFC", borderRadius: 10, padding: 14 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "العميل" : "Customer"}</div>
-                  <div style={{ fontWeight: 700 }}>{selectedInvoice.buyer_name_ar || "—"}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "تاريخ الإصدار" : "Issue Date"}</div>
-                  <div style={{ fontWeight: 600 }}>{fmtD(selectedInvoice.issue_date)}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "طريقة الدفع" : "Payment"}</div>
-                  <div style={{ fontWeight: 600 }}>{PAY_METHOD[selectedInvoice.invoice_payment_method] || "—"}
-                    {selectedInvoice.credit_days ? <span style={{ fontSize: 11, color: "var(--text-muted)", marginInlineStart: 6 }}>{selectedInvoice.credit_days} {ar ? "يوم" : "d"}</span> : ""}
-                  </div>
-                </div>
-                {selectedInvoice.due_date && (
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "تاريخ الاستحقاق" : "Due Date"}</div>
-                    <div style={{ fontWeight: 600, color: "#D97706" }}>{fmtD(selectedInvoice.due_date)}</div>
-                  </div>
-                )}
-                {selectedInvoice.notes && (
-                  <div style={{ gridColumn: "1/-1" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3 }}>{ar ? "ملاحظات" : "Notes"}</div>
-                    <div style={{ fontSize: 13 }}>{selectedInvoice.notes}</div>
-                  </div>
-                )}
-                {selectedInvoice.status === "rejected" && selectedInvoice.rejection_note && (
-                  <div style={{ gridColumn: "1/-1", background: "#FEF2F2", borderRadius: 8, padding: "8px 12px" }}>
-                    <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 700, marginBottom: 3 }}>{ar ? "سبب الرفض" : "Rejection Reason"}</div>
-                    <div style={{ fontSize: 13, color: "#DC2626" }}>{selectedInvoice.rejection_note}</div>
-                  </div>
-                )}
-              </div>
-
-              {/* أسطر الفاتورة */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>{ar ? "أسطر الفاتورة" : "Invoice Lines"}</div>
-                {(selectedInvoice.lines || []).length === 0 ? (
-                  <div style={{ textAlign: "center", color: "var(--text-muted)", padding: 20, fontSize: 13 }}>
-                    {ar ? "لا توجد أسطر" : "No lines"}
-                  </div>
-                ) : (
-                  <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "#F8FAFC" }}>
-                          <th style={{ padding: "10px 12px", textAlign: "start", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>#</th>
-                          <th style={{ padding: "10px 12px", textAlign: "start", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الوصف" : "Description"}</th>
-                          <th style={{ padding: "10px 12px", textAlign: "end", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الكمية" : "Qty"}</th>
-                          <th style={{ padding: "10px 12px", textAlign: "end", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "سعر الوحدة" : "Unit Price"}</th>
-                          <th style={{ padding: "10px 12px", textAlign: "end", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الضريبة" : "VAT"}</th>
-                          <th style={{ padding: "10px 12px", textAlign: "end", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>{ar ? "الإجمالي" : "Total"}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(selectedInvoice.lines || []).map((line: any, i: number) => (
-                          <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-muted)" }}>{i + 1}</td>
-                            <td style={{ padding: "10px 12px", fontWeight: 500 }}>
-                              {line.description_ar}
-                              {line.description_en && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{line.description_en}</div>}
-                            </td>
-                            <td style={{ padding: "10px 12px", textAlign: "end" }}>{fmt(line.quantity)}</td>
-                            <td style={{ padding: "10px 12px", textAlign: "end" }}>{fmt(line.unit_price)} SAR</td>
-                            <td style={{ padding: "10px 12px", textAlign: "end", color: "#D97706" }}>{fmt(line.vat_amount)} SAR</td>
-                            <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 700 }}>{fmt(line.total)} SAR</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* الإجماليات */}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <div style={{ minWidth: 280, display: "flex", flexDirection: "column", gap: 8, background: "#F8FAFC", borderRadius: 10, padding: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                    <span style={{ color: "var(--text-secondary)" }}>{ar ? "قبل الضريبة" : "Subtotal"}</span>
-                    <span>{fmt(selectedInvoice.subtotal)} SAR</span>
-                  </div>
-                  {Number(selectedInvoice.discount_amount) > 0 && (
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                      <span style={{ color: "#DC2626" }}>{ar ? "الخصم" : "Discount"}</span>
-                      <span style={{ color: "#DC2626" }}>- {fmt(selectedInvoice.discount_amount)} SAR</span>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#D97706" }}>
-                    <span>{ar ? "ضريبة القيمة المضافة" : "VAT"}</span>
-                    <span>{fmt(selectedInvoice.vat_amount)} SAR</span>
-                  </div>
-                  <div style={{ height: 1, background: "var(--border)" }} />
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 17, fontWeight: 800 }}>
-                    <span>{ar ? "الإجمالي" : "Total"}</span>
-                    <span style={{ color: "var(--primary)" }}>{fmt(selectedInvoice.total)} SAR</span>
-                  </div>
-                  {Number(selectedInvoice.paid_amount) > 0 && (
-                    <>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#059669" }}>
-                        <span>{ar ? "المدفوع" : "Paid"}</span>
-                        <span>{fmt(selectedInvoice.paid_amount)} SAR</span>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700,
-                        color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#059669" }}>
-                        <span>{ar ? "المتبقي" : "Remaining"}</span>
-                        <span>{fmt(Math.max(0, Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)))} SAR</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* أزرار الإجراء للفواتير المعلقة */}
-              {selectedInvoice.status === "submitted" && (
-                <div style={{ marginTop: 20, display: "flex", gap: 10, justifyContent: "center" }}>
-                  <button className="btn btn-primary" disabled={actionLoading === selectedInvoice.id}
-                    onClick={() => { doApprove(selectedInvoice.id); setSelectedInvoice(null); }}>
-                    {actionLoading === selectedInvoice.id ? "..." : (ar ? "✅ موافقة على الفاتورة" : "✅ Approve Invoice")}
-                  </button>
-                  <button className="btn btn-secondary" style={{ color: "#DC2626", borderColor: "#DC2626" }}
-                    disabled={actionLoading === selectedInvoice.id}
-                    onClick={() => { setRejectModal(selectedInvoice); setRejectNote(""); setSelectedInvoice(null); }}>
-                    {ar ? "❌ رفض" : "❌ Reject"}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
