@@ -22,13 +22,22 @@ def _ar(text: str | None) -> str:
     """تحويل النص العربي لعرضه صحيحاً في PDF"""
     if not text:
         return ""
+    text = str(text)
+    if not _USE_ARABIC_FONT:
+        # بدون خط Unicode نعيد النص كما هو لكن نستبدل الحروف غير Latin
+        # نحاول encode آمن — إذا فشل نعيد نص بديل
+        try:
+            return text.encode("latin-1").decode("latin-1")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # نحذف الأحرف غير Latin أو نستبدلها بـ ?
+            return text.encode("latin-1", errors="replace").decode("latin-1")
     if not _HAS_ARABIC:
         return text
     try:
-        reshaped = arabic_reshaper.reshape(str(text))
+        reshaped = arabic_reshaper.reshape(text)
         return get_display(reshaped)
     except Exception:
-        return str(text)
+        return text
 
 
 def _fmt(n) -> str:

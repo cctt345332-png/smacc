@@ -55,3 +55,6 @@ project/
 
 # Generated images
 Gemini_Generated_Image_*.png
+
+# Allow font files
+!backend/app/modules/reps/fonts/*.ttf
