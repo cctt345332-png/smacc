@@ -91,12 +91,12 @@ async def items_for_picker(
         stocks = stock_r.scalars().all()
         item_ids_qty = {s.item_id: s.quantity for s in stocks}
 
-        # جلب الأصناف من serial_items (سيريال) مع متوسط سعر البيع
+        # جلب الأصناف من serial_items. السعر يأتي من بطاقة الصنف الموحدة،
+        # لا من متوسط السيريالات حتى يبقى ثابتاً لكل جهاز من الصنف نفسه.
         serial_count_r = await db.execute(
             _select(
                 SerialItem.product_id,
                 _func.count(SerialItem.id).label("cnt"),
-                _func.avg(SerialItem.sale_price).label("avg_sale"),
             )
             .join(InventoryItem, SerialItem.product_id == InventoryItem.id)
             .where(
@@ -107,10 +107,8 @@ async def items_for_picker(
             .group_by(SerialItem.product_id)
         )
         item_ids_serial = {}
-        serial_avg_price = {}
         for row in serial_count_r.mappings().all():
             item_ids_serial[row["product_id"]] = row["cnt"]
-            serial_avg_price[row["product_id"]] = float(row["avg_sale"]) if row["avg_sale"] else 0
 
         # دمج الاثنين
         all_item_ids = list(set(list(item_ids_qty.keys()) + list(item_ids_serial.keys())))
@@ -138,12 +136,8 @@ async def items_for_picker(
                 "barcode": item.barcode,
                 "tracking_type": item.tracking_type,
                 "unit_type": item.unit_type,
-                # السيريال: سعره من avg serial_items، وإلا item.sale_price كـ fallback
-                "sale_price": (
-                    serial_avg_price.get(item.id) or float(item.sale_price)
-                    if item.tracking_type == "serial"
-                    else float(item.sale_price)
-                ),
+                # بطاقة الصنف هي مصدر السعر الموحد للسيريالات وغيرها.
+                "sale_price": float(item.sale_price),
                 "vat_rate": float(item.vat_rate),
                 "quantity_on_hand": float(
                     item_ids_serial.get(item.id, 0) if item.tracking_type == "serial"

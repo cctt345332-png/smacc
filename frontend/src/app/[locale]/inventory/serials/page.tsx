@@ -150,9 +150,9 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
     setSaving(true);
     try {
       await updateSerial(editSerial.id, {
-        ...editSerialForm,
-        cost_price: parseFloat(editSerialForm.cost_price) || 0,
-        sale_price: editSerialForm.sale_price ? parseFloat(editSerialForm.sale_price) : null,
+        condition: editSerialForm.condition,
+        status: editSerialForm.status,
+        notes: editSerialForm.notes,
       });
       setEditSerial(null);
       if (selectedProduct) loadSerials(selectedProduct.id, filterStatus);
@@ -192,8 +192,6 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
         serials: bulkTab === "manual"
           ? bulkLines.filter(l => l.serial_number.trim()).map(l => ({
               serial_number: l.serial_number.trim(),
-              cost_price: l.cost_price ? parseFloat(l.cost_price) : undefined,
-              sale_price: l.sale_price ? parseFloat(l.sale_price) : undefined,
             }))
           : serialNumbers.map(sn => ({ serial_number: sn })),
       };
@@ -446,26 +444,11 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                   <option value="sold">{ar ? "مباع" : "Sold"}</option>
                 </select>
               </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">{ar ? "سعر الشراء" : "Cost Price"}</label>
-                  <input type="number" className="form-input" value={editSerialForm.cost_price}
-                    onChange={e => setEditSerialForm((f: any) => ({ ...f, cost_price: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{ar ? "سعر البيع" : "Sale Price"}</label>
-                  <input type="number" className="form-input" value={editSerialForm.sale_price}
-                    onChange={e => setEditSerialForm((f: any) => ({ ...f, sale_price: e.target.value }))} />
-                </div>
+              <div style={{ marginBottom: 12, padding: "8px 10px", border: "1px solid #B8D5C8", background: "#F2F8F3", color: "#15543E", fontSize: 12, lineHeight: 1.7 }}>
+                {ar
+                  ? "أسعار التكلفة والبيع موحدة لهذا الصنف وتُدار من بطاقة الصنف. لا يمكن إنشاء سعر مختلف لهذا السيريال."
+                  : "Cost and sale prices are unified for this item and managed from the item card. A different price cannot be set for this serial."}
               </div>
-              {editSerialForm.cost_price && editSerialForm.sale_price && (
-                <div style={{ background: "#F0FDF4", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12 }}>
-                  <span style={{ color: "var(--text-secondary)" }}>{ar ? "الربح المتوقع:" : "Expected Profit:"} </span>
-                  <span style={{ fontWeight: 700, color: parseFloat(editSerialForm.sale_price) - parseFloat(editSerialForm.cost_price) >= 0 ? "#059669" : "#DC2626" }}>
-                    {fmt(parseFloat(editSerialForm.sale_price) - parseFloat(editSerialForm.cost_price))} SAR
-                  </span>
-                </div>
-              )}
               <div className="form-group">
                 <label className="form-label">{ar ? "ملاحظات" : "Notes"}</label>
                 <input className="form-input" value={editSerialForm.notes}
@@ -508,11 +491,11 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                     </div>
                   </div>
                   <div>
-                    <label className="form-label" style={{ fontSize: 11 }}>{ar ? "سعر الشراء" : "Cost"}</label>
+                    <label className="form-label" style={{ fontSize: 11 }}>{ar ? "تكلفة أول سيريال" : "First Serial Cost"}</label>
                     <input type="number" className="form-input" style={{ fontSize: 12 }} value={bulkForm.cost_price} onChange={e => setBulkForm(f => ({ ...f, cost_price: e.target.value }))} placeholder="0.00" />
                   </div>
                   <div>
-                    <label className="form-label" style={{ fontSize: 11 }}>{ar ? "سعر البيع" : "Sale"}</label>
+                    <label className="form-label" style={{ fontSize: 11 }}>{ar ? "سعر بيع أول سيريال" : "First Serial Sale Price"}</label>
                     <input type="number" className="form-input" style={{ fontSize: 12 }} value={bulkForm.sale_price} onChange={e => setBulkForm(f => ({ ...f, sale_price: e.target.value }))} placeholder="0.00" />
                   </div>
                   <div>
@@ -524,11 +507,16 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                   </div>
                 </div>
               </div>
+              <div style={{ marginTop: -8, marginBottom: 16, fontSize: 11, color: "#15543E", lineHeight: 1.7 }}>
+                {ar
+                  ? "تُستخدم هذه الأسعار لتهيئة بطاقة الصنف عند إضافة أول سيريال فقط. بعد ذلك ترث كل السيريالات الجديدة سعر بطاقة الصنف الموحد."
+                  : "These prices initialize the item card only when its first serial is added. Later serials inherit the unified item-card price."}
+              </div>
 
               {/* تبويبات طريقة الإدخال */}
               <div style={{ display: "flex", borderBottom: "2px solid var(--border)", marginBottom: 16 }}>
                 {([
-                  { key: "manual", icon: "📋", label: ar ? "يدوي" : "Manual", desc: ar ? "سطر سطر مع سعر مختلف" : "Row by row, different prices" },
+                  { key: "manual", icon: "📋", label: ar ? "يدوي" : "Manual", desc: ar ? "سطر سيريال لكل جهاز" : "One serial per row" },
                   { key: "excel",  icon: "📄", label: ar ? "Excel/نص" : "Excel/Text", desc: ar ? "ملف Excel أو CSV أو لصق" : "Excel/CSV file or paste" },
                 ] as const).map(t => (
                   <button key={t.key} onClick={() => setBulkTab(t.key)}
@@ -552,39 +540,23 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                     <thead>
                       <tr style={{ background: "#F8FAFC" }}>
                         <th style={{ padding: "8px 10px", textAlign: "start", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", borderBottom: "1px solid var(--border)" }}>{ar ? "رقم السيريال / IMEI *" : "Serial / IMEI *"}</th>
-                        <th style={{ padding: "8px 10px", textAlign: "end", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", borderBottom: "1px solid var(--border)", width: 120 }}>{ar ? "سعر الشراء" : "Cost"}</th>
-                        <th style={{ padding: "8px 10px", textAlign: "end", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", borderBottom: "1px solid var(--border)", width: 120 }}>{ar ? "سعر البيع" : "Sale"}</th>
                         <th style={{ width: 36, borderBottom: "1px solid var(--border)" }}></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {bulkLines.map((line, i) => {
-                        const cost = parseFloat(line.cost_price || bulkForm.cost_price) || 0;
-                        const sale = parseFloat(line.sale_price || bulkForm.sale_price) || 0;
-                        const profit = sale - cost;
-                        return (
-                          <tr key={i} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                            <td style={{ padding: "5px 8px" }}>
-                              <input className="form-input" style={{ fontSize: 12 }} value={line.serial_number} dir="ltr" autoComplete="off"
-                                onChange={e => setBulkLines(ls => ls.map((l, j) => j === i ? { ...l, serial_number: e.target.value } : l))}
-                                onKeyDown={e => { if (e.key === "Enter") setBulkLines(ls => [...ls, { serial_number: "", cost_price: "", sale_price: "" }]); }}
-                                placeholder="IMEI / Serial Number" />
-                            </td>
-                            <td style={{ padding: "5px 8px" }}>
-                              <input type="number" className="form-input" style={{ fontSize: 12, textAlign: "end" }} value={line.cost_price} placeholder={bulkForm.cost_price || "—"}
-                                onChange={e => setBulkLines(ls => ls.map((l, j) => j === i ? { ...l, cost_price: e.target.value } : l))} />
-                            </td>
-                            <td style={{ padding: "5px 8px" }}>
-                              <input type="number" className="form-input" style={{ fontSize: 12, textAlign: "end" }} value={line.sale_price} placeholder={bulkForm.sale_price || "—"}
-                                onChange={e => setBulkLines(ls => ls.map((l, j) => j === i ? { ...l, sale_price: e.target.value } : l))} />
-                              {cost > 0 && sale > 0 && <div style={{ fontSize: 10, textAlign: "end", color: profit >= 0 ? "#059669" : "#DC2626" }}>{ar ? "ر:" : "P:"} {fmt(profit)}</div>}
-                            </td>
-                            <td style={{ padding: "5px 4px" }}>
-                              {bulkLines.length > 1 && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "var(--danger)" }} onClick={() => setBulkLines(ls => ls.filter((_, j) => j !== i))}><Icon name="trash" size={13} /></button>}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {bulkLines.map((line, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                          <td style={{ padding: "5px 8px" }}>
+                            <input className="form-input" style={{ fontSize: 12 }} value={line.serial_number} dir="ltr" autoComplete="off"
+                              onChange={e => setBulkLines(ls => ls.map((l, j) => j === i ? { ...l, serial_number: e.target.value } : l))}
+                              onKeyDown={e => { if (e.key === "Enter") setBulkLines(ls => [...ls, { serial_number: "", cost_price: "", sale_price: "" }]); }}
+                              placeholder="IMEI / Serial Number" />
+                          </td>
+                          <td style={{ padding: "5px 4px" }}>
+                            {bulkLines.length > 1 && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "var(--danger)" }} onClick={() => setBulkLines(ls => ls.filter((_, j) => j !== i))}><Icon name="trash" size={13} /></button>}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </>

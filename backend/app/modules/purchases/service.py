@@ -393,8 +393,6 @@ async def _add_inventory_for_bill(
         # ── سيريالات جماعية (JSON) ────────────────────────────────
         if line.new_serial_numbers_json:
             entries: list = json.loads(line.new_serial_numbers_json)
-            first_sale_price: Decimal | None = None  # نحفظ أول سعر نجده
-
             for entry in entries:
                 if isinstance(entry, str):
                     sn        = entry
@@ -414,10 +412,6 @@ async def _add_inventory_for_bill(
                     else None
                 )
 
-                # احفظ أول سعر موجود
-                if sale_price and first_sale_price is None:
-                    first_sale_price = sale_price
-
                 try:
                     await add_serial(
                         db=db, tenant_id=tenant_id,
@@ -433,11 +427,8 @@ async def _add_inventory_for_bill(
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في إضافة السيريال {sn}: {e.detail}")
 
-            # حدّث sale_price على InventoryItem من أول سيريال عنده سعر
-            if first_sale_price:
-                item = await db.get(InventoryItem, line.inventory_item_id)
-                if item:
-                    item.sale_price = first_sale_price
+            # add_serial يهيّئ بطاقة الصنف من أول سيريال فقط عند غياب الأسعار،
+            # ثم يجعل كل السيريالات الجديدة ترث السعر الموحد من البطاقة.
 
         # ── بدون سيريالات — كمية عادية أو تشغيلة ─────────────────
         else:
@@ -805,7 +796,7 @@ async def reprocess_bill_inventory(
     - يتجاوز السيريالات الموجودة مسبقاً بصمت (بدلاً من رمي خطأ)
     - يُسجِّل كل ما تم ويرجعه كتقرير
     """
-    from app.modules.inventory.service import add_stock, add_batch
+    from app.modules.inventory.service import add_serial, add_stock, add_batch
     from app.models.inventory import InventoryItem, SerialItem, StockMovement
 
     bill = await get_bill(db, tenant_id, bill_id)
@@ -859,46 +850,20 @@ async def reprocess_bill_inventory(
                     else None
                 )
 
-                # تحقق من وجود المستودع
-                effective_wh = wh_id
-                if not effective_wh:
-                    from app.modules.inventory.service import _get_default_warehouse_id
-                    effective_wh = await _get_default_warehouse_id(db, tenant_id)
-
                 try:
-                    serial = SerialItem(
-                        id=str(uuid.uuid4()),
+                    await add_serial(
+                        db=db,
+                        tenant_id=tenant_id,
                         product_id=line.inventory_item_id,
-                        warehouse_id=effective_wh,
                         serial_number=sn,
                         condition=condition,
-                        status="in_stock",
                         cost_price=line.unit_price,
                         sale_price=sale_price,
                         purchase_bill_id=bill.id,
-                        purchased_at=datetime.utcnow(),
+                        warehouse_id=wh_id,
+                        auto_commit=False,
                     )
-                    db.add(serial)
-                    db.add(StockMovement(
-                        id=str(uuid.uuid4()),
-                        tenant_id=tenant_id,
-                        product_id=line.inventory_item_id,
-                        warehouse_id=effective_wh,
-                        movement_type="purchase",
-                        quantity=Decimal("1"),
-                        unit_cost=line.unit_price,
-                        serial_item_id=serial.id,
-                        reference_type="bill",
-                        reference_id=bill.id,
-                    ))
                     added_serials.append(sn)
-
-                    # حدّث sale_price على InventoryItem من أول سيريال عنده سعر
-                    if sale_price:
-                        item_obj = await db.get(InventoryItem, line.inventory_item_id)
-                        if item_obj and (not item_obj.sale_price or item_obj.sale_price == 0):
-                            item_obj.sale_price = sale_price
-
                 except Exception as e:
                     errors.append(f"سيريال {sn}: {str(e)}")
 

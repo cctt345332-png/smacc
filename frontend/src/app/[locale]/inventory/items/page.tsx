@@ -377,18 +377,20 @@ function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categ
           <div className="grid-3">
             <div className="form-group">
               <label className="form-label">
-                {ar ? "سعر التكلفة" : "Cost Price"}
-                {isSerial && <span style={{ fontSize: 10, color: "var(--text-muted)", marginInlineStart: 4 }}>{ar ? "(متوسط)" : "(avg)"}</span>}
+                {isSerial ? (ar ? "سعر التكلفة الموحد" : "Unified Cost Price") : (ar ? "سعر التكلفة" : "Cost Price")}
               </label>
               <input type="number" className="form-input" value={form.cost_price}
-                onChange={e => setForm((f: any) => ({ ...f, cost_price: e.target.value }))}
-                disabled={isSerial} style={isSerial ? { background: "#F1F5F9" } : {}} />
+                onFocus={e => (e.target as HTMLInputElement).select()}
+                placeholder="0.00"
+                min="0" step="0.01"
+                onChange={e => setForm((f: any) => ({ ...f, cost_price: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label className="form-label">{ar ? "سعر البيع" : "Sale Price"}</label>
+              <label className="form-label">{isSerial ? (ar ? "سعر البيع الموحد" : "Unified Sale Price") : (ar ? "سعر البيع" : "Sale Price")}</label>
               <input type="number" className="form-input" value={form.sale_price}
                 onFocus={e => (e.target as HTMLInputElement).select()}
                 placeholder="0.00"
+                min="0" step="0.01"
                 onChange={e => setForm((f: any) => ({ ...f, sale_price: e.target.value }))} />
             </div>
             <div className="form-group">
@@ -399,6 +401,13 @@ function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categ
               </select>
             </div>
           </div>
+          {isSerial && (
+            <div style={{ marginTop: 4, padding: "8px 10px", border: "1px solid #B8D5C8", background: "#F2F8F3", color: "#15543E", fontSize: 12, lineHeight: 1.7 }}>
+              {ar
+                ? "بطاقة الصنف هي المرجع الموحد. عند الحفظ تُطبّق تكلفة وسعر البيع على كل السيريالات المتاحة في المخزون، ولا تتغير تكلفة أو ربح الأجهزة المباعة سابقاً."
+                : "The item card is the unified source. Saving applies cost and sale price to all in-stock serials without changing historical cost or profit for sold units."}
+            </div>
+          )}
           {!isSerial && (
             <div className="form-group">
               <label className="form-label">{ar ? "نقطة إعادة الطلب" : "Reorder Point"}</label>

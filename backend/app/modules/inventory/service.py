@@ -143,6 +143,46 @@ async def get_item(db: AsyncSession, tenant_id: str, item_id: str) -> InventoryI
     return item
 
 
+def _decimal_price(value) -> Decimal | None:
+    """تحويل السعر إلى Decimal مع الاحتفاظ بـ None كقيمة غير محددة."""
+    return Decimal(str(value)) if value is not None else None
+
+
+def _tracking_value(value) -> str:
+    """قراءة قيمة Enum أو string بأمان."""
+    return getattr(value, "value", value)
+
+
+async def _sync_available_serial_prices(
+    db: AsyncSession,
+    item: InventoryItem,
+    *,
+    cost_price: Decimal | None = None,
+    sale_price: Decimal | None = None,
+) -> int:
+    """تطبيق أسعار بطاقة الصنف على السيريالات المتاحة فقط.
+
+    لا تُحدَّث السيريالات المباعة ولا حركات المخزون؛ إذ تمثل تكلفة البيع
+    المسجلة في StockMovement دليلاً تاريخياً ثابتاً للربح والتقارير.
+    """
+    if _tracking_value(item.tracking_type) != TrackingType.SERIAL.value:
+        return 0
+
+    result = await db.execute(
+        select(SerialItem).where(
+            SerialItem.product_id == item.id,
+            SerialItem.status == SerialStatus.IN_STOCK,
+        )
+    )
+    serials = result.scalars().all()
+    for serial in serials:
+        if cost_price is not None:
+            serial.cost_price = cost_price
+        if sale_price is not None:
+            serial.sale_price = sale_price
+    return len(serials)
+
+
 async def _get_default_warehouse_id(db: AsyncSession, tenant_id: str) -> str | None:
     """جلب المستودع الرئيسي للـ tenant"""
     r = await db.execute(
@@ -279,7 +319,7 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
 
     allowed = [
         "name_ar", "name_en", "barcode", "description_ar", "category_id",
-        "sale_price", "vat_rate", "reorder_point", "store_enabled",
+        "cost_price", "sale_price", "vat_rate", "reorder_point", "store_enabled",
         "store_description_ar", "store_images_json", "store_price",
         "store_featured", "pos_enabled", "is_active", "tracking_type",
         # حقول الصيدلية
@@ -287,9 +327,27 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
         "requires_prescription", "generic_name", "country_of_origin",
         "import_license", "gs1_code", "nphies_code",
     ]
+    price_updates: dict[str, Decimal] = {}
     for k in allowed:
         if k in data and data[k] is not None:
-            setattr(item, k, data[k])
+            if k in ("cost_price", "sale_price"):
+                value = _decimal_price(data[k])
+                setattr(item, k, value)
+                price_updates[k] = value
+            else:
+                setattr(item, k, data[k])
+
+    # الصنف ذو السيريالات يعتمد بطاقة الصنف كمصدر موحد للأسعار. نُحدّث
+    # السيريالات المتاحة فقط، ولا نكتب أبداً فوق سيريال مباع أو unit_cost
+    # المسجل مسبقاً في حركة البيع.
+    if price_updates and _tracking_value(item.tracking_type) == TrackingType.SERIAL.value:
+        await _sync_available_serial_prices(
+            db,
+            item,
+            cost_price=price_updates.get("cost_price"),
+            sale_price=price_updates.get("sale_price"),
+        )
+
     item.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(item)
@@ -344,6 +402,29 @@ async def add_serial(
     if existing.scalar_one_or_none():
         raise HTTPException(400, f"السيريال {serial_number} موجود مسبقاً")
 
+    # أول سيريال هو نقطة التهيئة فقط: يملأ بطاقة الصنف إذا كانت أسعارها
+    # غير محددة. بعد ذلك تبقى بطاقة الصنف المرجع الموحد ولا تُستبدل بسعر
+    # أي فاتورة شراء لاحقة أو بسعر سيريال منفرد.
+    existing_count = (
+        await db.execute(
+            select(func.count(SerialItem.id)).where(SerialItem.product_id == product_id)
+        )
+    ).scalar() or 0
+    incoming_cost = _decimal_price(cost_price) or Decimal("0")
+    incoming_sale = _decimal_price(sale_price)
+    if existing_count == 0 and (not item.cost_price or item.cost_price == 0):
+        item.cost_price = incoming_cost
+    # قد يصل أول سيريال من دون سعر بيع؛ لذلك نلتقط أول سعر بيع متاح
+    # لاحقاً ما دامت بطاقة الصنف غير مُسعّرة بعد.
+    if (not item.sale_price or item.sale_price == 0) and incoming_sale is not None:
+        item.sale_price = incoming_sale
+
+    # كل سيريال جديد يرث السعر الموحد في بطاقة الصنف بعد تهيئتها من الأول.
+    effective_cost = _decimal_price(item.cost_price) or incoming_cost
+    effective_sale = _decimal_price(item.sale_price)
+    if effective_sale is None or effective_sale == 0:
+        effective_sale = incoming_sale
+
     serial = SerialItem(
         id=str(uuid.uuid4()),
         product_id=product_id,
@@ -351,8 +432,8 @@ async def add_serial(
         serial_number=serial_number,
         condition=condition,
         status="in_stock",
-        cost_price=cost_price,
-        sale_price=sale_price,
+        cost_price=effective_cost,
+        sale_price=effective_sale,
         purchase_bill_id=purchase_bill_id,
         notes=notes,
         purchased_at=datetime.utcnow(),
@@ -367,7 +448,9 @@ async def add_serial(
         warehouse_id=warehouse_id,
         movement_type="purchase",
         quantity=Decimal("1"),
-        unit_cost=cost_price,
+        # تبقى تكلفة فاتورة الشراء الأصلية في سجل الوارد لأغراض التدقيق.
+        # أما تكلفة الربح عند البيع فتُلتقط من السيريال وقت البيع.
+        unit_cost=incoming_cost,
         serial_item_id=serial.id,
         reference_type="bill",
         reference_id=purchase_bill_id,
@@ -729,13 +812,39 @@ async def update_serial(
     # التحقق من الـ tenant عبر المنتج
     await get_item(db, tenant_id, serial.product_id)
 
-    allowed = ["condition", "status", "cost_price", "sale_price", "notes"]
+    allowed = ["condition", "status", "notes"]
     for k in allowed:
         if k in data and data[k] is not None:
-            if k in ("cost_price", "sale_price"):
-                setattr(serial, k, Decimal(str(data[k])))
-            else:
-                setattr(serial, k, data[k])
+            setattr(serial, k, data[k])
+
+    price_updates = {
+        key: _decimal_price(data[key])
+        for key in ("cost_price", "sale_price")
+        if key in data and data[key] is not None
+    }
+    if price_updates:
+        item = await get_item(db, tenant_id, serial.product_id)
+        if _tracking_value(item.tracking_type) == TrackingType.SERIAL.value:
+            if _tracking_value(serial.status) != SerialStatus.IN_STOCK.value:
+                raise HTTPException(
+                    400,
+                    "لا يمكن تعديل أسعار سيريال غير متاح؛ عدّل أسعار بطاقة الصنف للسيريالات المتاحة فقط",
+                )
+            if "cost_price" in price_updates:
+                item.cost_price = price_updates["cost_price"]
+            if "sale_price" in price_updates:
+                item.sale_price = price_updates["sale_price"]
+            await _sync_available_serial_prices(
+                db,
+                item,
+                cost_price=price_updates.get("cost_price"),
+                sale_price=price_updates.get("sale_price"),
+            )
+            item.updated_at = datetime.utcnow()
+        else:
+            for key, value in price_updates.items():
+                setattr(serial, key, value)
+
     await db.commit()
     await db.refresh(serial)
     return serial

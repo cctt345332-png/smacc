@@ -159,8 +159,8 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
               { label: ar ? "وحدة القياس" : "Unit", value: item.unit_type },
               { label: ar ? "اللون" : "Color", value: item.color },
               { label: ar ? "السعة" : "Storage", value: item.storage },
-              { label: ar ? "سعر التكلفة" : "Cost Price", value: item.tracking_type === "serial" ? (ar ? "يُحدد لكل سيريال" : "Per serial") : `${fmt(item.cost_price)} SAR` },
-              { label: ar ? "سعر البيع" : "Sale Price", value: item.tracking_type === "serial" ? (ar ? "يُحدد لكل سيريال" : "Per serial") : `${fmt(item.sale_price)} SAR` },
+              { label: item.tracking_type === "serial" ? (ar ? "سعر التكلفة الموحد" : "Unified Cost Price") : (ar ? "سعر التكلفة" : "Cost Price"), value: `${fmt(item.cost_price)} SAR` },
+              { label: item.tracking_type === "serial" ? (ar ? "سعر البيع الموحد" : "Unified Sale Price") : (ar ? "سعر البيع" : "Sale Price"), value: `${fmt(item.sale_price)} SAR` },
               { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: `${item.vat_rate}%` },
             ].filter(f => f.value).map(f => (
               <div key={f.label}>
