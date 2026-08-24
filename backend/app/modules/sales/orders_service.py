@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from fastapi import HTTPException
 
 from app.models.sales_orders import SalesOrder, SalesOrderLine, SalesOrderStatus
-from app.models.sales import Customer, Invoice, Payment
+from app.models.sales import Customer, Invoice, InvoiceStatus, Payment
 
 
 async def _next_order_number(db: AsyncSession, tenant_id: str) -> str:
@@ -152,7 +152,12 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
             Invoice.customer_id == customer_id,
             Invoice.issue_date >= from_date,
             Invoice.issue_date <= to_date,
-            Invoice.status != "cancelled",
+            Invoice.status.in_([
+                InvoiceStatus.CONFIRMED,
+                InvoiceStatus.PAID,
+                InvoiceStatus.PARTIAL,
+                InvoiceStatus.OVERDUE,
+            ]),
         ).order_by(Invoice.issue_date)
     )
     invoices = inv_r.scalars().all()

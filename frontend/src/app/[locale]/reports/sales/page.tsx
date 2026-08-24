@@ -3,16 +3,12 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getInvoices, getSalesSummary } from "@/lib/sales";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import {
+  INVOICE_STATUS_PRESENTATION,
+  isFinancialInvoiceStatus,
+} from "@/lib/invoiceStatus";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
-
-const STATUS_AR: Record<string, { label: string; badge: string }> = {
-  draft:     { label: "مسودة",  badge: "badge-warning" },
-  confirmed: { label: "مؤكدة",  badge: "badge-info" },
-  paid:      { label: "مدفوعة", badge: "badge-success" },
-  partial:   { label: "جزئية",  badge: "badge-warning" },
-  cancelled: { label: "ملغاة",  badge: "badge-danger" },
-};
 
 export default function SalesReportPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
@@ -36,7 +32,9 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
       const [inv, sum] = await Promise.all([getInvoices(), getSalesSummary()]);
       const filtered = inv.data.filter((i: any) => {
         const d = new Date(i.issue_date);
-        return d >= new Date(fromDate) && d <= new Date(toDate) && i.status !== "cancelled";
+        return d >= new Date(fromDate)
+          && d <= new Date(toDate)
+          && isFinancialInvoiceStatus(i.status);
       });
       setInvoices(filtered);
       setSummary(sum.data);
@@ -66,7 +64,7 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
           </div>
           <h1 className="page-title">{ar ? "تقرير المبيعات" : "Sales Report"}</h1>
         </div>
-        {loaded && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المبيعات" : "Sales Report"} subtitle={ar ? "ملخص الفواتير والتحصيلات خلال الفترة" : "Invoice and collection summary for the period"} period={`${fromDate} — ${toDate}`} reportCode={`SR-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "عدد الفواتير" : "Invoice count", value: String(invoices.length), tone: "blue" }, { label: ar ? "المبيعات قبل الضريبة" : "Net sales", value: `${fmt(totalNet)} SAR`, tone: "blue" }, { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: `${fmt(totalVAT)} SAR`, tone: "amber" }, { label: ar ? "إجمالي المبيعات" : "Gross sales", value: `${fmt(totalGross)} SAR`, tone: "green" }, { label: ar ? "المحصّل" : "Collected", value: `${fmt(totalPaid)} SAR`, tone: "green" }, { label: ar ? "المستحق" : "Outstanding", value: `${fmt(totalOutstanding)} SAR`, tone: totalOutstanding > 0 ? "red" : "green" }]} tables={[{ title: ar ? "تفاصيل فواتير المبيعات" : "Sales invoice details", headers: [ar ? "رقم الفاتورة" : "Invoice #", ar ? "العميل" : "Customer", ar ? "التاريخ" : "Date", ar ? "قبل الضريبة" : "Net", ar ? "الضريبة" : "VAT", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "الحالة" : "Status"], rows: invoices.map((inv: any) => [inv.invoice_number || "—", inv.buyer_name_ar || "—", inv.issue_date ? new Date(inv.issue_date).toLocaleDateString("en-GB") : "—", fmt(inv.taxable_amount), fmt(inv.vat_amount), fmt(inv.total), fmt(inv.paid_amount), (STATUS_AR[inv.status] || { label: inv.status || "—" }).label]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", fmt(totalNet), fmt(totalVAT), fmt(totalGross), fmt(totalPaid), ""] }]} />}
+        {loaded && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المبيعات" : "Sales Report"} subtitle={ar ? "ملخص الفواتير والتحصيلات خلال الفترة" : "Invoice and collection summary for the period"} period={`${fromDate} — ${toDate}`} reportCode={`SR-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "عدد الفواتير" : "Invoice count", value: String(invoices.length), tone: "blue" }, { label: ar ? "المبيعات قبل الضريبة" : "Net sales", value: `${fmt(totalNet)} SAR`, tone: "blue" }, { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: `${fmt(totalVAT)} SAR`, tone: "amber" }, { label: ar ? "إجمالي المبيعات" : "Gross sales", value: `${fmt(totalGross)} SAR`, tone: "green" }, { label: ar ? "المحصّل" : "Collected", value: `${fmt(totalPaid)} SAR`, tone: "green" }, { label: ar ? "المستحق" : "Outstanding", value: `${fmt(totalOutstanding)} SAR`, tone: totalOutstanding > 0 ? "red" : "green" }]} tables={[{ title: ar ? "تفاصيل فواتير المبيعات" : "Sales invoice details", headers: [ar ? "رقم الفاتورة" : "Invoice #", ar ? "العميل" : "Customer", ar ? "التاريخ" : "Date", ar ? "قبل الضريبة" : "Net", ar ? "الضريبة" : "VAT", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "الحالة" : "Status"], rows: invoices.map((inv: any) => [inv.invoice_number || "—", inv.buyer_name_ar || "—", inv.issue_date ? new Date(inv.issue_date).toLocaleDateString("en-GB") : "—", fmt(inv.taxable_amount), fmt(inv.vat_amount), fmt(inv.total), fmt(inv.paid_amount), (INVOICE_STATUS_PRESENTATION[inv.status] || { ar: "حالة غير معروفة" }).ar]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", fmt(totalNet), fmt(totalVAT), fmt(totalGross), fmt(totalPaid), ""] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -133,7 +131,7 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
                     {invoices.map(inv => {
                       const due = inv.due_date ? new Date(inv.due_date) : null;
                       const isOverdue = due && due < todayD && !["paid","cancelled"].includes(inv.status);
-                      const st = STATUS_AR[inv.status] || { label: inv.status, badge: "badge-gray" };
+                      const st = INVOICE_STATUS_PRESENTATION[inv.status] || { ar: "حالة غير معروفة", badge: "badge-gray" };
                       return (
                         <tr key={inv.id} style={isOverdue ? { background: "#FFF5F5" } : {}}>
                           <td><Link href={`/${locale}/sales/invoices/${inv.id}`} style={{ color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}>{inv.invoice_number}</Link></td>
@@ -152,7 +150,7 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
                           <td style={{ textAlign: "end", color: "#D97706" }}>{fmt(inv.vat_amount)}</td>
                           <td style={{ textAlign: "end", fontWeight: 700 }}>{fmt(inv.total)}</td>
                           <td style={{ textAlign: "end", color: "var(--success)" }}>{fmt(inv.paid_amount)}</td>
-                          <td><span className={`badge ${isOverdue ? "badge-danger" : st.badge}`}>{isOverdue ? (ar ? "متأخرة" : "Overdue") : st.label}</span></td>
+                          <td><span className={`badge ${isOverdue ? "badge-danger" : st.badge}`}>{isOverdue ? (ar ? "متأخرة" : "Overdue") : st.ar}</span></td>
                         </tr>
                       );
                     })}

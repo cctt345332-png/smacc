@@ -81,11 +81,20 @@ async def list_invoices(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # المندوب يشوف فواتيره فقط
+    # المندوب يشوف فواتيره التشغيلية كلها، أما قائمة المبيعات العامة
+    # فتستبعد المسودات والفواتير المقدمة للمراجعة من الأثر المالي.
     rep_id = None
-    if user["role"] == "sales_rep":
+    include_unconfirmed = user["role"] == "sales_rep"
+    if include_unconfirmed:
         rep_id = await get_rep_id_for_user(db, user["user_id"])
-    return await service.get_invoices(db, user["tenant_id"], status, customer_id, rep_id)
+    return await service.get_invoices(
+        db,
+        user["tenant_id"],
+        status,
+        customer_id,
+        rep_id,
+        include_unconfirmed=include_unconfirmed,
+    )
 
 
 @router.get("/invoices/summary")

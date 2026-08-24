@@ -3,17 +3,12 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getInvoices, getSalesSummary, confirmInvoice, cancelInvoice } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
+import {
+  FINANCIAL_INVOICE_STATUSES,
+  INVOICE_STATUS_PRESENTATION,
+} from "@/lib/invoiceStatus";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
-
-const STATUS_MAP: Record<string, { ar: string; badge: string }> = {
-  draft:        { ar: "مسودة",   badge: "badge-warning" },
-  confirmed:    { ar: "مؤكدة",   badge: "badge-info" },
-  paid:         { ar: "مدفوعة",  badge: "badge-success" },
-  cancelled:    { ar: "ملغاة",   badge: "badge-danger" },
-  partial:      { ar: "جزئية",   badge: "badge-warning" },
-  zatca_cleared:{ ar: "زاتكا ✓", badge: "badge-success" },
-};
 
 const INVOICE_TYPES: Record<string, { ar: string; badge: string }> = {
   standard:   { ar: "ضريبية كاملة", badge: "badge-info" },
@@ -138,8 +133,8 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
             onChange={e => setFilterStatus(e.target.value)}
           >
             <option value="">{ar ? "كل الحالات" : "All Statuses"}</option>
-            {Object.entries(STATUS_MAP).map(([k, v]) => (
-              <option key={k} value={k}>{v.ar}</option>
+            {FINANCIAL_INVOICE_STATUSES.map((status) => (
+              <option key={status} value={status}>{INVOICE_STATUS_PRESENTATION[status].ar}</option>
             ))}
           </select>
           <span style={{ fontSize: 13, color: "var(--text-secondary)", marginInlineStart: "auto" }}>
@@ -181,7 +176,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
               </thead>
               <tbody>
                 {invoices.map(inv => {
-                  const status = STATUS_MAP[inv.status] || { ar: inv.status, badge: "badge-gray" };
+                  const status = INVOICE_STATUS_PRESENTATION[inv.status] || { ar: "حالة غير معروفة", badge: "badge-gray" };
                   const itype = INVOICE_TYPES[inv.invoice_type] || { ar: inv.invoice_type, badge: "badge-gray" };
                   const today = new Date(); today.setHours(0,0,0,0);
                   const dueDate = inv.due_date ? new Date(inv.due_date) : null;

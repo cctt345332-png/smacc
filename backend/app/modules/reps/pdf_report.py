@@ -309,19 +309,25 @@ def generate_reps_summary_pdf(
 
     # ══ صفحة 2: الفواتير التفصيلية ══════════════════════════════════════════
     STATUS_AR = {
-        "draft": "مسودة", "submitted": "بانتظار المراجعة", "approved": "موافق عليها",
-        "rejected": "مرفوضة", "confirmed": "مؤكدة", "paid": "مدفوعة",
-        "partial": "جزئي", "cancelled": "ملغاة",
+        "draft": "مسودة", "submitted": "بانتظار المراجعة", "approved": "تمت الموافقة",
+        "rejected": "معادة للمندوب", "confirmed": "مؤكدة", "paid": "مدفوعة",
+        "partial": "مدفوعة جزئيًا", "overdue": "متأخرة السداد", "cancelled": "ملغاة",
     }
     STATUS_CLR = {
         "draft": pdf.C_MUTED, "submitted": pdf.C_AMBER, "approved": pdf.C_BLUE,
         "rejected": pdf.C_RED, "confirmed": pdf.C_GREEN, "paid": pdf.C_GREEN,
-        "partial": pdf.C_AMBER, "cancelled": pdf.C_MUTED,
+        "partial": pdf.C_AMBER, "overdue": pdf.C_RED, "cancelled": pdf.C_MUTED,
     }
     PAY_AR = {"cash": "نقد", "credit": "آجل", "cheque": "شيك", "transfer": "تحويل"}
 
     rep_map = {r["id"]: r for r in reps_data}
-    inv_list = [i for i in invoices if i.get("rep_id")]
+    financial_statuses = {"confirmed", "paid", "partial", "overdue"}
+    # تفاصيل وإجماليات تقرير المبيعات تقتصر على الفواتير التي اكتملت
+    # دورتها المالية. تبقى submitted في عداد المراجعة أعلى التقرير فقط.
+    inv_list = [
+        i for i in invoices
+        if i.get("rep_id") and i.get("status") in financial_statuses
+    ]
 
     if inv_list:
         pdf.add_page()
@@ -396,7 +402,10 @@ def generate_reps_summary_pdf(
     # ══ صفحة 3+: تفاصيل مندوب واحد (إذا طُلب) ══════════════════════════════
     if filter_rep_id:
         rep_info     = rep_map.get(filter_rep_id, {})
-        rep_invoices = [i for i in invoices if i.get("rep_id") == filter_rep_id]
+        rep_invoices = [
+            i for i in invoices
+            if i.get("rep_id") == filter_rep_id and i.get("status") in financial_statuses
+        ]
 
         if rep_info:
             pdf.add_page()

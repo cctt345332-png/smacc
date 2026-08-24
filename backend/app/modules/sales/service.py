@@ -148,11 +148,28 @@ async def delete_customer(
 
 # ─── Invoices ────────────────────────────────────────────────────────
 async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = None,
-                        customer_id: str | None = None, rep_id: str | None = None):
+                        customer_id: str | None = None, rep_id: str | None = None,
+                        include_unconfirmed: bool = False):
+    """قائمة الفواتير المالية.
+
+    المدير والتقارير يرون الفواتير التي اكتملت دورتها المالية فقط. أما المندوب
+    فيحتاج الوصول إلى مسوداته والفواتير المعادة أو قيد المراجعة عبر include_unconfirmed.
+    """
     from sqlalchemy.orm import selectinload
+    financial_statuses = (
+        InvoiceStatus.CONFIRMED,
+        InvoiceStatus.PAID,
+        InvoiceStatus.PARTIAL,
+        InvoiceStatus.OVERDUE,
+    )
     q = select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments)).where(Invoice.tenant_id == tenant_id)
-    if status:
+    financial_status_values = {item.value for item in financial_statuses}
+    if status and (include_unconfirmed or status in financial_status_values):
         q = q.where(Invoice.status == status)
+    elif not include_unconfirmed:
+        # لا يعيد هذا المسار العام submitted أو draft أو rejected للمدير
+        # ولو أُرسلت الحالة يدويًا؛ لها مسارات تشغيل ومراجعة مستقلة.
+        q = q.where(Invoice.status.in_(financial_statuses))
     if customer_id:
         q = q.where(Invoice.customer_id == customer_id)
     if rep_id:

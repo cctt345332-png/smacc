@@ -1,14 +1,14 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import { getSupervisorSummary, getSupervisorInvoices, getSupervisorReps } from "@/lib/reps";
+import { INVOICE_STATUS_PRESENTATION, isFinancialInvoiceStatus } from "@/lib/invoiceStatus";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
 
-const STATUS: Record<string, string> = {
-  confirmed: "مؤكدة", paid: "مدفوعة", partial: "جزئي",
-  submitted: "بانتظار المراجعة", draft: "مسودة",
-};
+const STATUS: Record<string, string> = Object.fromEntries(
+  Object.entries(INVOICE_STATUS_PRESENTATION).map(([status, presentation]) => [status, presentation.ar])
+);
 
 export default function SupervisorReportsPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
@@ -30,7 +30,8 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
       getSupervisorReps().catch(() => ({ data: [] })),
     ]).then(([s, i, r]) => {
       setSummary(s.data);
-      setInvoices(Array.isArray(i.data) ? i.data : []);
+      // التقرير والتصدير الماليان لا يعرضان إلا الفواتير المؤكدة بعد الاعتماد.
+      setInvoices(Array.isArray(i.data) ? i.data.filter((invoice: any) => isFinancialInvoiceStatus(invoice.status)) : []);
       setReps(Array.isArray(r.data) ? r.data : []);
     }).finally(() => setLoading(false));
   }, []);
@@ -40,7 +41,7 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
       ["رقم الفاتورة", "العميل", "الحالة", "التاريخ", "الإجمالي", "المدفوع", "المتبقي"],
       ...invoices.map((inv: any) => [
         inv.invoice_number, inv.buyer_name_ar,
-        STATUS[inv.status] || inv.status,
+        STATUS[inv.status] || "حالة غير معروفة",
         inv.issue_date ? new Date(inv.issue_date).toLocaleDateString("en-US") : "",
         Number(inv.total || 0).toFixed(2),
         Number(inv.paid_amount || 0).toFixed(2),
@@ -98,7 +99,7 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
           {reps.map((rep: any) => {
             const repInvoices = invoices.filter((i: any) => i.rep_id === rep.id);
             const repSales = repInvoices
-              .filter((i: any) => ["confirmed","paid","partial"].includes(i.status))
+              .filter((i: any) => ["confirmed", "paid", "partial", "overdue"].includes(i.status))
               .reduce((s: number, i: any) => s + Number(i.total || 0), 0);
             return (
               <div key={rep.id} style={{ display: "flex", justifyContent: "space-between",

@@ -4,19 +4,23 @@ import Link from "next/link";
 import { getReps, getRepSummary } from "@/lib/reps";
 import api from "@/lib/api";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import {
+  FINANCIAL_INVOICE_STATUSES,
+  INVOICE_STATUS_PRESENTATION,
+  isFinancialInvoiceStatus,
+} from "@/lib/invoiceStatus";
 
 const fmt  = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US") : "—";
 
-const STATUS_AR: Record<string, string> = {
-  draft: "مسودة", submitted: "بانتظار المراجعة", approved: "موافق عليها",
-  rejected: "مرفوضة", confirmed: "مؤكدة", paid: "مدفوعة",
-  partial: "جزئي", cancelled: "ملغاة",
-};
+const STATUS_AR: Record<string, string> = Object.fromEntries(
+  Object.entries(INVOICE_STATUS_PRESENTATION).map(([status, presentation]) => [status, presentation.ar])
+);
 const STATUS_COLOR: Record<string, string> = {
   draft: "#6B7280", submitted: "#D97706", approved: "#2563EB",
   rejected: "#DC2626", confirmed: "#059669", paid: "#059669",
-  partial: "#D97706", cancelled: "#6B7280",
+  partial: "#D97706", overdue: "#DC2626", cancelled: "#6B7280",
+  sent: "#2563EB", zatca_pending: "#D97706", zatca_cleared: "#059669", zatca_rejected: "#DC2626",
 };
 const PAY_AR: Record<string, string> = { cash: "نقد", credit: "آجل", cheque: "شيك", transfer: "تحويل" };
 
@@ -31,6 +35,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const [reps, setReps] = useState<any[]>([]);
   const [summaries, setSummaries] = useState<Record<string, any>>({});
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"performance" | "invoices" | "stock">("performance");
   const [filterRep, setFilterRep] = useState("");
@@ -78,7 +83,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         const remaining = Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0));
         return [
           inv.invoice_number, rep?.full_name || "", rep?.zone || "",
-          inv.buyer_name_ar, STATUS_AR[inv.status] || inv.status,
+          inv.buyer_name_ar, STATUS_AR[inv.status] || "حالة غير معروفة",
           PAY_AR[inv.invoice_payment_method] || "",
           inv.issue_date ? new Date(inv.issue_date).toLocaleDateString("en-US") : "",
           Number(inv.total || 0).toFixed(2),
@@ -128,16 +133,20 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         const repsRes = await getReps();
         const list = Array.isArray(repsRes.data) ? repsRes.data : [];
         setReps(list);
-        const [sumResults, invRes] = await Promise.all([
+        const [sumResults, invRes, pendingRes] = await Promise.all([
           Promise.allSettled(list.map((r: any) => getRepSummary(r.id))),
           api.get("/sales/invoices"),
+          api.get("/sales/invoices-pending").catch(() => ({ data: [] })),
         ]);
         const map: Record<string, any> = {};
         sumResults.forEach((r, i) => {
           if (r.status === "fulfilled") map[list[i].id] = r.value.data;
         });
         setSummaries(map);
-        setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
+        // مصدر التقرير المالي يعيد المؤكد فقط؛ طلبات المراجعة تبقى منفصلة
+        // ولا تدخل أبداً في المبيعات أو العمولات أو التصدير.
+        setInvoices(Array.isArray(invRes.data) ? invRes.data.filter((invoice: any) => isFinancialInvoiceStatus(invoice.status)) : []);
+        setPendingInvoices(Array.isArray(pendingRes.data) ? pendingRes.data : []);
       } catch { } finally { setLoading(false); }
     };
     load();
@@ -146,9 +155,9 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const repMap: Record<string, any> = {};
   reps.forEach(r => { repMap[r.id] = r; });
 
-  // فلتر الفواتير — يشمل كل الحالات بما فيها submitted
+  // تقرير المبيعات لا يشمل إلا الفواتير المكتملة ماليًا بعد الاعتماد.
   const filteredInvoices = invoices.filter((inv: any) => {
-    if (!inv.rep_id) return false; // فقط فواتير المناديب
+    if (!inv.rep_id || !isFinancialInvoiceStatus(inv.status)) return false;
     const matchR    = !filterRep    || inv.rep_id === filterRep;
     const matchS    = !filterStatus || inv.status === filterStatus;
     const matchFrom = !dateFrom || new Date(inv.issue_date) >= new Date(dateFrom);
@@ -204,7 +213,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     { label: ar ? "المناديب" : "Reps", value: String(repStats.length), tone: "neutral" as const },
     { label: ar ? "كمية مخزون المناديب" : "Rep stock qty", value: String(repStats.reduce((s, r) => s + Number(r.sum.stock_qty || 0), 0)), tone: "amber" as const },
   ];
-  const reportTable = tab === "performance" ? { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "الهدف" : "Target", ar ? "المبيعات" : "Sales", ar ? "التحقق" : "Achievement", ar ? "المحصّل" : "Collected", ar ? "المستحق" : "Outstanding", ar ? "العمولة" : "Commission"], rows: repStats.map(({ rep, sum, pct, commission }) => [rep.full_name, rep.zone || "—", rep.target_monthly ? fmt(rep.target_monthly) : "—", fmt(sum.total_sales || 0), pct == null ? "—" : `${pct}%`, fmt(sum.total_collected || 0), fmt(sum.outstanding || 0), fmt(commission)]), totals: [ar ? "الإجمالي" : "Total", "", "", fmt(totalSales), "", fmt(totalCollected), fmt(totalOutstanding), fmt(totalCommission) ] } : tab === "invoices" ? { headers: [ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "الحالة" : "Status", ar ? "التاريخ" : "Date", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "المتبقي" : "Remaining"], rows: filteredInvoices.map((inv: any) => [inv.invoice_number, repMap[inv.rep_id]?.full_name || "—", inv.buyer_name_ar || "—", STATUS_AR[inv.status] || inv.status, fmtD(inv.issue_date), fmt(inv.total), fmt(inv.paid_amount), fmt(Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0)))]) } : { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "المركبة" : "Vehicle", ar ? "كمية المخزون" : "Stock qty", ar ? "قيمة المخزون" : "Stock value"], rows: repStats.map(({ rep, sum }) => [rep.full_name, rep.zone || "—", rep.vehicle_plate || "—", String(Number(sum.stock_qty || 0)), fmt(sum.stock_value || 0)]) };
+  const reportTable = tab === "performance" ? { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "الهدف" : "Target", ar ? "المبيعات" : "Sales", ar ? "التحقق" : "Achievement", ar ? "المحصّل" : "Collected", ar ? "المستحق" : "Outstanding", ar ? "العمولة" : "Commission"], rows: repStats.map(({ rep, sum, pct, commission }) => [rep.full_name, rep.zone || "—", rep.target_monthly ? fmt(rep.target_monthly) : "—", fmt(sum.total_sales || 0), pct == null ? "—" : `${pct}%`, fmt(sum.total_collected || 0), fmt(sum.outstanding || 0), fmt(commission)]), totals: [ar ? "الإجمالي" : "Total", "", "", fmt(totalSales), "", fmt(totalCollected), fmt(totalOutstanding), fmt(totalCommission) ] } : tab === "invoices" ? { headers: [ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "الحالة" : "Status", ar ? "التاريخ" : "Date", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "المتبقي" : "Remaining"], rows: filteredInvoices.map((inv: any) => [inv.invoice_number, repMap[inv.rep_id]?.full_name || "—", inv.buyer_name_ar || "—", STATUS_AR[inv.status] || "حالة غير معروفة", fmtD(inv.issue_date), fmt(inv.total), fmt(inv.paid_amount), fmt(Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0)))]) } : { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "المركبة" : "Vehicle", ar ? "كمية المخزون" : "Stock qty", ar ? "قيمة المخزون" : "Stock value"], rows: repStats.map(({ rep, sum }) => [rep.full_name, rep.zone || "—", rep.vehicle_plate || "—", String(Number(sum.stock_qty || 0)), fmt(sum.stock_value || 0)]) };
 
   return (
     <>
@@ -308,8 +317,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         <div className="card no-print" style={{ marginBottom: 16 }}>
           <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <select className="form-input form-select" style={{ width: 180 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-              <option value="">{ar ? "كل الحالات (شامل المعلقة)" : "All Statuses (incl. pending)"}</option>
-              {Object.entries(STATUS_AR).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              <option value="">{ar ? "كل الفواتير المؤكدة" : "All confirmed invoices"}</option>
+              {FINANCIAL_INVOICE_STATUSES.map((status) => <option key={status} value={status}>{STATUS_AR[status]}</option>)}
             </select>
             <input type="date" className="form-input" style={{ width: 150 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             <input type="date" className="form-input" style={{ width: 150 }} value={dateTo}   onChange={e => setDateTo(e.target.value)}   />
@@ -352,8 +361,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                   </thead>
                   <tbody>
                     {repStats.map(({ rep, sum, pct, commission }, idx) => {
-                      const pendingCount = invoices.filter(i => i.rep_id === rep.id && i.status === "submitted").length;
-                      const pendingTotal = invoices.filter(i => i.rep_id === rep.id && i.status === "submitted")
+                      const pendingCount = pendingInvoices.filter(i => i.rep_id === rep.id && i.status === "submitted").length;
+                      const pendingTotal = pendingInvoices.filter(i => i.rep_id === rep.id && i.status === "submitted")
                         .reduce((s, i) => s + Number(i.total || 0), 0);
                       return (
                         <tr key={rep.id}>
@@ -417,7 +426,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                       <td style={{ textAlign: "end", padding: "10px 16px", color: totalOutstanding > 0 ? "#DC2626" : "#059669" }}>{fmt(totalOutstanding)} SAR</td>
                       <td style={{ textAlign: "end", padding: "10px 16px" }}>{repStats.reduce((s, r) => s + (r.sum.invoice_count || 0), 0)}</td>
                       <td style={{ textAlign: "end", padding: "10px 16px", color: "#D97706" }}>
-                        {invoices.filter(i => i.rep_id && i.status === "submitted").length}
+                        {pendingInvoices.filter(i => i.rep_id && i.status === "submitted").length}
                       </td>
                       <td style={{ textAlign: "end", padding: "10px 16px", color: "#7C3AED" }}>{fmt(totalCommission)} SAR</td>
                     </tr>
@@ -467,7 +476,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                                 color: STATUS_COLOR[inv.status] || "#6B7280",
                                 padding: "2px 8px", borderRadius: 20, fontSize: 12, fontWeight: 600
                               }}>
-                                {STATUS_AR[inv.status] || inv.status}
+                                {STATUS_AR[inv.status] || "حالة غير معروفة"}
                               </span>
                               {inv.status === "rejected" && inv.rejection_note && (
                                 <div style={{ fontSize: 11, color: "#DC2626", marginTop: 2 }}>{inv.rejection_note.slice(0, 40)}</div>
@@ -586,7 +595,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                   color: STATUS_COLOR[selectedInvoice.status] || "#6B7280",
                   padding: "3px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700
                 }}>
-                  {STATUS_AR[selectedInvoice.status] || selectedInvoice.status}
+                  {STATUS_AR[selectedInvoice.status] || "حالة غير معروفة"}
                 </span>
               </div>
               <div style={{ display: "flex", gap: 8 }}>

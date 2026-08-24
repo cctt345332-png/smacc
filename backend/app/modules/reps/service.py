@@ -264,7 +264,7 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
         .where(
             Invoice.tenant_id == tenant_id,
             Invoice.rep_id == rep.id,
-            Invoice.status.in_(["confirmed", "paid", "partial"]),
+            Invoice.status.in_(["confirmed", "paid", "partial", "overdue"]),
         )
     )
     total_sales, invoice_count = sales_r.one()
@@ -435,7 +435,7 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
         .where(
             Invoice.tenant_id == tenant_id,
             Invoice.rep_id == rep_id,
-            Invoice.status.in_(["confirmed", "paid", "partial"]),
+            Invoice.status.in_(["confirmed", "paid", "partial", "overdue"]),
         )
     )
     total_sales, invoice_count = sales_r.one()

@@ -4,6 +4,7 @@ import { getMySummary, getMyInvoices, getMyStock } from "@/lib/reps";
 import { getCustomers } from "@/lib/sales";
 import api from "@/lib/api";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import { isFinancialInvoiceStatus } from "@/lib/invoiceStatus";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
@@ -15,7 +16,8 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
   confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
   paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
-  partial:   { ar: "جزئي",             color: "#D97706", bg: "#FEF3C7" },
+  partial:   { ar: "مدفوعة جزئيًا",    color: "#D97706", bg: "#FEF3C7" },
+  overdue:   { ar: "متأخرة السداد",    color: "#DC2626", bg: "#FEF2F2" },
   cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
 };
 
@@ -51,7 +53,9 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
       getCustomers().catch(() => ({ data: [] })),
     ]).then(([s, i, st, c]) => {
       setSummary(s.data);
-      setInvoices(Array.isArray(i.data) ? i.data : []);
+      // الفواتير التي تنتظر مراجعة المحاسب تبقى في شاشة فواتيري، ولا تدخل
+      // تقرير الأداء أو إجمالياته أو تصديره قبل انتقالها إلى حالة مؤكدة.
+      setInvoices(Array.isArray(i.data) ? i.data.filter((invoice: any) => isFinancialInvoiceStatus(invoice.status)) : []);
       setStock(Array.isArray(st.data) ? st.data : []);
       setCustomers(Array.isArray(c.data) ? c.data : []);
     }).finally(() => setLoading(false));
@@ -137,7 +141,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
       ...filteredInvoices.map((inv: any) => [
         inv.invoice_number,
         inv.buyer_name_ar,
-        STATUS[inv.status]?.ar || inv.status,
+        STATUS[inv.status]?.ar || "حالة غير معروفة",
         inv.issue_date ? new Date(inv.issue_date).toLocaleDateString("en-US") : "",
         Number(inv.total || 0).toFixed(2),
         Number(inv.paid_amount || 0).toFixed(2),
@@ -266,7 +270,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
                       return acc;
                     }, {})
                   ).map(([status, count]: any) => {
-                    const st = STATUS[status] || { ar: status, color: "#6B7280", bg: "#F3F4F6" };
+                    const st = STATUS[status] || { ar: "حالة غير معروفة", color: "#6B7280", bg: "#F3F4F6" };
                     return (
                       <div key={status} style={{ display: "flex", justifyContent: "space-between",
                         alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
