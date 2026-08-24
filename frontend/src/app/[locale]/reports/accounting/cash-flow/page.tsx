@@ -1,9 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { getTrialBalance } from "@/lib/accounting";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
-export default function CashFlowPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CashFlowPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
@@ -48,7 +55,7 @@ export default function CashFlowPage({ params: { locale } }: { params: { locale:
           </div>
           <h1 className="page-title">{ar ? "قائمة التدفقات النقدية" : "Cash Flow Statement"}</h1>
         </div>
-        {data && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "قائمة التدفقات النقدية" : "Cash Flow Statement"} subtitle={ar ? "التدفقات من الأنشطة التشغيلية والاستثمارية والتمويلية" : "Operating, investing and financing cash flows"} period={`${fromDate} — ${toDate}`} reportCode={`CF-${toDate.replaceAll("-", "")}`} metrics={[{ label: ar ? "صافي التدفق التشغيلي" : "Operating cash flow", value: `${fmt(data.operating)} SAR`, tone: data.operating >= 0 ? "green" : "red" }, { label: ar ? "التدفق الاستثماري" : "Investing cash flow", value: `${fmt(data.investing)} SAR`, tone: "blue" }, { label: ar ? "التدفق التمويلي" : "Financing cash flow", value: `${fmt(data.financing)} SAR`, tone: "amber" }, { label: ar ? "صافي التغير في النقدية" : "Net change in cash", value: `${fmt(data.operating + data.investing + data.financing)} SAR`, tone: data.operating + data.investing + data.financing >= 0 ? "green" : "red" }]} tables={[{ title: ar ? "التدفقات من الأنشطة التشغيلية" : "Operating activities", headers: [ar ? "البند" : "Item", ar ? "القيمة" : "Amount"], rows: [[ar ? "صافي الربح" : "Net profit", `${fmt(data.netProfit)} SAR`]], totals: [ar ? "إجمالي التدفقات التشغيلية" : "Total operating cash flow", `${fmt(data.operating)} SAR`] }, { title: ar ? "التدفقات من الأنشطة الاستثمارية" : "Investing activities", headers: [ar ? "البند" : "Item", ar ? "القيمة" : "Amount"], rows: [[ar ? "الحركات الاستثمارية" : "Investing movements", `${fmt(data.investing)} SAR`]], totals: [ar ? "إجمالي التدفقات الاستثمارية" : "Total investing cash flow", `${fmt(data.investing)} SAR`] }, { title: ar ? "التدفقات من الأنشطة التمويلية" : "Financing activities", headers: [ar ? "البند" : "Item", ar ? "القيمة" : "Amount"], rows: [[ar ? "الحركات التمويلية" : "Financing movements", `${fmt(data.financing)} SAR`]], totals: [ar ? "صافي التغير في النقدية" : "Net change in cash", `${fmt(data.operating + data.investing + data.financing)} SAR`] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -68,7 +75,7 @@ export default function CashFlowPage({ params: { locale } }: { params: { locale:
       </div>
 
       {data && (
-        <div className="card">
+        <div className="card" id="report-content-cash-flow">
           <div className="card-header">
             <span className="card-title">{ar ? `قائمة التدفقات النقدية — ${fromDate} إلى ${toDate}` : `Cash Flow — ${fromDate} to ${toDate}`}</span>
           </div>

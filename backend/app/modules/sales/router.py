@@ -13,7 +13,7 @@ from app.modules.sales.schemas import (
     InvoiceCreate, InvoiceOut, InvoiceReject,
     PaymentCreate, PaymentOut,
     QuotationCreate, QuotationOut,
-    CreditNoteCreate,
+    CreditNoteCreate, RefundRequestCreate, RefundRequestDecision,
 )
 
 router = APIRouter(prefix="/sales", tags=["sales"])
@@ -48,12 +48,29 @@ async def create_customer(
     rep_id = None
     if user["role"] == "sales_rep":
         rep_id = await get_rep_id_for_user(db, user["user_id"])
-    return await service.create_customer(db, user["tenant_id"], data, rep_id)
+    return await service.create_customer(db, user["tenant_id"], data, rep_id, user["user_id"])
 
 
 @router.patch("/customers/{customer_id}", response_model=CustomerOut)
 async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    return await service.update_customer(db, user["tenant_id"], customer_id, data)
+    customer = await service.get_customer(db, user["tenant_id"], customer_id)
+    if user["role"] == "sales_rep":
+        rep_id = await get_rep_id_for_user(db, user["user_id"])
+        if not rep_id or customer.rep_id != rep_id:
+            from fastapi import HTTPException
+            raise HTTPException(403, "لا يمكنك تعديل عميل مندوب آخر")
+    return await service.update_customer(db, user["tenant_id"], customer_id, data, user["user_id"])
+
+
+@router.delete("/customers/{customer_id}")
+async def delete_customer(customer_id: str, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    customer = await service.get_customer(db, user["tenant_id"], customer_id)
+    if user["role"] == "sales_rep":
+        rep_id = await get_rep_id_for_user(db, user["user_id"])
+        if not rep_id or customer.rep_id != rep_id:
+            from fastapi import HTTPException
+            raise HTTPException(403, "لا يمكنك حذف عميل مندوب آخر")
+    return await service.delete_customer(db, user["tenant_id"], customer_id, user["user_id"])
 
 
 # ─── Invoices ────────────────────────────────────────────────────────
@@ -77,6 +94,15 @@ async def sales_summary(user=Depends(get_current_user), db: AsyncSession = Depen
     if user["role"] == "sales_rep":
         rep_id = await get_rep_id_for_user(db, user["user_id"])
     return await service.get_sales_summary(db, user["tenant_id"], rep_id)
+
+
+@router.get("/invoices/system-summary")
+async def system_dashboard_summary(
+    _user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """مؤشرات النظام الأساسية للمدير؛ طابور المناديب له مسار مستقل."""
+    return await service.get_system_dashboard_summary(db, _user["tenant_id"])
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceOut)
@@ -121,6 +147,12 @@ async def reject_invoice(invoice_id: str, data: InvoiceReject, user=Depends(requ
 async def update_invoice(invoice_id: str, data: dict, user=Depends(require_role(["sales_rep","manager","accountant","sales"])), db: AsyncSession = Depends(get_db)):
     """تعديل فاتورة مسودة أو مرفوضة"""
     return await service.update_invoice(db, user["tenant_id"], user["user_id"], invoice_id, data)
+
+
+@router.delete("/invoices/{invoice_id}")
+async def delete_invoice_draft(invoice_id: str, user=Depends(require_role(["sales_rep","manager","accountant","sales"])), db: AsyncSession = Depends(get_db)):
+    """حذف المسودة فقط؛ يمنع حذف أي فاتورة دخلت الاعتماد أو الترحيل."""
+    return await service.delete_invoice_draft(db, user["tenant_id"], user["user_id"], invoice_id)
 
 
 @router.get("/invoices-pending", response_model=list[InvoiceOut])
@@ -186,6 +218,18 @@ async def convert_to_invoice(quotation_id: str, user=Depends(require_role(["mana
 
 
 # ─── Credit Notes ────────────────────────────────────────────────────
+async def _assert_refund_credit_note_access(credit_note_id: str, user: dict, db: AsyncSession):
+    """المندوب يستطيع طلب استرداد إشعار يخص فواتيره فقط."""
+    credit_note = await service.get_credit_note(db, user["tenant_id"], credit_note_id)
+    if user["role"] == "sales_rep":
+        original = await service.get_invoice(db, user["tenant_id"], credit_note.original_invoice_id)
+        rep_id = await get_rep_id_for_user(db, user["user_id"])
+        if not rep_id or original.rep_id != rep_id:
+            from fastapi import HTTPException
+            raise HTTPException(403, "لا يمكنك طلب استرداد لإشعار مندوب آخر")
+    return credit_note
+
+
 @router.post("/credit-notes", status_code=201)
 async def create_credit_note(data: CreditNoteCreate, user=Depends(require_role(["manager","accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.create_credit_note(db, user["tenant_id"], user["user_id"], data)
@@ -202,6 +246,39 @@ async def list_credit_notes(tenant_id=Depends(get_tenant_id), db: AsyncSession =
         .order_by(CreditNote.issue_date.desc())
     )
     return r.scalars().all()
+
+
+@router.get("/credit-notes/{cn_id}/refund-requests")
+async def list_refund_requests(
+    cn_id: str, user=Depends(get_current_user), db: AsyncSession = Depends(get_db),
+):
+    await _assert_refund_credit_note_access(cn_id, user, db)
+    return await service.list_credit_note_refund_requests(db, user["tenant_id"], cn_id)
+
+
+@router.post("/credit-notes/{cn_id}/refund-requests", status_code=201)
+async def create_refund_request(
+    cn_id: str, data: RefundRequestCreate,
+    user=Depends(require_role(["manager", "accountant", "sales", "sales_rep"])),
+    db: AsyncSession = Depends(get_db),
+):
+    await _assert_refund_credit_note_access(cn_id, user, db)
+    return await service.create_refund_request(db, user["tenant_id"], user["user_id"], cn_id, data)
+
+
+@router.post("/refund-requests/{request_id}/approve")
+async def approve_refund_request(
+    request_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db),
+):
+    return await service.approve_refund_request(db, user["tenant_id"], user["user_id"], request_id)
+
+
+@router.post("/refund-requests/{request_id}/reject")
+async def reject_refund_request(
+    request_id: str, data: RefundRequestDecision,
+    user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db),
+):
+    return await service.reject_refund_request(db, user["tenant_id"], user["user_id"], request_id, data.rejection_reason)
 
 
 @router.get("/credit-notes/{cn_id}")

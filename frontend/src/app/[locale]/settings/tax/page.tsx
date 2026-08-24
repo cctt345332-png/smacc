@@ -1,10 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getVATSettings, saveVATSettings, getAccounts } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 
-export default function TaxSettingsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function TaxSettingsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [accounts, setAccounts] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);

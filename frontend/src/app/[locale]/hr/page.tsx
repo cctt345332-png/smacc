@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { getHRSummary, getEmployees } from "@/lib/hr";
@@ -12,7 +12,13 @@ const IcChevron  = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="n
 const IcBuilding = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h6"/><path d="M3 15h6"/><path d="M15 9h3"/><path d="M15 15h3"/></svg>;
 const IcShield   = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
 
-export default function HRPage({ params: { locale } }: { params: { locale: string } }) {
+export default function HRPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const { plan } = useAuthStore();
   const hasHR = plan === "professional" || plan === "enterprise";

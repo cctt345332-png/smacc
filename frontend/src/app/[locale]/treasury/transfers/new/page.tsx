@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createVoucher } from "@/lib/treasury";
@@ -7,7 +7,13 @@ import { getAccounts, getFiscalYears, getBankAccounts } from "@/lib/accounting";
 
 const today = () => new Date().toISOString().split("T")[0];
 
-export default function NewTransferPage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewTransferPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);

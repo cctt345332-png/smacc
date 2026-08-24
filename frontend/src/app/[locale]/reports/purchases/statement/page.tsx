@@ -1,13 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getVendors, getVendorStatement } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function VendorStatementPage({ params: { locale } }: { params: { locale: string } }) {
+export default function VendorStatementPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const searchParams = useSearchParams();
   const now = new Date();
@@ -52,11 +59,7 @@ export default function VendorStatementPage({ params: { locale } }: { params: { 
           <h1 className="page-title">{ar ? "كشف حساب المورد" : "Vendor Account Statement"}</h1>
           <p className="page-subtitle">{ar ? "جميع الفواتير والمدفوعات والرصيد المستحق للمورد" : "All bills, payments and outstanding balance"}</p>
         </div>
-        {data && (
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-            <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
-          </button>
-        )}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب مورد" : "Vendor Account Statement"} subtitle={`${data.vendor.vendor_number || ""} — ${ar ? data.vendor.name_ar : data.vendor.name_en || data.vendor.name_ar}`} period={`${fromDate} — ${toDate}`} reportCode={`VEN-ST-${data.vendor.vendor_number || vendorId}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الفواتير الواردة" : "Total bills", value: `${fmt(data.summary.total_billed)} SAR`, tone: "red" }, { label: ar ? "إجمالي المدفوعات" : "Total paid", value: `${fmt(data.summary.total_paid)} SAR`, tone: "green" }, { label: ar ? "الرصيد المستحق للمورد" : "Outstanding balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }, { label: ar ? "عدد الحركات" : "Transactions", value: String(data.transactions.length), tone: "neutral" }]} tables={[{ title: ar ? "حركات حساب المورد" : "Vendor account transactions", headers: [ar ? "التاريخ" : "Date", ar ? "النوع" : "Type", ar ? "المرجع" : "Reference", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: data.transactions.map((t: any) => [t.date ? new Date(t.date).toLocaleDateString("en-GB") : "—", t.type === "bill" ? (ar ? "فاتورة واردة" : "Bill") : (ar ? "سند صرف" : "Payment"), t.reference || "—", ar ? t.description_ar || "—" : t.description_en || t.description_ar || "—", t.debit > 0 ? fmt(t.debit) : "—", t.credit > 0 ? fmt(t.credit) : "—", `${fmt(Math.abs(t.balance))} ${t.balance > 0 ? (ar ? "مستحق" : "Owed") : (ar ? "مسدد" : "Paid")}`]), totals: [ar ? "الرصيد الختامي" : "Closing balance", "", "", "", fmt(data.summary.total_paid), fmt(data.summary.total_billed), `${fmt(data.summary.closing_balance)} SAR`] }]} />}
       </div>
 
       {/* Filter */}

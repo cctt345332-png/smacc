@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import { getVendors, createVendor } from "@/lib/purchases";
 import { getAccounts } from "@/lib/accounting";
@@ -28,7 +28,13 @@ const emptyForm = {
   ap_account_id: "", notes: "",
 };
 
-export default function VendorsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function VendorsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [vendors, setVendors] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);

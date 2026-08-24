@@ -1,19 +1,10 @@
 #!/bin/sh
-set -e
+set -eu
 
-echo "Creating database tables..."
-python -c "
-import asyncio
-from app.core.database import engine, Base
-from app.models import *  # import all models
+if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
+    echo "Applying Alembic migrations..."
+    python -m alembic upgrade head
+fi
 
-async def create_tables():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print('Tables created successfully')
-
-asyncio.run(create_tables())
-"
-
-echo "Starting server..."
+echo "Starting API server..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000

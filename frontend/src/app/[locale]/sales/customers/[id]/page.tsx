@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getCustomer, getInvoices } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
@@ -20,7 +20,14 @@ const TYPE_MAP: Record<string, { ar: string; badge: string }> = {
   government: { ar: "حكومي", badge: "badge-warning" },
 };
 
-export default function CustomerDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function CustomerDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [customer, setCustomer] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);

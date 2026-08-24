@@ -1,79 +1,55 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, use } from "react";
 import { getInvoice, getCustomer } from "@/lib/sales";
 import { getCompany } from "@/lib/settings";
-import InvoicePrint, { InvoicePrintDoc } from "@/components/documents/InvoicePrint";
+import UnifiedDocumentPrint, { UnifiedPrintDocument } from "@/components/documents/UnifiedDocumentPrint";
 
-export default function SalesInvoicePrintPage({
-  params: { locale, id },
-}: {
-  params: { locale: string; id: string };
-}) {
+export default function SalesInvoicePrintPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
-  const [doc,     setDoc]     = useState<InvoicePrintDoc | null>(null);
+  const [document, setDocument] = useState<UnifiedPrintDocument | null>(null);
   const [company, setCompany] = useState<any>(null);
-  const [party,   setParty]   = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [party, setParty] = useState<any>(null);
 
   useEffect(() => {
     Promise.all([getInvoice(id), getCompany()])
-      .then(([invRes, compRes]) => {
-        const inv = invRes.data;
-        setCompany(compRes.data);
-
-        const mapped: InvoicePrintDoc = {
-          number:           inv.invoice_number,
-          issue_date:       inv.issue_date,
-          supply_date:      inv.supply_date,
-          due_date:         inv.due_date,
-          invoice_type:     inv.invoice_type,
-          status:           inv.status,
-          uuid:             inv.uuid,
-          qr_code:          inv.qr_code,
-          notes:            inv.notes,
-          subtotal:         inv.subtotal,
-          discount_amount:  inv.discount_amount,
-          vat_amount:       inv.vat_amount,
-          total:            inv.total,
-          paid_amount:      inv.paid_amount,
-          lines:            inv.lines || [],
-        };
-        setDoc(mapped);
-
-        // جلب بيانات العميل
-        if (inv.customer_id) {
-          getCustomer(inv.customer_id)
-            .then(r => setParty(r.data))
-            .catch(() => {
-              // fallback: استخدم snapshot المحفوظ في الفاتورة
-              if (inv.buyer_name_ar) {
-                setParty({ name_ar: inv.buyer_name_ar, vat_number: inv.buyer_vat_number });
-              }
-            });
-        } else if (inv.buyer_name_ar) {
-          setParty({ name_ar: inv.buyer_name_ar, vat_number: inv.buyer_vat_number });
-        }
+      .then(async ([invoiceRes, companyRes]) => {
+        const invoice = invoiceRes.data;
+        setCompany(companyRes.data);
+        setDocument({
+          number: invoice.invoice_number,
+          issue_date: invoice.issue_date,
+          supply_date: invoice.supply_date,
+          due_date: invoice.due_date,
+          status: invoice.status,
+          invoice_type: invoice.invoice_type,
+          uuid: invoice.uuid,
+          qr_code: invoice.qr_code,
+          currency_code: invoice.currency_code || "SAR",
+          subtotal: invoice.subtotal,
+          discount_amount: invoice.discount_amount,
+          vat_amount: invoice.vat_amount,
+          total: invoice.total,
+          paid_amount: invoice.paid_amount,
+          notes: invoice.notes,
+          payment_method: invoice.invoice_payment_method,
+          lines: (invoice.lines || []).map((line: any) => ({ ...line, vat_rate: line.vat_rate, unit: line.unit })),
+        });
+        if (invoice.customer_id) {
+          try { setParty((await getCustomer(invoice.customer_id)).data); }
+          catch { setParty({ name_ar: invoice.buyer_name_ar, vat_number: invoice.buyer_vat_number, address_street: invoice.buyer_address }); }
+        } else setParty({ name_ar: invoice.buyer_name_ar, vat_number: invoice.buyer_vat_number, address_street: invoice.buyer_address });
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => setDocument(null));
   }, [id]);
 
-  // طباعة تلقائية
-  useEffect(() => {
-    if (!loading && doc) setTimeout(() => window.print(), 900);
-  }, [loading, doc]);
-
-  if (loading) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#6B7280" }}>
-      {ar ? "جاري التحميل..." : "Loading..."}
-    </div>
-  );
-
-  if (!doc) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#DC2626" }}>
-      {ar ? "الفاتورة غير موجودة" : "Invoice not found"}
-    </div>
-  );
-
-  return <InvoicePrint doc={doc} company={company} party={party} locale={locale} type="sale" />;
+  if (!document) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#64736B", fontFamily: "Cairo, sans-serif" }}>{ar ? "جارٍ تجهيز الفاتورة للطباعة…" : "Preparing invoice for print…"}</div>;
+  return <UnifiedDocumentPrint kind={document.invoice_type === "simplified" ? "simplified_invoice" : "tax_invoice"} document={document} company={company} party={party} locale={locale} />;
 }

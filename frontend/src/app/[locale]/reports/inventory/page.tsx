@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getStockValueReport } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -22,7 +23,13 @@ const TRACKING_BADGE: Record<string, string> = {
   weight:   "badge-info",
 };
 
-export default function InventoryReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function InventoryReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -75,7 +82,7 @@ export default function InventoryReportPage({ params: { locale } }: { params: { 
           {extraReports.map(r => (
             <Link key={r.href} href={r.href} className="btn btn-secondary btn-sm">{r.label}</Link>
           ))}
-          {data && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}</button>}
+          {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المخزون" : "Inventory Report"} subtitle={ar ? "قيمة الأصناف وحالة المخزون حسب التتبع" : "Item valuation and stock status by tracking type"} period={ar ? "حتى تاريخ الطباعة" : "As of print date"} reportCode={`INV-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الأصناف" : "Total items", value: String(data.summary.total_items), tone: "blue" }, { label: ar ? "قيمة المخزون بالتكلفة" : "Cost value", value: `${fmt(data.summary.total_cost_value)} SAR`, tone: "blue" }, { label: ar ? "قيمة المخزون بالبيع" : "Sale value", value: `${fmt(data.summary.total_sale_value)} SAR`, tone: "green" }, { label: ar ? "الربح المتوقع" : "Potential profit", value: `${fmt(data.summary.total_potential_profit)} SAR`, tone: "green" }, { label: ar ? "منخفض المخزون" : "Low stock", value: String(data.summary.low_stock_count || 0), tone: data.summary.low_stock_count ? "red" : "green" }]} tables={[{ title: ar ? "تفاصيل الأصناف" : "Item details", headers: [ar ? "الصنف" : "Item", "SKU", ar ? "التتبع" : "Tracking", ar ? "الكمية" : "Qty", ar ? "سعر التكلفة" : "Cost", ar ? "سعر البيع" : "Sale", ar ? "قيمة التكلفة" : "Cost value", ar ? "الربح المتوقع" : "Potential profit", ar ? "الحالة" : "Status"], rows: filtered.map((row: any) => [row.name_ar || "—", row.sku || "—", ar ? TRACKING_AR[row.tracking_type] || row.tracking_type : row.tracking_type, fmt(row.quantity), fmt(row.cost_price), fmt(row.sale_price), `${fmt(row.cost_value)} SAR`, `${fmt(row.potential_profit)} SAR`, row.is_low_stock ? (ar ? "منخفض" : "Low stock") : (ar ? "متاح" : "Available")]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", "", "", "", `${fmt(filtered.reduce((s: number, r: any) => s + Number(r.cost_value || 0), 0))} SAR`, `${fmt(filtered.reduce((s: number, r: any) => s + Number(r.potential_profit || 0), 0))} SAR`, ""] }]} />}
         </div>
       </div>
 

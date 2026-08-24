@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -10,7 +11,13 @@ const PAYMENT_LABELS: Record<string, string> = {
   cash: "نقدي", mada: "مدى", credit_card: "بطاقة ائتمان", stc_pay: "STC Pay", split: "مقسّم",
 };
 
-export default function POSSalesReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function POSSalesReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const sar = ar ? "ر.س" : "SAR";
 
@@ -65,9 +72,7 @@ export default function POSSalesReportPage({ params: { locale } }: { params: { l
           </div>
           <h1 className="page-title">{ar ? "تقرير مبيعات نقطة البيع" : "POS Sales Report"}</h1>
         </div>
-        <button className="btn btn-secondary" onClick={() => window.print()}>
-          <Icon name="print" size={15} />{ar ? "طباعة" : "Print"}
-        </button>
+        <StructuredReportPrintButton locale={locale} title={ar ? "تقرير مبيعات نقطة البيع" : "POS Sales Report"} subtitle={ar ? "المبيعات اليومية والجلسات وطرق التحصيل" : "Daily sales, sessions and collections"} period={`${dateFrom} — ${dateTo}`} reportCode={`POS-SALES-${dateTo.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي المبيعات" : "Total sales", value: `${fmt(totalSales)} ${sar}`, tone: "green" }, { label: ar ? "إجمالي النقد" : "Cash", value: `${fmt(totalCash)} ${sar}`, tone: "blue" }, { label: ar ? "إجمالي البطاقة" : "Card", value: `${fmt(totalCard)} ${sar}`, tone: "blue" }, { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: `${fmt(totalVat)} ${sar}`, tone: "amber" }, { label: ar ? "المعاملات" : "Transactions", value: String(totalTxns), tone: "green" }]} tables={[{ title: ar ? "المبيعات اليومية" : "Daily sales", headers: [ar ? "التاريخ" : "Date", ar ? "المبيعات" : "Sales", ar ? "النسبة" : "Share"], rows: days.map(([day, amount]) => [new Date(day).toLocaleDateString(ar ? "ar-SA" : "en-US"), `${fmt(amount)} ${sar}`, `${totalSales > 0 ? ((amount / totalSales) * 100).toFixed(1) : "0.0"}%`]), totals: [ar ? "الإجمالي" : "TOTAL", `${fmt(totalSales)} ${sar}`, "100.0%"] }, { title: ar ? "ملخص الجلسات" : "Session summary", headers: [ar ? "التاريخ" : "Date", ar ? "المبيعات" : "Sales", ar ? "نقدي" : "Cash", ar ? "بطاقة" : "Card", ar ? "الضريبة" : "VAT", ar ? "المعاملات" : "Txns", ar ? "الحالة" : "Status"], rows: filtered.map(s => [new Date(s.opened_at).toLocaleString(ar ? "ar-SA" : "en-US"), `${fmt(Number(s.total_sales || 0))} ${sar}`, `${fmt(Number(s.total_cash || 0))} ${sar}`, `${fmt(Number(s.total_card || 0))} ${sar}`, `${fmt(Number(s.total_vat || 0))} ${sar}`, String(s.transaction_count || 0), s.status === "open" ? (ar ? "مفتوحة" : "Open") : (ar ? "مغلقة" : "Closed")]) }]} />
       </div>
 
       {/* فلتر التاريخ */}

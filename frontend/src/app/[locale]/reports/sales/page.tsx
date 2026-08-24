@@ -1,7 +1,8 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getInvoices, getSalesSummary } from "@/lib/sales";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -13,7 +14,13 @@ const STATUS_AR: Record<string, { label: string; badge: string }> = {
   cancelled: { label: "ملغاة",  badge: "badge-danger" },
 };
 
-export default function SalesReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SalesReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
@@ -42,7 +49,7 @@ export default function SalesReportPage({ params: { locale } }: { params: { loca
   const totalGross = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
   const totalPaid = invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
   const totalOutstanding = invoices.reduce((s, i) => s + Math.max(0, Number(i.total||0) - Number(i.paid_amount||0)), 0);
-  const todayD = new Date(); todayD.setHours(0,0,0,0);
+  const todayD = new Date();todayD.setHours(0,0,0,0);
   const overdueCount = invoices.filter(i => {
     const due = i.due_date ? new Date(i.due_date) : null;
     return due && due < todayD && !["paid","cancelled"].includes(i.status);
@@ -59,7 +66,7 @@ export default function SalesReportPage({ params: { locale } }: { params: { loca
           </div>
           <h1 className="page-title">{ar ? "تقرير المبيعات" : "Sales Report"}</h1>
         </div>
-        {loaded && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {loaded && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المبيعات" : "Sales Report"} subtitle={ar ? "ملخص الفواتير والتحصيلات خلال الفترة" : "Invoice and collection summary for the period"} period={`${fromDate} — ${toDate}`} reportCode={`SR-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "عدد الفواتير" : "Invoice count", value: String(invoices.length), tone: "blue" }, { label: ar ? "المبيعات قبل الضريبة" : "Net sales", value: `${fmt(totalNet)} SAR`, tone: "blue" }, { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: `${fmt(totalVAT)} SAR`, tone: "amber" }, { label: ar ? "إجمالي المبيعات" : "Gross sales", value: `${fmt(totalGross)} SAR`, tone: "green" }, { label: ar ? "المحصّل" : "Collected", value: `${fmt(totalPaid)} SAR`, tone: "green" }, { label: ar ? "المستحق" : "Outstanding", value: `${fmt(totalOutstanding)} SAR`, tone: totalOutstanding > 0 ? "red" : "green" }]} tables={[{ title: ar ? "تفاصيل فواتير المبيعات" : "Sales invoice details", headers: [ar ? "رقم الفاتورة" : "Invoice #", ar ? "العميل" : "Customer", ar ? "التاريخ" : "Date", ar ? "قبل الضريبة" : "Net", ar ? "الضريبة" : "VAT", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "الحالة" : "Status"], rows: invoices.map((inv: any) => [inv.invoice_number || "—", inv.buyer_name_ar || "—", inv.issue_date ? new Date(inv.issue_date).toLocaleDateString("en-GB") : "—", fmt(inv.taxable_amount), fmt(inv.vat_amount), fmt(inv.total), fmt(inv.paid_amount), (STATUS_AR[inv.status] || { label: inv.status || "—" }).label]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", fmt(totalNet), fmt(totalVAT), fmt(totalGross), fmt(totalPaid), ""] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -80,6 +87,7 @@ export default function SalesReportPage({ params: { locale } }: { params: { loca
 
       {loaded && (
         <>
+          <div id="report-content-sales">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr) repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
             {[
               { label: ar ? "عدد الفواتير" : "Invoice Count", value: invoices.length, color: "#2563EB", isMoney: false },
@@ -162,6 +170,7 @@ export default function SalesReportPage({ params: { locale } }: { params: { loca
                 </table>
               )}
             </div>
+          </div>
           </div>
         </>
       )}

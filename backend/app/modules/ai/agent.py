@@ -174,8 +174,8 @@ async def _openai_agent_call(
         "tools": tools,
         "tool_choice": "auto",
         "temperature": 0.3,
-        "max_tokens": 2048,
     }
+    body["max_completion_tokens" if provider.model.startswith("gpt-5") else "max_tokens"] = 2048
 
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(

@@ -1,15 +1,22 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getSerialProfitReport } from "@/lib/inventory";
 import { getItems } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
 const CONDITION: Record<string, string> = { new: "جديد", used: "مستخدم", refurbished: "مجدد" };
 
-export default function SerialProfitPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SerialProfitPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [products, setProducts] = useState<any[]>([]);
@@ -48,7 +55,7 @@ export default function SerialProfitPage({ params: { locale } }: { params: { loc
           <h1 className="page-title">{ar ? "تقرير ربح السيريالات" : "Serial Profit Report"}</h1>
           <p className="page-subtitle">{ar ? "الربح الصافي لكل وحدة مباعة بالسيريال" : "Net profit per sold serial unit"}</p>
         </div>
-        {data && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}</button>}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير ربح السيريالات" : "Serial Profit Report"} subtitle={ar ? "ربحية الوحدات المباعة ذات التتبع التسلسلي" : "Profitability of serial-tracked sold units"} period={`${fromDate} — ${toDate}`} reportCode={`SER-PROFIT-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "الوحدات المباعة" : "Units sold", value: String(data.summary.count || 0), tone: "blue" }, { label: ar ? "إجمالي التكلفة" : "Total cost", value: `${fmt(data.summary.total_cost)} SAR`, tone: "red" }, { label: ar ? "إجمالي الإيرادات" : "Total revenue", value: `${fmt(data.summary.total_revenue)} SAR`, tone: "green" }, { label: ar ? "صافي الربح" : "Net profit", value: `${fmt(data.summary.total_profit)} SAR`, tone: data.summary.total_profit >= 0 ? "green" : "red" }, { label: ar ? "متوسط الهامش" : "Average margin", value: `${fmt(data.summary.avg_profit_pct)}%`, tone: "amber" }]} tables={[{ title: ar ? "تفاصيل ربح السيريالات" : "Serial profit details", headers: [ar ? "رقم السيريال" : "Serial #", ar ? "المنتج" : "Product", ar ? "الحالة" : "Condition", ar ? "تاريخ البيع" : "Sold date", ar ? "التكلفة" : "Cost", ar ? "سعر البيع" : "Sale price", ar ? "الربح" : "Profit", ar ? "هامش الربح" : "Margin"], rows: data.rows.map((row: any) => [row.serial_number || "—", row.product_name || "—", ar ? CONDITION[row.condition] || row.condition : row.condition, row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-GB") : "—", `${fmt(row.cost_price)} SAR`, `${fmt(row.sale_price)} SAR`, `${fmt(row.profit)} SAR`, `${fmt(row.profit_pct)}%`]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", "", `${fmt(data.summary.total_cost)} SAR`, `${fmt(data.summary.total_revenue)} SAR`, `${fmt(data.summary.total_profit)} SAR`, `${fmt(data.summary.avg_profit_pct)}%`] }]} />}
       </div>
 
       {/* Filters */}

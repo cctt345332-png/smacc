@@ -1,54 +1,56 @@
+# تطوير محلي فقط. لا تستخدم هذا الملف على الخادم.
+# انسخ .env.development.example إلى .env قبل التشغيل.
 services:
-
-  # ── PostgreSQL ────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: erp
-      POSTGRES_PASSWORD: erp
-      POSTGRES_DB: erp
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U erp"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # ── Redis ─────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
       interval: 5s
       timeout: 3s
       retries: 5
 
-  # ── Backend ───────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://erp:erp@postgres:5432/erp
-      REDIS_URL: redis://redis:6379
-      SECRET_KEY: super-secret-change-in-production
-      SUPER_ADMIN_SECRET: super-admin-secret-2024
-      # بيانات الاتصال بـ PostgreSQL لـ pg_dump
+      APP_ENV: development
+      RUN_MIGRATIONS: "1"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      SUPER_ADMIN_SECRET: ${SUPER_ADMIN_SECRET:?SUPER_ADMIN_SECRET is required}
+      ENABLE_SUPER_ADMIN_BOOTSTRAP: ${ENABLE_SUPER_ADMIN_BOOTSTRAP:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       PGHOST: postgres
       PGPORT: "5432"
-      PGUSER: erp
-      PGPASSWORD: erp
-      PGDATABASE: erp
+      PGUSER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      PGDATABASE: ${POSTGRES_DB:?POSTGRES_DB is required}
+    ports:
+      - "127.0.0.1:8000:8000"
     volumes:
       - backups_data:/backups
     depends_on:
@@ -63,18 +65,16 @@ services:
       retries: 5
       start_period: 30s
 
-  # ── Frontend ──────────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # المتصفح يتصل بالـ backend من الخارج (localhost)
-        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
         NEXT_PUBLIC_MAPBOX_TOKEN: ${NEXT_PUBLIC_MAPBOX_TOKEN:-}
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       backend:
         condition: service_healthy

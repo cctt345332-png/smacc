@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getVoucher, postVoucher, cancelVoucher } from "@/lib/treasury";
 import { getCompany } from "@/lib/settings";
@@ -17,7 +17,14 @@ const METHODS: Record<string, string> = {
   mada: "مدى", stc_pay: "STC Pay", credit_card: "بطاقة ائتمان",
 };
 
-export default function PaymentDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function PaymentDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [voucher, setVoucher] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
@@ -74,7 +81,7 @@ export default function PaymentDetailPage({ params: { locale, id } }: { params: 
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+          <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/treasury/payments/${id}/print`, "_blank")}>
             <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
           </button>
           {voucher.status === "draft" && (

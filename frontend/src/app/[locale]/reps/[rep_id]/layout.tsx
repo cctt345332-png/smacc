@@ -1,4 +1,4 @@
-import AppLayout from "@/components/layout/AppLayout";
-export default function Layout({ children, params: { locale } }: { children: React.ReactNode; params: { locale: string } }) {
-  return <AppLayout locale={locale}>{children}</AppLayout>;
+export default function RepDetailLayout({ children }: { children: React.ReactNode }) {
+  // RepsLayout الأعلى يوفّر AppLayout بالفعل؛ تغليف التفاصيل مرة أخرى كان يكرر الرأس والهامش.
+  return <>{children}</>;
 }

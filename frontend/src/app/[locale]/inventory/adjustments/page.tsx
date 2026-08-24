@@ -1,16 +1,24 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getItems, getWarehouses, getSerials, createStockCount, updateSerial, getCountHistory } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
 const COND_AR: Record<string, string> = { new: "جديد", used: "مستخدم", refurbished: "مجدد" };
 const STATUS_AR: Record<string, string> = { in_stock: "متاح", sold: "مباع", reserved: "محجوز", damaged: "تالف" };
 const STATUS_BADGE: Record<string, string> = { in_stock: "badge-success", sold: "badge-gray", reserved: "badge-warning", damaged: "badge-danger" };
+const TRACKING_AR: Record<string, string> = { quantity: "كمية", serial: "سيريال", batch: "تشغيلة", variant: "متغيرات", weight: "وزن" };
 
-export default function StockCountPage({ params: { locale } }: { params: { locale: string } }) {
+export default function StockCountPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -136,9 +144,7 @@ export default function StockCountPage({ params: { locale } }: { params: { local
           <button className="btn btn-secondary btn-sm" onClick={handleOpenHistory}>
             <Icon name="view" size={14} /> {ar ? "سجل الجرد السابق" : "Count History"}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-            <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
-          </button>
+          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={ar ? "الكميات المدخلة قبل الحفظ" : "Entered counts before posting"} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "الأصناف المعدلة" : "Adjusted items", value: String(changedCount), tone: "amber" }]} tables={[{ headers: [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"], rows: items.filter(item => countMap[item.id] !== undefined && countMap[item.id] !== "").map(item => [String(item.name_ar), String(TRACKING_AR[item.tracking_type] || item.tracking_type), fmt(item.quantity_on_hand), String(countMap[item.id])]), note: notes || undefined }]} />
           {changedCount > 0 && (
             <button className="btn btn-primary" onClick={handleSaveCount} disabled={saving}>
               <Icon name="check" size={16} />

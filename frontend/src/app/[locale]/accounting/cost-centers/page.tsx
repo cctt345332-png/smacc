@@ -1,10 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getCostCenters, createCostCenter } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 
-export default function CostCentersPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CostCentersPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

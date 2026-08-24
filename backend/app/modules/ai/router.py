@@ -53,7 +53,7 @@ class AISettingsUpdate(BaseModel):
 class ValidateKeyRequest(BaseModel):
     provider: str
     api_key: str
-    model: str = "gpt-4o-mini"
+    model: str = "gpt-5-mini"
 
 
 # ══════════════════════════════════════════════════════════════════════

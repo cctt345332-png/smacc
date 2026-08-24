@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
-import { getInvoice } from "@/lib/sales";
+import { createRefundRequest, getInvoice, getRefundRequests } from "@/lib/sales";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 import SellerBlock from "@/components/documents/SellerBlock";
@@ -21,11 +21,20 @@ function QRCodeDisplay({ data, size = 88 }: { data: string; size?: number }) {
   return <canvas ref={canvasRef} style={{ borderRadius: 4 }} />;
 }
 
-export default function CreditNoteDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function CreditNoteDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [creditNote, setCreditNote] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
   const [originalInvoice, setOriginalInvoice] = useState<any>(null);
+  const [refundRequests, setRefundRequests] = useState<any[]>([]);
+  const [requestingRefund, setRequestingRefund] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -36,6 +45,10 @@ export default function CreditNoteDetailPage({ params: { locale, id } }: { param
       ]);
       setCreditNote(cnRes.data);
       setCompany(compRes.data);
+      try {
+        const refundsRes = await getRefundRequests(cnRes.data.id);
+        setRefundRequests(refundsRes.data || []);
+      } catch { setRefundRequests([]); }
       if (cnRes.data?.original_invoice_id) {
         const invRes = await getInvoice(cnRes.data.original_invoice_id);
         setOriginalInvoice(invRes.data);
@@ -50,6 +63,23 @@ export default function CreditNoteDetailPage({ params: { locale, id } }: { param
   };
 
   useEffect(() => { load(); }, [id]);
+
+  const requestRefund = async () => {
+    if (!creditNote) return;
+    const amountRaw = window.prompt(ar ? "مبلغ طلب الاسترداد (ر.س)" : "Refund request amount (SAR)", String(Number(creditNote.total || 0).toFixed(2)));
+    if (amountRaw === null) return;
+    const amount = Number(amountRaw);
+    if (!Number.isFinite(amount) || amount <= 0) { alert(ar ? "أدخل مبلغًا صحيحًا أكبر من صفر" : "Enter a valid positive amount"); return; }
+    const reason = window.prompt(ar ? "ملاحظة طلب الاسترداد (اختياري)" : "Refund request note (optional)") || undefined;
+    setRequestingRefund(true);
+    try {
+      await createRefundRequest(creditNote.id, { amount, reason });
+      await load();
+      alert(ar ? "تم إنشاء طلب الاسترداد بانتظار الاعتماد. لم يُنشأ سند صرف تلقائيًا." : "Refund request created pending approval. No payment voucher was created automatically.");
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر إنشاء طلب الاسترداد" : "Could not create refund request"));
+    } finally { setRequestingRefund(false); }
+  };
 
   if (loading) {
     return (
@@ -93,9 +123,13 @@ export default function CreditNoteDetailPage({ params: { locale, id } }: { param
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+          <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/sales/credit-notes/${id}/print`, "_blank")}>
             <Icon name="print" size={14} />
             {ar ? "طباعة" : "Print"}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={requestRefund} disabled={requestingRefund}>
+            <Icon name="money" size={14} />
+            {requestingRefund ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "طلب استرداد" : "Request refund")}
           </button>
         </div>
       </div>
@@ -236,6 +270,17 @@ export default function CreditNoteDetailPage({ params: { locale, id } }: { param
               <span style={{ color: "#DC2626" }}>- {fmt(creditNote.total)} SAR</span>
             </div>
           </div>
+        </div>
+
+        <div style={{ padding: "14px 28px", borderTop: "1px solid var(--border)", background: "#FFFEFA" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 13 }}>{ar ? "طلبات الاسترداد" : "Refund requests"}</div>
+              <div style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 3 }}>{ar ? `المقبوض على الفاتورة الأصلية: ${fmt(originalInvoice?.paid_amount)} SAR. الاعتماد لا ينشئ سند صرف تلقائيًا.` : `Paid on original invoice: ${fmt(originalInvoice?.paid_amount)} SAR. Approval does not create a payment voucher automatically.`}</div>
+            </div>
+            <span className="badge badge-gray">{refundRequests.length} {ar ? "طلب" : "requests"}</span>
+          </div>
+          {refundRequests.length > 0 && <div className="table-wrapper" style={{ marginTop: 10 }}><table><thead><tr><th>{ar ? "المبلغ" : "Amount"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "السبب" : "Reason"}</th><th>{ar ? "تاريخ الطلب" : "Requested at"}</th></tr></thead><tbody>{refundRequests.map((request: any) => <tr key={request.id}><td style={{ fontFamily: "monospace", fontWeight: 700 }}>{fmt(request.amount)} SAR</td><td>{request.status === "requested" ? (ar ? "بانتظار الاعتماد" : "Pending") : request.status === "approved" ? (ar ? "مُعتمد" : "Approved") : request.status === "rejected" ? (ar ? "مرفوض" : "Rejected") : request.status}</td><td>{request.reason || "—"}</td><td>{request.created_at ? new Date(request.created_at).toLocaleDateString("en-SA") : "—"}</td></tr>)}</tbody></table></div>}
         </div>
 
         {/* UUID */}

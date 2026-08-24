@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getPurchaseOrder, confirmPurchaseOrder, cancelPurchaseOrder, getVendor } from "@/lib/purchases";
 import { getCompany } from "@/lib/settings";
@@ -18,7 +18,14 @@ const STATUS_MAP: Record<string, { ar: string; badge: string }> = {
   cancelled:          { ar: "ملغي",        badge: "badge-danger" },
 };
 
-export default function PurchaseOrderDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function PurchaseOrderDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [order, setOrder] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
@@ -90,7 +97,7 @@ export default function PurchaseOrderDetailPage({ params: { locale, id } }: { pa
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+          <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/purchases/orders/${id}/print`, "_blank")}>
             <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
           </button>
           {order.status === "draft" && (

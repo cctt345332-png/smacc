@@ -114,7 +114,7 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
   }
 
   return (
-    <div className="app-layout">
+    <div className="app-layout legacy-erp-app legacy-app-shell">
       <div
         className={`sidebar-overlay${mobileOpen ? " visible" : ""}`}
         onClick={() => setMobileOpen(false)}

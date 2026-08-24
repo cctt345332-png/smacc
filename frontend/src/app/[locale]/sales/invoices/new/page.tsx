@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getCustomers, createInvoice, confirmInvoice } from "@/lib/sales";
@@ -34,7 +34,13 @@ function calcLine(line: Line) {
   return { gross, discAmt, taxable, tax, total: taxable + tax };
 }
 
-export default function NewInvoicePage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewInvoicePage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
 

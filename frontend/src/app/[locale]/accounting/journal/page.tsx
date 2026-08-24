@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getJournalEntries, postJournalEntry, cancelJournalEntry, reverseJournalEntry } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
@@ -11,7 +11,13 @@ const STATUS_AR: Record<string, string> = {
   draft: "مسودة", posted: "مرحّل", cancelled: "ملغي",
 };
 
-export default function JournalPage({ params: { locale } }: { params: { locale: string } }) {
+export default function JournalPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

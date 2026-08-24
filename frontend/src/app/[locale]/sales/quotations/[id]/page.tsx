@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
@@ -30,7 +30,14 @@ const STATUS_MAP: Record<string, { ar: string; badge: string }> = {
   expired:  { ar: "منتهية",  badge: "badge-gray" },
 };
 
-export default function QuotationDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function QuotationDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [quotation, setQuotation] = useState<any>(null);
@@ -107,7 +114,7 @@ export default function QuotationDetailPage({ params: { locale, id } }: { params
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+          <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/sales/quotations/${id}/print`, "_blank")}>
             <Icon name="print" size={14} />
             {ar ? "طباعة" : "Print"}
           </button>

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getMySummary, getMyStock, getMyInvoices } from "@/lib/reps";
@@ -20,8 +20,8 @@ function StatCard({
 }) {
   return (
     <div style={{
-      background: "var(--surface)", borderRadius: 16,
-      padding: "16px 18px", border: "1px solid var(--border)",
+      background: "#FFFEFA", borderRadius: 2,
+      padding: "12px 14px", border: "1px solid #C8D0C7",
       flex: 1, minWidth: 0,
     }}>
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6, fontWeight: 500 }}>
@@ -42,8 +42,8 @@ function ActionCard({
 }) {
   const inner = (
     <div style={{
-      background: "var(--surface)", borderRadius: 16,
-      padding: "18px 16px", border: "1.5px solid var(--border)",
+      background: "#FFFEFA", borderRadius: 2,
+      padding: "13px 14px", border: "1px solid #C8D0C7",
       cursor: "pointer", transition: "all 0.15s",
       display: "flex", alignItems: "center", gap: 14,
     }}
@@ -53,7 +53,7 @@ function ActionCard({
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "var(--surface)"; (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
     >
       <div style={{
-        width: 50, height: 50, borderRadius: 14, flexShrink: 0,
+        width: 38, height: 38, borderRadius: 2, flexShrink: 0,
         background: color + "18", display: "flex",
         alignItems: "center", justifyContent: "center", color,
       }}>
@@ -88,7 +88,13 @@ const Icons = {
 };
 
 /* ══════════════════════════════════════════════════════════════════ */
-export default function RepDashboard({ params: { locale } }: { params: { locale: string } }) {
+export default function RepDashboard(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const base = `/${locale}`;
   const router = useRouter();
@@ -128,7 +134,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, flexDirection: "column", gap: 12 }}>
-        <div style={{ width: 36, height: 36, border: "3px solid var(--border)", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <div style={{ width: 36, height: 36, border: "3px solid var(--border)", borderTopColor: "#0B5D4A", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
         <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>
       </div>
     );
@@ -171,7 +177,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
         <StatCard
           label={ar ? "إجمالي مبيعاتي" : "My Total Sales"}
           value={`${fmt(summary?.total_sales)} SAR`}
-          color="#2563EB"
+          color="#0B5D4A"
         />
         <StatCard
           label={ar ? "المقبوض" : "Collected"}
@@ -195,13 +201,13 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
       {pct !== null && (
         <div style={{ background: "var(--surface)", borderRadius: 16, padding: "16px 18px", border: "1px solid var(--border)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#7C3AED" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#356B63" }}>
               {Icons.target}
               <span style={{ fontSize: 13, fontWeight: 700 }}>{ar ? "الهدف الشهري" : "Monthly Target"}</span>
             </div>
             <span style={{
               fontSize: 13, fontWeight: 800,
-              color: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB",
+              color: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#0B5D4A",
             }}>{pct}%</span>
           </div>
           <div style={{ height: 10, background: "var(--border)", borderRadius: 5, overflow: "hidden" }}>
@@ -209,7 +215,7 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
               height: "100%",
               width: `${pct}%`,
               borderRadius: 5,
-              background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB",
+              background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#0B5D4A",
               transition: "width 0.6s ease",
             }} />
           </div>
@@ -228,22 +234,22 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <ActionCard icon={Icons.newInvoice} label={ar ? "فاتورة جديدة" : "New Invoice"}
             desc={ar ? "اصدر فاتورة مبيعات جديدة" : "Create a new sales invoice"}
-            color="#2563EB" href={`${base}/reps/me/invoices/new`} />
+            color="#0B5D4A" href={`${base}/reps/me/invoices/new`} />
           <ActionCard icon={Icons.customers} label={ar ? "عملائي" : "My Customers"}
             desc={ar ? "عرض وإدارة عملائك" : "View and manage your customers"}
-            color="#059669" href={`${base}/reps/me/customers`} />
+            color="#28705D" href={`${base}/reps/me/customers`} />
           <ActionCard icon={Icons.stock} label={ar ? "مخزوني" : "My Stock"}
             desc={ar ? `${stock.length} صنف متاح` : `${stock.length} items available`}
-            color="#D97706" href={`${base}/reps/me/stock`} />
+            color="#697A3B" href={`${base}/reps/me/stock`} />
           <ActionCard icon={Icons.receipt} label={ar ? "سندات القبض" : "Receipts"}
             desc={ar ? "سندات القبض من العملاء" : "Customer payment receipts"}
-            color="#7C3AED" href={`${base}/reps/me/payments`} />
+            color="#356B63" href={`${base}/reps/me/payments`} />
           <ActionCard icon={Icons.newCustomer} label={ar ? "عميل جديد" : "New Customer"}
             desc={ar ? "أضف عميلاً جديداً" : "Add a new customer"}
-            color="#0891B2" href={`${base}/reps/me/customers?action=new`} />
+            color="#4D766B" href={`${base}/reps/me/customers?action=new`} />
           <ActionCard icon={Icons.reports} label={ar ? "تقاريري" : "My Reports"}
             desc={ar ? "عرض تقارير أدائك" : "View your performance reports"}
-            color="#DC2626" href={`${base}/reps/me/reports`} />
+            color="#566A60" href={`${base}/reps/me/reports`} />
         </div>
       </div>
 
@@ -254,14 +260,14 @@ export default function RepDashboard({ params: { locale } }: { params: { locale:
             <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
               {ar ? "آخر الفواتير" : "Recent Invoices"}
             </div>
-            <Link href={`${base}/reps/me/invoices`} style={{ fontSize: 12, color: "#2563EB", fontWeight: 700, textDecoration: "none" }}>
+            <Link href={`${base}/reps/me/invoices`} style={{ fontSize: 12, color: "#0B5D4A", fontWeight: 700, textDecoration: "none" }}>
               {ar ? "عرض الكل" : "View all"}
             </Link>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {recentInvoices.map((inv: any) => {
               const statusColors: Record<string, string> = {
-                paid: "#059669", confirmed: "#2563EB", partial: "#D97706",
+                paid: "#059669", confirmed: "#0B5D4A", partial: "#D97706",
                 overdue: "#DC2626", draft: "#94A3B8", cancelled: "#6B7280",
               };
               const statusLabels: Record<string, { ar: string; en: string }> = {
@@ -340,7 +346,7 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
   const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
     draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
     submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
-    approved:  { ar: "موافق عليها",      color: "#2563EB", bg: "#EFF6FF" },
+    approved:  { ar: "موافق عليها",      color: "#0B5D4A", bg: "#E8F1E9" },
     rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
     confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
     paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
@@ -382,7 +388,7 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
           display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-              <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 17, color: "#2563EB" }}>{inv.invoice_number}</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 17, color: "#0B5D4A" }}>{inv.invoice_number}</span>
               <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: st.bg, color: st.color }}>{ar ? st.ar : inv.status}</span>
             </div>
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{d.buyer_name_ar}</div>
@@ -390,8 +396,8 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
           <div style={{ display: "flex", gap: 8 }}>
             {["approved","confirmed","paid","partial"].includes(inv.status) && (
               <button onClick={handlePDF} disabled={downloading}
-                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #BFDBFE",
-                  background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #9BBBAD",
+                  background: "#E8F1E9", color: "#0B5D4A", fontSize: 12, fontWeight: 600, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 5 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -447,7 +453,7 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
                         {line.discount_pct > 0 && ` — خصم ${line.discount_pct}%`}
                       </div>
                     </div>
-                    <div style={{ fontWeight: 700, color: "#2563EB", flexShrink: 0, marginInlineStart: 12 }}>
+                    <div style={{ fontWeight: 700, color: "#0B5D4A", flexShrink: 0, marginInlineStart: 12 }}>
                       {fmt2(line.total || line.quantity * line.unit_price)} SAR
                     </div>
                   </div>
@@ -467,7 +473,7 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
               ))}
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 0", fontWeight: 800, fontSize: 16 }}>
                 <span>{ar ? "الإجمالي" : "Total"}</span>
-                <span style={{ color: "#2563EB" }}>{fmt2(d.total)} SAR</span>
+                <span style={{ color: "#0B5D4A" }}>{fmt2(d.total)} SAR</span>
               </div>
               {Number(d.paid_amount || 0) > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 4 }}>

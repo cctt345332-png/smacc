@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createVoucher } from "@/lib/treasury";
@@ -16,7 +16,13 @@ const METHODS = [
   { value: "stc_pay", ar: "STC Pay", en: "STC Pay" },
 ];
 
-export default function NewReceiptPage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewReceiptPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);

@@ -1,14 +1,24 @@
-"use client";
+"use client";;
+import { use } from "react";
 import { usePathname } from "next/navigation";
 import AppLayout from "@/components/layout/AppLayout";
 
-export default function SalesLayout({
-  children,
-  params: { locale },
-}: {
-  children: React.ReactNode;
-  params: { locale: string };
-}) {
+export default function SalesLayout(
+  props: {
+    children: React.ReactNode;
+    params: Promise<{ locale: string }>;
+  }
+) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
+  const {
+    children
+  } = props;
+
   const pathname = usePathname();
   // صفحات /print تُطبع مستقلة — بدون sidebar أو header
   if (pathname.endsWith("/print")) {

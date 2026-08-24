@@ -1,4 +1,5 @@
-"use client";
+"use client";;
+import { use } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icons";
 
@@ -63,7 +64,13 @@ const groups = (base: string, ar: boolean): { title: string; color: string; icon
   },
 ];
 
-export default function ReportsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function ReportsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const base = `/${locale}`;
 

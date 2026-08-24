@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import { getInvoice, confirmInvoice, createPayment, getPayments } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
@@ -45,7 +45,14 @@ const emptyPayment = {
   bank_account_id: "",
 };
 
-export default function InvoiceDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function InvoiceDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [invoice, setInvoice] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
@@ -85,7 +92,7 @@ export default function InvoiceDetailPage({ params: { locale, id } }: { params: 
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("print") === "1" && invoice) {
-        setTimeout(() => window.print(), 800);
+        window.location.replace(`/${locale}/sales/invoices/${id}/print`);
       }
     }
   }, [invoice]);

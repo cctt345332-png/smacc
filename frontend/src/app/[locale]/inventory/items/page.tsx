@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getItems, getCategories, updateItem, deleteItem } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
@@ -31,7 +31,13 @@ const TRACKING_TYPES = [
   { value: "weight",   ar: "وزن",      en: "Weight",    badge: "badge-info",    desc: "عطارات، ذهب" },
 ];
 
-export default function ItemsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function ItemsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);

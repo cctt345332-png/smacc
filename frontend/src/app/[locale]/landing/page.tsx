@@ -1,401 +1,55 @@
 "use client";
-import { useState, useEffect } from "react";
+
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ACTIVITIES_LIST, PLANS_LIST, ActivityConfig, PlanConfig } from "@/lib/activityConfig";
-import LandingNav from "@/components/landing/LandingNav";
-import LandingFooter from "@/components/landing/LandingFooter";
-import { SpaceBackground } from "@/components/landing/SpaceBackground";
+import { useEffect, useState } from "react";
+import { ACTIVITIES_LIST, PLANS_LIST, type PlanConfig } from "@/lib/activityConfig";
+import { PUBLIC_CONTACT, publicContactLinks } from "@/lib/publicContact";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
-
-// ─── أيقونات الأنشطة ─────────────────────────────────────────────────
-const s18 = { width: 28, height: 28, viewBox: "0 0 24 24", fill: "none" as const, stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-const ActivityIcons: Record<string, JSX.Element> = {
-  mobile:       <svg {...s18}><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>,
-  spareParts:   <svg {...s18}><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>,
-  pharmacy:     <svg {...s18}><path d="M12 22V12m0 0V2m0 10H2m10 0h10"/></svg>,
-  grocery:      <svg {...s18}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>,
-  spices:       <svg {...s18}><path d="M12 2a5 5 0 0 1 5 5c0 5-5 13-5 13S7 12 7 7a5 5 0 0 1 5-5z"/><circle cx="12" cy="7" r="2"/></svg>,
-  clothing:     <svg {...s18}><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.57a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.57a2 2 0 0 0-1.34-2.23z"/></svg>,
-  construction: <svg {...s18}><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M12 6V2"/><path d="M8 6V4"/><path d="M16 6V4"/><line x1="2" y1="12" x2="22" y2="12"/></svg>,
-  general:      <svg {...s18}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+const Icon = ({ name }: { name: "arrow" | "check" | "chart" | "receipt" | "box" | "users" | "shield" | "mail" | "phone" | "pin" }) => {
+  const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  if (name === "arrow") return <svg {...common}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
+  if (name === "check") return <svg {...common}><polyline points="20 6 9 17 4 12"/></svg>;
+  if (name === "chart") return <svg {...common}><line x1="4" y1="20" x2="20" y2="20"/><line x1="7" y1="16" x2="7" y2="10"/><line x1="12" y1="16" x2="12" y2="4"/><line x1="17" y1="16" x2="17" y2="7"/></svg>;
+  if (name === "receipt") return <svg {...common}><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/></svg>;
+  if (name === "box") return <svg {...common}><path d="m21 8-9 5-9-5 9-5z"/><path d="M3 8v9l9 5 9-5V8"/><path d="M12 13v9"/></svg>;
+  if (name === "users") return <svg {...common}><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2"/><path d="M16 4a3 3 0 0 1 0 6"/><path d="M21 21v-2a5 5 0 0 0-3-4.58"/></svg>;
+  if (name === "shield") return <svg {...common}><path d="M12 22s8-3.7 8-10V5l-8-3-8 3v7c0 6.3 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>;
+  if (name === "mail") return <svg {...common}><rect x="3" y="5" width="18" height="14" rx="1"/><polyline points="3 7 12 13 21 7"/></svg>;
+  if (name === "phone") return <svg {...common}><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1A19.5 19.5 0 0 1 4.7 13a19.8 19.8 0 0 1-3.1-8.7A2 2 0 0 1 3.6 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.4 2.1L7.9 9.9a16 16 0 0 0 6.2 6.2l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></svg>;
+  return <svg {...common}><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></svg>;
 };
 
-const IcCheck = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
-const IcArrow = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>;
-const IcStar  = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>;
-const IcShield = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
-const IcCloud  = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>;
-const IcChart  = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>;
-const IcPos    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>;
-const IcBox    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>;
-const IcUsers  = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
+const modules = [
+  ["chart", "المحاسبة اليومية", "قيود وتقارير وميزان مراجعة منظم"], ["receipt", "المبيعات والفوترة", "فواتير وعروض أسعار ومرتجعات"],
+  ["box", "المخزون والمشتريات", "أصناف ومستودعات وسيريالات"], ["users", "إدارة الفريق", "صلاحيات ومستخدمون ومندوبون"],
+] as const;
 
 export default function LandingPage() {
-  const params = useParams();
-  const locale = (params?.locale as string) || "ar";
+  const { locale = "ar" } = useParams<{ locale: string }>();
   const ar = locale === "ar";
-  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
-  const [activeActivity, setActiveActivity] = useState(0);
-
-  // ── إعدادات المدير العام ──────────────────────────────────────────
-  const [landingCfg, setLandingCfg] = useState<Record<string, any>>({});
-  const [plansList, setPlansList] = useState(PLANS_LIST);
-  const [activitiesList, setActivitiesList] = useState(ACTIVITIES_LIST);
-
+  const [plans, setPlans] = useState<PlanConfig[]>(PLANS_LIST);
   useEffect(() => {
-    // جلب إعدادات صفحة الهبوط
-    fetch(`${API_BASE}/admin/landing-config/public`)
-      .then(r => r.json()).then(d => { if (d && Object.keys(d).length > 0) setLandingCfg(d); })
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api/v1"}/admin/plans-config/public`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.plans && Object.keys(data.plans).length) setPlans(Object.values(data.plans) as PlanConfig[]); })
       .catch(() => {});
-
-    // جلب الباقات (قد تكون معدّلة من المدير العام)
-    fetch(`${API_BASE}/admin/plans-config/public`)
-      .then(r => r.json()).then(d => {
-        if (d.has_override && d.plans && Object.keys(d.plans).length > 0) {
-          setPlansList(Object.values(d.plans) as any);
-        }
-      }).catch(() => {});
-
-    // جلب الأنشطة (قد تكون معدّلة من المدير العام)
-    fetch(`${API_BASE}/admin/activities-config/public`)
-      .then(r => r.json()).then(d => {
-        if (d.has_override && d.activities && Object.keys(d.activities).length > 0) {
-          setActivitiesList(Object.values(d.activities) as any);
-        }
-      }).catch(() => {});
   }, []);
-
-  // دوال مساعدة لجلب النص من الإعدادات أو الافتراضي
-  const t = (key: string, fallback: string) => landingCfg[key] || fallback;
-  const showSection = (key: string) => landingCfg[key] !== false;
-
-  return (
-    <div dir={ar ? "rtl" : "ltr"} style={{ fontFamily: "'Alexandria', sans-serif", color: "#0F172A", background: "#fff", minHeight: "100vh" }}>
-      <style>{`
-        .land-hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-        .land-act-grid  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-        .land-act-detail { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
-        .land-feat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
-        .land-plans-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
-        .land-mod-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        @media (max-width: 640px) {
-          .land-act-grid  { grid-template-columns: repeat(4, 1fr); gap: 6px; }
-          .land-act-detail { grid-template-columns: 1fr !important; gap: 20px; }
-          .land-feat-grid { grid-template-columns: 1fr; }
-          .land-plans-grid { grid-template-columns: 1fr; }
-          .land-mod-grid  { grid-template-columns: 1fr 1fr; }
-          .land-hero-btns a { width: 100%; justify-content: center; }
-        }
-      `}</style>
-
-      {/* ── Navbar ─────────────────────────────────────────────────── */}
-      <LandingNav locale={locale} />
-
-      {/* ── Hero ───────────────────────────────────────────────────── */}
-      <section style={{
-        position: "relative",
-        padding: "64px 5% 72px",
-        textAlign: "center",
-        background: "linear-gradient(180deg, #ffffff 0%, #ffffff 70%, #EFF6FF 100%)",
-        overflow: "hidden",
-      }}>
-
-        {/* جسيمات زرقاء خفيفة على خلفية بيضاء */}
-        <SpaceBackground
-          particleCount={380}
-          particleColor="rgba(37,99,235,0.18)"
-          backgroundColor="transparent"
-        />
-
-        {/* المحتوى */}
-        <div style={{ position: "relative", zIndex: 1, maxWidth: 680, margin: "0 auto" }}>
-
-          {/* Badge زاتكا */}
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#EFF6FF", color: "#2563EB", padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, marginBottom: 24, border: "1px solid #BFDBFE" }}>
-            <IcShield />
-            {ar
-              ? t("hero_badge_ar", "متوافق مع زاتكا — الفوترة الإلكترونية المرحلة الثانية")
-              : t("hero_badge_en", "ZATCA Compliant — Phase 2 e-Invoicing")}
-          </div>
-
-          {/* الشعار */}
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-            <img
-              src="/logo.png"
-              alt="Masar"
-              style={{
-                height: 110, maxWidth: "90%",
-                objectFit: "contain",
-                filter: "drop-shadow(0 2px 16px rgba(37,99,235,0.18))",
-              }}
-            />
-          </div>
-
-          {/* الوصف */}
-          <p style={{ fontSize: "clamp(14px, 2vw, 17px)", color: "#64748B", lineHeight: 1.75, maxWidth: 520, margin: "0 auto 32px" }}>
-            {ar
-              ? t("hero_subtitle_ar", "محاسبة، مبيعات، مشتريات، مخزون، نقطة بيع — كل شيء في مكان واحد. يتكيف مع نشاطك ويتوافق مع زاتكا.")
-              : t("hero_subtitle_en", "Accounting, sales, purchases, inventory, POS — everything in one place. Adapts to your business and complies with ZATCA.")}
-          </p>
-
-          {/* الأزرار */}
-          <div className="land-hero-btns">
-            <Link href={`/${locale}/register`} style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              padding: "13px 26px", borderRadius: 12,
-              background: "#2563EB", color: "white",
-              fontWeight: 800, fontSize: 15, textDecoration: "none",
-              boxShadow: "0 4px 16px rgba(37,99,235,0.35)",
-            }}>
-              {ar ? t("hero_cta_ar", "ابدأ تجربتك المجانية 14 يوم") : t("hero_cta_en", "Start your 14-day free trial")}
-              <IcArrow />
-            </Link>
-            <Link href={`/${locale}/login`} style={{
-              display: "inline-flex", alignItems: "center", gap: 8,
-              padding: "13px 26px", borderRadius: 12,
-              background: "white", color: "#0F172A",
-              fontWeight: 700, fontSize: 15, textDecoration: "none",
-              border: "1.5px solid #E2E8F0",
-            }}>
-              {ar ? "تسجيل الدخول" : "Sign In"}
-            </Link>
-          </div>
-
-          {/* النجوم */}
-          <div style={{ marginTop: 20, display: "flex", justifyContent: "center", alignItems: "center", gap: 4, color: "#F59E0B", flexWrap: "wrap" }}>
-            {[1,2,3,4,5].map(i => <IcStar key={i} />)}
-            <span style={{ color: "#94A3B8", fontSize: 12, marginInlineStart: 6 }}>
-              {ar ? t("trust_text_ar", "موثوق من أكثر من 500 شركة سعودية") : t("trust_text_en", "Trusted by 500+ Saudi businesses")}
-            </span>
-          </div>
-        </div>
-
-        {/* CSS للدوران */}
-        <style>{`
-          @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        `}</style>
-      </section>
-
-      {/* ── الأنشطة ────────────────────────────────────────────────── */}
-      {showSection("show_activities") && (
-      <section style={{ padding: "48px 5%", background: "#fff" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, marginBottom: 10 }}>
-              {ar ? "مصمم لنشاطك بالضبط" : "Designed for your exact business"}
-            </h2>
-            <p style={{ color: "#64748B", fontSize: 14 }}>
-              {ar ? "اختر نشاطك — تظهر فقط الميزات التي تحتاجها" : "Choose your activity — only the features you need appear"}
-            </p>
-          </div>
-
-          {/* Activity tabs */}
-          <div className="land-act-grid" style={{ marginBottom: 28 }}>
-            {activitiesList.map((act, i) => (
-              <button key={act.key} onClick={() => setActiveActivity(i)}
-                style={{
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
-                  padding: "12px 8px", borderRadius: 10,
-                  border: `2px solid ${activeActivity === i ? act.color : "#E2E8F0"}`,
-                  background: activeActivity === i ? act.bg : "white",
-                  color: activeActivity === i ? act.color : "#64748B",
-                  fontWeight: 600, fontSize: 11, cursor: "pointer", transition: "all 0.15s",
-                  lineHeight: 1.3, textAlign: "center",
-                }}>
-                <span style={{ color: activeActivity === i ? act.color : "#94A3B8" }}>
-                  {ActivityIcons[act.icon] || ActivityIcons.general}
-                </span>
-                <span>{ar ? act.label_ar.split(" ")[0] : act.label_en.split(" ")[0]}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Activity detail */}
-          {(() => {
-            const act = activitiesList[activeActivity];
-            return (
-              <div className="land-act-detail">
-                {/* Left: info */}
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-                    <div style={{ width: 52, height: 52, borderRadius: 14, background: act.bg, display: "flex", alignItems: "center", justifyContent: "center", color: act.color, flexShrink: 0 }}>
-                      {ActivityIcons[act.icon] || ActivityIcons.general}
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: "clamp(18px, 3vw, 22px)", fontWeight: 800, lineHeight: 1.2 }}>{ar ? act.label_ar : act.label_en}</h3>
-                      <p style={{ color: "#64748B", fontSize: 13, marginTop: 2 }}>{ar ? act.desc_ar : act.desc_en}</p>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                    {[
-                      act.inventoryFeatures.serial    && (ar ? "تتبع السيريال لكل وحدة" : "Per-unit serial tracking"),
-                      act.inventoryFeatures.batch     && (ar ? "تتبع التشغيلة وتاريخ الانتهاء" : "Batch & expiry tracking"),
-                      act.inventoryFeatures.variant   && (ar ? "متغيرات المنتج (مقاس، لون)" : "Product variants (size, color)"),
-                      act.inventoryFeatures.weight    && (ar ? "البيع بالوزن" : "Sell by weight"),
-                      act.allowPurchaseFromPOS        && (ar ? "شراء مباشر من نقطة البيع" : "Direct purchase from POS"),
-                      act.modules.includes("pos")     && (ar ? "نقطة بيع متكاملة" : "Full POS system"),
-                      ar ? "محاسبة متوافقة مع زاتكا" : "ZATCA-compliant accounting",
-                    ].filter(Boolean).map((f, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                        <span style={{ color: act.color, flexShrink: 0 }}><IcCheck /></span>
-                        <span>{f as string}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <Link href={`/${locale}/register?activity=${act.key}`}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8, marginTop: 20, padding: "11px 20px", borderRadius: 10, background: act.color, color: "white", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
-                    {ar ? `ابدأ بـ ${act.label_ar}` : `Start with ${act.label_en}`}
-                    <IcArrow />
-                  </Link>
-                </div>
-
-                {/* Right: modules */}
-                <div style={{ background: act.bg, borderRadius: 14, padding: 20, border: `1px solid ${act.color}20` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: act.color, textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 14 }}>
-                    {ar ? "الوحدات المتاحة" : "Available Modules"}
-                  </div>
-                  <div className="land-mod-grid">
-                    {[
-                      { key: "accounting", ar: "المحاسبة",       en: "Accounting", icon: <IcChart /> },
-                      { key: "sales",      ar: "المبيعات",       en: "Sales",      icon: <IcArrow /> },
-                      { key: "purchases",  ar: "المشتريات",      en: "Purchases",  icon: <IcBox /> },
-                      { key: "inventory",  ar: "المخزون",        en: "Inventory",  icon: <IcBox /> },
-                      { key: "pos",        ar: "نقطة البيع",     en: "POS",        icon: <IcPos /> },
-                      { key: "treasury",   ar: "الخزينة",        en: "Treasury",   icon: <IcChart /> },
-                      { key: "hr",         ar: "الموارد البشرية",en: "HR",         icon: <IcUsers /> },
-                    ].map(m => {
-                      const enabled = act.modules.includes(m.key as any);
-                      return (
-                        <div key={m.key} style={{
-                          display: "flex", alignItems: "center", gap: 7,
-                          padding: "8px 10px", borderRadius: 8,
-                          background: enabled ? "white" : "transparent",
-                          opacity: enabled ? 1 : 0.3,
-                          fontSize: 12, fontWeight: enabled ? 600 : 400,
-                        }}>
-                          <span style={{ color: enabled ? act.color : "#94A3B8", flexShrink: 0 }}>{m.icon}</span>
-                          {ar ? m.ar : m.en}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </section>
-      )}
-
-      {/* ── الميزات ────────────────────────────────────────────────── */}
-      {showSection("show_features") && (
-      <section style={{ padding: "48px 5%", background: "#F8FAFC" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, marginBottom: 10 }}>
-              {ar ? t("features_title_ar", "كل ما تحتاجه في مكان واحد") : t("features_title_en", "Everything you need in one place")}
-            </h2>
-          </div>
-          <div className="land-feat-grid">
-            {[
-              { icon: <IcShield />, color: "#2563EB", bg: "#EFF6FF", title: ar ? "متوافق مع زاتكا" : "ZATCA Compliant",    desc: ar ? "فوترة إلكترونية المرحلة الثانية، QR Code، UUID" : "Phase 2 e-invoicing, QR Code, UUID" },
-              { icon: <IcPos />,    color: "#059669", bg: "#ECFDF5", title: ar ? "نقطة بيع متكاملة" : "Full POS System",   desc: ar ? "كاشير سريع، فاتورة حرارية، مدى وSTC Pay" : "Fast cashier, thermal receipt, Mada & STC Pay" },
-              { icon: <IcBox />,    color: "#7C3AED", bg: "#F5F3FF", title: ar ? "مخزون ذكي" : "Smart Inventory",          desc: ar ? "سيريال، تشغيلة، متغيرات، وزن — حسب نشاطك" : "Serial, batch, variants, weight — per your activity" },
-              { icon: <IcChart />,  color: "#D97706", bg: "#FFFBEB", title: ar ? "تقارير متقدمة" : "Advanced Reports",     desc: ar ? "ميزانية، دخل، تدفقات نقدية، ضريبة القيمة المضافة" : "Balance sheet, income, cash flow, VAT" },
-              { icon: <IcCloud />,  color: "#0891B2", bg: "#ECFEFF", title: ar ? "سحابي 100%" : "100% Cloud",              desc: ar ? "وصول من أي مكان، نسخ احتياطي تلقائي" : "Access from anywhere, automatic backup" },
-              { icon: <IcUsers />,  color: "#EC4899", bg: "#FDF2F8", title: ar ? "متعدد المستخدمين" : "Multi-user",        desc: ar ? "صلاحيات مرنة، فروع متعددة، مستودعات" : "Flexible permissions, multiple branches, warehouses" },
-            ].map((f, i) => (
-              <div key={i} style={{ background: "white", borderRadius: 14, padding: 20, border: "1px solid #E2E8F0" }}>
-                <div style={{ width: 42, height: 42, borderRadius: 11, background: f.bg, display: "flex", alignItems: "center", justifyContent: "center", color: f.color, marginBottom: 12 }}>
-                  {f.icon}
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 5 }}>{f.title}</div>
-                <div style={{ color: "#64748B", fontSize: 12, lineHeight: 1.6 }}>{f.desc}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-
-      {/* ── الأسعار ────────────────────────────────────────────────── */}
-      {showSection("show_pricing") && (
-      <section style={{ padding: "48px 5%", background: "#fff" }} id="pricing">
-        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-          <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <h2 style={{ fontSize: "clamp(22px, 4vw, 30px)", fontWeight: 800, marginBottom: 10 }}>
-              {ar ? t("pricing_title_ar", "خطط واضحة بدون مفاجآت") : t("pricing_title_en", "Clear plans, no surprises")}
-            </h2>
-            <p style={{ color: "#64748B", fontSize: 14, marginBottom: 20 }}>
-              {ar ? t("pricing_subtitle_ar", "ابدأ مجاناً 14 يوم — لا يلزم بطاقة ائتمان") : t("pricing_subtitle_en", "Start free for 14 days — no credit card required")}
-            </p>
-            <div style={{ display: "inline-flex", background: "#F1F5F9", borderRadius: 10, padding: 4, gap: 4 }}>
-              {(["monthly", "yearly"] as const).map(b => (
-                <button key={b} onClick={() => setBilling(b)}
-                  style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontWeight: 600, fontSize: 12, cursor: "pointer", background: billing === b ? "white" : "transparent", color: billing === b ? "#0F172A" : "#64748B", boxShadow: billing === b ? "0 1px 4px rgba(0,0,0,0.1)" : "none" }}>
-                  {b === "monthly" ? (ar ? "شهري" : "Monthly") : (ar ? "سنوي (وفر 17%)" : "Yearly (save 17%)")}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="land-plans-grid">
-            {plansList.map(plan => (
-              <div key={plan.key} style={{
-                borderRadius: 16, padding: 24, border: `2px solid ${plan.popular ? plan.color : "#E2E8F0"}`,
-                background: plan.popular ? plan.bg : "white", position: "relative",
-              }}>
-                {plan.popular && (
-                  <div style={{ position: "absolute", top: -11, insetInlineStart: "50%", transform: "translateX(-50%)", background: plan.color, color: "white", padding: "3px 12px", borderRadius: 20, fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    {ar ? "الأكثر شيوعاً" : "Most Popular"}
-                  </div>
-                )}
-                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{ar ? plan.label_ar : plan.label_en}</div>
-                <div style={{ marginBottom: 16 }}>
-                  {plan.price_monthly === 0 ? (
-                    <div style={{ fontSize: 28, fontWeight: 800, color: plan.color }}>
-                      {ar ? "مجاناً" : "Free"}
-                      <span style={{ fontSize: 12, fontWeight: 400, color: "#64748B", marginInlineStart: 6 }}>
-                        {ar ? `${plan.limits.trial_days} يوم` : `${plan.limits.trial_days} days`}
-                      </span>
-                    </div>
-                  ) : (
-                    <div>
-                      <span style={{ fontSize: 28, fontWeight: 800, color: plan.color }}>
-                        {billing === "monthly" ? plan.price_monthly : Math.round(plan.price_yearly / 12)}
-                      </span>
-                      <span style={{ fontSize: 13, color: "#64748B" }}> {ar ? "ر.س / شهر" : "SAR / mo"}</span>
-                      {billing === "yearly" && (
-                        <div style={{ fontSize: 11, color: "#059669", fontWeight: 600 }}>
-                          {ar ? `${plan.price_yearly} ر.س / سنة` : `${plan.price_yearly} SAR / year`}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 20 }}>
-                  {(ar ? plan.features_ar : plan.features_en).map((f, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12 }}>
-                      <span style={{ color: plan.color, flexShrink: 0 }}><IcCheck /></span>
-                      {f}
-                    </div>
-                  ))}
-                </div>
-                <Link href={`/${locale}/register?plan=${plan.key}`}
-                  style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, padding: "10px 0", borderRadius: 10, background: plan.popular ? plan.color : "transparent", color: plan.popular ? "white" : plan.color, fontWeight: 700, fontSize: 13, textDecoration: "none", border: `1.5px solid ${plan.color}` }}>
-                  {plan.key === "trial" ? (ar ? "ابدأ مجاناً" : "Start Free") : (ar ? "اشترك الآن" : "Subscribe Now")}
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-      )}
-
-      {/* ── Footer ─────────────────────────────────────────────────── */}
-      <LandingFooter locale={locale} />
-    </div>
-  );
+  const visiblePlans = plans.filter((plan) => (plan as PlanConfig & { is_active?: boolean }).is_active !== false);
+  return <main className="public-site" dir={ar ? "rtl" : "ltr"}>
+    <style>{`
+      .public-site{--ink:#173a2f;--green:#0b5d4a;--green2:#126d57;--paper:#fffefa;--line:#c8d0c7;min-height:100vh;background:var(--paper);color:var(--ink);font-family:var(--font-cairo),Cairo,Arial,sans-serif}
+      .public-site *{box-sizing:border-box}.public-site a{text-decoration:none;color:inherit}.marketing-wrap{width:min(1180px,92vw);margin:auto}.public-header{height:76px;background:#fff;border-bottom:1px solid #dce3da;position:sticky;top:0;z-index:30}.public-header .marketing-wrap{height:100%;display:flex;align-items:center;justify-content:space-between;gap:24px}.brand-logo{display:block;width:192px;height:auto;object-fit:contain}.public-nav{display:flex;align-items:center;gap:22px;font-size:13px;font-weight:700;color:#5f7068}.public-nav a:hover{color:var(--green)}.header-actions{display:flex;align-items:center;gap:8px}.public-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 15px;border:1px solid var(--green);font:800 13px inherit;cursor:pointer;transition:.16s ease}.public-btn.primary{color:#fff;background:linear-gradient(180deg,#17735c,#0b5d4a);box-shadow:0 3px 0 #084535}.public-btn.secondary{background:#fff;color:var(--green)}
+      .hero{position:relative;overflow:hidden;padding:80px 0 68px;background:radial-gradient(circle at 16% 20%,#e1f0e5 0,transparent 31%),linear-gradient(180deg,#fbfdf8,#eef5ef)}.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:55px;align-items:center}.eyebrow{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border:1px solid #b9cfbd;background:#f9fdf8;color:#126d57;font-size:11px;font-weight:800}.hero h1{font-size:clamp(32px,4vw,54px);line-height:1.2;margin:18px 0 16px;letter-spacing:-1px}.hero h1 strong{color:var(--green)}.hero p{max-width:580px;margin:0 0 24px;font-size:16px;line-height:2;color:#5a6b62}.hero-actions{display:flex;flex-wrap:wrap;gap:10px}.hero-note{display:flex;align-items:center;gap:8px;margin-top:20px;color:#597165;font-size:12px}.hero-note i{color:#e0a80e}.product-frame{border:1px solid #bdccbf;background:#fffefa;box-shadow:13px 15px 0 rgba(11,93,74,.13);padding:10px}.window-bar{height:32px;display:flex;align-items:center;gap:5px;padding:0 10px;background:linear-gradient(#f5f8f3,#e2e9e1);border:1px solid var(--line);font:800 10px monospace;color:#527060}.dots{display:flex;gap:4px;margin-inline-end:auto}.dots i{width:7px;height:7px;border-radius:50%;background:#a9b9ac}.ledger-top{display:grid;grid-template-columns:140px 1fr;gap:8px;margin-top:8px}.ledger-side{min-height:244px;padding:12px 9px;background:#0b5d4a;color:#e8f3e9}.ledger-side b{display:block;margin:0 0 13px;font-size:11px}.ledger-side span{display:block;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.14);font-size:9px}.ledger-work{border:1px solid var(--line);padding:10px}.ledger-work-head{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:11px}.ledger-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}.ledger-kpi{padding:8px;border:1px solid #d7e0d6;background:#f6faf5}.ledger-kpi small{display:block;color:#76857a;font-size:8px}.ledger-kpi b{font:800 13px monospace;color:#0b5d4a}.ledger-table{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;border-top:1px solid var(--line);border-left:1px solid var(--line)}.ledger-table span{min-height:27px;padding:7px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);font-size:8px}.ledger-table span:nth-child(-n+4){font-weight:800;background:#e8f1e9}.ledger-table span:nth-child(8n+5),.ledger-table span:nth-child(8n+6),.ledger-table span:nth-child(8n+7),.ledger-table span:nth-child(8n+8){background:#fbfdf9}
+      .proof{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fff;padding:19px 0}.proof-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0}.proof-item{padding:0 21px;border-inline-start:1px solid #d9e1d8;text-align:center}.proof-item:first-child{border:0}.proof-item b{display:block;font:800 20px monospace;color:var(--green)}.proof-item span{font-size:11px;color:#718078}.section{padding:76px 0}.section.paper{background:#fff}.section-heading{max-width:640px;margin:0 auto 32px;text-align:center}.section-heading span{color:#126d57;font-size:11px;font-weight:900;letter-spacing:.4px}.section-heading h2{margin:8px 0 10px;font-size:clamp(25px,3vw,38px)}.section-heading p{margin:0;color:#66776e;line-height:1.8;font-size:14px}.module-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:#fff}.module-card{padding:22px;border-inline-start:1px solid var(--line);min-height:180px}.module-card:first-child{border:0}.module-icon{width:40px;height:40px;display:grid;place-items:center;background:#e8f1e9;color:var(--green);border:1px solid #bdd1c0}.module-card h3{margin:16px 0 7px;font-size:15px}.module-card p{margin:0;color:#6b7b72;font-size:12px;line-height:1.8}.activity-strip{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center;padding:34px;border:1px solid #b9cbbb;background:#e8f1e9}.activity-copy h2{font-size:28px;margin:0 0 10px}.activity-copy p{color:#586c60;line-height:1.9;font-size:14px}.activity-list{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.activity-list span{padding:9px 11px;border:1px solid #c1d1c1;background:#fffefa;font-size:11px;font-weight:700}.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.plan{position:relative;border:1px solid var(--line);background:#fffefa;padding:21px}.plan.popular{border:2px solid var(--green);box-shadow:5px 6px 0 #d7e5d8}.plan .tag{position:absolute;top:-12px;inset-inline-start:17px;padding:4px 9px;background:var(--green);color:#fff;font-size:10px;font-weight:800}.plan h3{margin:0;font-size:19px}.plan .price{margin:12px 0;font:800 26px monospace;color:var(--green)}.plan .price small{font:700 10px Cairo,sans-serif;color:#6c7a71}.plan ul{margin:0 0 17px;padding:0;list-style:none}.plan li{display:flex;gap:7px;margin:8px 0;color:#607167;font-size:11px}.plan li svg{color:#126d57;flex:0 0 auto;width:14px}.footer{padding:42px 0 22px;background:#123c31;color:#e6f0e8}.footer-grid{display:grid;grid-template-columns:1.3fr repeat(3,1fr);gap:32px}.footer .brand-logo{width:180px;filter:brightness(0) invert(1);margin-bottom:14px}.footer p,.footer a{color:#c6d7ca;font-size:12px;line-height:1.9}.footer h4{font-size:13px;margin:0 0 11px;color:#fff}.footer a{display:block;margin:4px 0}.contact-line{display:flex!important;align-items:center;gap:8px}.footer-bottom{margin-top:30px;padding-top:16px;border-top:1px solid rgba(255,255,255,.16);font-size:10px;color:#b8cbbd}
+      @media(max-width:820px){.public-nav{display:none}.hero{padding:45px 0}.hero-grid,.activity-strip{grid-template-columns:1fr;gap:25px}.product-frame{max-width:570px;margin:auto}.module-grid{grid-template-columns:repeat(2,1fr)}.module-card:nth-child(3){border-inline-start:0;border-top:1px solid var(--line)}.module-card:nth-child(4){border-top:1px solid var(--line)}.plans{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr 1fr}.proof-grid{grid-template-columns:repeat(2,1fr);gap:18px}.proof-item:nth-child(3){border:0}.header-actions .secondary{display:none}}@media(max-width:480px){.public-header{height:64px}.brand-logo{width:143px}.header-actions .primary{min-height:34px;padding:0 9px;font-size:11px}.hero h1{font-size:32px}.hero p{font-size:14px}.hero-actions{display:grid;grid-template-columns:1fr}.hero-actions .public-btn{width:100%}.ledger-top{grid-template-columns:95px 1fr}.ledger-side{min-height:220px}.ledger-kpis{grid-template-columns:1fr}.ledger-kpi:nth-child(n+2){display:none}.proof-item{padding:0 9px}.module-grid{grid-template-columns:1fr}.module-card{border:0!important;border-top:1px solid var(--line)!important;min-height:auto}.module-card:first-child{border-top:0!important}.footer-grid{grid-template-columns:1fr}.activity-list{grid-template-columns:1fr}.section{padding:52px 0}}
+    `}</style>
+    <header className="public-header"><div className="marketing-wrap"><Link href={`/${locale}/landing`}><img className="brand-logo" src="/logo-masar-green.png" alt="MASAR - مسار للحلول المحاسبية"/></Link><nav className="public-nav"><Link href="#features">{ar ? "المزايا" : "Features"}</Link><Link href="#plans">{ar ? "الباقات" : "Plans"}</Link><Link href={`/${locale}/landing/contact`}>{ar ? "تواصل معنا" : "Contact"}</Link></nav><div className="header-actions"><Link className="public-btn secondary" href={`/${locale}/login`}>{ar ? "دخول" : "Sign in"}</Link><Link className="public-btn primary" href={`/${locale}/register`}>{ar ? "ابدأ الآن" : "Start now"}</Link></div></div></header>
+    <section className="hero"><div className="marketing-wrap hero-grid"><div><div className="eyebrow"><Icon name="shield"/>{ar ? "منصة محاسبية منظمة للشركات السعودية" : "An organized accounting platform for Saudi businesses"}</div><h1>{ar ? <>أدر أعمال شركتك من <strong>دفتر واحد واضح.</strong></> : <>Run your company from <strong>one clear ledger.</strong></>}</h1><p>{ar ? "مَسار يجمع المحاسبة والمبيعات والمخزون والمشتريات في نظام عملي مرتب، لتتابع الأرقام والعمليات بثقة." : "MASAR brings accounting, sales, inventory and purchasing into one orderly workspace."}</p><div className="hero-actions"><Link className="public-btn primary" href={`/${locale}/register`}>{ar ? "أنشئ مساحة شركتك" : "Create your workspace"}<Icon name="arrow"/></Link><Link className="public-btn secondary" href={`/${locale}/login`}>{ar ? "تسجيل الدخول" : "Sign in"}</Link></div><div className="hero-note"><i>★★★★★</i>{ar ? "تصميم عملي مناسب للعمل اليومي، وليس لوحة مزدحمة." : "A practical workspace for daily operations."}</div></div><div className="product-frame" aria-label={ar ? "معاينة النظام" : "System preview"}><div className="window-bar"><span>{ar ? "مَسار ERP · لوحة العمليات" : "MASAR ERP · Operations"}</span><div className="dots"><i/><i/><i/></div></div><div className="ledger-top"><aside className="ledger-side"><b>MASAR ERP</b><span>{ar ? "لوحة العمليات" : "Operations"}</span><span>{ar ? "المبيعات" : "Sales"}</span><span>{ar ? "المشتريات" : "Purchases"}</span><span>{ar ? "المخزون" : "Inventory"}</span><span>{ar ? "التقارير" : "Reports"}</span></aside><div className="ledger-work"><div className="ledger-work-head"><span>{ar ? "ملخص اليوم" : "Today summary"}</span><span>{ar ? "24 أغسطس" : "24 Aug"}</span></div><div className="ledger-kpis"><div className="ledger-kpi"><small>{ar ? "المبيعات" : "Sales"}</small><b>18,450</b></div><div className="ledger-kpi"><small>{ar ? "المقبوضات" : "Collected"}</small><b>12,700</b></div><div className="ledger-kpi"><small>{ar ? "فواتير" : "Invoices"}</small><b>24</b></div></div><div className="ledger-table"><span>{ar ? "المستند" : "Document"}</span><span>{ar ? "العميل" : "Customer"}</span><span>{ar ? "القيمة" : "Amount"}</span><span>{ar ? "الحالة" : "Status"}</span><span>INV-0241</span><span>{ar ? "شركة المثال" : "Example Co."}</span><span>4,250</span><span>{ar ? "مكتمل" : "Done"}</span><span>INV-0242</span><span>{ar ? "متجر المدينة" : "City Store"}</span><span>2,800</span><span>{ar ? "معلق" : "Pending"}</span></div></div></div></div></div></section>
+    <section className="proof"><div className="marketing-wrap proof-grid"><div className="proof-item"><b>01</b><span>{ar ? "مساحة عمل واحدة" : "One workspace"}</span></div><div className="proof-item"><b>08+</b><span>{ar ? "وحدات تشغيل مترابطة" : "Connected modules"}</span></div><div className="proof-item"><b>RTL</b><span>{ar ? "واجهة عربية أصلية" : "Arabic-first interface"}</span></div><div className="proof-item"><b>24/7</b><span>{ar ? "وصول من أي مكان" : "Access anywhere"}</span></div></div></section>
+    <section className="section paper" id="features"><div className="marketing-wrap"><div className="section-heading"><span>{ar ? "مبني للعمل اليومي" : "Built for daily work"}</span><h2>{ar ? "كل وحدة في مكانها الصحيح." : "Every workflow in its proper place."}</h2><p>{ar ? "واجهة عملية متماسكة تساعدك على تنفيذ العمليات ومراجعتها بدل التنقل بين صفحات كثيرة." : "A coherent workspace for executing and reviewing operations without needless switching."}</p></div><div className="module-grid">{modules.map(([icon,title,text])=><article className="module-card" key={title}><div className="module-icon"><Icon name={icon}/></div><h3>{ar ? title : title}</h3><p>{ar ? text : text}</p></article>)}</div></div></section>
+    <section className="section"><div className="marketing-wrap activity-strip"><div className="activity-copy"><span className="eyebrow">{ar ? "تهيئة مرنة" : "Flexible setup"}</span><h2>{ar ? "ابدأ وفق نشاطك، ثم توسع بهدوء." : "Start for your business, then grow with confidence."}</h2><p>{ar ? "من الجوالات وقطع الغيار إلى الصيدليات والبقالات، نرتب نقطة البداية بما يناسب طبيعة عملياتك." : "From mobile retail to pharmacies and groceries, start with the workflows that fit you."}</p><Link className="public-btn secondary" href={`/${locale}/register`}>{ar ? "ابدأ الإعداد" : "Start setup"}<Icon name="arrow"/></Link></div><div className="activity-list">{ACTIVITIES_LIST.slice(0,6).map((activity)=><span key={activity.key}>{ar ? activity.label_ar : activity.label_en}</span>)}</div></div></section>
+    <section className="section paper" id="plans"><div className="marketing-wrap"><div className="section-heading"><span>{ar ? "باقات واضحة" : "Clear plans"}</span><h2>{ar ? "اختر نقطة البداية المناسبة." : "Choose the right starting point."}</h2><p>{ar ? "ابدأ بالتجربة، ثم انتقل إلى الباقة المناسبة عبر إدارة الاشتراك في النظام." : "Begin with a trial, then move to the appropriate plan through subscription management."}</p></div><div className="plans">{visiblePlans.map((plan, index)=><article className={`plan ${plan.popular || index === 1 ? "popular" : ""}`} key={plan.key}>{(plan.popular || index === 1)&&<span className="tag">{ar ? "الأكثر اختيارًا" : "Popular"}</span>}<h3>{ar ? plan.label_ar : plan.label_en}</h3><div className="price">{plan.price_monthly === 0 ? (ar ? "مجانًا" : "Free") : `${plan.price_monthly}`} {plan.price_monthly > 0 && <small>{ar ? "ر.س / شهر" : "SAR / mo"}</small>}</div><ul>{(ar ? plan.features_ar : plan.features_en).slice(0,4).map((feature)=><li key={feature}><Icon name="check"/>{feature}</li>)}</ul><Link className="public-btn secondary" href={`/${locale}/register?plan=${plan.key}`}>{ar ? "ابدأ بهذه الباقة" : "Choose this plan"}</Link></article>)}</div></div></section>
+    <footer className="footer"><div className="marketing-wrap"><div className="footer-grid"><div><img className="brand-logo" src="/logo-masar-green.png" alt="MASAR"/><p>{ar ? "حلول محاسبية عملية تساعد الشركات على تنظيم أعمالها ومتابعة عملياتها من منصة واحدة." : "Practical accounting solutions for organized company operations."}</p></div><div><h4>{ar ? "المنصة" : "Platform"}</h4><Link href="#features">{ar ? "المزايا" : "Features"}</Link><Link href="#plans">{ar ? "الباقات" : "Plans"}</Link><Link href={`/${locale}/login`}>{ar ? "تسجيل الدخول" : "Sign in"}</Link></div><div><h4>{ar ? "الدعم" : "Support"}</h4><Link href={`/${locale}/landing/contact`}>{ar ? "تواصل معنا" : "Contact us"}</Link><a href={publicContactLinks.whatsapp} target="_blank" rel="noreferrer">{ar ? "واتساب الدعم" : "WhatsApp support"}</a><a href={publicContactLinks.email}>{ar ? "راسلنا بالبريد" : "Email us"}</a></div><div><h4>{ar ? "بيانات التواصل" : "Contact details"}</h4><a className="contact-line" href={publicContactLinks.email}><Icon name="mail"/>{PUBLIC_CONTACT.email}</a><a className="contact-line" href={publicContactLinks.phone}><Icon name="phone"/><span dir="ltr">{PUBLIC_CONTACT.phone}</span></a><span className="contact-line"><Icon name="pin"/>{ar ? PUBLIC_CONTACT.addressAr : PUBLIC_CONTACT.addressEn}</span></div></div><div className="footer-bottom">© {new Date().getFullYear()} MASAR. {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}</div></div></footer>
+  </main>;
 }

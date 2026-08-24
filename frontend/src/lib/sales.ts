@@ -5,6 +5,7 @@ export const getCustomers = (search?: string) => api.get("/sales/customers", { p
 export const getCustomer = (id: string) => api.get(`/sales/customers/${id}`);
 export const createCustomer = (data: any) => api.post("/sales/customers", data);
 export const updateCustomer = (id: string, data: any) => api.patch(`/sales/customers/${id}`, data);
+export const deleteCustomer = (id: string) => api.delete(`/sales/customers/${id}`);
 
 // Invoices
 export const getInvoices = (params?: any) => api.get("/sales/invoices", { params });
@@ -13,6 +14,12 @@ export const createInvoice = (data: any) => api.post("/sales/invoices", data);
 export const confirmInvoice = (id: string) => api.post(`/sales/invoices/${id}/confirm`);
 export const cancelInvoice = (id: string) => api.post(`/sales/invoices/${id}/cancel`);
 export const getSalesSummary = () => api.get("/sales/invoices/summary");
+export const getPendingInvoices = (repId?: string) => api.get("/sales/invoices-pending", { params: repId ? { rep_id: repId } : {} });
+export const submitInvoice = (id: string) => api.post(`/sales/invoices/${id}/submit`);
+export const approveInvoice = (id: string) => api.post(`/sales/invoices/${id}/approve`);
+export const rejectInvoice = (id: string, rejection_note: string) => api.post(`/sales/invoices/${id}/reject`, { rejection_note });
+export const updateInvoice = (id: string, data: any) => api.patch(`/sales/invoices/${id}`, data);
+export const deleteInvoiceDraft = (id: string) => api.delete(`/sales/invoices/${id}`);
 
 // Payments
 export const getPayments = (invoice_id?: string) => api.get("/sales/payments", { params: invoice_id ? { invoice_id } : {} });
@@ -28,6 +35,9 @@ export const convertToInvoice = (id: string) => api.post(`/sales/quotations/${id
 export const getCreditNotes = () => api.get("/sales/credit-notes");
 export const getCreditNote = (id: string) => api.get(`/sales/credit-notes/${id}`);
 export const createCreditNote = (data: any) => api.post("/sales/credit-notes", data);
+export const createRepCreditNote = (data: any) => api.post("/reps/me/credit-notes", data);
+export const getRefundRequests = (creditNoteId: string) => api.get(`/sales/credit-notes/${creditNoteId}/refund-requests`);
+export const createRefundRequest = (creditNoteId: string, data: { amount: number; reason?: string }) => api.post(`/sales/credit-notes/${creditNoteId}/refund-requests`, data);
 
 // Sales Orders
 export const getSalesOrders = (params?: any) => api.get("/sales/orders", { params });

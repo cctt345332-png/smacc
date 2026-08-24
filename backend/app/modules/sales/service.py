@@ -4,17 +4,22 @@ import json
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from fastapi import HTTPException
 
 from app.models.sales import (
     Customer, Invoice, InvoiceLine, Payment, Quotation, QuotationLine,
-    CreditNote, CreditNoteLine, InvoiceStatus, InvoiceType, PaymentMethod
+    CreditNote, CreditNoteLine, RefundRequest, RefundRequestStatus,
+    InvoiceStatus, InvoiceType, PaymentMethod
 )
+from app.models.reps import SalesRep
+from app.models.user import User
+from app.models.purchases import Bill
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
-    QuotationCreate, CreditNoteCreate
+    QuotationCreate, CreditNoteCreate, RefundRequestCreate
 )
+from app.core.audit import record_audit
 
 
 # ─── QR Code Generator (ZATCA TLV format) ───────────────────────────
@@ -90,7 +95,10 @@ async def get_customer(db: AsyncSession, tenant_id: str, customer_id: str):
     return c
 
 
-async def create_customer(db: AsyncSession, tenant_id: str, data: CustomerCreate, rep_id: str | None = None):
+async def create_customer(
+    db: AsyncSession, tenant_id: str, data: CustomerCreate,
+    rep_id: str | None = None, actor_user_id: str | None = None,
+):
     customer = Customer(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
@@ -99,18 +107,43 @@ async def create_customer(db: AsyncSession, tenant_id: str, data: CustomerCreate
         **data.model_dump(),
     )
     db.add(customer)
+    record_audit(db, tenant_id, actor_user_id, "create", "customer", customer.id,
+                 customer_number=customer.customer_number, rep_id=rep_id)
     await db.commit()
     await db.refresh(customer)
     return customer
 
 
-async def update_customer(db: AsyncSession, tenant_id: str, customer_id: str, data: CustomerUpdate):
+async def update_customer(
+    db: AsyncSession, tenant_id: str, customer_id: str, data: CustomerUpdate,
+    actor_user_id: str | None = None,
+):
     c = await get_customer(db, tenant_id, customer_id)
+    changed_fields = list(data.model_dump(exclude_none=True).keys())
     for k, v in data.model_dump(exclude_none=True).items():
         setattr(c, k, v)
+    record_audit(db, tenant_id, actor_user_id, "update", "customer", c.id,
+                 changed_fields=changed_fields)
     await db.commit()
     await db.refresh(c)
     return c
+
+
+async def delete_customer(
+    db: AsyncSession, tenant_id: str, customer_id: str, actor_user_id: str | None = None,
+):
+    """يحذف العميل الذي لا يملك حركة مالية فقط؛ السجل المالي لا يحذف."""
+    customer = await get_customer(db, tenant_id, customer_id)
+    invoice_count = (await db.execute(select(func.count(Invoice.id)).where(
+        Invoice.tenant_id == tenant_id, Invoice.customer_id == customer.id
+    ))).scalar() or 0
+    if invoice_count:
+        raise HTTPException(400, "لا يمكن حذف عميل لديه فواتير أو ذمم؛ أوقفه بدلاً من ذلك")
+    record_audit(db, tenant_id, actor_user_id, "delete", "customer", customer.id,
+                 customer_number=customer.customer_number)
+    await db.delete(customer)
+    await db.commit()
+    return {"message": "تم حذف العميل", "id": customer_id}
 
 
 # ─── Invoices ────────────────────────────────────────────────────────
@@ -287,6 +320,9 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
             variant_id=getattr(line, "variant_id", None),
         ))
 
+    record_audit(db, tenant_id, user_id, "create", "invoice", invoice.id,
+                 invoice_number=invoice.invoice_number, customer_id=invoice.customer_id,
+                 line_count=len(lines_data), total=invoice.total, rep_id=invoice.rep_id)
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
@@ -735,127 +771,332 @@ async def convert_quotation_to_invoice(db: AsyncSession, tenant_id: str, user_id
 
 # ─── Credit Notes ────────────────────────────────────────────────────
 async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
+    """إنشاء إشعار دائن متزن، مرتبط بسطر الفاتورة ووحداته المتسلسلة عند الحاجة."""
     original = await get_invoice(db, tenant_id, data.original_invoice_id)
+    if not data.lines:
+        raise HTTPException(400, "يجب أن يحتوي المرتجع على سطر واحد على الأقل")
 
-    subtotal = Decimal("0")
+    # يعتمد المرتجع الجديد على هوية السطر، لا على وصفه. تبقى مطابقة الوصف أدناه
+    # لاستيعاب إشعارات تاريخية لم يكن لها هذا الحقل فقط.
+    original_by_id = {line.id: line for line in original.lines}
+    duplicate_ids = [line.original_invoice_line_id for line in data.lines]
+    if len(duplicate_ids) != len(set(duplicate_ids)):
+        raise HTTPException(400, "لا يمكن تكرار سطر الفاتورة الأصلي داخل المرتجع نفسه")
+
+    previous_rows = await db.execute(
+        select(
+            CreditNoteLine.original_invoice_line_id,
+            CreditNoteLine.description_ar,
+            func.coalesce(func.sum(CreditNoteLine.quantity), 0),
+        )
+        .join(CreditNote)
+        .where(CreditNote.tenant_id == tenant_id, CreditNote.original_invoice_id == original.id)
+        .group_by(CreditNoteLine.original_invoice_line_id, CreditNoteLine.description_ar)
+    )
+    returned_qty: dict[str, Decimal] = {}
+    descriptions_count: dict[str, int] = {}
+    for source_line in original.lines:
+        descriptions_count[source_line.description_ar] = descriptions_count.get(source_line.description_ar, 0) + 1
+    for original_line_id, description_ar, quantity in previous_rows.all():
+        if original_line_id:
+            returned_qty[original_line_id] = returned_qty.get(original_line_id, Decimal("0")) + Decimal(str(quantity))
+        elif descriptions_count.get(description_ar, 0) == 1:
+            # توافق محدود مع سجل قديم لا يحمل الهوية؛ لا يستخدم مع الفواتير ذات الوصف المكرر.
+            fallback_id = next(line.id for line in original.lines if line.description_ar == description_ar)
+            returned_qty[fallback_id] = returned_qty.get(fallback_id, Decimal("0")) + Decimal(str(quantity))
+
+    previous_serial_rows = await db.execute(
+        select(CreditNoteLine.original_invoice_line_id, CreditNoteLine.serial_ids_json)
+        .join(CreditNote)
+        .where(
+            CreditNote.tenant_id == tenant_id,
+            CreditNote.original_invoice_id == original.id,
+            CreditNoteLine.serial_ids_json.isnot(None),
+        )
+    )
+    returned_serial_ids: set[str] = set()
+    for _source_line_id, serial_json in previous_serial_rows.all():
+        try:
+            returned_serial_ids.update(str(serial_id) for serial_id in json.loads(serial_json or "[]"))
+        except (TypeError, ValueError):
+            # لا تُهمل الخطأ بصمت في الإشعارات الجديدة؛ هذا المسار للحفاظ على قراءة السجل التاريخي فقط.
+            continue
+
+    from app.modules.inventory.service import get_item
+    validated_lines: list[tuple[object, InvoiceLine, list[str], Decimal, Decimal, Decimal]] = []
+    taxable_total = Decimal("0")
     total_vat = Decimal("0")
     total = Decimal("0")
+    for line in data.lines:
+        original_line = original_by_id.get(line.original_invoice_line_id)
+        if not original_line:
+            raise HTTPException(400, "سطر المرتجع لا ينتمي إلى الفاتورة الأصلية")
+        quantity = Decimal(str(line.quantity))
+        if quantity <= 0:
+            raise HTTPException(400, "كمية المرتجع يجب أن تكون أكبر من صفر")
+        if quantity + returned_qty.get(original_line.id, Decimal("0")) > Decimal(str(original_line.quantity)):
+            raise HTTPException(400, f"كمية المرتجع للصنف '{original_line.description_ar}' تتجاوز الكمية المتاحة للمرتجع")
+        if line.inventory_item_id and line.inventory_item_id != original_line.inventory_item_id:
+            raise HTTPException(400, "الصنف المرتجع لا يطابق سطر الفاتورة الأصلية")
+        if line.variant_id and line.variant_id != original_line.variant_id:
+            raise HTTPException(400, "متغير الصنف المرتجع لا يطابق سطر الفاتورة الأصلية")
+
+        serial_ids = list(dict.fromkeys(str(serial_id) for serial_id in (line.serial_ids or [])))
+        if original_line.inventory_item_id:
+            item = await get_item(db, tenant_id, original_line.inventory_item_id)
+            tracking_type = getattr(item.tracking_type, "value", item.tracking_type)
+            if tracking_type == "serial":
+                expected_ids: set[str] = set()
+                if original_line.serial_item_id:
+                    expected_ids.add(str(original_line.serial_item_id))
+                try:
+                    expected_ids.update(str(serial_id) for serial_id in json.loads(original_line.serial_ids_json or "[]"))
+                except (TypeError, ValueError):
+                    raise HTTPException(400, "بيانات سيريالات الفاتورة الأصلية غير صالحة")
+                if not serial_ids:
+                    raise HTTPException(400, f"حدد السيريال المرتجع للصنف '{original_line.description_ar}'")
+                if Decimal(len(serial_ids)) != quantity:
+                    raise HTTPException(400, "كمية سطر السيريال يجب أن تساوي عدد السيريالات المحددة")
+                if not set(serial_ids).issubset(expected_ids):
+                    raise HTTPException(400, "يوجد سيريال لا ينتمي إلى سطر الفاتورة الأصلية")
+                if set(serial_ids) & returned_serial_ids:
+                    raise HTTPException(400, "لا يمكن إرجاع السيريال نفسه أكثر من مرة")
+                returned_serial_ids.update(serial_ids)
+            elif serial_ids:
+                raise HTTPException(400, "لا تقبل السيريالات إلا عند إرجاع صنف متسلسل")
+            elif tracking_type in ("batch", "variant"):
+                raise HTTPException(400, "مرتجع التشغيلة أو المتغير يحتاج تحديد هويته التشغيلية قبل تمكينه")
+
+        # يستمد السعر والضريبة والوصف من الأصل؛ لا يسمح لواجهة العميل بتغيير الأساس المالي للمرتجع.
+        _sub, _disc, taxable, vat, total_line = _calc_line(
+            quantity,
+            Decimal(str(original_line.unit_price)),
+            Decimal(str(original_line.discount_pct)),
+            Decimal(str(original_line.vat_rate)),
+        )
+        taxable_total += taxable
+        total_vat += vat
+        total += total_line
+        validated_lines.append((line, original_line, serial_ids, taxable, vat, total_line))
+
     cn_id = str(uuid.uuid4())
     issue_date = data.issue_date.replace(tzinfo=None)
-
-    lines_data = []
-    for line in data.lines:
-        sub, disc, taxable, vat, tot = _calc_line(line.quantity, line.unit_price, line.discount_pct, line.vat_rate)
-        subtotal += sub
-        total_vat += vat
-        total += tot
-        lines_data.append((line, sub, vat, tot))
-
     from app.models.tenant import Tenant
     tenant = await db.get(Tenant, tenant_id)
     from app.modules.accounting.service import get_vat_settings
     vat_settings = await get_vat_settings(db, tenant_id)
-
-    qr = _generate_qr_tlv(
-        seller_name=tenant.name if tenant else "",
-        vat_number=vat_settings.vat_number if vat_settings else "",
-        timestamp=issue_date.isoformat(),
-        total=total, vat_amount=total_vat,
-    )
-
     cn = CreditNote(
-        id=cn_id, tenant_id=tenant_id,
-        credit_note_number=await _next_credit_note_number(db, tenant_id),
-        uuid=str(uuid.uuid4()),
-        original_invoice_id=data.original_invoice_id,
-        customer_id=original.customer_id,
-        issue_date=issue_date, reason=data.reason,
-        subtotal=subtotal, vat_amount=total_vat, total=total,
-        qr_code=qr, created_by=user_id,
+        id=cn_id, tenant_id=tenant_id, credit_note_number=await _next_credit_note_number(db, tenant_id),
+        uuid=str(uuid.uuid4()), original_invoice_id=data.original_invoice_id, customer_id=original.customer_id,
+        issue_date=issue_date, reason=data.reason, subtotal=taxable_total, vat_amount=total_vat, total=total,
+        qr_code=_generate_qr_tlv(tenant.name if tenant else "", vat_settings.vat_number if vat_settings else "", issue_date.isoformat(), total, total_vat), created_by=user_id,
     )
-    db.add(cn)
 
-    for i, (line, sub, vat, tot) in enumerate(lines_data):
-        db.add(CreditNoteLine(
-            id=str(uuid.uuid4()), credit_note_id=cn_id, line_order=i,
-            description_ar=line.description_ar,
-            quantity=line.quantity, unit_price=line.unit_price,
-            vat_rate=line.vat_rate, subtotal=sub, vat_amount=vat, total=tot,
-        ))
-
-    await db.commit()
-    await db.refresh(cn)
-
-    # ── قيد محاسبي للإشعار الدائن (مرتجع مبيعات) ──────────────────
-    if original.fiscal_year_id:
-        await _create_credit_note_journal(db, tenant_id, user_id, cn, original)
+    try:
+        db.add(cn)
+        for i, (line, original_line, serial_ids, taxable, vat, total_line) in enumerate(validated_lines):
+            db.add(CreditNoteLine(
+                id=str(uuid.uuid4()), credit_note_id=cn_id, original_invoice_line_id=original_line.id,
+                line_order=i, description_ar=original_line.description_ar, quantity=Decimal(str(line.quantity)),
+                unit_price=Decimal(str(original_line.unit_price)), vat_rate=Decimal(str(original_line.vat_rate)),
+                subtotal=taxable, vat_amount=vat, total=total_line,
+                inventory_item_id=original_line.inventory_item_id, variant_id=original_line.variant_id,
+                serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
+            ))
+        await _return_credit_note_inventory(db, tenant_id, user_id, cn, original, validated_lines)
+        record_audit(db, tenant_id, user_id, "create", "credit_note", cn.id,
+                     credit_note_number=cn.credit_note_number, original_invoice_id=original.id,
+                     total=cn.total, line_count=len(validated_lines))
+        if original.fiscal_year_id:
+            await _create_credit_note_journal(db, tenant_id, user_id, cn, original)
         await db.commit()
-
+    except Exception:
+        await db.rollback()
+        raise
+    await db.refresh(cn)
     return cn
 
 
+async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, original_invoice, validated_lines):
+    """يعيد الكمية أو السيريال إلى مستودع الفاتورة مع حركة return_in داخل معاملة الإشعار."""
+    from app.modules.inventory.service import add_stock, get_item
+    from app.models.inventory import SerialItem, SerialStatus, StockMovement
+    from app.models.reps import SalesRep
+
+    warehouse_id = None
+    if original_invoice.rep_id:
+        rep = await db.get(SalesRep, original_invoice.rep_id)
+        warehouse_id = rep.warehouse_id if rep else None
+
+    for _line, original_line, serial_ids, _taxable, _vat, _total_line in validated_lines:
+        if not original_line.inventory_item_id:
+            continue
+        item = await get_item(db, tenant_id, original_line.inventory_item_id)
+        tracking_type = getattr(item.tracking_type, "value", item.tracking_type)
+        if tracking_type == "serial":
+            serial_result = await db.execute(select(SerialItem).where(SerialItem.id.in_(serial_ids)))
+            serials = {serial.id: serial for serial in serial_result.scalars().all()}
+            if len(serials) != len(serial_ids):
+                raise HTTPException(400, "تعذر العثور على أحد السيريالات المحددة للمرتجع")
+            for serial_id in serial_ids:
+                serial = serials[serial_id]
+                if serial.product_id != original_line.inventory_item_id or serial.sale_invoice_id != original_invoice.id:
+                    raise HTTPException(400, "السيريال المحدد لا يخص الفاتورة أو الصنف المرتجع")
+                if getattr(serial.status, "value", serial.status) != "sold":
+                    raise HTTPException(400, f"لا يمكن إرجاع السيريال بحالته الحالية: {serial.status}")
+                serial.status = SerialStatus.IN_STOCK
+                serial.warehouse_id = warehouse_id or serial.warehouse_id
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
+                    warehouse_id=serial.warehouse_id, movement_type="return_in", quantity=Decimal("1"),
+                    unit_cost=serial.cost_price, serial_item_id=serial.id,
+                    reference_type="credit_note", reference_id=credit_note.id, created_by=user_id,
+                ))
+            continue
+        if tracking_type in ("batch", "variant"):
+            raise HTTPException(400, "مرتجع التشغيلة أو المتغير يحتاج تحديد هويته التشغيلية قبل إعادة المخزون")
+        await add_stock(
+            db=db, tenant_id=tenant_id, product_id=original_line.inventory_item_id,
+            quantity=Decimal(str(_line.quantity)), unit_cost=item.cost_price, warehouse_id=warehouse_id,
+            reference_type="credit_note", reference_id=credit_note.id, user_id=user_id, auto_commit=False,
+            movement_type="return_in",
+        )
+
+
 async def _create_credit_note_journal(db, tenant_id, user_id, cn, original_invoice):
-    """
-    قيد مرتجع المبيعات:
-    مدين: الإيرادات (عكس الفاتورة الأصلية)
-    مدين: ضريبة القيمة المضافة (استرداد)
-    دائن: حسابات القبض (تخفيض الدين)
-    """
-    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
+    """قيد متزن: مدين الإيراد والضريبة، دائن حساب العميل."""
+    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus, Account, AccountType
     from app.modules.accounting.service import _next_entry_number, get_vat_settings
-
     customer = await db.get(Customer, cn.customer_id)
-    ar_account_id = customer.ar_account_id if customer else None
-    if not ar_account_id:
-        return
-
+    if not customer or not customer.ar_account_id:
+        return None
+    revenue = (await db.execute(select(Account).where(Account.tenant_id == tenant_id, Account.account_type == AccountType.REVENUE, Account.is_active == True, Account.is_posting == True).order_by(Account.code).limit(1))).scalar_one_or_none()
     vat_settings = await get_vat_settings(db, tenant_id)
-    entry_number = await _next_entry_number(db, tenant_id)
-
-    entry = JournalEntry(
-        id=str(uuid.uuid4()), tenant_id=tenant_id,
-        entry_number=entry_number,
-        entry_date=cn.issue_date,
-        fiscal_year_id=original_invoice.fiscal_year_id,
-        description_ar=f"إشعار دائن (مرتجع): {cn.credit_note_number} — {original_invoice.buyer_name_ar}",
-        description_en=f"Credit Note (Return): {cn.credit_note_number}",
-        status=JournalEntryStatus.POSTED,
-        source="credit_note",
-        reference=cn.credit_note_number,
-        total_debit=cn.total,
-        total_credit=cn.total,
-        created_by=user_id,
-        posted_by=user_id,
-        posted_at=datetime.utcnow(),
-    )
+    if not revenue or (cn.vat_amount > 0 and (not vat_settings or not vat_settings.vat_account_id)):
+        return None
+    entry = JournalEntry(id=str(uuid.uuid4()), tenant_id=tenant_id, entry_number=await _next_entry_number(db, tenant_id), entry_date=cn.issue_date,
+        fiscal_year_id=original_invoice.fiscal_year_id, description_ar=f"إشعار دائن (مرتجع): {cn.credit_note_number} — {original_invoice.buyer_name_ar}",
+        description_en=f"Credit Note (Return): {cn.credit_note_number}", status=JournalEntryStatus.POSTED, source="credit_note", reference=cn.credit_note_number,
+        total_debit=cn.total, total_credit=cn.total, created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow())
     db.add(entry)
-
-    # دائن: حسابات القبض (تخفيض ما يستحق من العميل)
-    db.add(JournalEntryLine(
-        id=str(uuid.uuid4()), entry_id=entry.id,
-        account_id=ar_account_id,
-        description=f"مرتجع — {cn.credit_note_number}",
-        debit=Decimal("0"), credit=cn.total, line_order=0,
-    ))
-
-    # مدين: ضريبة القيمة المضافة (استرداد ضريبة المخرجات)
-    if cn.vat_amount > 0 and vat_settings and vat_settings.vat_account_id:
-        db.add(JournalEntryLine(
-            id=str(uuid.uuid4()), entry_id=entry.id,
-            account_id=vat_settings.vat_account_id,
-            description="استرداد ضريبة القيمة المضافة — مرتجع",
-            debit=cn.vat_amount, credit=Decimal("0"), line_order=1,
-        ))
+    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=customer.ar_account_id, description=f"مرتجع — {cn.credit_note_number}", debit=Decimal("0"), credit=cn.total, line_order=0))
+    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=revenue.id, description=f"عكس إيراد المبيعات — {cn.credit_note_number}", debit=cn.subtotal, credit=Decimal("0"), line_order=1))
+    if cn.vat_amount > 0:
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=vat_settings.vat_account_id, description="عكس ضريبة القيمة المضافة — مرتجع", debit=cn.vat_amount, credit=Decimal("0"), line_order=2))
+    cn.journal_entry_id = entry.id
+    await db.flush()
+    return entry.id
 
 
-    # مدين: ضريبة القيمة المضافة (استرداد ضريبة المخرجات)
-    if cn.vat_amount > 0 and vat_settings and vat_settings.vat_account_id:
-        db.add(JournalEntryLine(
-            id=str(uuid.uuid4()), entry_id=entry.id,
-            account_id=vat_settings.vat_account_id,
-            description="استرداد ضريبة القيمة المضافة — مرتجع",
-            debit=cn.vat_amount, credit=Decimal("0"), line_order=1,
-        ))
+async def get_credit_note(db: AsyncSession, tenant_id: str, credit_note_id: str) -> CreditNote:
+    credit_note = await db.get(CreditNote, credit_note_id)
+    if not credit_note or credit_note.tenant_id != tenant_id:
+        raise HTTPException(404, "الإشعار الدائن غير موجود")
+    return credit_note
+
+
+async def get_refund_request(db: AsyncSession, tenant_id: str, refund_request_id: str) -> RefundRequest:
+    request = await db.get(RefundRequest, refund_request_id)
+    if not request or request.tenant_id != tenant_id:
+        raise HTTPException(404, "طلب الاسترداد غير موجود")
+    return request
+
+
+async def list_credit_note_refund_requests(db: AsyncSession, tenant_id: str, credit_note_id: str):
+    credit_note = await get_credit_note(db, tenant_id, credit_note_id)
+    result = await db.execute(
+        select(RefundRequest)
+        .where(RefundRequest.tenant_id == tenant_id, RefundRequest.credit_note_id == credit_note.id)
+        .order_by(RefundRequest.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+async def create_refund_request(
+    db: AsyncSession, tenant_id: str, user_id: str, credit_note_id: str, data: RefundRequestCreate,
+):
+    """ينشئ طلب استرداد يحتاج اعتمادًا؛ لا ينشئ سند صرف ولا يرحّل خزينة تلقائيًا."""
+    credit_note = await get_credit_note(db, tenant_id, credit_note_id)
+    original = await get_invoice(db, tenant_id, credit_note.original_invoice_id)
+    amount = Decimal(str(data.amount)).quantize(Decimal("0.01"))
+    if amount <= 0:
+        raise HTTPException(400, "مبلغ طلب الاسترداد يجب أن يكون أكبر من صفر")
+
+    active_statuses = (RefundRequestStatus.REQUESTED, RefundRequestStatus.APPROVED)
+    credit_note_active = (await db.execute(
+        select(func.coalesce(func.sum(RefundRequest.amount), 0)).where(
+            RefundRequest.tenant_id == tenant_id,
+            RefundRequest.credit_note_id == credit_note.id,
+            RefundRequest.status.in_(active_statuses),
+        )
+    )).scalar() or Decimal("0")
+    credit_note_remaining = Decimal(str(credit_note.total)) - Decimal(str(credit_note_active))
+
+    all_credit_total = (await db.execute(
+        select(func.coalesce(func.sum(CreditNote.total), 0)).where(
+            CreditNote.tenant_id == tenant_id,
+            CreditNote.original_invoice_id == original.id,
+        )
+    )).scalar() or Decimal("0")
+    invoice_active = (await db.execute(
+        select(func.coalesce(func.sum(RefundRequest.amount), 0)).where(
+            RefundRequest.tenant_id == tenant_id,
+            RefundRequest.original_invoice_id == original.id,
+            RefundRequest.status.in_(active_statuses),
+        )
+    )).scalar() or Decimal("0")
+    invoice_refundable_cap = min(Decimal(str(original.paid_amount or 0)), Decimal(str(all_credit_total)))
+    invoice_remaining = invoice_refundable_cap - Decimal(str(invoice_active))
+    allowed = min(credit_note_remaining, invoice_remaining)
+    if amount > allowed:
+        raise HTTPException(400, "مبلغ طلب الاسترداد يتجاوز قيمة الإشعار الدائن أو المبلغ المقبوض المتاح")
+
+    request = RefundRequest(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, credit_note_id=credit_note.id,
+        original_invoice_id=original.id, customer_id=credit_note.customer_id,
+        amount=amount, status=RefundRequestStatus.REQUESTED, reason=(data.reason or None),
+        requested_by=user_id,
+    )
+    db.add(request)
+    record_audit(db, tenant_id, user_id, "request_refund", "credit_note", credit_note.id,
+                 refund_request_id=request.id, amount=amount, original_invoice_id=original.id)
+    await db.commit()
+    await db.refresh(request)
+    return request
+
+
+async def approve_refund_request(db: AsyncSession, tenant_id: str, user_id: str, refund_request_id: str):
+    """يعتمد الطلب فقط؛ ينشأ سند الصرف لاحقًا من الخزينة بعد تحديد الحسابات."""
+    request = await get_refund_request(db, tenant_id, refund_request_id)
+    if request.status != RefundRequestStatus.REQUESTED:
+        raise HTTPException(400, "يمكن اعتماد طلب استرداد بانتظار الاعتماد فقط")
+    request.status = RefundRequestStatus.APPROVED
+    request.approved_by = user_id
+    request.approved_at = datetime.utcnow()
+    record_audit(db, tenant_id, user_id, "approve_refund", "refund_request", request.id,
+                 credit_note_id=request.credit_note_id, amount=request.amount)
+    await db.commit()
+    await db.refresh(request)
+    return request
+
+
+async def reject_refund_request(
+    db: AsyncSession, tenant_id: str, user_id: str, refund_request_id: str, rejection_reason: str | None,
+):
+    request = await get_refund_request(db, tenant_id, refund_request_id)
+    if request.status != RefundRequestStatus.REQUESTED:
+        raise HTTPException(400, "يمكن رفض طلب استرداد بانتظار الاعتماد فقط")
+    if not rejection_reason or not rejection_reason.strip():
+        raise HTTPException(400, "سبب رفض الاسترداد مطلوب")
+    request.status = RefundRequestStatus.REJECTED
+    request.approved_by = user_id
+    request.approved_at = datetime.utcnow()
+    request.rejection_reason = rejection_reason.strip()
+    record_audit(db, tenant_id, user_id, "reject_refund", "refund_request", request.id,
+                 credit_note_id=request.credit_note_id, amount=request.amount)
+    await db.commit()
+    await db.refresh(request)
+    return request
 
 
 # ─── Summary ─────────────────────────────────────────────────────────
@@ -900,8 +1141,74 @@ async def get_sales_summary(db: AsyncSession, tenant_id: str, rep_id: str | None
     }
 
 
-# ─── Workflow المناديب ────────────────────────────────────────────────
 
+
+# ─── System dashboard ────────────────────────────────────────────────
+async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict:
+    """ملخص موحّد للمدير؛ لا يخلط طلبات المناديب مع أداء النظام الأساسي."""
+    now = datetime.utcnow()
+    month_start = datetime(now.year, now.month, 1)
+    confirmed_statuses = (
+        InvoiceStatus.CONFIRMED,
+        InvoiceStatus.PAID,
+        InvoiceStatus.PARTIAL,
+        InvoiceStatus.OVERDUE,
+    )
+
+    monthly_invoices_r = await db.execute(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_(confirmed_statuses),
+            Invoice.issue_date >= month_start,
+        )
+    )
+    monthly_invoices = monthly_invoices_r.scalars().all()
+
+    sales_total = sum((invoice.total or Decimal("0")) for invoice in monthly_invoices)
+    sales_before_vat = sum((invoice.taxable_amount or Decimal("0")) for invoice in monthly_invoices)
+
+    purchase_cost_r = await db.execute(
+        select(func.coalesce(func.sum(Bill.taxable_amount), 0)).where(
+            Bill.tenant_id == tenant_id,
+            Bill.bill_date >= month_start,
+        )
+    )
+    purchase_cost = Decimal(str(purchase_cost_r.scalar() or 0))
+    estimated_gross_profit = sales_before_vat - purchase_cost
+
+    new_customers_r = await db.execute(
+        select(func.count(Customer.id)).where(
+            Customer.tenant_id == tenant_id,
+            Customer.created_at >= month_start,
+        )
+    )
+    total_customers_r = await db.execute(
+        select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id)
+    )
+
+    outstanding_r = await db.execute(
+        select(func.coalesce(func.sum(Invoice.total - Invoice.paid_amount), 0)).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_(confirmed_statuses),
+        )
+    )
+    outstanding_total = Decimal(str(outstanding_r.scalar() or 0))
+
+    margin = float(estimated_gross_profit / sales_before_vat * 100) if sales_before_vat else 0.0
+    return {
+        "period": "this_month",
+        "sales_total": float(sales_total),
+        "sales_before_vat": float(sales_before_vat),
+        "invoice_count": len(monthly_invoices),
+        "estimated_gross_profit": float(estimated_gross_profit),
+        "gross_margin_pct": round(margin, 1),
+        "new_customers": int(new_customers_r.scalar() or 0),
+        "total_customers": int(total_customers_r.scalar() or 0),
+        "outstanding_total": float(outstanding_total),
+    }
+
+
+# ─── Workflow المناديب ────────────────────────────────────────────────
 async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
     """المندوب يقدّم الفاتورة للمحاسب — draft أو rejected → submitted"""
     invoice = await get_invoice(db, tenant_id, invoice_id)
@@ -916,9 +1223,12 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED):
         raise HTTPException(400, f"لا يمكن تقديم فاتورة بحالة '{invoice.status.value}'")
 
+    previous_status = invoice.status.value
     invoice.status = InvoiceStatus.SUBMITTED
     invoice.submitted_at = datetime.utcnow()
     invoice.rejection_note = None  # مسح سبب الرفض السابق
+    record_audit(db, tenant_id, user_id, "submit", "invoice", invoice.id,
+                 invoice_number=invoice.invoice_number, from_status=previous_status, to_status="submitted")
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
@@ -948,6 +1258,8 @@ async def approve_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
 
     await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
     invoice.status = InvoiceStatus.CONFIRMED
+    record_audit(db, tenant_id, user_id, "approve_and_confirm", "invoice", invoice.id,
+                 invoice_number=invoice.invoice_number, total=invoice.total)
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
@@ -966,6 +1278,8 @@ async def reject_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     invoice.reviewed_by = user_id
     invoice.reviewed_at = datetime.utcnow()
     invoice.rejection_note = rejection_note.strip()
+    record_audit(db, tenant_id, user_id, "reject", "invoice", invoice.id,
+                 invoice_number=invoice.invoice_number, reason=invoice.rejection_note)
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
@@ -989,10 +1303,13 @@ async def confirm_approved_invoice(db: AsyncSession, tenant_id: str, user_id: st
 
 
 async def get_submitted_invoices(db: AsyncSession, tenant_id: str, rep_id: str | None = None):
-    """جلب الفواتير المقدّمة للمراجعة"""
+    """جلب فواتير المناديب المقدّمة للمراجعة، مع هوية المندوب التشغيلية."""
     from sqlalchemy.orm import selectinload
+
     q = (
-        select(Invoice)
+        select(Invoice, SalesRep.rep_code, SalesRep.zone, User.full_name)
+        .outerjoin(SalesRep, Invoice.rep_id == SalesRep.id)
+        .outerjoin(User, SalesRep.user_id == User.id)
         .options(selectinload(Invoice.lines))
         .where(
             Invoice.tenant_id == tenant_id,
@@ -1002,26 +1319,111 @@ async def get_submitted_invoices(db: AsyncSession, tenant_id: str, rep_id: str |
     if rep_id:
         q = q.where(Invoice.rep_id == rep_id)
     q = q.order_by(Invoice.submitted_at.asc())
-    r = await db.execute(q)
-    return r.scalars().all()
+
+    rows = (await db.execute(q)).all()
+    invoices = []
+    for invoice, rep_code, rep_zone, rep_name in rows:
+        # حقول عرض فقط؛ تبقى الفاتورة نفسها المصدر المالي الوحيد للحقيقة.
+        invoice.rep_name = rep_name
+        invoice.rep_code = rep_code
+        invoice.rep_zone = rep_zone
+        invoices.append(invoice)
+    return invoices
+
+
+async def _assert_rep_owns_invoice(db: AsyncSession, user_id: str, invoice: Invoice):
+    """يحمي عمليات المندوب على فواتيره فقط، بينما يبقى المدير/المحاسب قادرين على الإدارة."""
+    rep_r = await db.execute(select(SalesRep).where(SalesRep.user_id == user_id))
+    rep = rep_r.scalar_one_or_none()
+    if rep and invoice.rep_id != rep.id:
+        raise HTTPException(403, "لا يمكنك تنفيذ عملية على فاتورة مندوب آخر")
 
 
 async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, data: dict):
-    """تحديث فاتورة مسودة أو مرفوضة"""
+    """تحديث كامل لمسودة أو فاتورة مرفوضة، بما يشمل خطوطها وإجمالياتها."""
     invoice = await get_invoice(db, tenant_id, invoice_id)
-
+    await _assert_rep_owns_invoice(db, user_id, invoice)
     if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED):
-        raise HTTPException(400, "لا يمكن تعديل فاتورة بهذه الحالة")
+        raise HTTPException(400, "لا يمكن تعديل فاتورة بعد إرسالها أو اعتمادها")
 
-    # تحديث الحقول المسموح بها
-    allowed = {
-        "notes", "terms", "due_date",
-        "invoice_payment_method", "credit_days",
-        "cheque_number", "cheque_date", "bank_name",
-    }
-    for key, value in data.items():
-        if key in allowed:
-            setattr(invoice, key, value)
+    def as_datetime(value):
+        if value is None or value == "":
+            return None
+        if isinstance(value, datetime):
+            return value.replace(tzinfo=None)
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
 
+    if data.get("customer_id"):
+        customer = await get_customer(db, tenant_id, data["customer_id"])
+        invoice.customer_id = customer.id
+        invoice.buyer_name_ar = customer.name_ar
+        invoice.buyer_vat_number = customer.vat_number
+        invoice.buyer_address = "، ".join(p for p in [customer.address_street, customer.address_district, customer.address_city, customer.address_postal] if p)
+
+    allowed = {"notes", "terms", "invoice_payment_method", "credit_days", "cheque_number", "cheque_date", "bank_name", "invoice_type"}
+    for key in allowed:
+        if key in data:
+            setattr(invoice, key, data[key])
+    for key in ("issue_date", "supply_date", "due_date"):
+        if key in data:
+            setattr(invoice, key, as_datetime(data[key]))
+
+    if "lines" in data:
+        rows = data.get("lines") or []
+        if not rows:
+            raise HTTPException(400, "يجب أن تحتوي الفاتورة على صنف واحد على الأقل")
+        await db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))
+        subtotal = Decimal("0")
+        total_discount = Decimal("0")
+        total_vat = Decimal("0")
+        total = Decimal("0")
+        for i, raw in enumerate(rows):
+            quantity = Decimal(str(raw.get("quantity", 1)))
+            unit_price = Decimal(str(raw.get("unit_price", 0)))
+            discount_pct = Decimal(str(raw.get("discount_pct", 0)))
+            vat_rate = Decimal(str(raw.get("vat_rate", 15)))
+            sub, disc, taxable, vat, tot = _calc_line(quantity, unit_price, discount_pct, vat_rate)
+            subtotal += sub
+            total_discount += disc
+            total_vat += vat
+            total += tot
+            serial_ids = raw.get("serial_ids")
+            db.add(InvoiceLine(
+                id=str(uuid.uuid4()), invoice_id=invoice.id, line_order=i,
+                description_ar=raw.get("description_ar") or "صنف",
+                description_en=raw.get("description_en"), quantity=quantity,
+                unit=raw.get("unit"), unit_price=unit_price,
+                discount_pct=discount_pct, discount_amount=disc,
+                vat_rate=vat_rate, vat_category=raw.get("vat_category") or "S",
+                subtotal=sub, vat_amount=vat, total=tot,
+                inventory_item_id=raw.get("inventory_item_id"),
+                serial_item_id=raw.get("serial_item_id"),
+                serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
+                variant_id=raw.get("variant_id"),
+            ))
+        invoice.subtotal = subtotal
+        invoice.discount_amount = total_discount
+        invoice.taxable_amount = subtotal - total_discount
+        invoice.vat_amount = total_vat
+        invoice.total = total
+
+    # المسودة المرفوضة تعود قابلة للتعديل، لكن لا تُرسل إلا بإجراء submit صريح.
+    if invoice.status == InvoiceStatus.REJECTED:
+        invoice.rejection_note = invoice.rejection_note
+    record_audit(db, tenant_id, user_id, "update", "invoice", invoice.id,
+                 invoice_number=invoice.invoice_number, changed_fields=list(data.keys()))
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
+
+
+async def delete_invoice_draft(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
+    """حذف المسودة فقط؛ لا تمس المستندات التي دخلت دورة اعتماد أو ترحيل."""
+    invoice = await get_invoice(db, tenant_id, invoice_id)
+    await _assert_rep_owns_invoice(db, user_id, invoice)
+    if invoice.status != InvoiceStatus.DRAFT:
+        raise HTTPException(400, "يمكن حذف المسودات فقط؛ الفاتورة المرفوضة تعدّل ثم تعاد للإرسال")
+    record_audit(db, tenant_id, user_id, "delete_draft", "invoice", invoice.id,
+                 invoice_number=invoice.invoice_number)
+    await db.delete(invoice)
+    await db.commit()
+    return {"message": "تم حذف المسودة", "id": invoice_id}

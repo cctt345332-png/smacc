@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getItem, getSerials, getBatches, addBatch, getWarehouses } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
@@ -25,7 +25,14 @@ const TRACKING_AR: Record<string, string> = {
   quantity: "كمية", serial: "سيريال", batch: "تشغيلة", variant: "متغيرات", weight: "وزن",
 };
 
-export default function ItemDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function ItemDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [item, setItem] = useState<any>(null);
   const [allSerials, setAllSerials] = useState<any[]>([]);

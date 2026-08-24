@@ -1,11 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { runDepreciation } from "@/lib/assets";
 import { getFiscalYears } from "@/lib/accounting";
 import { useEffect } from "react";
 
-export default function DepreciationPage({ params: { locale } }: { params: { locale: string } }) {
+export default function DepreciationPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);

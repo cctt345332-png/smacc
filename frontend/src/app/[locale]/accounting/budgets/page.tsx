@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getBudgets, createBudget, getFiscalYears, getAccounts } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
@@ -8,7 +8,13 @@ const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو
 const MONTHS_EN = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTH_KEYS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 
-export default function BudgetsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function BudgetsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [budgets, setBudgets] = useState<any[]>([]);
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);

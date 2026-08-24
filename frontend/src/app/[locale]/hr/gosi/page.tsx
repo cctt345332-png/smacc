@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getGOSI } from "@/lib/hr";
 
 const IcShield   = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
@@ -15,7 +15,13 @@ const months = [
   { v: 11, ar: "نوفمبر", en: "November" }, { v: 12, ar: "ديسمبر", en: "December" },
 ];
 
-export default function GosiPage({ params: { locale } }: { params: { locale: string } }) {
+export default function GosiPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);

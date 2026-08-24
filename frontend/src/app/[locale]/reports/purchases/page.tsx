@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getBills, getVendors } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -14,7 +15,13 @@ const STATUS_AR: Record<string, { label: string; badge: string }> = {
   cancelled: { label: "ملغاة",  badge: "badge-danger" },
 };
 
-export default function PurchasesReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function PurchasesReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
@@ -45,7 +52,7 @@ export default function PurchasesReportPage({ params: { locale } }: { params: { 
   const totalGross = bills.reduce((s, b) => s + Number(b.total || 0), 0);
   const totalPaid = bills.reduce((s, b) => s + Number(b.paid_amount || 0), 0);
   const totalOutstanding = bills.reduce((s, b) => s + Math.max(0, Number(b.total||0) - Number(b.paid_amount||0)), 0);
-  const todayD = new Date(); todayD.setHours(0,0,0,0);
+  const todayD = new Date();todayD.setHours(0,0,0,0);
   const overdueCount = bills.filter(b => {
     const due = b.due_date ? new Date(b.due_date) : null;
     return due && due < todayD && !["paid","cancelled"].includes(b.status);
@@ -68,7 +75,7 @@ export default function PurchasesReportPage({ params: { locale } }: { params: { 
             <Icon name="ledger" size={14} />
             {ar ? "كشف حساب مورد" : "Vendor Statement"}
           </Link>
-          {loaded && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>{ar ? "طباعة" : "Print"}</button>}
+          {loaded && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المشتريات" : "Purchases Report"} subtitle={ar ? "ملخص فواتير الموردين والمدفوعات خلال الفترة" : "Vendor bills and payments summary for the period"} period={`${fromDate} — ${toDate}`} reportCode={`PR-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "عدد الفواتير" : "Bill count", value: String(bills.length), tone: "blue" }, { label: ar ? "المشتريات قبل الضريبة" : "Net purchases", value: `${fmt(totalNet)} SAR`, tone: "blue" }, { label: ar ? "ضريبة المدخلات" : "Input VAT", value: `${fmt(totalVAT)} SAR`, tone: "amber" }, { label: ar ? "إجمالي المشتريات" : "Gross purchases", value: `${fmt(totalGross)} SAR`, tone: "green" }, { label: ar ? "المدفوع للموردين" : "Paid to vendors", value: `${fmt(totalPaid)} SAR`, tone: "green" }, { label: ar ? "المستحق للموردين" : "Outstanding AP", value: `${fmt(totalOutstanding)} SAR`, tone: totalOutstanding > 0 ? "red" : "green" }]} tables={[{ title: ar ? "تفاصيل فواتير الموردين" : "Vendor bill details", headers: [ar ? "رقم الفاتورة" : "Bill #", ar ? "المورد" : "Vendor", ar ? "التاريخ" : "Date", ar ? "قبل الضريبة" : "Net", ar ? "الضريبة" : "VAT", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "الحالة" : "Status"], rows: bills.map((bill: any) => [bill.bill_number || "—", bill.vendor_name_ar || "—", bill.bill_date ? new Date(bill.bill_date).toLocaleDateString("en-GB") : "—", fmt(bill.taxable_amount), fmt(bill.vat_amount), fmt(bill.total), fmt(bill.paid_amount), (STATUS_AR[bill.status] || { label: bill.status || "—" }).label]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", fmt(totalNet), fmt(totalVAT), fmt(totalGross), fmt(totalPaid), ""] }]} />}
         </div>
       </div>
 
@@ -98,6 +105,7 @@ export default function PurchasesReportPage({ params: { locale } }: { params: { 
 
       {loaded && (
         <>
+          <div id="report-content-purchases">
           {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr) repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
             {[
@@ -184,6 +192,7 @@ export default function PurchasesReportPage({ params: { locale } }: { params: { 
                 </table>
               )}
             </div>
+          </div>
           </div>
         </>
       )}

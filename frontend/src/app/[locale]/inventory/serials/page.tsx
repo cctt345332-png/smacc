@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getItems, getSerials, addSerialsBulk, searchSerial, getWarehouses, updateSerial, deleteSerial } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
@@ -20,7 +20,13 @@ const COND_BADGE: Record<string, string> = {
   new: "badge-success", used: "badge-warning", refurbished: "badge-info",
 };
 
-export default function SerialsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SerialsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);

@@ -1,4 +1,5 @@
-"use client";
+"use client";;
+import { use } from "react";
 import Link from "next/link";
 
 // ─── أيقونات ─────────────────────────────────────────────────────────
@@ -122,7 +123,13 @@ function PermCell({ perm }: { perm: Perm }) {
   return <div style={{ display: "flex", justifyContent: "center" }}><span style={{ color: "#CBD5E1" }}><IcX /></span></div>;
 }
 
-export default function RolesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function RolesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
 
   return (

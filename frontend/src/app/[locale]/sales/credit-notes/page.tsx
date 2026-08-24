@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { getInvoices } from "@/lib/sales";
@@ -7,7 +7,13 @@ import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function CreditNotesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CreditNotesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [invoiceMap, setInvoiceMap] = useState<Record<string, string>>({});

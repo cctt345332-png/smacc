@@ -3,11 +3,12 @@
  * تقرير انتهاء الصلاحية — للصيدلية فقط
  * يظهر فقط إذا كان النشاط = pharmacy
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getBatchExpiryReport, getExpiryAlerts } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -18,7 +19,13 @@ const STATUS_CONFIG = {
   ok:       { ar: "صالح", badge: "badge-success", bg: "#F0FDF4", color: "#059669" },
 };
 
-export default function ExpiryReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function ExpiryReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [rows, setRows] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any>(null);
@@ -77,9 +84,7 @@ export default function ExpiryReportPage({ params: { locale } }: { params: { loc
           <p className="page-subtitle">{ar ? "متابعة تواريخ انتهاء صلاحية الأدوية والتشغيلات" : "Track medication batch expiry dates"}</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-            <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
-          </button>
+          <StructuredReportPrintButton locale={locale} title={ar ? "تقرير انتهاء الصلاحية" : "Expiry Date Report"} subtitle={ar ? "رقابة التشغيلات الدوائية وتواريخ انتهاء الصلاحية" : "Medication batch expiry control"} period={ar ? `خلال ${daysAhead} يومًا` : `Within ${daysAhead} days`} reportCode={`EXP-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "منتهي الصلاحية" : "Expired", value: String(alerts?.expired_count || 0), tone: "red" }, { label: ar ? "ينتهي خلال 30 يوم" : "Within 30 days", value: String(rows.filter(r => r.status === "critical").length), tone: "red" }, { label: ar ? "ينتهي خلال 90 يوم" : "Within 90 days", value: String(alerts?.near_expiry_count || 0), tone: "amber" }, { label: ar ? "قيمة المخاطر" : "At-risk value", value: `${fmt(Number(alerts?.expired_value || 0) + Number(alerts?.near_expiry_value || 0))} SAR`, tone: "red" }]} tables={[{ title: ar ? "تفاصيل التشغيلات" : "Batch details", headers: [ar ? "الصنف" : "Item", "SKU", ar ? "رقم التشغيلة" : "Batch no.", ar ? "الكمية" : "Qty", ar ? "تاريخ الانتهاء" : "Expiry date", ar ? "الأيام المتبقية" : "Days left", ar ? "القيمة" : "Value", ar ? "الحالة" : "Status"], rows: filtered.map(row => { const status = STATUS_CONFIG[row.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.ok; const days = row.days_to_expiry == null ? "—" : row.days_to_expiry < 0 ? `${Math.abs(row.days_to_expiry)} ${ar ? "يوم مضى" : "days ago"}` : `${row.days_to_expiry} ${ar ? "يوم" : "days"}`; return [row.product_name || "—", row.product_sku || "—", row.batch_number || "—", fmt(row.quantity), row.expiry_date ? new Date(row.expiry_date).toLocaleDateString("en-GB") : "—", days, `${fmt(row.value)} SAR`, ar ? status.ar : row.status]; }), totals: [ar ? "الإجمالي" : "TOTAL", "", "", fmt(filtered.reduce((s, row) => s + Number(row.quantity || 0), 0)), "", "", `${fmt(filtered.reduce((s, row) => s + Number(row.value || 0), 0))} SAR`, ""] }]} />
         </div>
       </div>
 

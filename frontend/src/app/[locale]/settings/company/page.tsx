@@ -1,12 +1,18 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import { getCompany, updateCompany, uploadLogo, deleteLogo } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 
 const SAUDI_CITIES = ["الرياض", "جدة", "مكة المكرمة", "المدينة المنورة", "الدمام", "الخبر", "الظهران", "الطائف", "تبوك", "أبها", "القصيم", "حائل", "جازان", "نجران", "الجوف"];
 
-export default function CompanyPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CompanyPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [company, setCompany] = useState<any>(null);
   const [saving, setSaving] = useState(false);

@@ -17,3 +17,6 @@ cryptography==42.0.8
 fpdf2==2.7.9
 arabic-reshaper==3.0.0
 python-bidi==0.4.2
+
+# Release verification
+pytest==8.3.5

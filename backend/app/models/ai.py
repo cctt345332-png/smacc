@@ -28,9 +28,8 @@ class AITenantSettings(Base):
     api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # الموديل المختار
-    # openai: gpt-4o, gpt-4o-mini, gpt-3.5-turbo
-    # gemini: gemini-1.5-pro, gemini-1.5-flash, gemini-pro
-    model: Mapped[str] = mapped_column(String(100), default="gpt-4o-mini")
+    # النماذج الداخلية المتاحة في المعاينة تبدأ بـ GPT-5 Mini.
+    model: Mapped[str] = mapped_column(String(100), default="gpt-5-mini")
 
     # الميزات المفعّلة لهذه الشركة (JSON array)
     # ["accounting", "inventory", "sales", "general", "pos", "reports"]
@@ -82,7 +81,7 @@ class AISystemConfig(Base):
     internal_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # الموديل الداخلي
-    internal_model: Mapped[str] = mapped_column(String(100), default="gpt-4o-mini")
+    internal_model: Mapped[str] = mapped_column(String(100), default="gpt-5-mini")
 
     # حدود الرسائل الشهرية لكل باقة (JSON)
     # {"trial": 20, "starter": 100, "professional": 500, "enterprise": -1}

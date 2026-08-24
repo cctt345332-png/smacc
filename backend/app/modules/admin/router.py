@@ -17,6 +17,7 @@ from app.core.tenant import get_current_user
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.system_config import SystemConfig
+from app.core.plan_catalog import default_plan_catalog
 
 router = APIRouter(prefix="/admin", tags=["super-admin"])
 
@@ -361,7 +362,7 @@ async def _set_config(db: AsyncSession, key: str, value: dict) -> None:
 @router.get("/plans-config")
 async def get_plans_config(_=Depends(require_super_admin), db: AsyncSession = Depends(get_db)):
     data = await _get_config(db, "plans_config")
-    return {"plans": data, "source": "db" if data else "default"}
+    return {"plans": data or default_plan_catalog(), "source": "db" if data else "catalog"}
 
 
 @router.put("/plans-config")
@@ -373,7 +374,7 @@ async def update_plans_config(data: dict, _=Depends(require_super_admin), db: As
 @router.get("/plans-config/public")
 async def get_plans_config_public(db: AsyncSession = Depends(get_db)):
     data = await _get_config(db, "plans_config")
-    return {"plans": data, "has_override": bool(data)}
+    return {"plans": data or default_plan_catalog(), "source": "db" if data else "catalog"}
 
 
 # ══════════════════════════════════════════════════════════════════════

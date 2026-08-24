@@ -11,14 +11,14 @@ import { useAuthStore } from "@/store/authStore";
 
 // ─── Activity config ──────────────────────────────────────────────────
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string; tracking: string; allowPurchase: boolean }> = {
-  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#2563EB", bg: "#EFF6FF", tracking: "serial",   allowPurchase: true  },
-  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#7C3AED", bg: "#F5F3FF", tracking: "serial",   allowPurchase: true  },
-  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#059669", bg: "#ECFDF5", tracking: "batch",    allowPurchase: false },
-  grocery:       { label: "بقالة",               icon: "grocery",      color: "#D97706", bg: "#FFFBEB", tracking: "quantity", allowPurchase: false },
-  spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#B45309", bg: "#FEF3C7", tracking: "weight",   allowPurchase: false },
-  clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#EC4899", bg: "#FDF2F8", tracking: "variant",  allowPurchase: false },
-  construction:  { label: "مواد بناء",            icon: "construction", color: "#64748B", bg: "#F1F5F9", tracking: "quantity", allowPurchase: false },
-  general:       { label: "عام",                 icon: "general",      color: "#0F172A", bg: "#F8FAFC", tracking: "quantity", allowPurchase: false },
+  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#0B5D4A", bg: "#E8F1E9", tracking: "serial",   allowPurchase: true  },
+  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#365F45", bg: "#EEF4ED", tracking: "serial",   allowPurchase: true  },
+  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#176545", bg: "#EAF5ED", tracking: "batch",    allowPurchase: false },
+  grocery:       { label: "بقالة",               icon: "grocery",      color: "#9A6B13", bg: "#FFF8E5", tracking: "quantity", allowPurchase: false },
+  spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#8B651D", bg: "#FCF5E2", tracking: "weight",   allowPurchase: false },
+  clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#516A5B", bg: "#EDF2EC", tracking: "variant",  allowPurchase: false },
+  construction:  { label: "مواد بناء",            icon: "construction", color: "#4D5C54", bg: "#E9ECE6", tracking: "quantity", allowPurchase: false },
+  general:       { label: "عام",                 icon: "general",      color: "#0B5D4A", bg: "#F2F6F1", tracking: "quantity", allowPurchase: false },
 };
 
 interface CartLine {
@@ -442,7 +442,7 @@ export default function POSCashierPage() {
 
   // ── main cashier UI ────────────────────────────────────────────────
   return (
-    <div dir={dir} style={{ display: "flex", flexDirection: "column", height: "calc(100vh - var(--header-height))", overflow: "hidden" }}>
+    <div dir={dir} className="legacy-pos" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - var(--header-height))", overflow: "hidden" }}>
 
       {/* ── Top bar ── */}
       <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>

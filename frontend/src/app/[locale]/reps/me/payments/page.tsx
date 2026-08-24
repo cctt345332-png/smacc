@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getMyPayments, getMyInvoices } from "@/lib/reps";
 import { createPayment, getCustomers } from "@/lib/sales";
 import api from "@/lib/api";
@@ -10,16 +10,22 @@ const fmtDate = (d: any) =>
 
 const METHOD: Record<string, { ar: string; color: string; bg: string }> = {
   cash:          { ar: "نقداً",       color: "#059669", bg: "#D1FAE5" },
-  bank_transfer: { ar: "تحويل بنكي", color: "#2563EB", bg: "#DBEAFE" },
-  cheque:        { ar: "شيك",        color: "#7C3AED", bg: "#EDE9FE" },
+  bank_transfer: { ar: "تحويل بنكي", color: "#0B5D4A", bg: "#DBEAFE" },
+  cheque:        { ar: "شيك",        color: "#356B63", bg: "#EDE9FE" },
   credit_card:   { ar: "بطاقة",      color: "#0891B2", bg: "#CFFAFE" },
   mada:          { ar: "مدى",        color: "#059669", bg: "#D1FAE5" },
-  stc_pay:       { ar: "STC Pay",    color: "#7C3AED", bg: "#EDE9FE" },
+  stc_pay:       { ar: "STC Pay",    color: "#356B63", bg: "#EDE9FE" },
 };
 
 const today = () => new Date().toISOString().split("T")[0];
 
-export default function RepPaymentsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function RepPaymentsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [payments, setPayments] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -118,7 +124,7 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
           </p>
         </div>
         <button onClick={() => { setShowModal(true); setError(""); setMode("invoice"); }}
-          style={{ padding:"8px 16px", borderRadius:10, border:"none", background:"#2563EB",
+          style={{ padding:"8px 16px", borderRadius:10, border:"none", background:"#0B5D4A",
             color:"white", fontWeight:700, fontSize:13, cursor:"pointer",
             display:"flex", alignItems:"center", gap:6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -146,7 +152,7 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
             {ar ? "لا توجد سندات بعد" : "No receipts yet"}
           </div>
           <button onClick={() => setShowModal(true)}
-            style={{ padding:"8px 16px", borderRadius:10, border:"none", background:"#2563EB", color:"white", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+            style={{ padding:"8px 16px", borderRadius:10, border:"none", background:"#0B5D4A", color:"white", fontWeight:700, fontSize:13, cursor:"pointer" }}>
             + {ar ? "سند جديد" : "New Receipt"}
           </button>
         </div>
@@ -165,7 +171,7 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
                 </div>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ display:"flex", justifyContent:"space-between" }}>
-                    <span style={{ fontFamily:"monospace", fontWeight:700, fontSize:13, color:"#2563EB" }}>
+                    <span style={{ fontFamily:"monospace", fontWeight:700, fontSize:13, color:"#0B5D4A" }}>
                       {p.payment_number || `#${p.id?.slice(-6)}`}
                     </span>
                     <span style={{ fontWeight:800, fontSize:15, color:"#059669" }}>+ {fmt(p.amount)} SAR</span>
@@ -179,7 +185,7 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
                   {p.invoice_number && (
                     <div style={{ fontSize:11, color:"var(--text-secondary)", marginTop:3 }}>
                       {ar ? "فاتورة:" : "Invoice:"}{" "}
-                      <span style={{ fontFamily:"monospace", color:"#2563EB" }}>{p.invoice_number}</span>
+                      <span style={{ fontFamily:"monospace", color:"#0B5D4A" }}>{p.invoice_number}</span>
                     </div>
                   )}
                 </div>
@@ -228,9 +234,9 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
                     setCustomerBalance(null); setCustomerInvoices([]);
                   }}
                     style={{ flex:1, padding:"9px", borderRadius:8, border:"2px solid",
-                      borderColor: mode === m.v ? "#2563EB" : "var(--border)",
-                      background: mode === m.v ? "#EFF6FF" : "var(--surface)",
-                      color: mode === m.v ? "#2563EB" : "var(--text-primary)",
+                      borderColor: mode === m.v ? "#0B5D4A" : "var(--border)",
+                      background: mode === m.v ? "#E8F1E9" : "var(--surface)",
+                      color: mode === m.v ? "#0B5D4A" : "var(--text-primary)",
                       fontWeight:700, fontSize:12, cursor:"pointer" }}>
                     {ar ? m.ar : m.en}
                   </button>
@@ -271,7 +277,7 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
                     if (!inv) return null;
                     const rem = Number(inv.total||0) - Number(inv.paid_amount||0);
                     return (
-                      <div style={{ marginTop:8, background:"#EFF6FF", borderRadius:10,
+                      <div style={{ marginTop:8, background:"#E8F1E9", borderRadius:10,
                         padding:"10px 14px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                         <div>
                           <div style={{ fontSize:10, color:"#6B7280" }}>{ar ? "الإجمالي" : "Total"}</div>
@@ -312,7 +318,7 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
                   )}
 
                   {customerBalance && !loadingBalance && (
-                    <div style={{ marginTop:8, background:"#EFF6FF", borderRadius:10, padding:"12px 14px" }}>
+                    <div style={{ marginTop:8, background:"#E8F1E9", borderRadius:10, padding:"12px 14px" }}>
                       <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                         <span style={{ fontSize:13, fontWeight:600 }}>{ar ? "رصيد العميل المستحق" : "Customer Balance Due"}</span>
                         <span style={{ fontSize:16, fontWeight:800, color:"#DC2626" }}>
@@ -381,9 +387,9 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
                   ].map(m => (
                     <button key={m.v} type="button" onClick={() => upd("payment_method", m.v)}
                       style={{ padding:"8px 4px", borderRadius:8, border:"2px solid",
-                        borderColor: form.payment_method === m.v ? "#2563EB" : "var(--border)",
-                        background: form.payment_method === m.v ? "#EFF6FF" : "var(--surface)",
-                        color: form.payment_method === m.v ? "#2563EB" : "var(--text-primary)",
+                        borderColor: form.payment_method === m.v ? "#0B5D4A" : "var(--border)",
+                        background: form.payment_method === m.v ? "#E8F1E9" : "var(--surface)",
+                        color: form.payment_method === m.v ? "#0B5D4A" : "var(--text-primary)",
                         fontWeight:700, fontSize:11, cursor:"pointer",
                         display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
                       <span style={{ fontSize:16 }}>{m.icon}</span>
@@ -430,7 +436,7 @@ export default function RepPaymentsPage({ params: { locale } }: { params: { loca
                 </button>
                 <button onClick={handleSave} disabled={saving}
                   style={{ flex:2, padding:"12px", borderRadius:10, border:"none",
-                    background: saving ? "#93C5FD" : "#2563EB", color:"white", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                    background: saving ? "#93C5FD" : "#0B5D4A", color:"white", fontSize:14, fontWeight:700, cursor:"pointer" }}>
                   {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ السند" : "Save Receipt")}
                 </button>
               </div>

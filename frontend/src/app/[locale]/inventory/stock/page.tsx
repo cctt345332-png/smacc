@@ -3,7 +3,7 @@
  * صفحة مخزون المندوب — تعرض مخزونه فقط (البايكند يفلتر تلقائياً)
  * نفس تصميم صفحة المستودعات بدون أزرار الإدارة
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getStockByWarehouse } from "@/lib/inventory";
 
@@ -13,7 +13,13 @@ const TRACKING_AR: Record<string, string> = {
   quantity: "كمية", serial: "سيريال", batch: "تشغيلة", variant: "متغيرات", weight: "وزن",
 };
 
-export default function MyStockPage({ params: { locale } }: { params: { locale: string } }) {
+export default function MyStockPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [stock, setStock] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

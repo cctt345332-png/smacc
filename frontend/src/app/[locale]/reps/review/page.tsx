@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { getReps } from "@/lib/reps";
@@ -240,7 +240,13 @@ function InvoiceDetailModal({
   );
 }
 
-export default function ReviewPage({ params: { locale } }: { params: { locale: string } }) {
+export default function ReviewPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [invoices, setInvoices]   = useState<any[]>([]);
   const [reps, setReps]           = useState<any[]>([]);

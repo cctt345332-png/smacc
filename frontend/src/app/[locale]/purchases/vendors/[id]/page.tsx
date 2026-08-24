@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import { getVendor, updateVendor, getBills } from "@/lib/purchases";
 import { getAccounts } from "@/lib/accounting";
@@ -39,7 +39,14 @@ function Field({ label, value, mono }: { label: string; value?: string | null; m
   );
 }
 
-export default function VendorDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function VendorDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [vendor, setVendor] = useState<any>(null);
   const [bills, setBills] = useState<any[]>([]);

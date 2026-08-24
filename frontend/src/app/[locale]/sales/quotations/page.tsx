@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getQuotations, convertToInvoice } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
@@ -14,7 +14,13 @@ const STATUS_MAP: Record<string, { ar: string; badge: string }> = {
   expired:  { ar: "منتهية",  badge: "badge-gray" },
 };
 
-export default function QuotationsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function QuotationsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [quotations, setQuotations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

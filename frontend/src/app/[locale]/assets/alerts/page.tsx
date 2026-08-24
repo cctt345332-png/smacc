@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getAlertSettings, updateAlertSettings, runAssetAlerts, getNotifications, markRead, markAllRead } from "@/lib/notifications";
 import { Icon } from "@/components/ui/Icons";
@@ -18,7 +18,13 @@ const TYPE_AR: Record<string, string> = {
   general: "عام",
 };
 
-export default function AssetAlertsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function AssetAlertsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [settings, setSettings] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);

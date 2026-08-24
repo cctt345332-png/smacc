@@ -1,15 +1,22 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import api from "@/lib/api";
 import { getCompany } from "@/lib/settings";
 import { getCustomer } from "@/lib/sales";
 import InvoicePrint, { InvoicePrintDoc } from "@/components/documents/InvoicePrint";
 
-export default function RepInvoicePrintPage({
-  params: { locale, id },
-}: {
-  params: { locale: string; id: string };
-}) {
+export default function RepInvoicePrintPage(
+  props: {
+    params: Promise<{ locale: string; id: string }>;
+  }
+) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [doc,     setDoc]     = useState<InvoicePrintDoc | null>(null);
   const [company, setCompany] = useState<any>(null);

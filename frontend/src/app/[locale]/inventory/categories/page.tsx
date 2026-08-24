@@ -1,10 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getCategories, createCategory } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 
-export default function CategoriesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CategoriesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

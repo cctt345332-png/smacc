@@ -1,12 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getStockSummary, getLowStockAlerts } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function InventoryPage({ params: { locale } }: { params: { locale: string } }) {
+export default function InventoryPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [summary, setSummary] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);

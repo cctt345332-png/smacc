@@ -1,7 +1,13 @@
 import AppLayout from "@/components/layout/AppLayout";
 import Link from "next/link";
 
-export default function Page({ params: { locale } }: { params: { locale: string } }) {
+export default async function Page(props: { params: Promise<{ locale: string }> }) {
+  const params = await props.params;
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   return (
     <AppLayout locale={locale}>

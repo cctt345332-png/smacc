@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getCustomers, createQuotation } from "@/lib/sales";
@@ -27,7 +27,13 @@ function calcLine(l: Line) {
   return { gross, discAmt, taxable, vatAmt, total: taxable + vatAmt };
 }
 
-export default function NewQuotationPage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewQuotationPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [customers, setCustomers] = useState<any[]>([]);

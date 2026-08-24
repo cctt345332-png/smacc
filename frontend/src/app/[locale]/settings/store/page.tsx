@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 
@@ -23,7 +23,13 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 
-export default function StoreSettingsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function StoreSettingsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const { plan } = useAuthStore();
   const hasStore = plan === "professional" || plan === "enterprise";

@@ -1,6 +1,6 @@
 ﻿"use client";
 import { getMapboxTileUrl } from "@/lib/mapConfig";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, use } from "react";
 import Link from "next/link";
 import { getRep, getRepSummary, getRepStock, getRepInvoices, getRepTransfers, getRepLocationHistory, updateRep } from "@/lib/reps";
 import api from "@/lib/api";
@@ -27,7 +27,14 @@ const PAY_METHOD: Record<string, string> = {
 /* ══════════════════════════════════════════════════════════════════
    الصفحة الرئيسية: تفاصيل المندوب
    ══════════════════════════════════════════════════════════════════ */
-export default function RepDetailPage({ params: { locale, rep_id } }: { params: { locale: string; rep_id: string } }) {
+export default function RepDetailPage(props: { params: Promise<{ locale: string; rep_id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    rep_id
+  } = params;
+
   const ar = locale === "ar";
 
   // ── State ────────────────────────────────────────────────────────
@@ -47,6 +54,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
   // ── تتبع الموقع (props للـ TrackingTab) ─────────────────────────
   const mapRef      = useRef<HTMLDivElement>(null);
   const trackingMap = useRef<any>(null);
+  const mapInitToken = useRef(0);
   const [trackDate,    setTrackDate]    = useState(() => new Date().toISOString().split("T")[0]);
   const [trackPoints,  setTrackPoints]  = useState<any[]>([]);
   const [trackLoading, setTrackLoading] = useState(false);
@@ -490,6 +498,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
           setTrackLoading={setTrackLoading}
           mapRef={mapRef}
           trackingMap={trackingMap}
+          mapInitToken={mapInitToken}
         />
       )}
 
@@ -655,7 +664,7 @@ export default function RepDetailPage({ params: { locale, rep_id } }: { params: 
 function TrackingTab({
   locale, repId, trackDate, setTrackDate,
   trackPoints, setTrackPoints, trackLoading, setTrackLoading,
-  mapRef, trackingMap,
+  mapRef, trackingMap, mapInitToken,
 }: {
   locale: string;
   repId: string;
@@ -667,6 +676,7 @@ function TrackingTab({
   setTrackLoading: (b: boolean) => void;
   mapRef: React.RefObject<HTMLDivElement>;
   trackingMap: React.MutableRefObject<any>;
+  mapInitToken: React.MutableRefObject<number>;
 }) {
   const ar = locale === "ar";
 
@@ -682,10 +692,20 @@ function TrackingTab({
     }
   }, []);
 
-  /* تهيئة الخريطة */
+  /* تهيئة الخريطة: الحارس يمنع سباق الاستيراد أثناء Fast Refresh أو تبديل التبويبات. */
   useEffect(() => {
-    if (!mapRef.current || trackingMap.current) return;
-    import("leaflet").then(L => {
+    const container = mapRef.current;
+    if (!container || trackingMap.current) return;
+    const token = ++mapInitToken.current;
+    let disposed = false;
+
+    const initialize = async () => {
+      const L = await import("leaflet");
+      if (disposed || token !== mapInitToken.current || trackingMap.current || !mapRef.current) return;
+
+      // Leaflet يحتفظ بمعرف على العنصر حتى بعد تحديث التطوير؛ نزيله دفاعيًا قبل الإنشاء.
+      const mapContainer = mapRef.current as HTMLDivElement & { _leaflet_id?: number };
+      if (mapContainer._leaflet_id) delete mapContainer._leaflet_id;
       // @ts-ignore
       delete L.Icon.Default.prototype._getIconUrl;
       L.Icon.Default.mergeOptions({
@@ -693,17 +713,27 @@ function TrackingTab({
         iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
-      const map = L.map(mapRef.current!, { center: [24.7136, 46.6753], zoom: 11 });
+      const map = L.map(mapContainer, { center: [24.7136, 46.6753], zoom: 11 });
       L.tileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ar", {
         attribution: "Google Maps", maxZoom: 19,
       }).addTo(map);
       trackingMap.current = { map, L };
-    });
-    return () => {
-      trackingMap.current?.map?.remove();
-      trackingMap.current = null;
+      requestAnimationFrame(() => map.invalidateSize());
     };
-  }, []);
+
+    void initialize();
+    return () => {
+      disposed = true;
+      mapInitToken.current += 1;
+      const current = trackingMap.current;
+      if (current?.map) {
+        current.map.off();
+        current.map.remove();
+        trackingMap.current = null;
+      }
+      if (mapRef.current) delete (mapRef.current as HTMLDivElement & { _leaflet_id?: number })._leaflet_id;
+    };
+  }, [mapInitToken, mapRef, trackingMap]);
 
   /* رسم المسار */
   useEffect(() => {
@@ -770,7 +800,7 @@ function TrackingTab({
       </div>
 
       {/* الخريطة */}
-      <div style={{ height: 480, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", position: "relative" }}>
+      <div style={{ height: "clamp(280px, 46vh, 380px)", minHeight: 280, borderRadius: 2, overflow: "hidden", border: "1px solid var(--border)", position: "relative", background: "#F7F9F5" }}>
         <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
         {trackPoints.length === 0 && !trackLoading && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.85)", flexDirection: "column", gap: 8 }}>

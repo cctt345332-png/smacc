@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { getBills } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -16,7 +17,13 @@ const cols = [
   { key: "over90",  ar: "أكثر من 90",   en: "Over 90 Days", color: "#7C3AED" },
 ];
 
-export default function APAgingPage({ params: { locale } }: { params: { locale: string } }) {
+export default function APAgingPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [rows, setRows] = useState<AgingRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,7 +77,7 @@ export default function APAgingPage({ params: { locale } }: { params: { locale: 
           <h1 className="page-title">{ar ? "تقرير عمر الديون — الموردون" : "AP Aging Report"}</h1>
           <p className="page-subtitle">{ar ? "تحليل الديون المستحقة للموردين حسب الفترة الزمنية" : "Outstanding payables by aging period"}</p>
         </div>
-        {loaded && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}</button>}
+        {loaded && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير عمر ديون الموردين" : "AP Aging Report"} subtitle={ar ? "تحليل الذمم المستحقة للموردين حسب شريحة التأخر" : "Outstanding payables by aging bucket"} period={ar ? `كما في ${asOf}` : `As of ${asOf}`} reportCode={`AP-AGE-${asOf.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "جاري" : "Current", value: `${fmt(totals.current)} SAR`, tone: "green" }, { label: ar ? "1-30 يوم" : "1-30 days", value: `${fmt(totals.days30)} SAR`, tone: "amber" }, { label: ar ? "31-60 يوم" : "31-60 days", value: `${fmt(totals.days60)} SAR`, tone: "amber" }, { label: ar ? "61-90 يوم" : "61-90 days", value: `${fmt(totals.days90)} SAR`, tone: "red" }, { label: ar ? "أكثر من 90 يوم" : "Over 90 days", value: `${fmt(totals.over90)} SAR`, tone: "red" }, { label: ar ? "إجمالي الدائنين" : "Total payables", value: `${fmt(totals.total)} SAR`, tone: "blue" }]} tables={[{ title: ar ? "تحليل الموردين حسب الاستحقاق" : "Payables by vendor", headers: [ar ? "المورد" : "Vendor", ar ? "جاري" : "Current", ar ? "1-30" : "1-30", ar ? "31-60" : "31-60", ar ? "61-90" : "61-90", ar ? ">90" : ">90", ar ? "الإجمالي" : "Total"], rows: rows.map(row => [row.vendor, fmt(row.current), fmt(row.days30), fmt(row.days60), fmt(row.days90), fmt(row.over90), fmt(row.total)]), totals: [ar ? "الإجمالي" : "TOTAL", fmt(totals.current), fmt(totals.days30), fmt(totals.days60), fmt(totals.days90), fmt(totals.over90), fmt(totals.total)] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>

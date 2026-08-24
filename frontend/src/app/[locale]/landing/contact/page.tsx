@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import LandingNav from "@/components/landing/LandingNav";
 import LandingFooter from "@/components/landing/LandingFooter";
+import { PUBLIC_CONTACT, publicContactLinks } from "@/lib/publicContact";
 
 const IcMail    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
 const IcPhone   = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.56 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.18 6.18l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
@@ -30,8 +31,9 @@ export default function ContactPage() {
   };
 
   const contactInfo = [
-    { icon: <IcMail />,  color: "#2563EB", bg: "#EFF6FF", label: ar ? "البريد الإلكتروني" : "Email",   value: "support@masar.sa" },
-    { icon: <IcPhone />, color: "#059669", bg: "#ECFDF5", label: ar ? "الهاتف / واتساب"  : "Phone / WhatsApp", value: "+966 5x xxx xxxx" },
+    { icon: <IcMail />,  color: "#0B5D4A", bg: "#E8F1E9", label: ar ? "البريد الإلكتروني" : "Email", value: PUBLIC_CONTACT.email, href: publicContactLinks.email },
+    { icon: <IcPhone />, color: "#126D57", bg: "#EAF5ED", label: ar ? "الهاتف / واتساب" : "Phone / WhatsApp", value: PUBLIC_CONTACT.phone, href: publicContactLinks.phone },
+    { icon: <IcClock />, color: "#647E6C", bg: "#EEF3EE", label: ar ? "العنوان" : "Address", value: ar ? PUBLIC_CONTACT.addressAr : PUBLIC_CONTACT.addressEn },
     { icon: <IcClock />, color: "#D97706", bg: "#FFFBEB", label: ar ? "ساعات العمل"      : "Working Hours", value: ar ? "الأحد — الخميس، 9ص — 6م" : "Sun — Thu, 9AM — 6PM" },
   ];
 
@@ -69,7 +71,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 2 }}>{c.label}</div>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>{c.value}</div>
+                    {c.href ? <a href={c.href} style={{ fontSize: 14, fontWeight: 700, color: "#0B5D4A" }}>{c.value}</a> : <div style={{ fontSize: 14, fontWeight: 700 }}>{c.value}</div>}
                   </div>
                 </div>
               ))}
@@ -125,7 +127,7 @@ export default function ContactPage() {
                       {ar ? "الجوال" : "Phone"}
                     </label>
                     <input className="form-input" value={form.phone} onChange={e => upd("phone", e.target.value)}
-                      placeholder="+966 5x xxx xxxx" />
+                      placeholder="0500000000" />
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 5, color: "#374151" }}>
@@ -149,7 +151,7 @@ export default function ContactPage() {
                     style={{ resize: "vertical" }} />
                 </div>
                 <button type="submit" disabled={sending}
-                  style={{ padding: "12px", borderRadius: 10, background: "#2563EB", color: "white", fontWeight: 700, fontSize: 14, border: "none", cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.7 : 1 }}>
+                  style={{ padding: "12px", borderRadius: 2, background: "#0B5D4A", color: "white", fontWeight: 700, fontSize: 14, border: "1px solid #084535", cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.7 : 1 }}>
                   {sending ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال الرسالة" : "Send Message")}
                 </button>
               </form>

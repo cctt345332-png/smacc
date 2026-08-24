@@ -58,3 +58,14 @@ Gemini_Generated_Image_*.png
 
 # Allow font files
 !backend/app/modules/reps/fonts/*.ttf
+
+# Local preview, audit and browser-verification artifacts (never commit by default)
+/frontend/tsconfig.tsbuildinfo
+/backend/app/modules/reps/fonts/*.pkl
+/backend/app/modules/reps/fonts/*.cw127.pkl
+/verify_*.mjs
+/inspect_*.mjs
+/*_audit.md
+/reference_ui_fingerprint.md
+/project_audit_*.md
+/print_template_requirements.md

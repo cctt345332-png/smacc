@@ -1,11 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getItem, getCategories, updateItem } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 
-export default function EditItemPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function EditItemPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [loading, setLoading] = useState(true);

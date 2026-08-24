@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getVouchers, postVoucher, cancelVoucher, getTreasurySummary } from "@/lib/treasury";
 import { Icon } from "@/components/ui/Icons";
@@ -8,7 +8,13 @@ const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFraction
 const STATUS = { draft: { ar: "مسودة", badge: "badge-warning" }, posted: { ar: "مرحّل", badge: "badge-success" }, cancelled: { ar: "ملغي", badge: "badge-danger" } };
 const METHODS: Record<string, string> = { cash: "نقداً", bank_transfer: "تحويل بنكي", cheque: "شيك", mada: "مدى", stc_pay: "STC Pay", credit_card: "بطاقة" };
 
-export default function ReceiptsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function ReceiptsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);

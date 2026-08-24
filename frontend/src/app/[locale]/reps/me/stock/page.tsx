@@ -1,10 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getMyStock } from "@/lib/reps";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function RepStockPage({ params: { locale } }: { params: { locale: string } }) {
+export default function RepStockPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [stock, setStock] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +53,7 @@ export default function RepStockPage({ params: { locale } }: { params: { locale:
           </div>
           <div style={{ background: "var(--surface)", borderRadius: 14, padding: "14px 16px", border: "1px solid var(--border)" }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{ar ? "القيمة الإجمالية" : "Total Value"}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#2563EB" }}>{fmt(totalVal)} SAR</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#0B5D4A" }}>{fmt(totalVal)} SAR</div>
           </div>
         </div>
       )}
@@ -98,7 +104,7 @@ export default function RepStockPage({ params: { locale } }: { params: { locale:
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "flex", gap: 8 }}>
                       {(s.item_sku || s.sku) && <span style={{ fontFamily: "monospace" }}>{s.item_sku || s.sku}</span>}
-                      {isSerial && <span style={{ color: "#7C3AED", fontWeight: 600 }}>{ar ? "سيريال" : "Serial"}</span>}
+                      {isSerial && <span style={{ color: "#356B63", fontWeight: 600 }}>{ar ? "سيريال" : "Serial"}</span>}
                       {isLow && <span style={{ color: "#D97706", fontWeight: 600 }}>{ar ? "منخفض" : "Low"}</span>}
                       {isEmpty && <span style={{ color: "#DC2626", fontWeight: 600 }}>{ar ? "نفد" : "Empty"}</span>}
                     </div>
@@ -113,7 +119,7 @@ export default function RepStockPage({ params: { locale } }: { params: { locale:
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
                   <div>
                     <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{ar ? "سعر البيع" : "Sale Price"}</div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: "#2563EB" }}>{fmt(s.sale_price)} SAR</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: "#0B5D4A" }}>{fmt(s.sale_price)} SAR</div>
                   </div>
                   {qty > 0 && (
                     <div style={{ textAlign: "end" }}>

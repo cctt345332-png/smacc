@@ -1,11 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getSupervisors, createSupervisor, assignRepsToSupervisor, getReps } from "@/lib/reps";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function SupervisorsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SupervisorsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [supervisors, setSupervisors] = useState<any[]>([]);
   const [reps, setReps]               = useState<any[]>([]);
@@ -137,6 +143,7 @@ export default function SupervisorsPage({ params: { locale } }: { params: { loca
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>
               {ar ? "مشرف جديد" : "New Supervisor"}
             </h3>
+            <form onSubmit={e => { e.preventDefault(); handleCreate(); }}>
             {error && (
               <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8,
                 padding: "10px 14px", marginBottom: 14, color: "#DC2626", fontSize: 13 }}>{error}</div>
@@ -155,13 +162,14 @@ export default function SupervisorsPage({ params: { locale } }: { params: { loca
               </div>
             ))}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-              <button className="btn btn-secondary" onClick={() => setShowCreate(false)}>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>
                 {ar ? "إلغاء" : "Cancel"}
               </button>
-              <button className="btn btn-primary" onClick={handleCreate} disabled={saving}>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
                 {saving ? "..." : (ar ? "إنشاء المشرف" : "Create")}
               </button>
             </div>
+            </form>
           </div>
         </div>
       )}

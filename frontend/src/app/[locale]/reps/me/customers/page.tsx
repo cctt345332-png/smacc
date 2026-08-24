@@ -1,9 +1,9 @@
 "use client";
 import { getMapboxTileUrl } from "@/lib/mapConfig";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, use } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getCustomers, createCustomer } from "@/lib/sales";
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "@/lib/sales";
 
 const emptyForm = {
   customer_type: "individual",
@@ -132,7 +132,7 @@ function LocationPicker({ locale, onSelect, onClose }: {
             <button onClick={() => coords && onSelect(coords.lat, coords.lng)}
               disabled={!coords}
               style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none",
-                background: "#2563EB", color: "white", cursor: "pointer",
+                background: "#0B5D4A", color: "white", cursor: "pointer",
                 fontSize: 13, fontWeight: 700 }}>
               {ar ? "تأكيد الموقع" : "Confirm Location"}
             </button>
@@ -143,7 +143,13 @@ function LocationPicker({ locale, onSelect, onClose }: {
   );
 }
 
-export default function RepCustomersPage({ params: { locale } }: { params: { locale: string } }) {
+export default function RepCustomersPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const searchParams = useSearchParams();
 
@@ -151,6 +157,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState("");
@@ -176,12 +183,23 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
   }, [searchParams]);
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const openNew = () => { setEditingCustomer(null); setForm({ ...emptyForm }); setError(""); setShowModal(true); };
+  const openEdit = (customer: any) => {
+    setEditingCustomer(customer);
+    setForm({ customer_type: customer.customer_type || "individual", name_ar: customer.name_ar || "", name_en: customer.name_en || "", phone: customer.phone || "", email: customer.email || "", address_city: customer.address_city || "", vat_number: customer.vat_number || "", cr_number: customer.cr_number || "", national_id: customer.national_id || "", payment_terms_days: String(customer.payment_terms_days ?? 30), credit_limit: String(customer.credit_limit ?? 0), notes: customer.notes || "", latitude: customer.latitude ? String(customer.latitude) : "", longitude: customer.longitude ? String(customer.longitude) : "" });
+    setError(""); setShowModal(true);
+  };
+  const handleDelete = async (customer: any) => {
+    if (!window.confirm(ar ? `حذف العميل «${customer.name_ar}»؟` : `Delete ${customer.name_ar}?`)) return;
+    try { await deleteCustomer(customer.id); load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف العميل" : "Could not delete customer")); }
+  };
 
   const handleSave = async () => {
     if (!form.name_ar.trim()) { setError(ar ? "الاسم بالعربي مطلوب" : "Arabic name is required"); return; }
     setSaving(true); setError("");
     try {
-      await createCustomer({
+      const payload = {
         ...form,
         payment_terms_days: parseInt(form.payment_terms_days) || 30,
         credit_limit: parseFloat(form.credit_limit) || 0,
@@ -192,8 +210,11 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
         notes: form.notes || null,
         latitude: form.latitude ? parseFloat(form.latitude) : null,
         longitude: form.longitude ? parseFloat(form.longitude) : null,
-      } as any);
+      } as any;
+      if (editingCustomer) await updateCustomer(editingCustomer.id, payload);
+      else await createCustomer(payload);
       setShowModal(false);
+      setEditingCustomer(null);
       setForm({ ...emptyForm });
       load();
     } catch (e: any) {
@@ -216,8 +237,8 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
             {filtered.length} {ar ? "عميل" : "customers"}
           </p>
         </div>
-        <button onClick={() => { setForm({ ...emptyForm }); setError(""); setShowModal(true); }}
-          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#2563EB", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+        <button onClick={openNew}
+          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#0B5D4A", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           {ar ? "عميل جديد" : "New Customer"}
         </button>
@@ -241,13 +262,30 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 12 }}>
               {ar ? "لا يوجد عملاء" : "No customers found"}
             </div>
-            <button onClick={() => { setForm({ ...emptyForm }); setError(""); setShowModal(true); }}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#2563EB", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+            <button onClick={openNew}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#0B5D4A", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
               + {ar ? "أضف عميلاً" : "Add Customer"}
             </button>
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
+          <>
+            <div className="rep-customers-mobile-list">
+              {filtered.map((c: any) => (
+                <article key={c.id} className="rep-customer-mobile-card">
+                  <div className="rep-customer-mobile-top">
+                    <div><strong>{c.name_ar}</strong><span className="rep-customer-code">{c.customer_number}</span></div>
+                    <span className={c.is_active ? "rep-customer-state active" : "rep-customer-state"}>{c.is_active ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}</span>
+                  </div>
+                  <div className="rep-customer-mobile-meta"><span>{ar ? "الجوال" : "Phone"}: <b>{c.phone || "—"}</b></span><span>{ar ? "المدينة" : "City"}: <b>{c.address_city || "—"}</b></span></div>
+                  <div className="rep-customer-mobile-actions">
+                    <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`}>{ar ? "فاتورة" : "Invoice"}</Link>
+                    <button onClick={() => openEdit(c)}>{ar ? "تعديل" : "Edit"}</button>
+                    <button className="danger" onClick={() => handleDelete(c)}>{ar ? "حذف" : "Delete"}</button>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="rep-customers-desktop-table" style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "var(--bg)", borderBottom: "1px solid var(--border)" }}>
@@ -274,16 +312,18 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
                       </span>
                     </td>
                     <td style={{ padding: "12px 16px" }}>
-                      <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`}
-                        style={{ fontSize: 12, color: "#2563EB", fontWeight: 600, textDecoration: "none", padding: "4px 10px", border: "1px solid #BFDBFE", borderRadius: 6, background: "#EFF6FF" }}>
-                        {ar ? "فاتورة" : "Invoice"}
-                      </Link>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`} style={{ fontSize: 12, color: "#0B5D4A", fontWeight: 700, textDecoration: "none", padding: "4px 9px", border: "1px solid #9BBBAD", background: "#E8F1E9" }}>{ar ? "فاتورة" : "Invoice"}</Link>
+                        <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#23463A", fontWeight: 700, padding: "4px 9px", border: "1px solid #AEB9B0", background: "#F7F9F5", cursor: "pointer" }}>{ar ? "تعديل" : "Edit"}</button>
+                        <button onClick={() => handleDelete(c)} style={{ fontSize: 12, color: "#B42318", fontWeight: 700, padding: "4px 9px", border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -295,7 +335,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
             <div style={{ width: 40, height: 4, background: "var(--border)", borderRadius: 2, margin: "0 auto 20px" }} />
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>{ar ? "عميل جديد" : "New Customer"}</h2>
+              <h2 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>{editingCustomer ? (ar ? "تعديل العميل" : "Edit Customer") : (ar ? "عميل جديد" : "New Customer")}</h2>
               <button onClick={() => setShowModal(false)}
                 style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
             </div>
@@ -310,7 +350,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
               <div style={{ display: "flex", gap: 8 }}>
                 {[{ v: "individual", ar: "فرد", en: "Individual" }, { v: "company", ar: "شركة", en: "Company" }].map(t => (
                   <button key={t.v} type="button" onClick={() => upd("customer_type", t.v)}
-                    style={{ flex: 1, padding: "8px", borderRadius: 8, border: "2px solid", borderColor: form.customer_type === t.v ? "#2563EB" : "var(--border)", background: form.customer_type === t.v ? "#EFF6FF" : "var(--surface)", color: form.customer_type === t.v ? "#2563EB" : "var(--text-primary)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    style={{ flex: 1, padding: "8px", borderRadius: 8, border: "2px solid", borderColor: form.customer_type === t.v ? "#0B5D4A" : "var(--border)", background: form.customer_type === t.v ? "#E8F1E9" : "var(--surface)", color: form.customer_type === t.v ? "#0B5D4A" : "var(--text-primary)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     {ar ? t.ar : t.en}
                   </button>
                 ))}
@@ -381,7 +421,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
                     {parseFloat(form.latitude).toFixed(5)}, {parseFloat(form.longitude).toFixed(5)}
                   </span>
                   <button type="button" onClick={() => setShowLocationPicker(true)}
-                    style={{ fontSize: 11, color: "#2563EB", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                    style={{ fontSize: 11, color: "#0B5D4A", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
                     {ar ? "تعديل" : "Edit"}
                   </button>
                   <button type="button" onClick={() => { upd("latitude", ""); upd("longitude", ""); }}
@@ -393,7 +433,7 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
                 <button type="button" onClick={() => setShowLocationPicker(true)}
                   style={{ width: "100%", padding: "10px", borderRadius: 10,
                     border: "2px dashed var(--border)", background: "var(--surface)",
-                    color: "#2563EB", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    color: "#0B5D4A", fontWeight: 600, fontSize: 13, cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -411,8 +451,8 @@ export default function RepCustomersPage({ params: { locale } }: { params: { loc
                 {ar ? "إلغاء" : "Cancel"}
               </button>
               <button onClick={handleSave} disabled={saving}
-                style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: "#2563EB", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ العميل" : "Save Customer")}
+                style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: "#0B5D4A", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editingCustomer ? (ar ? "حفظ التعديل" : "Save Changes") : (ar ? "حفظ العميل" : "Save Customer"))}
               </button>
             </div>
           </div>

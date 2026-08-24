@@ -5,13 +5,19 @@
  * - تمنع أي اختصار لوحة مفاتيح من الهروب
  * - تدعم QR المجمع (20 سيريال دفعة واحدة)
  */
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getItems, addSerialsBulk, getWarehouses } from "@/lib/inventory";
 
 const fmt = (n: any) => Number(n || 0).toFixed(0);
 
-export default function ScanPage({ params: { locale } }: { params: { locale: string } }) {
+export default function ScanPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const searchParams = useSearchParams();

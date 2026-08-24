@@ -1,12 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function POSTopItemsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function POSTopItemsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const sar = ar ? "ر.س" : "SAR";
   const [data, setData] = useState<any[]>([]);
@@ -38,7 +45,7 @@ export default function POSTopItemsPage({ params: { locale } }: { params: { loca
           </div>
           <h1 className="page-title">{ar ? "أفضل الأصناف مبيعاً" : "Top Selling Items"}</h1>
         </div>
-        <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print" size={15} />{ar ? "طباعة" : "Print"}</button>
+        <StructuredReportPrintButton locale={locale} title={ar ? "تقرير أفضل الأصناف مبيعًا" : "Top Selling Items Report"} subtitle={ar ? "ترتيب الأصناف بحسب الإيراد والكمية" : "Item ranking by revenue and quantity"} period={`${dateFrom} — ${dateTo}`} reportCode={`POS-TOP-${dateTo.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "عدد الأصناف" : "Items", value: String(data.length), tone: "blue" }, { label: ar ? "إجمالي المبيعات" : "Total sales", value: `${fmt(data.reduce((s, item) => s + Number(item.total_revenue || 0), 0))} ${sar}`, tone: "green" }, { label: ar ? "إجمالي الكمية" : "Total quantity", value: fmt(data.reduce((s, item) => s + Number(item.total_qty || 0), 0)), tone: "blue" }]} tables={[{ title: ar ? "ترتيب الأصناف" : "Item ranking", headers: ["#", ar ? "الصنف" : "Item", ar ? "الكمية المباعة" : "Qty sold", ar ? "إجمالي المبيعات" : "Total sales", ar ? "متوسط السعر" : "Avg price", ar ? "الحصة" : "Share"], rows: data.map((item, i) => [String(i + 1), item.product_name_ar || "—", fmt(item.total_qty), `${fmt(item.total_revenue)} ${sar}`, `${fmt(item.avg_price)} ${sar}`, `${Number(item.share_pct || 0).toFixed(1)}%`]) }]} />
       </div>
 
       <div className="card" style={{ padding: "14px 20px", marginBottom: 20, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>

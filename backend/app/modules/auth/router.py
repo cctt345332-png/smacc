@@ -164,6 +164,8 @@ class CreateSuperAdminRequest(BaseModel):
 async def create_super_admin(data: CreateSuperAdminRequest, db: AsyncSession = Depends(get_db)):
     """إنشاء حساب مدير عام — يستخدم مرة واحدة فقط عند الإعداد الأولي"""
     from app.core.config import settings
+    if not settings.ENABLE_SUPER_ADMIN_BOOTSTRAP:
+        raise HTTPException(404, "مسار الإعداد الأولي للمدير العام غير مفعّل")
     if data.secret_key != settings.SUPER_ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="مفتاح سري غير صحيح")
 

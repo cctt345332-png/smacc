@@ -1,9 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getAssets, getAssetsSummary } from "@/lib/assets";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
-export default function AssetReportsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function AssetReportsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [assets, setAssets] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
@@ -27,6 +34,17 @@ export default function AssetReportsPage({ params: { locale } }: { params: { loc
 
   const activeAssets = assets.filter(a => a.status === "active");
   const disposedAssets = assets.filter(a => a.status === "disposed");
+  const printableAssets = reportType === "disposal" ? disposedAssets : activeAssets;
+  const selectedReport = reports.find(r => r.key === reportType) || reports[0];
+  const includeBook = ["register", "depreciation", "bookvalue"].includes(reportType);
+  const includeAnnual = reportType === "depreciation";
+  const includeDisposal = reportType === "disposal";
+  const assetHeaders = [ar ? "رقم الأصل" : "Asset #", ar ? "اسم الأصل" : "Asset name", ar ? "تاريخ الشراء" : "Purchase date", ar ? "التكلفة" : "Cost", ...(includeBook ? [ar ? "مجمع الاستهلاك" : "Accum. dep.", ar ? "القيمة الدفترية" : "Book value"] : []), ...(includeAnnual ? [ar ? "الاستهلاك السنوي" : "Annual dep."] : []), ...(includeDisposal ? [ar ? "تاريخ التخلص" : "Disposal date", ar ? "قيمة التخلص" : "Disposal amount"] : []), ar ? "الحالة" : "Status"];
+  const assetRows = printableAssets.map((asset: any) => {
+    const annual = (Number(asset.purchase_cost) - Number(asset.salvage_value || 0)) / Number(asset.useful_life_years || 1);
+    return [asset.asset_number || "—", ar ? asset.name_ar : asset.name_en || asset.name_ar, asset.purchase_date ? new Date(asset.purchase_date).toLocaleDateString("en-GB") : "—", `${fmt(Number(asset.purchase_cost))} SAR`, ...(includeBook ? [`${fmt(Number(asset.accumulated_depreciation))} SAR`, `${fmt(Number(asset.book_value))} SAR`] : []), ...(includeAnnual ? [`${fmt(annual)} SAR`] : []), ...(includeDisposal ? [asset.disposal_date ? new Date(asset.disposal_date).toLocaleDateString("en-GB") : "—", asset.disposal_amount ? `${fmt(Number(asset.disposal_amount))} SAR` : "—"] : []), asset.status === "active" ? (ar ? "نشط" : "Active") : (ar ? "متخلص منه" : "Disposed")];
+  });
+  const assetTotals = [ar ? "الإجمالي" : "TOTAL", "", "", `${fmt(printableAssets.reduce((s, a: any) => s + Number(a.purchase_cost || 0), 0))} SAR`, ...(includeBook ? [`${fmt(activeAssets.reduce((s, a: any) => s + Number(a.accumulated_depreciation || 0), 0))} SAR`, `${fmt(activeAssets.reduce((s, a: any) => s + Number(a.book_value || 0), 0))} SAR`] : []), ...(includeAnnual ? [`${fmt(activeAssets.reduce((s, a: any) => s + ((Number(a.purchase_cost) - Number(a.salvage_value || 0)) / Number(a.useful_life_years || 1)), 0))} SAR`] : []), ...(includeDisposal ? ["", ""] : []), ""];
 
   return (
     <>
@@ -39,9 +57,7 @@ export default function AssetReportsPage({ params: { locale } }: { params: { loc
           </div>
           <h1 className="page-title">{ar ? "تقارير الأصول الثابتة" : "Fixed Asset Reports"}</h1>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-          {ar ? "طباعة" : "Print"}
-        </button>
+        <StructuredReportPrintButton locale={locale} title={ar ? selectedReport.ar : selectedReport.en} subtitle={ar ? "تقرير الأصول الثابتة" : "Fixed asset report"} period={ar ? "حتى تاريخ الطباعة" : "As of print date"} reportCode={`FA-${reportType.toUpperCase()}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الأصول" : "Total assets", value: String(summary?.total_assets || 0), tone: "blue" }, { label: ar ? "إجمالي التكلفة" : "Total cost", value: `${fmt(summary?.total_cost || 0)} SAR`, tone: "blue" }, { label: ar ? "مجمع الاستهلاك" : "Accumulated depreciation", value: `${fmt(summary?.total_accumulated_depreciation || 0)} SAR`, tone: "amber" }, { label: ar ? "القيمة الدفترية" : "Net book value", value: `${fmt(summary?.total_book_value || 0)} SAR`, tone: "green" }]} tables={[{ title: ar ? selectedReport.ar : selectedReport.en, headers: assetHeaders, rows: assetRows, totals: assetTotals }]} />
       </div>
 
       {/* Report selector */}

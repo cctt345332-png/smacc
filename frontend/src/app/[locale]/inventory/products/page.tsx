@@ -1,5 +1,11 @@
 import { redirect } from "next/navigation";
 
-export default function ProductsRedirect({ params: { locale } }: { params: { locale: string } }) {
+export default async function ProductsRedirect(props: { params: Promise<{ locale: string }> }) {
+  const params = await props.params;
+
+  const {
+    locale
+  } = params;
+
   redirect(`/${locale}/inventory/items`);
 }

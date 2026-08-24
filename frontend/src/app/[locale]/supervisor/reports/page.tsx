@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getSupervisorSummary, getSupervisorInvoices, getSupervisorReps } from "@/lib/reps";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -10,7 +10,13 @@ const STATUS: Record<string, string> = {
   submitted: "بانتظار المراجعة", draft: "مسودة",
 };
 
-export default function SupervisorReportsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SupervisorReportsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [summary, setSummary]   = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);

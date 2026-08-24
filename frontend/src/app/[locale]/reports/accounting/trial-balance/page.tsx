@@ -1,9 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { getTrialBalance } from "@/lib/accounting";
+import TrialBalancePrintButton from "@/components/documents/TrialBalancePrintButton";
 
-export default function TrialBalancePage({ params: { locale } }: { params: { locale: string } }) {
+export default function TrialBalancePage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
@@ -41,7 +48,7 @@ export default function TrialBalancePage({ params: { locale } }: { params: { loc
           </div>
           <h1 className="page-title">{ar ? "ميزان المراجعة" : "Trial Balance"}</h1>
         </div>
-        {loaded && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {loaded && <TrialBalancePrintButton locale={locale} fromDate={fromDate} toDate={toDate} rows={data} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -61,7 +68,7 @@ export default function TrialBalancePage({ params: { locale } }: { params: { loc
       </div>
 
       {loaded && (
-        <div className="card">
+        <div className="card" id="report-content-trial-balance">
           <div className="card-header">
             <span className="card-title">{ar ? "ميزان المراجعة" : "Trial Balance"}</span>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fromDate} → {toDate}</span>

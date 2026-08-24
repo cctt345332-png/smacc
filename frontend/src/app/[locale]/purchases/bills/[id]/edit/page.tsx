@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getBill, updateBill, confirmBill } from "@/lib/purchases";
@@ -26,7 +26,14 @@ function calcLine(l: Line) {
   return { gross, discAmt, taxable, vatAmt, total: taxable + vatAmt };
 }
 
-export default function EditBillPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function EditBillPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
 

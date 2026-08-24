@@ -1,4 +1,14 @@
 import AppLayout from "@/components/layout/AppLayout";
-export default function SettingsLayout({ children, params: { locale } }: { children: React.ReactNode; params: { locale: string } }) {
+export default async function SettingsLayout(props: { children: React.ReactNode; params: Promise<{ locale: string }> }) {
+  const params = await props.params;
+
+  const {
+    locale
+  } = params;
+
+  const {
+    children
+  } = props;
+
   return <AppLayout locale={locale}>{children}</AppLayout>;
 }

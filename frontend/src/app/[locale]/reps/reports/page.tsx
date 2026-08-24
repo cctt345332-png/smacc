@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getReps, getRepSummary } from "@/lib/reps";
 import api from "@/lib/api";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt  = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US") : "—";
@@ -19,7 +20,13 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const PAY_AR: Record<string, string> = { cash: "نقد", credit: "آجل", cheque: "شيك", transfer: "تحويل" };
 
-export default function RepsReportsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function RepsReportsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [reps, setReps] = useState<any[]>([]);
   const [summaries, setSummaries] = useState<Record<string, any>>({});
@@ -83,8 +90,6 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
     downloadCSV(rows, "reps-invoices.csv");
   };
 
-  /* ── طباعة ──────────────────────────────────────────────────────── */
-  const handlePrint = () => window.print();
 
   /* ── تحميل PDF من الباكند ───────────────────────────────────────── */
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -185,6 +190,21 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
     : tab === "invoices"
       ? (ar ? "تقرير فواتير المناديب" : "Sales Rep Invoices Report")
       : (ar ? "تقرير مخزون المناديب" : "Sales Rep Stock Report");
+  const reportPeriod = filterMonth || `${dateFrom || (ar ? "بداية البيانات" : "Start")} — ${dateTo || (ar ? "حتى اليوم" : "Today")}`;
+  const reportMetrics = tab === "performance" ? [
+    { label: ar ? "مبيعات الفريق" : "Team sales", value: `${fmt(totalSales)} SAR`, tone: "blue" as const },
+    { label: ar ? "المحصّل" : "Collected", value: `${fmt(totalCollected)} SAR`, tone: "green" as const },
+    { label: ar ? "المستحق" : "Outstanding", value: `${fmt(totalOutstanding)} SAR`, tone: "amber" as const },
+    { label: ar ? "العمولات" : "Commissions", value: `${fmt(totalCommission)} SAR`, tone: "neutral" as const },
+  ] : tab === "invoices" ? [
+    { label: ar ? "عدد الفواتير" : "Invoices", value: String(filteredInvoices.length), tone: "neutral" as const },
+    { label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(filteredInvoices.reduce((s: number, i: any) => s + Number(i.total || 0), 0))} SAR`, tone: "blue" as const },
+    { label: ar ? "المتبقي" : "Outstanding", value: `${fmt(filteredInvoices.reduce((s: number, i: any) => s + Math.max(0, Number(i.total || 0) - Number(i.paid_amount || 0)), 0))} SAR`, tone: "amber" as const },
+  ] : [
+    { label: ar ? "المناديب" : "Reps", value: String(repStats.length), tone: "neutral" as const },
+    { label: ar ? "كمية مخزون المناديب" : "Rep stock qty", value: String(repStats.reduce((s, r) => s + Number(r.sum.stock_qty || 0), 0)), tone: "amber" as const },
+  ];
+  const reportTable = tab === "performance" ? { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "الهدف" : "Target", ar ? "المبيعات" : "Sales", ar ? "التحقق" : "Achievement", ar ? "المحصّل" : "Collected", ar ? "المستحق" : "Outstanding", ar ? "العمولة" : "Commission"], rows: repStats.map(({ rep, sum, pct, commission }) => [rep.full_name, rep.zone || "—", rep.target_monthly ? fmt(rep.target_monthly) : "—", fmt(sum.total_sales || 0), pct == null ? "—" : `${pct}%`, fmt(sum.total_collected || 0), fmt(sum.outstanding || 0), fmt(commission)]), totals: [ar ? "الإجمالي" : "Total", "", "", fmt(totalSales), "", fmt(totalCollected), fmt(totalOutstanding), fmt(totalCommission) ] } : tab === "invoices" ? { headers: [ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "الحالة" : "Status", ar ? "التاريخ" : "Date", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "المتبقي" : "Remaining"], rows: filteredInvoices.map((inv: any) => [inv.invoice_number, repMap[inv.rep_id]?.full_name || "—", inv.buyer_name_ar || "—", STATUS_AR[inv.status] || inv.status, fmtD(inv.issue_date), fmt(inv.total), fmt(inv.paid_amount), fmt(Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0)))]) } : { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "المركبة" : "Vehicle", ar ? "كمية المخزون" : "Stock qty", ar ? "قيمة المخزون" : "Stock value"], rows: repStats.map(({ rep, sum }) => [rep.full_name, rep.zone || "—", rep.vehicle_plate || "—", String(Number(sum.stock_qty || 0)), fmt(sum.stock_value || 0)]) };
 
   return (
     <>
@@ -227,10 +247,7 @@ export default function RepsReportsPage({ params: { locale } }: { params: { loca
             style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #FCA5A5", background: pdfLoading ? "#F1F5F9" : "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: pdfLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
             {pdfLoading ? "⏳" : "📥"} {ar ? (pdfLoading ? "جاري..." : "PDF") : (pdfLoading ? "Loading..." : "PDF")}
           </button>
-          <button onClick={handlePrint}
-            style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#F8FAFC", color: "#374151", fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            🖨️ {ar ? "طباعة" : "Print"}
-          </button>
+          <StructuredReportPrintButton locale={locale} title={printTitle} subtitle={ar ? "تقرير تشغيلي للمناديب" : "Operational sales-rep report"} period={reportPeriod} orientation="landscape" reportCode={`REP-${tab.toUpperCase()}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={reportMetrics} tables={[reportTable]} />
         </div>
       </div>
 

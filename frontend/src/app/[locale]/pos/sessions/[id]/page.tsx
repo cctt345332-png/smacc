@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { getSessionReport, closeSession, refundTransaction } from "@/lib/pos";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
   mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#2563EB", bg: "#EFF6FF" },
@@ -132,10 +133,7 @@ export default function SessionDetailPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => window.print()}>
-            <Icon name="print" size={15} />
-            {isAr ? "طباعة" : "Print"}
-          </button>
+          <StructuredReportPrintButton locale={locale} title={isAr ? "تقرير جلسة نقطة البيع" : "POS Session Report"} subtitle={`${session.session_number || session.id}`} period={`${fmtDate(session.opened_at)} — ${session.closed_at ? fmtDate(session.closed_at) : (isAr ? "مفتوحة" : "Open")}`} orientation="landscape" reportCode={`PSS-${String(session.session_number || session.id).slice(-8)}`} metrics={[{ label: isAr ? "رصيد الافتتاح" : "Opening cash", value: `${fmt(Number(session.opening_cash || 0))} ${sar}`, tone: "neutral" }, { label: isAr ? "إجمالي المبيعات" : "Sales total", value: `${fmt(Number(session.total_sales || 0))} ${sar}`, tone: "green" }, { label: isAr ? "النقد المتوقع" : "Expected cash", value: `${fmt(expectedCash)} ${sar}`, tone: "blue" }, { label: isAr ? "فرق الإغلاق" : "Closing variance", value: difference == null ? "—" : `${fmt(difference)} ${sar}`, tone: difference === 0 ? "green" : "amber" }]} tables={[{ title: isAr ? "طرق الدفع" : "Payment methods", headers: [isAr ? "الطريقة" : "Method", isAr ? "المبلغ" : "Amount"], rows: Object.entries(byMethod).map(([method, amount]) => [PAYMENT_LABELS[method] || method, `${fmt(Number(amount || 0))} ${sar}`]) }, { title: isAr ? "المعاملات" : "Transactions", headers: [isAr ? "الوقت" : "Time", isAr ? "الرقم" : "Number", isAr ? "الدفع" : "Payment", isAr ? "الإجمالي" : "Total"], rows: transactions.map((txn: any) => [fmtDate(txn.created_at || txn.transaction_date), String(txn.transaction_number || txn.id || "—"), PAYMENT_LABELS[txn.payment_method] || txn.payment_method || "—", `${fmt(Number(txn.total || txn.total_amount || 0))} ${sar}`]) }]} />
           {isOpen && (
             <button className="btn btn-primary" onClick={() => { setClosingCash(String(expectedCash.toFixed(2))); setShowCloseModal(true); }}>
               <Icon name="lock" size={15} />

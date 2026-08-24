@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createVoucher } from "@/lib/treasury";
@@ -15,7 +15,13 @@ const CATS = [
 ];
 const METHODS = [{ value: "cash", ar: "نقداً" }, { value: "bank_transfer", ar: "تحويل بنكي" }, { value: "cheque", ar: "شيك" }];
 
-export default function NewExpensePage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewExpensePage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);

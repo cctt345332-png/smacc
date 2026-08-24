@@ -322,11 +322,44 @@ class CreditNote(Base):
     lines: Mapped[list["CreditNoteLine"]] = relationship("CreditNoteLine", back_populates="credit_note", cascade="all, delete-orphan")
 
 
+class RefundRequestStatus(str, enum.Enum):
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+
+class RefundRequest(Base):
+    """طلب استرداد ناتج عن إشعار دائن؛ لا ينشئ سند صرف تلقائياً."""
+    __tablename__ = "refund_requests"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    credit_note_id: Mapped[str] = mapped_column(String, ForeignKey("credit_notes.id"), index=True)
+    original_invoice_id: Mapped[str] = mapped_column(String, ForeignKey("invoices.id"), index=True)
+    customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    status: Mapped[RefundRequestStatus] = mapped_column(
+        SAEnum(RefundRequestStatus, values_callable=lambda x: [e.value for e in x]),
+        default=RefundRequestStatus.REQUESTED,
+    )
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    requested_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
+    approved_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    payment_voucher_id: Mapped[str | None] = mapped_column(String, ForeignKey("vouchers.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class CreditNoteLine(Base):
     __tablename__ = "credit_note_lines"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     credit_note_id: Mapped[str] = mapped_column(String, ForeignKey("credit_notes.id"), index=True)
+    # يربط المرتجع بسطر محدد من الفاتورة الأصلية، وليس بوصف الصنف فقط.
+    original_invoice_line_id: Mapped[str | None] = mapped_column(String, ForeignKey("invoice_lines.id"), index=True, nullable=True)
     line_order: Mapped[int] = mapped_column(Integer, default=0)
     description_ar: Mapped[str] = mapped_column(String(500))
     quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3), default=1)
@@ -335,5 +368,9 @@ class CreditNoteLine(Base):
     subtotal: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
+    inventory_item_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    variant_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # قائمة IDs للسيريالات المعادة؛ تحفظ النص الأصلي لتدقيق كل وحدة.
+    serial_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     credit_note: Mapped["CreditNote"] = relationship("CreditNote", back_populates="lines")

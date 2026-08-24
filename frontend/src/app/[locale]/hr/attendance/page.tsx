@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getAttendance } from "@/lib/hr";
 
 const IcCheck    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
@@ -14,7 +14,13 @@ const statusCfg: Record<string, { ar: string; en: string; badge: string }> = {
   leave:   { ar: "إجازة", en: "On Leave", badge: "badge-info" },
 };
 
-export default function AttendancePage({ params: { locale } }: { params: { locale: string } }) {
+export default function AttendancePage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const today = new Date().toISOString().split("T")[0];
   const [records, setRecords] = useState<any[]>([]);

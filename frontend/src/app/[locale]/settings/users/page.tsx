@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -29,7 +29,13 @@ const ROLES: { key: string; ar: string; en: string; color: string; bg: string; d
 
 const getRoleConfig = (key: string) => ROLES.find(r => r.key === key) || ROLES[ROLES.length - 1];
 
-export default function UsersPage({ params: { locale } }: { params: { locale: string } }) {
+export default function UsersPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const { plan: storePlan } = useAuthStore();
 

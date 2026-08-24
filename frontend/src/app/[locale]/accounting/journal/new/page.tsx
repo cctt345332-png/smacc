@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getAccounts, getFiscalYears, getCostCenters, createJournalEntry } from "@/lib/accounting";
@@ -8,7 +8,13 @@ interface Line { account_id: string; cost_center_id: string; description: string
 
 const emptyLine = (): Line => ({ account_id: "", cost_center_id: "", description: "", debit: "", credit: "" });
 
-export default function NewJournalPage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewJournalPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);

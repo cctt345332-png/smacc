@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -14,7 +15,13 @@ const PAYMENT_LABELS: Record<string, { ar: string; en: string; color: string; bg
   split:       { ar: "مقسّم",          en: "Split",       color: "#64748B", bg: "#F1F5F9" },
 };
 
-export default function POSPaymentsReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function POSPaymentsReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const sar = ar ? "ر.س" : "SAR";
   const [sessions, setSessions] = useState<any[]>([]);
@@ -53,7 +60,7 @@ export default function POSPaymentsReportPage({ params: { locale } }: { params: 
           </div>
           <h1 className="page-title">{ar ? "تقرير طرق الدفع" : "Payment Methods Report"}</h1>
         </div>
-        <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print" size={15} />{ar ? "طباعة" : "Print"}</button>
+        <StructuredReportPrintButton locale={locale} title={ar ? "تقرير طرق الدفع" : "Payment Methods Report"} subtitle={ar ? "توزيع تحصيلات نقطة البيع حسب وسيلة الدفع" : "POS collections by payment method"} period={`${dateFrom} — ${dateTo}`} reportCode={`POS-PAY-${dateTo.replaceAll("-", "")}`} orientation="portrait" metrics={[{ label: ar ? "إجمالي المبيعات" : "Total sales", value: `${fmt(totalSales)} ${sar}`, tone: "green" }, { label: ar ? "إجمالي النقد" : "Total cash", value: `${fmt(totalCash)} ${sar}`, tone: "blue" }, { label: ar ? "إجمالي البطاقة" : "Total card", value: `${fmt(totalCard)} ${sar}`, tone: "blue" }, { label: ar ? "عدد الجلسات" : "Sessions", value: String(filtered.length), tone: "amber" }]} tables={[{ title: ar ? "توزيع طرق الدفع" : "Payment distribution", headers: [ar ? "وسيلة الدفع" : "Payment method", ar ? "المبلغ" : "Amount", ar ? "النسبة من المبيعات" : "Share of sales"], rows: byMethod.map(m => [ar ? m.label.ar : m.label.en, `${fmt(m.amount)} ${sar}`, `${totalSales > 0 ? ((m.amount / totalSales) * 100).toFixed(1) : "0.0"}%`]), totals: [ar ? "الإجمالي" : "TOTAL", `${fmt(totalSales)} ${sar}`, "100.0%"] }]} />
       </div>
 
       <div className="card" style={{ padding: "14px 20px", marginBottom: 20, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>

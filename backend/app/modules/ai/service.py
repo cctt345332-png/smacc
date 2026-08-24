@@ -7,6 +7,7 @@ AI Gateway Service
 - لا يحتاج تفعيل منفصل لكل شركة
 """
 from __future__ import annotations
+import os
 from datetime import datetime
 from typing import AsyncGenerator
 from fastapi import HTTPException
@@ -30,7 +31,7 @@ async def get_or_create_tenant_settings(tenant_id: str, db: AsyncSession) -> AIT
     if not settings:
         settings = AITenantSettings(
             tenant_id=tenant_id, provider="internal",
-            model="gpt-4o-mini", enabled_features=[], is_enabled=False,
+            model="gpt-5-mini", enabled_features=[], is_enabled=False,
         )
         db.add(settings)
         await db.commit()
@@ -41,6 +42,43 @@ async def get_or_create_tenant_settings(tenant_id: str, db: AsyncSession) -> AIT
 async def get_system_config(db: AsyncSession) -> AISystemConfig | None:
     r = await db.execute(select(AISystemConfig).where(AISystemConfig.id == 1))
     return r.scalar_one_or_none()
+
+
+async def ensure_preview_internal_ai(db: AsyncSession) -> None:
+    """يفعّل الذكاء الداخلي في بيئة المعاينة فقط عند تمرير علم صريح في البيئة.
+
+    لا يُستدعى هذا المسار في الإنتاج. لا ينشئ قيودًا أو مستندات؛ هو فقط يضبط
+    منفذ الذكاء وخصائص الاقتراح المسموح بها للحسابات التجريبية.
+    """
+    if os.getenv("SMACC_AI_PREVIEW_AUTOCONFIG") != "1":
+        return
+
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return
+
+    config = await get_system_config(db)
+    if not config:
+        config = AISystemConfig(id=1)
+        db.add(config)
+        await db.flush()
+
+    # تفعيل المزود الداخلي للنماذج المتاحة في المعاينة.
+    config.internal_provider = "openai"
+    config.internal_model = os.getenv("SMACC_AI_PREVIEW_MODEL", "gpt-5-mini")
+    config.internal_api_key_encrypted = encrypt_key(api_key)
+    config.internal_enabled = True
+
+    limits = dict(config.plan_limits or {})
+    limits["trial"] = 100
+    config.plan_limits = limits
+
+    features = dict(config.plan_features or {})
+    # تشمل المحاسبة كي يستطيع المستخدم طلب «مسودة قيد» ومراجعتها.
+    features["trial"] = ["general", "accounting", "inventory", "sales", "purchases", "reports", "treasury", "pos"]
+    config.plan_features = features
+    config.updated_at = datetime.utcnow()
+    await db.commit()
 
 
 async def get_monthly_usage(tenant_id: str, feature: str, db: AsyncSession) -> AIUsage:
@@ -241,9 +279,16 @@ async def get_tenant_ai_info(tenant_id: str, db: AsyncSession) -> dict:
         plain = decrypt_key(settings.api_key_encrypted)
         masked_key = mask_key(plain) if plain else ""
 
+    # عند اختيار المزود الداخلي، النموذج الفعلي يحدده إعداد النظام المركزي.
+    effective_model = (
+        sys_config.internal_model
+        if settings.provider == "internal" and internal_available and sys_config
+        else settings.model
+    )
+
     return {
         "provider": settings.provider,
-        "model": settings.model,
+        "model": effective_model,
         "is_enabled": effective_enabled,
         "enabled_features": plan_allowed_features,
         "api_key_masked": masked_key,

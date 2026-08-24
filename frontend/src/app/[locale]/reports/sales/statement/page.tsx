@@ -1,12 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getCustomers, getCustomerStatement } from "@/lib/sales";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function CustomerStatementPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CustomerStatementPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const searchParams = useSearchParams();
   const now = new Date();
@@ -47,7 +54,7 @@ export default function CustomerStatementPage({ params: { locale } }: { params: 
           <h1 className="page-title">{ar ? "كشف حساب العميل" : "Customer Account Statement"}</h1>
           <p className="page-subtitle">{ar ? "جميع الفواتير والمدفوعات والرصيد المستحق" : "All invoices, payments and outstanding balance"}</p>
         </div>
-        {data && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب عميل" : "Customer Account Statement"} subtitle={`${data.customer.customer_number || ""} — ${ar ? data.customer.name_ar : data.customer.name_en || data.customer.name_ar}`} period={`${fromDate} — ${toDate}`} reportCode={`CUS-ST-${data.customer.customer_number || customerId}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(data.summary.total_invoiced)} SAR`, tone: "blue" }, { label: ar ? "إجمالي المدفوعات" : "Total paid", value: `${fmt(data.summary.total_paid)} SAR`, tone: "green" }, { label: ar ? "الرصيد المستحق" : "Closing balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }, { label: ar ? "عدد الحركات" : "Transactions", value: String(data.transactions.length), tone: "neutral" }]} tables={[{ title: ar ? "حركات الحساب" : "Account transactions", headers: [ar ? "التاريخ" : "Date", ar ? "النوع" : "Type", ar ? "المرجع" : "Reference", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: data.transactions.map((t: any) => [t.date ? new Date(t.date).toLocaleDateString("en-GB") : "—", t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "دفعة" : "Payment"), t.reference || "—", ar ? t.description_ar || "—" : t.description_en || t.description_ar || "—", t.debit > 0 ? fmt(t.debit) : "—", t.credit > 0 ? fmt(t.credit) : "—", `${fmt(Math.abs(t.balance))} ${t.balance > 0 ? (ar ? "مدين" : "Dr") : (ar ? "دائن" : "Cr")}`]), totals: [ar ? "الرصيد الختامي" : "Closing balance", "", "", "", fmt(data.summary.total_invoiced), fmt(data.summary.total_paid), `${fmt(data.summary.closing_balance)} SAR`] }]} />}
       </div>
 
       {/* Filter */}

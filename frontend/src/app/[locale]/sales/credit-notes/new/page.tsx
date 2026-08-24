@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getInvoices, getInvoice, createCreditNote } from "@/lib/sales";
@@ -9,7 +9,20 @@ import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const today = () => new Date().toISOString().split("T")[0];
 
-interface Line { picked: PickedItem; vat_rate: string; }
+interface Line {
+  picked: PickedItem;
+  vat_rate: string;
+  original_invoice_line_id?: string;
+  original_serial_ids?: string[];
+  return_serial_ids?: string[];
+}
+
+const parseSerialIds = (line: any): string[] => {
+  try {
+    const ids = JSON.parse(line.serial_ids_json || "[]");
+    return Array.from(new Set([line.serial_item_id, ...(Array.isArray(ids) ? ids : [])].filter(Boolean).map(String)));
+  } catch { return line.serial_item_id ? [String(line.serial_item_id)] : []; }
+};
 
 const emptyLine = (): Line => ({
   picked: { mode: "free", description_ar: "", unit_price: 0, quantity: 1 },
@@ -25,7 +38,13 @@ function calcLine(l: Line) {
   return { taxable, vatAmt, total: taxable + vatAmt };
 }
 
-export default function NewCreditNotePage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewCreditNotePage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -46,18 +65,24 @@ export default function NewCreditNotePage({ params: { locale } }: { params: { lo
     try {
       const { data: inv } = await getInvoice(invoiceId);
       if (inv.lines && inv.lines.length > 0) {
-        setLines(inv.lines.map((l: any) => ({
-          picked: {
-            mode: l.inventory_item_id ? (l.serial_item_id ? "serial" : "item") : "free",
-            description_ar: l.description_ar,
-            unit_price: Number(l.unit_price),
-            quantity: Number(l.quantity),
-            inventory_item_id: l.inventory_item_id || undefined,
-            serial_item_id: l.serial_item_id || undefined,
-            item_name: l.description_ar,
-          },
-          vat_rate: String(l.vat_rate || 15),
-        })));
+        setLines(inv.lines.map((l: any) => {
+          const original_serial_ids = parseSerialIds(l);
+          return {
+            original_invoice_line_id: l.id,
+            original_serial_ids,
+            return_serial_ids: [],
+            picked: {
+              mode: l.inventory_item_id ? (original_serial_ids.length ? "serial" : "item") : "free",
+              description_ar: l.description_ar,
+              unit_price: Number(l.unit_price),
+              quantity: original_serial_ids.length ? 0 : Number(l.quantity),
+              inventory_item_id: l.inventory_item_id || undefined,
+              serial_item_id: l.serial_item_id || undefined,
+              item_name: l.description_ar,
+            },
+            vat_rate: String(l.vat_rate || 15),
+          };
+        }));
       }
     } catch { setLines([emptyLine()]); }
     finally { setLoadingLines(false); }
@@ -67,6 +92,13 @@ export default function NewCreditNotePage({ params: { locale } }: { params: { lo
   const setVat = (i: number, v: string) => setLines(p => p.map((l, idx) => idx === i ? { ...l, vat_rate: v } : l));
   const addLine = () => setLines(p => [...p, emptyLine()]);
   const removeLine = (i: number) => { if (lines.length > 1) setLines(p => p.filter((_, idx) => idx !== i)); };
+  const toggleReturnSerial = (index: number, serialId: string) => setLines(prev => prev.map((line, i) => {
+    if (i !== index) return line;
+    const selected = new Set<string>(line.return_serial_ids || []);
+    selected.has(serialId) ? selected.delete(serialId) : selected.add(serialId);
+    const return_serial_ids = Array.from(selected);
+    return { ...line, return_serial_ids, picked: { ...line.picked, quantity: return_serial_ids.length } };
+  }));
 
   const totals = lines.reduce((acc, l) => {
     const c = calcLine(l);
@@ -76,13 +108,15 @@ export default function NewCreditNotePage({ params: { locale } }: { params: { lo
   const handleSave = async () => {
     if (!form.original_invoice_id) return alert(ar ? "اختر الفاتورة الأصلية" : "Select original invoice");
     if (!form.reason) return alert(ar ? "أدخل سبب الإشعار" : "Enter reason");
-    if (lines.some(l => !l.picked.description_ar)) return alert(ar ? "أدخل وصف لكل الأسطر" : "Enter description for all lines");
+    if (lines.some(l => !l.original_invoice_line_id)) return alert(ar ? "اختر فاتورة أصلية ولا تضف أسطرًا خارجها" : "Select an original invoice and use its lines only");
+    if (lines.some(l => !l.picked.description_ar || Number(l.picked.quantity || 0) <= 0)) return alert(ar ? "حدد كمية مرتجعة صحيحة لكل سطر مختار" : "Choose a valid return quantity for each selected line");
     setSaving(true);
     try {
       await createCreditNote({
         ...form,
         issue_date: new Date(form.issue_date).toISOString(),
         lines: lines.map((l, i) => ({
+          original_invoice_line_id: l.original_invoice_line_id,
           description_ar: l.picked.description_ar,
           line_order: i,
           quantity: l.picked.quantity || 1,
@@ -91,6 +125,7 @@ export default function NewCreditNotePage({ params: { locale } }: { params: { lo
           vat_rate: parseFloat(l.vat_rate) || 15,
           inventory_item_id: l.picked.inventory_item_id || null,
           serial_item_id: l.picked.serial_item_id || null,
+          serial_ids: (l.original_serial_ids || []).length ? l.return_serial_ids || [] : undefined,
         })),
       });
       router.push(`/${locale}/sales/credit-notes`);
@@ -155,7 +190,7 @@ export default function NewCreditNotePage({ params: { locale } }: { params: { lo
       <div className="card">
         <div className="card-header">
           <span className="card-title">{ar ? "أسطر المرتجع" : "Return Lines"}</span>
-          <button className="btn btn-secondary btn-sm" onClick={addLine}>
+          <button className="btn btn-secondary btn-sm" onClick={addLine} disabled={Boolean(form.original_invoice_id)} title={form.original_invoice_id ? (ar ? "المرتجع مرتبط بأسطر الفاتورة المختارة" : "Returns must use the selected invoice lines") : undefined}>
             <Icon name="plus" size={14} /> {ar ? "إضافة سطر" : "Add Line"}
           </button>
         </div>
@@ -165,6 +200,7 @@ export default function NewCreditNotePage({ params: { locale } }: { params: { lo
               <tr>
                 <th style={{ minWidth: 220 }}>{ar ? "الصنف / الوصف" : "Item / Description"} <span style={{ color: "var(--danger)" }}>*</span></th>
                 <th style={{ width: 80 }}>{ar ? "الكمية" : "Qty"}</th>
+                <th style={{ minWidth: 155 }}>{ar ? "السيريالات المعادة" : "Returned serials"}</th>
                 <th style={{ width: 110 }}>{ar ? "سعر الوحدة" : "Unit Price"}</th>
                 <th style={{ width: 90 }}>{ar ? "الضريبة%" : "VAT%"}</th>
                 <th style={{ width: 110, textAlign: "end" }}>{ar ? "قبل الضريبة" : "Taxable"}</th>
@@ -183,8 +219,11 @@ export default function NewCreditNotePage({ params: { locale } }: { params: { lo
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 70 }} value={line.picked.quantity} min="0"
-                        disabled={line.picked.mode === "serial"}
-                        onChange={e => setPicked(i, { ...line.picked, quantity: parseFloat(e.target.value) || 1 })} />
+                        disabled={(line.original_serial_ids || []).length > 0}
+                        onChange={e => setPicked(i, { ...line.picked, quantity: parseFloat(e.target.value) || 0 })} />
+                    </td>
+                    <td style={{ verticalAlign: "top", paddingTop: 8 }}>
+                      {(line.original_serial_ids || []).length ? <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>{line.original_serial_ids!.map(serialId => <label key={serialId} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(line.return_serial_ids || []).includes(serialId)} onChange={() => toggleReturnSerial(i, serialId)} /><span style={{ fontFamily: "monospace" }}>{serialId}</span></label>)}</div> : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "لا ينطبق" : "N/A"}</span>}
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 100 }} value={line.picked.unit_price} min="0"

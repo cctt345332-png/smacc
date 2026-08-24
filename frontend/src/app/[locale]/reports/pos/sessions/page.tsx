@@ -1,12 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function POSSessionsReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function POSSessionsReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const sar = ar ? "ر.س" : "SAR";
   const [sessions, setSessions] = useState<any[]>([]);
@@ -39,7 +46,7 @@ export default function POSSessionsReportPage({ params: { locale } }: { params: 
           </div>
           <h1 className="page-title">{ar ? "تقرير جلسات الكاشير" : "Cashier Sessions Report"}</h1>
         </div>
-        <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print" size={15} />{ar ? "طباعة" : "Print"}</button>
+        <StructuredReportPrintButton locale={locale} title={ar ? "تقرير جلسات الكاشير" : "Cashier Sessions Report"} subtitle={ar ? "ملخص إقفال وتشغيل جلسات نقطة البيع" : "POS session opening and closing summary"} period={`${dateFrom} — ${dateTo}`} reportCode={`POS-SES-${dateTo.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الجلسات" : "Total sessions", value: String(filtered.length), tone: "blue" }, { label: ar ? "جلسات مغلقة" : "Closed sessions", value: String(closed.length), tone: "green" }, { label: ar ? "متوسط المبيعات" : "Avg sales/session", value: `${fmt(avgSales)} ${sar}`, tone: "green" }, { label: ar ? "متوسط المعاملات" : "Avg transactions", value: avgTxns.toFixed(1), tone: "amber" }]} tables={[{ title: ar ? "تفاصيل الجلسات" : "Session details", headers: [ar ? "الفتح" : "Opened", ar ? "الإغلاق" : "Closed", ar ? "المدة" : "Duration", ar ? "المبيعات" : "Sales", ar ? "نقدي" : "Cash", ar ? "بطاقة" : "Card", ar ? "معاملات" : "Txns", ar ? "الفرق" : "Difference", ar ? "الحالة" : "Status"], rows: filtered.map(s => { const opened = new Date(s.opened_at); const closedAt = s.closed_at ? new Date(s.closed_at) : null; const minutes = closedAt ? Math.round((closedAt.getTime() - opened.getTime()) / 60000) : null; const expected = Number(s.opening_cash || 0) + Number(s.total_cash || 0); const difference = s.closing_cash != null ? Number(s.closing_cash) - expected : null; return [opened.toLocaleString(ar ? "ar-SA" : "en-US"), closedAt ? closedAt.toLocaleString(ar ? "ar-SA" : "en-US") : "—", minutes != null ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : "—", `${fmt(Number(s.total_sales || 0))} ${sar}`, `${fmt(Number(s.total_cash || 0))} ${sar}`, `${fmt(Number(s.total_card || 0))} ${sar}`, String(s.transaction_count || 0), difference == null ? "—" : `${difference >= 0 ? "+" : ""}${fmt(difference)} ${sar}`, s.status === "open" ? (ar ? "مفتوحة" : "Open") : (ar ? "مغلقة" : "Closed")]; }) }]} />
       </div>
 
       <div className="card" style={{ padding: "14px 20px", marginBottom: 20, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>

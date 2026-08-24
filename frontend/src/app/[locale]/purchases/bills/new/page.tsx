@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createBill, confirmBill, getPurchaseOrders, getVendors } from "@/lib/purchases";
@@ -50,7 +50,13 @@ const emptyLine = (): Line => ({
 });
 
 // ── الصفحة الرئيسية ───────────────────────────────────────────────────
-export default function NewBillPage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewBillPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const searchParams = useSearchParams();

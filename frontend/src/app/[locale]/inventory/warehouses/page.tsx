@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getWarehouses, createWarehouse, getStockByWarehouse, transferStockBulk, validateSerials, getItems } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
@@ -32,7 +32,13 @@ const emptyLine = (): TransferLine => ({
   serialTab: "list", pasteSerials: "", validating: false, validationResult: null,
 });
 
-export default function WarehousesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function WarehousesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("");

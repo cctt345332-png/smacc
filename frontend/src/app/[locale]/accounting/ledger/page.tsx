@@ -1,10 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getAccounts, getLedger } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
-export default function LedgerPage({ params: { locale } }: { params: { locale: string } }) {
+export default function LedgerPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -44,7 +51,7 @@ export default function LedgerPage({ params: { locale } }: { params: { locale: s
           <h1 className="page-title">{ar ? "دفتر الأستاذ العام" : "General Ledger"}</h1>
           <p className="page-subtitle">{ar ? "حركات الحسابات المحاسبية" : "Account transaction history"}</p>
         </div>
-        {loaded && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {loaded && <StructuredReportPrintButton locale={locale} title={ar ? "دفتر الأستاذ العام" : "General Ledger"} subtitle={selectedAcc ? `${selectedAcc.code} — ${ar ? selectedAcc.name_ar : selectedAcc.name_en}` : ""} period={`${fromDate} — ${toDate}`} orientation="landscape" reportCode={`GL-${fromDate.replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي المدين" : "Total debit", value: `${fmt(totalDebit)} SAR`, tone: "blue" }, { label: ar ? "إجمالي الدائن" : "Total credit", value: `${fmt(totalCredit)} SAR`, tone: "green" }, { label: ar ? "الرصيد الختامي" : "Closing balance", value: `${fmt(rows.length ? Number(rows[rows.length - 1].balance) : 0)} SAR`, tone: "amber" }]} tables={[{ headers: [ar ? "رقم القيد" : "Entry #", ar ? "التاريخ" : "Date", ar ? "البيان" : "Description", ar ? "المرجع" : "Ref", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: rows.map(r => [String(r.entry_number || "—"), new Date(r.entry_date).toLocaleDateString("en-SA"), String(r.description || "—"), String(r.reference || "—"), Number(r.debit) ? fmt(Number(r.debit)) : "—", Number(r.credit) ? fmt(Number(r.credit)) : "—", fmt(Number(r.balance || 0))]), totals: [ar ? "الإجمالي" : "Total", "", "", "", fmt(totalDebit), fmt(totalCredit), fmt(rows.length ? Number(rows[rows.length - 1].balance) : 0)] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>

@@ -1,4 +1,5 @@
-"use client";
+"use client";;
+import { use } from "react";
 import Link from "next/link";
 
 const IcBuilding  = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h6"/><path d="M3 15h6"/><path d="M15 9h3"/><path d="M15 15h3"/></svg>;
@@ -25,7 +26,13 @@ interface SettingCard {
   desc_en: string;
 }
 
-export default function SettingsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SettingsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
 
   const cards: SettingCard[] = [

@@ -191,6 +191,7 @@ export interface PlanConfig {
   color: string;
   bg: string;
   popular?: boolean;
+  is_active?: boolean;
   limits: {
     invoices_per_month: number | null;  // null = غير محدود
     users: number | null;
@@ -212,8 +213,8 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     label_en: "Free Trial",
     price_monthly: 0,
     price_yearly: 0,
-    color: "#059669",
-    bg: "#ECFDF5",
+    color: "#176545",
+    bg: "#E8F1E9",
     limits: {
       invoices_per_month: 50,
       users: 2,
@@ -247,8 +248,8 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     label_en: "Starter",
     price_monthly: 99,
     price_yearly: 990,
-    color: "#2563EB",
-    bg: "#EFF6FF",
+    color: "#0B5D4A",
+    bg: "#E8F1E9",
     limits: {
       invoices_per_month: 300,
       users: 3,
@@ -283,8 +284,8 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     label_en: "Professional",
     price_monthly: 249,
     price_yearly: 2490,
-    color: "#7C3AED",
-    bg: "#F5F3FF",
+    color: "#126D57",
+    bg: "#EDF7EF",
     popular: true,
     limits: {
       invoices_per_month: 2000,
@@ -325,8 +326,8 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     label_en: "Enterprise",
     price_monthly: 499,
     price_yearly: 4990,
-    color: "#0F172A",
-    bg: "#F8FAFC",
+    color: "#2E493C",
+    bg: "#EEF2EE",
     limits: {
       invoices_per_month: null,
       users: null,

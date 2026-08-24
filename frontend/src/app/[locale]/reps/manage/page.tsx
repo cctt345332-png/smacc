@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getReps, createRep, updateRep, getRepSummary, getRepImpersonationToken } from "@/lib/reps";
@@ -21,7 +21,13 @@ const EMPTY_FORM = {
   target_monthly: "", commission_pct: "",
 };
 
-export default function ManageRepsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function ManageRepsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const { token: currentToken, user: currentUser, setAuth } = useAuthStore();

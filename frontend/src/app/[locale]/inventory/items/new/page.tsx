@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createItem, getCategories, getWarehouses } from "@/lib/inventory";
@@ -34,7 +34,13 @@ const TRACKING_TYPES = [
   { value: "weight", ar: "وزن" },
 ];
 
-export default function NewItemPage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewItemPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [categories, setCategories] = useState<any[]>([]);

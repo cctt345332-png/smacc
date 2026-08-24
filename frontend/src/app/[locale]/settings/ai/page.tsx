@@ -57,7 +57,7 @@ export default function AISettingsPage() {
   const [validResult, setValidResult] = useState<any>(null);
 
   const [provider, setProvider] = useState("internal");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [model, setModel] = useState("gpt-5-mini");
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
 
@@ -66,7 +66,7 @@ export default function AISettingsPage() {
       setInfo(s.data);
       setModels(m.data);
       setProvider(s.data.provider || "internal");
-      setModel(s.data.model || "gpt-4o-mini");
+      setModel(s.data.model || "gpt-5-mini");
     }).finally(() => setLoading(false));
   }, []);
 
@@ -173,7 +173,7 @@ export default function AISettingsPage() {
                   { key: "openai",   label: "OpenAI",           desc: ar ? "مفتاحك الخاص — غير محدود" : "Your own key — unlimited", available: true },
                   { key: "gemini",   label: "Google Gemini",    desc: ar ? "مفتاحك الخاص — غير محدود" : "Your own key — unlimited", available: true },
                 ].map(p => (
-                  <button key={p.key} onClick={() => { setProvider(p.key); setModel(p.key === "openai" ? "gpt-4o-mini" : p.key === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini"); }}
+                  <button key={p.key} onClick={() => { setProvider(p.key); setModel(p.key === "openai" ? "gpt-5-mini" : p.key === "gemini" ? "gemini-2.5-flash" : "gpt-5-mini"); }}
                     style={{
                       padding: "14px 12px", borderRadius: 10, cursor: "pointer", textAlign: "center",
                       border: `2px solid ${provider === p.key ? "var(--primary)" : "var(--border)"}`,

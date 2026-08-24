@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getVoucher, postVoucher, cancelVoucher } from "@/lib/treasury";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 import SellerBlock from "@/components/documents/SellerBlock";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const STATUS = {
@@ -13,7 +14,14 @@ const STATUS = {
   cancelled: { ar: "ملغي",  badge: "badge-danger" },
 };
 
-export default function TransferDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function TransferDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [voucher, setVoucher] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
@@ -70,9 +78,7 @@ export default function TransferDetailPage({ params: { locale, id } }: { params:
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-            <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
-          </button>
+          <StructuredReportPrintButton locale={locale} title={ar ? "سند تحويل بنكي" : "Bank Transfer Voucher"} subtitle={ar ? "مستند تحويل خزينة" : "Treasury transfer document"} period={new Date(voucher.voucher_date).toLocaleDateString("en-SA")} reportCode={voucher.voucher_number} metrics={[{ label: ar ? "مبلغ التحويل" : "Transfer amount", value: `${fmt(voucher.amount)} SAR`, tone: "blue" }, { label: ar ? "الحالة" : "Status", value: status.ar, tone: voucher.status === "posted" ? "green" : voucher.status === "cancelled" ? "red" : "amber" }]} tables={[{ headers: [ar ? "البيان" : "Description", ar ? "المرجع" : "Reference", ar ? "ملاحظات" : "Notes", ar ? "القيد" : "Journal entry"], rows: [[String(voucher.description_ar || "—"), String(voucher.reference || "—"), String(voucher.notes || "—"), voucher.journal_entry_id ? (ar ? "مرتبط بقيد" : "Linked") : (ar ? "غير مرحّل" : "Not posted")]] }]} />
           {voucher.status === "draft" && (
             <>
               <button className="btn btn-primary btn-sm" onClick={handlePost} disabled={acting}>

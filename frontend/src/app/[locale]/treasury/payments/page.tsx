@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getVouchers, postVoucher, cancelVoucher } from "@/lib/treasury";
 import { Icon } from "@/components/ui/Icons";
@@ -7,7 +7,13 @@ import { Icon } from "@/components/ui/Icons";
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const STATUS = { draft: { ar: "مسودة", badge: "badge-warning" }, posted: { ar: "مرحّل", badge: "badge-success" }, cancelled: { ar: "ملغي", badge: "badge-danger" } };
 
-export default function PaymentsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function PaymentsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

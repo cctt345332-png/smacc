@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getTerminals, createTerminal, updateTerminal, deleteTerminal } from "@/lib/pos";
 import { getAccounts, getFiscalYears, getBankAccounts } from "@/lib/accounting";
@@ -21,7 +21,13 @@ const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg
 
 const POS_PURCHASE_ACTIVITIES = new Set(["mobile_phones", "spare_parts"]);
 
-export default function POSTerminalsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function POSTerminalsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
 
   const [terminals,    setTerminals]    = useState<any[]>([]);

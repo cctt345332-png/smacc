@@ -1,147 +1,23 @@
 "use client";
-import { useState } from "react";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
+import { jwtDecode } from "jwt-decode";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
-import { jwtDecode } from "jwt-decode";
 
-export default function LoginPage({ params: { locale } }: { params: { locale: string } }) {
-  const t = useTranslations("common");
-  const ta = useTranslations("auth");
+export default function LoginPage() {
+  const { locale = "ar" } = useParams<{ locale: string }>();
+  const ar = locale === "ar";
   const router = useRouter();
-  const setAuth = useAuthStore((s) => s.setAuth);
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
-      const { data } = await api.post("/auth/login", { email, password });
-      const decoded: any = jwtDecode(data.access_token);
-      setAuth(data.access_token, {
-        id: decoded.sub,
-        tenantId: decoded.tenant_id,
-        role: decoded.role,
-      });
-      router.push(`/${locale}/dashboard`);
-    } catch {
-      setError(locale === "ar" ? "البريد الإلكتروني أو كلمة المرور غير صحيحة" : "Invalid email or password");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="auth-page">
-      {/* Left panel */}
-      <div className="auth-left">
-        <div style={{ maxWidth: 420, color: "white", textAlign: "center" }}>
-          <div style={{ fontSize: 56, marginBottom: 24 }}>📊</div>
-          <h1 style={{ fontSize: 32, fontWeight: 800, marginBottom: 16, lineHeight: 1.3 }}>
-            {locale === "ar" ? "نظام ERP متكامل للشركات السعودية" : "Complete ERP for Saudi Companies"}
-          </h1>
-          <p style={{ fontSize: 16, opacity: 0.7, lineHeight: 1.8 }}>
-            {locale === "ar"
-              ? "محاسبة • مبيعات • مشتريات • مخزون • موارد بشرية\nمتوافق مع متطلبات هيئة الزكاة والضريبة والجمارك"
-              : "Accounting • Sales • Purchases • Inventory • HR\nZATCA compliant for Saudi Arabia"}
-          </p>
-          <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 32, flexWrap: "wrap" }}>
-            {["ZATCA", "VAT 15%", "e-Invoice", "GOSI"].map(tag => (
-              <span key={tag} style={{
-                background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)",
-                borderRadius: 8, padding: "6px 14px", fontSize: 13, fontWeight: 600
-              }}>{tag}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Right panel */}
-      <div className="auth-right">
-        <div className="auth-card">
-          <div className="auth-logo">
-            <img src="/logo-ha.png" alt="Logo" style={{ height: 52, maxWidth: 200, objectFit: "contain" }} />
-          </div>
-
-          <h1 className="auth-title">{ta("loginTitle")}</h1>
-          <p className="auth-subtitle">{ta("loginSubtitle")}</p>
-
-          {error && (
-            <div style={{
-              background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8,
-              padding: "10px 14px", fontSize: 13, color: "#DC2626", marginBottom: 16
-            }}>
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">{t("email")}</label>
-              <input
-                type="email"
-                className="form-input"
-                placeholder={locale === "ar" ? "example@company.com" : "example@company.com"}
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            <div className="form-group">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <label className="form-label" style={{ margin: 0 }}>{t("password")}</label>
-                <a href="#" style={{ fontSize: 12, color: "var(--primary)", textDecoration: "none" }}>
-                  {ta("forgotPassword")}
-                </a>
-              </div>
-              <input
-                type="password"
-                className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="btn btn-primary"
-              style={{ width: "100%", marginTop: 8, padding: "11px 16px", fontSize: 14 }}
-              disabled={loading}
-            >
-              {loading ? t("loading") : t("login")}
-            </button>
-          </form>
-
-          <p style={{ textAlign: "center", fontSize: 13, color: "var(--text-secondary)", marginTop: 20 }}>
-            {ta("noAccount")}{" "}
-            <Link href={`/${locale}/register`} style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "none" }}>
-              {t("register")}
-            </Link>
-          </p>
-
-          {/* Language switch */}
-          <div style={{ textAlign: "center", marginTop: 24 }}>
-            <Link
-              href={locale === "ar" ? "/en/login" : "/ar/login"}
-              style={{ fontSize: 12, color: "var(--text-muted)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
-            >
-              🌐 {locale === "ar" ? "English" : "العربية"}
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const setAuth = useAuthStore((state) => state.setAuth);
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); setLoading(true); setError(""); try { const { data } = await api.post("/auth/login", { email, password }); const token: any = jwtDecode(data.access_token); setAuth(data.access_token, { id: token.sub, tenantId: token.tenant_id, role: token.role }); router.push(token.role === "super_admin" ? `/${locale}/super-admin/dashboard` : `/${locale}/dashboard`); } catch { setError(ar ? "تعذر تسجيل الدخول. راجع البريد وكلمة المرور." : "Unable to sign in. Check your email and password."); } finally { setLoading(false); } };
+  return <main className="auth-public" dir={ar ? "rtl" : "ltr"}><style>{`
+    .auth-public{min-height:100vh;background:linear-gradient(135deg,#edf5ee,#f7f5ee 56%,#e8f1e9);color:#183a2e;font-family:var(--font-cairo),Cairo,Arial,sans-serif}.auth-header{height:76px;display:flex;align-items:center;justify-content:center;padding:0 5%;border-bottom:1px solid #dbe4d9;background:#fff}.auth-header img{width:182px;height:auto;object-fit:contain}.auth-shell{width:min(1120px,92vw);margin:0 auto;min-height:calc(100vh - 76px);display:grid;grid-template-columns:.9fr 1.1fr;align-items:center;gap:70px;padding:42px 0}.auth-copy{padding:16px}.auth-kicker{display:inline-block;padding:5px 9px;border:1px solid #b8cbb9;color:#126d57;background:#f8fcf7;font-size:10px;font-weight:900}.auth-copy h1{max-width:440px;margin:17px 0 12px;font-size:clamp(30px,4vw,46px);line-height:1.25}.auth-copy p{max-width:430px;margin:0;color:#62746a;font-size:14px;line-height:2}.auth-points{display:grid;gap:9px;margin:25px 0 0}.auth-points span{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}.auth-points i{display:grid;place-items:center;width:20px;height:20px;background:#e6f2e8;color:#0b5d4a;border:1px solid #bdd1c0;font-style:normal}.auth-card{width:min(460px,100%);justify-self:end;border:1px solid #c5d1c4;background:#fffefa;box-shadow:8px 9px 0 rgba(11,93,74,.13);padding:0 30px 28px}.auth-card-top{margin:0 -30px 24px;padding:16px 30px;border-bottom:1px solid #d8e1d6;background:#fff}.auth-card-top small{color:#6d7d72;font-size:10px;font-weight:800}.auth-card h2{margin:0 0 6px;font-size:28px}.auth-card .lead{margin:0 0 23px;color:#748279;font-size:12px}.auth-field{display:grid;gap:6px;margin-bottom:15px}.auth-field label{font-size:11px;font-weight:900}.auth-field input{height:45px;padding:0 12px;border:1px solid #c8d0c7;background:#fff;font:13px inherit;outline:none}.auth-field input:focus{border-color:#0b5d4a;box-shadow:0 0 0 3px #e8f1e9}.auth-submit{width:100%;height:45px;margin-top:5px;border:1px solid #0b5d4a;background:linear-gradient(#16725b,#0b5d4a);box-shadow:0 3px 0 #084535;color:#fff;font:800 13px inherit;cursor:pointer}.auth-error{margin-bottom:14px;padding:9px 10px;border:1px solid #e2b7ac;background:#fff2ef;color:#9b4230;font-size:11px}.auth-links{display:flex;justify-content:space-between;gap:10px;margin-top:19px;padding-top:15px;border-top:1px solid #e0e6dd;color:#687970;font-size:11px}.auth-links a{font-weight:900;color:#0b5d4a;text-decoration:none}.auth-foot{margin-top:17px;color:#718077;text-align:center;font-size:10px}.auth-foot a{color:#0b5d4a;font-weight:800;text-decoration:none}@media(max-width:760px){.auth-header{height:70px}.auth-header img{width:155px}.auth-shell{min-height:calc(100vh - 70px);grid-template-columns:1fr;padding:24px 0 35px}.auth-copy{display:none}.auth-card{justify-self:center;box-shadow:4px 5px 0 rgba(11,93,74,.11);padding:0 21px 23px}.auth-card-top{margin:0 -21px 22px;padding:13px 21px}.auth-card h2{font-size:26px}.auth-links{flex-wrap:wrap}.auth-submit{height:47px}}`}</style>
+    <header className="auth-header"><Link href={`/${locale}/landing`}><img src="/logo-masar-green.png" alt="MASAR - مسار للحلول المحاسبية"/></Link></header>
+    <div className="auth-shell"><section className="auth-copy"><span className="auth-kicker">{ar ? "مساحة عمل محاسبية منظمة" : "An organized accounting workspace"}</span><h1>{ar ? "تابع أعمال شركتك من مكان واحد واضح." : "Follow your company operations from one clear place."}</h1><p>{ar ? "ادخل إلى مساحة شركتك لمراجعة العمليات والفواتير والمخزون والتقارير ضمن واجهة عملية متناسقة." : "Sign in to review operations, invoices, inventory and reports in one practical workspace."}</p><div className="auth-points"><span><i>✓</i>{ar ? "دخول آمن بحسب صلاحية المستخدم" : "Secure access based on user role"}</span><span><i>✓</i>{ar ? "واجهة عربية متجاوبة للاستخدام اليومي" : "Arabic-first responsive workspace"}</span><span><i>✓</i>{ar ? "تقارير وعمليات في سجل واحد منظم" : "Reports and operations in one organized ledger"}</span></div></section>
+      <section className="auth-card"><div className="auth-card-top"><small>{ar ? "دخول آمن إلى مَسار" : "SECURE MASAR ACCESS"}</small></div><h2>{ar ? "تسجيل الدخول" : "Sign in"}</h2><p className="lead">{ar ? "أدخل بيانات حسابك للمتابعة إلى مساحة شركتك." : "Enter your account details to continue to your workspace."}</p>{error && <div className="auth-error">{error}</div>}<form onSubmit={submit}><div className="auth-field"><label htmlFor="email">{ar ? "البريد الإلكتروني" : "Email address"}</label><input id="email" type="email" autoComplete="email" value={email} onChange={(event)=>setEmail(event.target.value)} placeholder="name@company.com" required/></div><div className="auth-field"><label htmlFor="password">{ar ? "كلمة المرور" : "Password"}</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={(event)=>setPassword(event.target.value)} placeholder="••••••••" required/></div><button className="auth-submit" disabled={loading}>{loading ? (ar ? "جارٍ التحقق…" : "Signing in…") : (ar ? "دخول إلى النظام ←" : "Sign in →")}</button></form><div className="auth-links"><span>{ar ? "ليس لديك حساب؟" : "No account yet?"} <Link href={`/${locale}/register`}>{ar ? "إنشاء حساب" : "Create account"}</Link></span><Link href={`/${locale}/landing/contact`}>{ar ? "تحتاج مساعدة؟" : "Need help?"}</Link></div><p className="auth-foot">{ar ? "بالدخول أنت توافق على" : "By signing in you agree to"} <Link href={`/${locale}/landing/terms`}>{ar ? "شروط الاستخدام" : "Terms"}</Link></p></section></div>
+  </main>;
 }

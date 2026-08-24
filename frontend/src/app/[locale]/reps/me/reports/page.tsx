@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getMySummary, getMyInvoices, getMyStock } from "@/lib/reps";
 import { getCustomers } from "@/lib/sales";
 import api from "@/lib/api";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
@@ -10,7 +11,7 @@ const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: 
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
-  approved:  { ar: "موافق عليها",      color: "#2563EB", bg: "#EFF6FF" },
+  approved:  { ar: "موافق عليها",      color: "#0B5D4A", bg: "#E8F1E9" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
   confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
   paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
@@ -18,7 +19,13 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
 };
 
-export default function RepReportsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function RepReportsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [summary, setSummary]   = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -71,7 +78,7 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
       <tr style="border-bottom:1px solid #E5E7EB">
         <td style="padding:7px 12px;font-size:12px">${fmtDate(t.date)}</td>
         <td style="padding:7px 12px;font-size:12px">${t.description || ""}</td>
-        <td style="padding:7px 12px;font-size:12px;color:#2563EB">${(t.debit || t.amount || 0) > 0 && t.type === "invoice" ? fmt(t.debit || t.amount) + " SAR" : ""}</td>
+        <td style="padding:7px 12px;font-size:12px;color:#0B5D4A">${(t.debit || t.amount || 0) > 0 && t.type === "invoice" ? fmt(t.debit || t.amount) + " SAR" : ""}</td>
         <td style="padding:7px 12px;font-size:12px;color:#059669">${(t.credit || t.amount || 0) > 0 && t.type === "payment" ? fmt(t.credit || t.amount) + " SAR" : ""}</td>
         <td style="padding:7px 12px;font-size:12px;font-weight:700;color:${(t.balance ?? t.running_balance ?? 0) > 0 ? "#DC2626" : "#059669"}">${fmt(t.balance ?? t.running_balance ?? 0)} SAR</td>
       </tr>`).join("");
@@ -83,7 +90,7 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
     table{width:100%;border-collapse:collapse}th{padding:10px 12px;background:#F9FAFB;font-size:12px;color:#6B7280;font-weight:600;text-align:start;border-bottom:2px solid #E5E7EB}</style></head>
     <body>
     <div class="no-print" style="text-align:center;margin-bottom:20px">
-      <button onclick="window.print()" style="padding:10px 28px;background:#1D4ED8;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">طباعة / حفظ PDF</button>
+      <button onclick="window.focus()" style="padding:10px 28px;background:#0B5D4A;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">تقرير مستقل</button>
     </div>
     <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1D4ED8">
       <div>
@@ -93,7 +100,7 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
       </div>
       <div style="text-align:start">
         <div style="font-size:12px;color:#6B7280">إجمالي المبيعات</div>
-        <div style="font-size:16px;font-weight:700;color:#2563EB">${fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0)} SAR</div>
+        <div style="font-size:16px;font-weight:700;color:#0B5D4A">${fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0)} SAR</div>
         <div style="font-size:12px;color:#6B7280;margin-top:4px">إجمالي المقبوض</div>
         <div style="font-size:16px;font-weight:700;color:#059669">${fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0)} SAR</div>
         <div style="font-size:12px;color:#6B7280;margin-top:4px">الرصيد المستحق</div>
@@ -103,14 +110,14 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
     <table>
       <thead><tr>
         <th>التاريخ</th><th>البيان</th>
-        <th style="color:#2563EB">مدين (فاتورة)</th>
+        <th style="color:#0B5D4A">مدين (فاتورة)</th>
         <th style="color:#059669">دائن (قبض)</th>
         <th>الرصيد</th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr style="background:#F9FAFB;font-weight:700">
         <td colspan="2" style="padding:10px 12px;font-size:13px">الإجمالي</td>
-        <td style="padding:10px 12px;color:#2563EB;font-size:13px">${fmt(stmtData.total_invoiced)} SAR</td>
+        <td style="padding:10px 12px;color:#0B5D4A;font-size:13px">${fmt(stmtData.total_invoiced)} SAR</td>
         <td style="padding:10px 12px;color:#059669;font-size:13px">${fmt(stmtData.total_paid)} SAR</td>
         <td style="padding:10px 12px;color:#DC2626;font-size:14px;font-weight:800">${fmt(stmtData.outstanding)} SAR</td>
       </tr></tfoot>
@@ -194,8 +201,8 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{ padding: "8px 16px", border: "none", background: "none", cursor: "pointer",
               fontSize: 13, fontWeight: tab === t.key ? 700 : 400,
-              color: tab === t.key ? "#2563EB" : "var(--text-secondary)",
-              borderBottom: tab === t.key ? "2px solid #2563EB" : "2px solid transparent" }}>
+              color: tab === t.key ? "#0B5D4A" : "var(--text-secondary)",
+              borderBottom: tab === t.key ? "2px solid #0B5D4A" : "2px solid transparent" }}>
             {t.label}
           </button>
         ))}
@@ -213,10 +220,10 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
               {/* بطاقات */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {[
-                  { label: ar ? "إجمالي مبيعاتي" : "Total Sales",     value: fmt(totalSales) + " SAR",       color: "#2563EB" },
+                  { label: ar ? "إجمالي مبيعاتي" : "Total Sales",     value: fmt(totalSales) + " SAR",       color: "#0B5D4A" },
                   { label: ar ? "المقبوض" : "Collected",               value: fmt(totalCollected) + " SAR",   color: "#059669" },
                   { label: ar ? "المستحق" : "Outstanding",             value: fmt(totalOutstanding) + " SAR", color: totalOutstanding > 0 ? "#DC2626" : "#059669" },
-                  { label: ar ? "عدد الفواتير" : "Invoices",           value: String(summary?.invoice_count || 0), color: "#7C3AED" },
+                  { label: ar ? "عدد الفواتير" : "Invoices",           value: String(summary?.invoice_count || 0), color: "#356B63" },
                 ].map(s => (
                   <div key={s.label} style={{ background: "var(--surface)", borderRadius: 14,
                     padding: "14px 16px", border: "1px solid var(--border)" }}>
@@ -231,13 +238,13 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                 <div style={{ background: "var(--surface)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{ar ? "الهدف الشهري" : "Monthly Target"}</span>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB" }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#0B5D4A" }}>
                       {pct}%
                     </span>
                   </div>
                   <div style={{ height: 10, background: "var(--border)", borderRadius: 5, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${pct}%`, borderRadius: 5,
-                      background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB",
+                      background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#0B5D4A",
                       transition: "width 0.6s" }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "var(--text-muted)" }}>
@@ -312,7 +319,7 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                     <div key={inv.id} style={{ background: "var(--surface)", borderRadius: 14,
                       padding: "14px 16px", border: "1px solid var(--border)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#2563EB" }}>
+                        <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#0B5D4A" }}>
                           {inv.invoice_number}
                         </span>
                         <span style={{ fontWeight: 800, fontSize: 14 }}>{fmt(inv.total)} SAR</span>
@@ -353,7 +360,7 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                   <div style={{ background: "var(--surface)", borderRadius: 14, padding: "12px 16px",
                     border: "1px solid var(--border)", display: "flex", justifyContent: "space-between" }}>
                     <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "إجمالي القيمة" : "Total Value"}</span>
-                    <span style={{ fontWeight: 800, color: "#2563EB" }}>
+                    <span style={{ fontWeight: 800, color: "#0B5D4A" }}>
                       {fmt(stock.reduce((s, i) => s + Number(i.quantity || 0) * Number(i.sale_price || 0), 0))} SAR
                     </span>
                   </div>
@@ -397,19 +404,10 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={loadStatement} disabled={!stmtCustomer || stmtLoading}
-                  style={{ flex: 2, padding: "11px", borderRadius: 10, border: "none", background: "#2563EB", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: !stmtCustomer ? 0.6 : 1 }}>
+                  style={{ flex: 2, padding: "11px", borderRadius: 10, border: "none", background: "#0B5D4A", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", opacity: !stmtCustomer ? 0.6 : 1 }}>
                   {stmtLoading ? (ar ? "جاري التحميل..." : "Loading...") : (ar ? "عرض الكشف" : "Load Statement")}
                 </button>
-                {stmtData && (
-                  <button onClick={printStatement}
-                    style={{ flex: 1, padding: "11px", borderRadius: 10, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#2563EB", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    PDF
-                  </button>
-                )}
+                {stmtData && <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب العميل" : "Customer Statement"} subtitle={customers.find(c => c.id === stmtCustomer)?.name_ar || ""} period={`${stmtFrom} — ${stmtTo}`} reportCode={`CST-${stmtTo.replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الفواتير" : "Invoiced", value: `${fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0)} SAR`, tone: "blue" }, { label: ar ? "إجمالي المقبوض" : "Collected", value: `${fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0)} SAR`, tone: "green" }, { label: ar ? "الرصيد المستحق" : "Outstanding", value: `${fmt(stmtData.summary?.closing_balance ?? stmtData.summary?.outstanding ?? stmtData.outstanding ?? 0)} SAR`, tone: "amber" }]} tables={[{ headers: [ar ? "التاريخ" : "Date", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: (stmtData.transactions || []).map((t: any) => [fmtDate(t.date), String(t.description || "—"), Number(t.debit || (t.type === "invoice" ? t.amount : 0)) ? fmt(t.debit || t.amount) : "—", Number(t.credit || (t.type === "payment" ? t.amount : 0)) ? fmt(t.credit || t.amount) : "—", fmt(t.balance ?? t.running_balance ?? 0)]) }]} />}
               </div>
 
               {stmtData && (
@@ -417,7 +415,7 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                   {/* ملخص */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[
-                      { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0) + " SAR", color: "#2563EB" },
+                      { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0) + " SAR", color: "#0B5D4A" },
                       { label: ar ? "إجمالي المقبوض" : "Total Paid",     value: fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0) + " SAR",     color: "#059669" },
                       { label: ar ? "الرصيد المستحق" : "Outstanding",    value: fmt(stmtData.summary?.closing_balance ?? stmtData.summary?.outstanding ?? stmtData.outstanding ?? 0) + " SAR",    color: "#DC2626" },
                     ].map(s => (
@@ -445,7 +443,7 @@ export default function RepReportsPage({ params: { locale } }: { params: { local
                           </div>
                           <div style={{ textAlign: "end", flexShrink: 0, marginInlineStart: 12 }}>
                             <div style={{ fontWeight: 700, fontSize: 13,
-                              color: t.type === "invoice" ? "#2563EB" : "#059669" }}>
+                              color: t.type === "invoice" ? "#0B5D4A" : "#059669" }}>
                               {t.type === "invoice"
                                 ? `+ ${fmt(t.debit || t.amount || 0)} SAR`
                                 : `- ${fmt(t.credit || t.amount || 0)} SAR`}

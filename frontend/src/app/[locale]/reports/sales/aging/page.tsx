@@ -1,13 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getInvoices } from "@/lib/sales";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
 interface AgingRow { customer: string; current: number; days30: number; days60: number; days90: number; over90: number; total: number; }
 
-export default function AgingReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function AgingReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [rows, setRows] = useState<AgingRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +81,7 @@ export default function AgingReportPage({ params: { locale } }: { params: { loca
           <h1 className="page-title">{ar ? "تقرير عمر الديون" : "Accounts Receivable Aging"}</h1>
           <p className="page-subtitle">{ar ? "تحليل الديون المستحقة حسب الفترة الزمنية" : "Outstanding receivables by aging period"}</p>
         </div>
-        {loaded && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {loaded && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير عمر الديون" : "Accounts Receivable Aging"} subtitle={ar ? "تحليل الذمم المستحقة حسب شريحة التأخر" : "Outstanding receivables by aging bucket"} period={ar ? `كما في ${asOf}` : `As of ${asOf}`} reportCode={`AR-AGE-${asOf.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "جاري" : "Current", value: `${fmt(totals.current)} SAR`, tone: "green" }, { label: ar ? "1-30 يوم" : "1-30 days", value: `${fmt(totals.days30)} SAR`, tone: "amber" }, { label: ar ? "31-60 يوم" : "31-60 days", value: `${fmt(totals.days60)} SAR`, tone: "amber" }, { label: ar ? "61-90 يوم" : "61-90 days", value: `${fmt(totals.days90)} SAR`, tone: "red" }, { label: ar ? "أكثر من 90 يوم" : "Over 90 days", value: `${fmt(totals.over90)} SAR`, tone: "red" }, { label: ar ? "إجمالي الذمم" : "Total receivables", value: `${fmt(totals.total)} SAR`, tone: "blue" }]} tables={[{ title: ar ? "تحليل الذمم حسب العميل" : "Receivables by customer", headers: [ar ? "العميل" : "Customer", ar ? "جاري" : "Current", ar ? "1-30" : "1-30", ar ? "31-60" : "31-60", ar ? "61-90" : "61-90", ar ? ">90" : ">90", ar ? "الإجمالي" : "Total"], rows: rows.map(row => [row.customer, fmt(row.current), fmt(row.days30), fmt(row.days60), fmt(row.days90), fmt(row.over90), fmt(row.total)]), totals: [ar ? "الإجمالي" : "TOTAL", fmt(totals.current), fmt(totals.days30), fmt(totals.days60), fmt(totals.days90), fmt(totals.over90), fmt(totals.total)] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>

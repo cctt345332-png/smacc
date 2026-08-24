@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getInvoices, getSalesSummary, confirmInvoice, cancelInvoice } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
@@ -20,7 +20,13 @@ const INVOICE_TYPES: Record<string, { ar: string; badge: string }> = {
   simplified: { ar: "مبسطة",        badge: "badge-gray" },
 };
 
-export default function InvoicesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function InvoicesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [invoices, setInvoices] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);

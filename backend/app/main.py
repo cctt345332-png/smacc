@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Request
+import os
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from app.core.config import settings
 from app.modules.auth.router import router as auth_router
 from app.modules.accounting.router import router as accounting_router
 from app.modules.assets.router import router as assets_router
@@ -21,16 +23,37 @@ from app.modules.supervisor.router import router as supervisor_router
 
 app = FastAPI(title="ERP System", version="1.0.0")
 
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://masa-erp.com",
-    "https://www.masa-erp.com",
-]
+
+@app.on_event("startup")
+async def initialise_preview_ai() -> None:
+    """تهيئة اختيارية وحصرية لمعاينة الذكاء؛ لا تعمل إلا بعلم بيئة صريح."""
+    if os.getenv("SMACC_AI_PREVIEW_AUTOCONFIG") != "1":
+        return
+    from app.core.database import AsyncSessionLocal
+    from app.modules.ai.service import ensure_preview_internal_ai
+    async with AsyncSessionLocal() as session:
+        await ensure_preview_internal_ai(session)
+
+
+def configured_origins() -> list[str]:
+    origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+    if settings.APP_ENV in {"development", "preview"}:
+        origins.extend([
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://masa-erp.com",
+            "https://www.masa-erp.com",
+        ])
+    return list(dict.fromkeys(origins))
+
+
+ALLOWED_ORIGINS = configured_origins()
+ALLOW_ORIGIN_REGEX = r"https://300[0-9]-.*\.manus\.computer" if settings.APP_ENV in {"development", "preview"} else None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

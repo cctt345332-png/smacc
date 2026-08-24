@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
@@ -22,7 +22,13 @@ const ROLE_LABELS: Record<string, { ar: string; en: string; color: string; bg: s
   super_admin:{ ar: "مدير النظام",   en: "Super Admin", color: "#0F172A", bg: "#F8FAFC" },
 };
 
-export default function ProfilePage({ params: { locale } }: { params: { locale: string } }) {
+export default function ProfilePage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const { user: storeUser } = useAuthStore();
 

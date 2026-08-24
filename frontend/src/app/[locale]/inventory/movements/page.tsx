@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getMovements, getWarehouses, getItems } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -17,7 +18,13 @@ const TYPE_COLOR: Record<string, string> = {
   damage: "#DC2626", initial: "#94A3B8",
 };
 
-export default function MovementsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function MovementsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [movements, setMovements] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -77,9 +84,7 @@ export default function MovementsPage({ params: { locale } }: { params: { locale
           <h1 className="page-title">{ar ? "حركات المخزون" : "Stock Movements"}</h1>
           <p className="page-subtitle">{ar ? "سجل كامل لجميع حركات المخزون — يشمل السيريالات" : "Complete log of all stock movements — including serials"}</p>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
-          <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
-        </button>
+        <StructuredReportPrintButton locale={locale} title={ar ? "سجل حركات المخزون" : "Inventory Movement Register"} subtitle={ar ? "سجل الحركات حسب الفلاتر المحددة" : "Movement register for selected filters"} period={filterMonth || (ar ? "كافة الفترات" : "All periods")} orientation="landscape" reportCode={`IM-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الحركات" : "Total movements", value: String(movements.length), tone: "neutral" }, { label: ar ? "قيمة الوارد" : "Inbound value", value: `${fmt(totalIn)} SAR`, tone: "green" }, { label: ar ? "قيمة الصادر" : "Outbound value", value: `${fmt(totalOut)} SAR`, tone: "red" }]} tables={[{ headers: [ar ? "التاريخ" : "Date", ar ? "الصنف" : "Item", ar ? "السيريال" : "Serial", ar ? "نوع الحركة" : "Type", ar ? "الكمية" : "Qty", ar ? "سعر الوحدة" : "Unit cost", ar ? "القيمة" : "Value", ar ? "المرجع" : "Reference"], rows: movements.map((m: any) => [new Date(m.created_at).toLocaleString("en-SA"), String(m.item_name || "—"), String(m.serial_number || "—"), String((TYPES.find(t => t.value === m.movement_type)?.ar) || m.movement_type || "—"), Number(m.quantity || 0).toLocaleString("en-US"), fmt(m.unit_cost), fmt(m.total_value), String(m.reference_number || m.reference_id || "—")]) }]} />
       </div>
 
       {/* إحصائيات */}

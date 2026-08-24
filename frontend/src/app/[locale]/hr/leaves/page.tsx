@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getLeaves, approveLeave, rejectLeave, createLeave, getEmployees } from "@/lib/hr";
 
 const IcCheck    = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
@@ -17,7 +17,13 @@ const leaveTypeLabels: Record<string, { ar: string; en: string }> = {
   unpaid:    { ar: "بدون راتب", en: "Unpaid" },
 };
 
-export default function LeavesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function LeavesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [activeTab, setActiveTab] = useState<TabKey>("pending");
   const [leaves, setLeaves]       = useState<any[]>([]);

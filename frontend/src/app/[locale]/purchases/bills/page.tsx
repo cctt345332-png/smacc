@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getBills, getPurchasesSummary, confirmBill, cancelBill } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
@@ -14,7 +14,13 @@ const STATUS_MAP: Record<string, { ar: string; badge: string }> = {
   cancelled: { ar: "ملغاة",   badge: "badge-danger" },
 };
 
-export default function BillsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function BillsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [bills, setBills] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);

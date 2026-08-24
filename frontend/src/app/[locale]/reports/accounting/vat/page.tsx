@@ -1,11 +1,18 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function VATReportPage({ params: { locale } }: { params: { locale: string } }) {
+export default function VATReportPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
@@ -36,7 +43,7 @@ export default function VATReportPage({ params: { locale } }: { params: { locale
           <h1 className="page-title">{ar ? "تقرير ضريبة القيمة المضافة" : "VAT Report"}</h1>
           <p className="page-subtitle">{ar ? "الإقرار الضريبي — هيئة الزكاة والضريبة والجمارك" : "VAT Return — ZATCA"}</p>
         </div>
-        {data && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير ضريبة القيمة المضافة" : "VAT Report"} subtitle={ar ? "ملخص ضريبة المخرجات والمدخلات للفترة" : "Output and input VAT summary for the period"} period={`${fromDate} — ${toDate}`} reportCode={`VAT-${toDate.replaceAll("-", "")}`} metrics={[{ label: ar ? "ضريبة المبيعات" : "Output VAT", value: `${fmt(data.summary.output_vat)} SAR`, tone: "green" }, { label: ar ? "ضريبة المشتريات" : "Input VAT", value: `${fmt(data.summary.input_vat)} SAR`, tone: "blue" }, { label: ar ? "صافي الضريبة المستحقة" : "Net VAT payable", value: `${fmt(data.summary.net_vat_payable)} SAR`, tone: data.summary.net_vat_payable > 0 ? "amber" : "green" }, { label: ar ? "عدد الفواتير" : "Invoices", value: String(data.summary.invoice_count || 0), tone: "neutral" }]} tables={[{ title: ar ? "المبيعات — ضريبة المخرجات" : "Sales — Output VAT", headers: [ar ? "البند" : "Item", ar ? "المبلغ الخاضع" : "Taxable amount", ar ? "مبلغ الضريبة" : "VAT amount"], rows: [[ar ? "مبيعات خاضعة للضريبة 15%" : "Standard rated sales 15%", fmt(data.output_vat.standard_rated_sales), fmt(data.output_vat.standard_vat_amount)], [ar ? "مبيعات بنسبة صفر" : "Zero rated sales", fmt(data.output_vat.zero_rated_sales), "0.00"], [ar ? "مبيعات معفاة" : "Exempt sales", fmt(data.output_vat.exempt_sales), "0.00"]], totals: [ar ? "إجمالي المبيعات" : "Total sales", fmt(data.output_vat.total_sales), fmt(data.output_vat.standard_vat_amount)] }, { title: ar ? "المشتريات — ضريبة المدخلات" : "Purchases — Input VAT", headers: [ar ? "البند" : "Item", ar ? "المبلغ الخاضع" : "Taxable amount", ar ? "مبلغ الضريبة" : "VAT amount"], rows: [[ar ? "مشتريات خاضعة للضريبة 15%" : "Standard rated purchases 15%", fmt(data.input_vat.standard_rated_purchases), fmt(data.input_vat.standard_vat_amount)]], totals: [ar ? "صافي الضريبة المستحقة" : "Net VAT payable", "", `${fmt(data.summary.net_vat_payable)} SAR`] }]} />}
       </div>
 
       {/* Filter */}
@@ -58,6 +65,7 @@ export default function VATReportPage({ params: { locale } }: { params: { locale
 
       {data && (
         <>
+          <div id="report-content-vat">
           {/* Summary cards */}
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
@@ -160,6 +168,7 @@ export default function VATReportPage({ params: { locale } }: { params: { locale
             <Link href={`/${locale}/settings/tax`} className="btn" style={{ background: "rgba(255,255,255,0.15)", color: "white", border: "1px solid rgba(255,255,255,0.3)", flexShrink: 0 }}>
               {ar ? "إعدادات زاتكا" : "ZATCA Settings"}
             </Link>
+          </div>
           </div>
         </>
       )}

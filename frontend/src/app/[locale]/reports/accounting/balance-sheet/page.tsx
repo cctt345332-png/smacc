@@ -1,9 +1,16 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { getTrialBalance } from "@/lib/accounting";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
-export default function BalanceSheetPage({ params: { locale } }: { params: { locale: string } }) {
+export default function BalanceSheetPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [asOf, setAsOf] = useState(now.toISOString().split("T")[0]);
@@ -55,7 +62,7 @@ export default function BalanceSheetPage({ params: { locale } }: { params: { loc
           </div>
           <h1 className="page-title">{ar ? "الميزانية العمومية" : "Balance Sheet"}</h1>
         </div>
-        {data && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "الميزانية العمومية" : "Balance Sheet"} subtitle={ar ? "تقرير المركز المالي" : "Statement of financial position"} period={ar ? `كما في ${asOf}` : `As of ${asOf}`} reportCode={`BS-${asOf.replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الأصول" : "Total assets", value: `${fmt(data.totalAssets)} SAR`, tone: "blue" }, { label: ar ? "إجمالي الخصوم" : "Total liabilities", value: `${fmt(data.totalLiabilities)} SAR`, tone: "red" }, { label: ar ? "حقوق الملكية" : "Equity", value: `${fmt(data.totalEquity)} SAR`, tone: "green" }]} tables={[{ title: ar ? "الأصول" : "Assets", headers: [ar ? "رمز الحساب" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "الرصيد" : "Balance"], rows: data.assets.filter((r: any) => Math.abs(Number(r.closing_debit) - Number(r.closing_credit)) >= 0.01).map((r: any) => [r.account_code, ar ? r.account_name_ar : r.account_name_en, `${fmt(Number(r.closing_debit) - Number(r.closing_credit))} SAR`]), totals: [ar ? "إجمالي الأصول" : "Total assets", "", `${fmt(data.totalAssets)} SAR`] }, { title: ar ? "الخصوم وحقوق الملكية" : "Liabilities & equity", headers: [ar ? "رمز الحساب" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "الرصيد" : "Balance"], rows: [...data.liabilities, ...data.equity].filter((r: any) => Math.abs(Number(r.closing_debit) - Number(r.closing_credit)) >= 0.01).map((r: any) => [r.account_code, ar ? r.account_name_ar : r.account_name_en, `${fmt(Number(r.closing_debit) - Number(r.closing_credit))} SAR`]), totals: [ar ? "إجمالي الخصوم وحقوق الملكية" : "Total liabilities & equity", "", `${fmt(data.totalLiabilities + data.totalEquity)} SAR`] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -71,7 +78,7 @@ export default function BalanceSheetPage({ params: { locale } }: { params: { loc
       </div>
 
       {data && (
-        <div className="grid-2">
+        <div className="grid-2" id="report-content-balance-sheet">
           <div className="card">
             <div className="card-header"><span className="card-title">{ar ? "الأصول" : "Assets"}</span></div>
             <div className="card-body" style={{ padding: "12px 0" }}>

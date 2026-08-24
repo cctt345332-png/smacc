@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getMyInvoices } from "@/lib/reps";
 import api from "@/lib/api";
+import { deleteInvoiceDraft } from "@/lib/sales";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) =>
@@ -19,8 +20,8 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
   return (
     <button onClick={handleDownload}
       style={{
-        width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #BFDBFE",
-        background: "#EFF6FF", color: "#2563EB", fontWeight: 700, fontSize: 14,
+        width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #9BBBAD",
+        background: "#E8F1E9", color: "#0B5D4A", fontWeight: 700, fontSize: 14,
         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -35,7 +36,7 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   draft:     { ar: "مسودة",              color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة",   color: "#D97706", bg: "#FEF3C7" },
-  approved:  { ar: "موافق عليها",        color: "#2563EB", bg: "#EFF6FF" },
+  approved:  { ar: "موافق عليها",        color: "#0B5D4A", bg: "#E8F1E9" },
   rejected:  { ar: "مرفوضة",             color: "#DC2626", bg: "#FEF2F2" },
   confirmed: { ar: "مؤكدة",              color: "#059669", bg: "#F0FDF4" },
   paid:      { ar: "مدفوعة",             color: "#059669", bg: "#F0FDF4" },
@@ -78,7 +79,7 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
         <div style={{ padding: "0 20px 16px", borderBottom: "1px solid var(--border)",
           display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#2563EB" }}>
+            <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#0B5D4A" }}>
               {inv.invoice_number}
             </div>
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{data.buyer_name_ar}</div>
@@ -147,7 +148,7 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
                           {line.discount_pct > 0 && ` — خصم ${line.discount_pct}%`}
                         </div>
                       </div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: "#2563EB", flexShrink: 0, marginInlineStart: 12 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: "#0B5D4A", flexShrink: 0, marginInlineStart: 12 }}>
                         {fmt(line.total || (line.quantity * line.unit_price))} SAR
                       </div>
                     </div>
@@ -172,7 +173,7 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4,
                 display: "flex", justifyContent: "space-between" }}>
                 <span style={{ fontWeight: 800, fontSize: 15 }}>{ar ? "الإجمالي" : "Total"}</span>
-                <span style={{ fontWeight: 800, fontSize: 18, color: "#2563EB" }}>{fmt(data.total)} SAR</span>
+                <span style={{ fontWeight: 800, fontSize: 18, color: "#0B5D4A" }}>{fmt(data.total)} SAR</span>
               </div>
               {Number(data.paid_amount || 0) > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
@@ -212,7 +213,13 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
 }
 
 /* ══════════════════════════════════════════════════════════════════ */
-export default function RepInvoicesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function RepInvoicesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,6 +232,17 @@ export default function RepInvoicesPage({ params: { locale } }: { params: { loca
       .finally(() => setLoading(false));
   }, []);
 
+  const handleDeleteDraft = async (invoice: any) => {
+    if (!window.confirm(ar ? `حذف المسودة ${invoice.invoice_number}؟ لا يمكن التراجع.` : `Delete draft ${invoice.invoice_number}? This cannot be undone.`)) return;
+    try {
+      await deleteInvoiceDraft(invoice.id);
+      setInvoices(prev => prev.filter(i => i.id !== invoice.id));
+      setSelected(null);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر حذف المسودة" : "Could not delete draft"));
+    }
+  };
+
   return (
     <>
       {/* Header */}
@@ -236,7 +254,7 @@ export default function RepInvoicesPage({ params: { locale } }: { params: { loca
           </p>
         </div>
         <Link href={`/${locale}/reps/me/invoices/new`}
-          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#2563EB",
+          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#0B5D4A",
             color: "white", fontWeight: 700, fontSize: 13, textDecoration: "none",
             display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -257,7 +275,7 @@ export default function RepInvoicesPage({ params: { locale } }: { params: { loca
             {ar ? "لا توجد فواتير بعد" : "No invoices yet"}
           </div>
           <Link href={`/${locale}/reps/me/invoices/new`}
-            style={{ padding: "10px 20px", borderRadius: 10, background: "#2563EB",
+            style={{ padding: "10px 20px", borderRadius: 10, background: "#0B5D4A",
               color: "white", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
             + {ar ? "إنشاء فاتورة" : "Create Invoice"}
           </Link>
@@ -293,7 +311,7 @@ export default function RepInvoicesPage({ params: { locale } }: { params: { loca
                 {/* البيانات */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#2563EB" }}>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#0B5D4A" }}>
                       {inv.invoice_number}
                     </span>
                     <span style={{ fontWeight: 800, fontSize: 14 }}>{fmt(inv.total)} SAR</span>
@@ -312,6 +330,19 @@ export default function RepInvoicesPage({ params: { locale } }: { params: { loca
                     <div style={{ fontSize: 11, color: "#DC2626", marginTop: 3, fontWeight: 600 }}>
                       {ar ? "متبقي:" : "Due:"} {fmt(remaining)} SAR
                     </div>
+                  )}
+                </div>
+
+                {/* إجراءات دورة الفاتورة */}
+                <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {["draft", "rejected"].includes(inv.status) && (
+                    <Link href={`/${locale}/reps/me/invoices/new?draft=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #9BBBAD", background: "#E8F1E9", color: "#0B5D4A", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "تعديل" : "Edit"}</Link>
+                  )}
+                  {inv.status === "draft" && (
+                    <button onClick={() => handleDeleteDraft(inv)} style={{ padding: "5px 8px", border: "1px solid #FECACA", background: "#FEF2F2", color: "#B42318", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
+                  )}
+                  {["confirmed", "paid", "partial", "overdue"].includes(inv.status) && (
+                    <Link href={`/${locale}/reps/me/returns/new?invoice=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #AEB9B0", background: "#E9ECE6", color: "#23463A", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "مرتجع" : "Return"}</Link>
                   )}
                 </div>
 

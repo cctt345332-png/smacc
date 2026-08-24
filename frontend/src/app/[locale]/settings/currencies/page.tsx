@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
 
@@ -22,7 +22,13 @@ const COMMON_CURRENCIES = [
   { code: "TRY", name_ar: "ليرة تركية",    name_en: "Turkish Lira",      symbol: "₺" },
 ];
 
-export default function CurrenciesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CurrenciesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [currencies, setCurrencies] = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);

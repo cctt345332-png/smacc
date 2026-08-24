@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getAlertSettings, updateAlertSettings, runAllAlerts } from "@/lib/notifications";
 
@@ -49,7 +49,13 @@ function AlertRow({ label, desc, enabled, onToggle, children }: {
   );
 }
 
-export default function AlertSettingsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function AlertSettingsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading]   = useState(true);

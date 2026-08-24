@@ -1,8 +1,14 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getSupervisorReps } from "@/lib/reps";
 
-export default function SupervisorRepsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SupervisorRepsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [reps, setReps]     = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

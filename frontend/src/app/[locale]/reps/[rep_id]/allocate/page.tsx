@@ -3,18 +3,25 @@
  * صفحة تحميل مخزون للمندوب
  * المدير يختار أصناف وكميات → تُنقل من المستودع الرئيسي لمستودع المندوب
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { getRep, getRepStock, allocateStockToRep } from "@/lib/reps";
 import api from "@/lib/api";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function AllocateStockPage({
-  params: { locale, rep_id },
-}: {
-  params: { locale: string; rep_id: string };
-}) {
+export default function AllocateStockPage(
+  props: {
+    params: Promise<{ locale: string; rep_id: string }>;
+  }
+) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    rep_id
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
 

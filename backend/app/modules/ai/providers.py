@@ -8,15 +8,16 @@ AI Providers — OpenAI & Gemini
 """
 from __future__ import annotations
 import json
+import os
 from typing import AsyncGenerator, Any
 import httpx
 
 # ─── Models المتاحة ───────────────────────────────────────────────────
 OPENAI_MODELS = [
-    {"id": "gpt-4o",       "name": "GPT-4o",        "context": 128000},
-    {"id": "gpt-4o-mini",  "name": "GPT-4o Mini",   "context": 128000},
-    {"id": "gpt-4-turbo",  "name": "GPT-4 Turbo",   "context": 128000},
-    {"id": "gpt-3.5-turbo","name": "GPT-3.5 Turbo", "context": 16385},
+    {"id": "gpt-5-nano",  "name": "GPT-5 Nano",  "context": 128000},
+    {"id": "gpt-5-mini",  "name": "GPT-5 Mini",  "context": 128000},
+    {"id": "gpt-5",       "name": "GPT-5",       "context": 128000},
+    {"id": "gpt-5.5",     "name": "GPT-5.5",     "context": 128000},
 ]
 
 GEMINI_MODELS = [
@@ -36,11 +37,15 @@ ALL_MODELS = {
 # OpenAI Provider
 # ══════════════════════════════════════════════════════════════════════
 class OpenAIProvider:
-    BASE_URL = "https://api.openai.com/v1"
+    DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key: str, model: str = "gpt-5-mini"):
         self.api_key = api_key
         self.model = model
+        # يسمح لمعاينة SMACC باستخدام خدمة النماذج المهيأة في البيئة،
+        # ويبقي OpenAI المباشر هو السلوك الافتراضي خارج المعاينة.
+        self.BASE_URL = os.getenv("OPENAI_API_BASE", self.DEFAULT_BASE_URL).rstrip("/")
+        self._proxy_mode = self.BASE_URL != self.DEFAULT_BASE_URL
 
     def _headers(self) -> dict:
         return {
@@ -53,13 +58,15 @@ class OpenAIProvider:
         if system_prompt:
             msgs.append({"role": "system", "content": system_prompt})
         msgs.extend(messages)
-        return {
+        body = {
             "model": self.model,
             "messages": msgs,
             "stream": stream,
             "temperature": 0.7,
-            "max_tokens": 2048,
         }
+        # نماذج GPT-5 تستخدم max_completion_tokens؛ أما النماذج الأقدم فتستخدم max_tokens.
+        body["max_completion_tokens" if self.model.startswith("gpt-5") else "max_tokens"] = 2048
+        return body
 
     async def chat(
         self,
@@ -88,7 +95,14 @@ class OpenAIProvider:
         messages: list[dict],
         system_prompt: str | None = None,
     ) -> AsyncGenerator[str, None]:
-        """Streaming — يرجع chunks نصية"""
+        """Streaming — مع بديل رد كامل للخدمات التي لا تعرض SSE."""
+        if self._proxy_mode:
+            # خدمة المعاينة لا تضمن SSE؛ نعيد النص كاملاً بدل فشل المحادثة.
+            result = await self.chat(messages, system_prompt)
+            if result.get("content"):
+                yield result["content"]
+            return
+
         body = self._build_body(messages, system_prompt, stream=True)
         async with httpx.AsyncClient(timeout=120) as client:
             async with client.stream(

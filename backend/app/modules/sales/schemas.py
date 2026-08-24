@@ -113,6 +113,8 @@ class InvoiceLineCreate(BaseModel):
     serial_item_id: Optional[str] = None   # legacy — سيريال واحد
     serial_ids: Optional[list[str]] = None  # جديد — قائمة سيريالات
     variant_id: Optional[str] = None
+    # لا يُستخدم عند إنشاء الفاتورة؛ يلزم فقط عند إنشاء إشعار دائن لربط السطر بالأصل.
+    original_invoice_line_id: Optional[str] = None
 
 
 class InvoiceLineOut(BaseModel):
@@ -132,6 +134,7 @@ class InvoiceLineOut(BaseModel):
     total: Decimal
     inventory_item_id: Optional[str] = None
     serial_item_id: Optional[str] = None
+    serial_ids_json: Optional[str] = None
     model_config = {"from_attributes": True}
 
 
@@ -184,6 +187,9 @@ class InvoiceOut(BaseModel):
     seller_logo: Optional[str] = None
     buyer_address: Optional[str]
     rep_id: Optional[str] = None
+    rep_name: Optional[str] = None
+    rep_code: Optional[str] = None
+    rep_zone: Optional[str] = None
     # workflow المناديب
     invoice_payment_method: Optional[InvoicePaymentMethod] = None
     credit_days: Optional[int] = None
@@ -264,8 +270,27 @@ class QuotationOut(BaseModel):
 
 
 # ─── Credit Note ─────────────────────────────────────────────────────
+class CreditNoteLineCreate(InvoiceLineCreate):
+    """سطر مرتجع مرتبط إلزامياً بسطر الفاتورة الأصلية.
+
+    serial_ids يحدد الوحدات الفعلية المعادة للأصناف المتسلسلة؛ لا يقبل
+    الخادم كمية سيريال بلا هذه القائمة.
+    """
+    original_invoice_line_id: str
+    serial_ids: Optional[list[str]] = None
+
+
 class CreditNoteCreate(BaseModel):
     original_invoice_id: str
     issue_date: datetime
     reason: str
-    lines: List[InvoiceLineCreate]
+    lines: List[CreditNoteLineCreate]
+
+
+class RefundRequestCreate(BaseModel):
+    amount: Decimal
+    reason: Optional[str] = None
+
+
+class RefundRequestDecision(BaseModel):
+    rejection_reason: Optional[str] = None

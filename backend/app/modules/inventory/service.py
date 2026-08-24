@@ -434,6 +434,7 @@ async def add_stock(
     reference_id: str | None = None,
     user_id: str | None = None,
     auto_commit: bool = True,
+    movement_type: str = "purchase",
 ):
     """إضافة كمية للمخزون (للمنتجات العادية)"""
     item = await get_item(db, tenant_id, product_id)
@@ -461,7 +462,7 @@ async def add_stock(
         tenant_id=tenant_id,
         product_id=product_id,
         warehouse_id=warehouse_id,
-        movement_type="purchase",
+        movement_type=movement_type,
         quantity=quantity,
         unit_cost=unit_cost,
         reference_type=reference_type,
@@ -748,17 +749,11 @@ async def delete_serial(db: AsyncSession, tenant_id: str, serial_id: str):
         raise HTTPException(404, "السيريال غير موجود")
     await get_item(db, tenant_id, serial.product_id)
 
-    if serial.status == "sold":
-        raise HTTPException(400, "لا يمكن حذف سيريال مباع — يؤثر على سجلات المبيعات")
-
-    # حذف حركات المخزون المرتبطة أولاً
-    await db.execute(
-        select(StockMovement).where(StockMovement.serial_item_id == serial_id)
-    )
-    from sqlalchemy import delete as sa_delete
-    await db.execute(
-        sa_delete(StockMovement).where(StockMovement.serial_item_id == serial_id)
-    )
+    if getattr(serial.status, "value", serial.status) != "in_stock":
+        raise HTTPException(400, "لا يمكن حذف سيريال له حالة بيع أو حجز أو مرتجع؛ احتفظ به لسجل التتبع")
+    movement_count = (await db.execute(select(func.count(StockMovement.id)).where(StockMovement.serial_item_id == serial_id))).scalar() or 0
+    if movement_count:
+        raise HTTPException(400, "لا يمكن حذف سيريال له حركات مخزون؛ أوقفه أو عدّل حالته بدلاً من ذلك")
 
     await db.delete(serial)
     await db.commit()

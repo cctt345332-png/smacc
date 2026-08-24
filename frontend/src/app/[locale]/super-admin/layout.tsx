@@ -62,19 +62,17 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   const sidebarW = collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-width)";
 
   return (
-    <div dir={ar ? "rtl" : "ltr"} className="app-layout" style={{ fontFamily: "'Alexandria', sans-serif" }}>
+    <div dir={ar ? "rtl" : "ltr"} className="app-layout legacy-app-shell super-admin-shell">
 
       {/* ── Sidebar ─────────────────────────────────────────────── */}
       <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
 
-        {/* Logo */}
-        <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <IcShield />
+        {/* Brand */}
+        <div className="super-admin-brand">
+          <img src="/logo-masar-green.png" alt="MASAR" className="super-admin-brand-logo" />
+          <div className="super-admin-brand-caption">
+            <span>{ar ? "إدارة المنصة" : "Platform Administration"}</span>
           </div>
-          <span className="sidebar-logo-text" style={{ fontSize: 15 }}>
-            {ar ? "المدير العام" : "Super Admin"}
-          </span>
         </div>
 
         {/* Nav */}
@@ -128,20 +126,20 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       {/* ── Main ────────────────────────────────────────────────── */}
       <div className={`main-content${collapsed ? " collapsed" : ""}`}>
 
-        {/* Header */}
-        <header className={`header${collapsed ? " collapsed" : ""}`}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
-              {currentNav ? (ar ? currentNav.ar : currentNav.en) : ""}
-            </span>
+        {/* Compact ERP header — page title remains inside the page header, not duplicated here. */}
+        <header className={`super-admin-header${collapsed ? " collapsed" : ""}`}>
+          <div className="super-admin-header-system">
+            <span className="super-admin-header-mark"><IcShield /></span>
+            <strong>MASAR ERP</strong>
+            <span>{ar ? "إدارة مركزية للشركات والباقات" : "Central company and plan administration"}</span>
           </div>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="badge badge-success" style={{ fontSize: 11 }}>
-              {ar ? "مدير عام" : "Super Admin"}
-            </span>
-            <div className="header-divider" />
-            <div className="profile-btn" style={{ cursor: "default" }}>
+          <div className="super-admin-header-context">
+            <span className="super-admin-context-label">{ar ? "المسار الحالي" : "Current area"}</span>
+            <b>{currentNav ? (ar ? currentNav.ar : currentNav.en) : (ar ? "إدارة النظام" : "System administration")}</b>
+          </div>
+          <div className="super-admin-header-user">
+            <span className="badge badge-success">{ar ? "مدير عام" : "Super Admin"}</span>
+            <div className="super-admin-user-card">
               <div className="profile-avatar">{user?.full_name?.[0] || "A"}</div>
               <div className="profile-info">
                 <div className="profile-name">{user?.full_name}</div>

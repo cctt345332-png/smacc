@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getPayroll, generatePayroll, confirmPayroll } from "@/lib/hr";
 
 const IcDollar   = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
@@ -16,7 +16,13 @@ const months = [
   { v: 11, ar: "نوفمبر", en: "November" }, { v: 12, ar: "ديسمبر", en: "December" },
 ];
 
-export default function PayrollPage({ params: { locale } }: { params: { locale: string } }) {
+export default function PayrollPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);

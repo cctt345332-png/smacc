@@ -284,14 +284,14 @@ async def search_serial(
     ]
 
 @router.patch("/serials/{serial_id}")
-async def update_serial(serial_id: str, data: dict, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
-    """تعديل سيريال — يتحقق من الـ tenant عبر service"""
-    return await service.update_serial(db, tenant_id, serial_id, data)
+async def update_serial(serial_id: str, data: dict, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
+    """تعديل سيريال — للمدير فقط مع التحقق من المستأجر."""
+    return await service.update_serial(db, user["tenant_id"], serial_id, data)
 
 @router.delete("/serials/{serial_id}", status_code=204)
-async def delete_serial(serial_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
-    """حذف سيريال (فقط إذا كان في المخزون)"""
-    return await service.delete_serial(db, tenant_id, serial_id)
+async def delete_serial(serial_id: str, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
+    """حذف سيريال غير مستخدم — للمدير فقط."""
+    return await service.delete_serial(db, user["tenant_id"], serial_id)
 
 @router.get("/items/{product_id}/available-serials")
 async def available_serials_for_invoice(
@@ -625,11 +625,11 @@ async def update_variant(
 @router.delete("/variants/{variant_id}")
 async def delete_variant(
     variant_id: str,
-    tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db),
 ):
-    """حذف متغير"""
+    """حذف متغير — للمدير فقط."""
     from app.modules.inventory.options_service import delete_variant as _delete
-    await _delete(db, tenant_id, variant_id)
+    await _delete(db, user["tenant_id"], variant_id)
     return {"message": "تم الحذف"}
 
 
@@ -668,11 +668,11 @@ async def update_option_group(
 @router.delete("/options/groups/{group_id}")
 async def delete_option_group(
     group_id: str,
-    tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db),
 ):
-    """حذف محور تخصيص وكل قيمه"""
+    """حذف محور تخصيص وكل قيمه — للمدير فقط."""
     from app.modules.inventory.options_service import delete_option_group as _delete
-    await _delete(db, tenant_id, group_id)
+    await _delete(db, user["tenant_id"], group_id)
     return {"message": "تم الحذف"}
 
 
@@ -699,11 +699,11 @@ async def update_option_value(
 @router.delete("/options/values/{option_id}")
 async def delete_option_value(
     option_id: str,
-    tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db),
+    user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db),
 ):
-    """حذف قيمة تخصيص"""
+    """حذف قيمة تخصيص — للمدير فقط."""
     from app.modules.inventory.options_service import delete_option
-    await delete_option(db, tenant_id, option_id)
+    await delete_option(db, user["tenant_id"], option_id)
     return {"message": "تم الحذف"}
 
 

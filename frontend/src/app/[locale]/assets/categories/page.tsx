@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getAssetCategories, createAssetCategory } from "@/lib/assets";
 import { getAccounts } from "@/lib/accounting";
@@ -12,7 +12,13 @@ const DEFAULT_CATEGORIES = [
   { name_ar: "آلات ومعدات", name_en: "Machinery & Equipment", useful_life_years: 10, depreciation_rate: 10 },
 ];
 
-export default function AssetCategoriesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function AssetCategoriesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [categories, setCategories] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);

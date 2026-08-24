@@ -6,10 +6,10 @@
  * - بعد الحفظ: status = submitted → تنتظر موافقة المحاسب
  * - زر "إرسال للمراجعة" بدلاً من "تأكيد مباشر"
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getCustomers, createInvoice } from "@/lib/sales";
+import { getCustomers, createInvoice, getInvoice, updateInvoice, submitInvoice } from "@/lib/sales";
 import { getMyStock } from "@/lib/reps";
 import api from "@/lib/api";
 import RepStockItemPicker, { RepPickedItem } from "@/components/inventory/RepStockItemPicker";
@@ -46,7 +46,13 @@ function calcLine(line: Line) {
   return { gross, discAmt, taxable, tax, total: taxable + tax, priceExcl };
 }
 
-export default function RepNewInvoicePage({ params: { locale } }: { params: { locale: string } }) {
+export default function RepNewInvoicePage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const base = `/${locale}`;
@@ -54,6 +60,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
   const [customers, setCustomers] = useState<any[]>([]);
   const [myStock, setMyStock] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const [form, setForm] = useState({
@@ -93,14 +100,21 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
       .catch(() => {});
   }, []);
 
-  // ملء customer_id من query param ?customer=
+  // ملء العميل أو فتح مسودة/فاتورة مرفوضة للتعديل
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const cid = params.get("customer");
-      if (cid) setForm(f => ({ ...f, customer_id: cid }));
-    }
-  }, []);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const cid = params.get("customer");
+    if (cid) setForm(f => ({ ...f, customer_id: cid }));
+    const id = params.get("draft");
+    if (!id) return;
+    getInvoice(id).then(({ data: inv }) => {
+      if (!['draft', 'rejected'].includes(inv.status)) throw new Error(ar ? "هذه الفاتورة لم تعد قابلة للتعديل" : "This invoice is no longer editable");
+      setDraftId(inv.id);
+      setForm({ customer_id: inv.customer_id || "", payment_type: inv.invoice_payment_method || "cash", credit_days: String(inv.credit_days || 30), issue_date: inv.issue_date ? String(inv.issue_date).slice(0, 10) : today(), supply_date: inv.supply_date ? String(inv.supply_date).slice(0, 10) : today(), due_date: inv.due_date ? String(inv.due_date).slice(0, 10) : "", notes: inv.notes || "" });
+      setLines((inv.lines || []).map((line: any) => ({ picked: { mode: "free", description_ar: line.description_ar || "", item_name: line.description_ar || "", unit_price: Number(line.unit_price || 0) * (1 + Number(line.vat_rate || 0) / 100), quantity: Number(line.quantity || 1), inventory_item_id: line.inventory_item_id || undefined, serial_item_id: line.serial_item_id || undefined, serial_ids: line.serial_ids_json ? JSON.parse(line.serial_ids_json) : undefined }, discount_pct: String(line.discount_pct || 0), vat_rate: String(line.vat_rate || 15) })) || [emptyLine()]);
+    }).catch((e: any) => setError(e?.response?.data?.detail || e?.message || (ar ? "تعذر فتح المسودة" : "Could not load draft")));
+  }, [ar]);
 
   const setLine = (i: number, field: keyof Omit<Line, "picked">, value: string) =>
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
@@ -146,7 +160,8 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
   const buildPayload = () => ({
     customer_id: form.customer_id,
     invoice_type: "simplified",
-    payment_type: form.payment_type,
+    invoice_payment_method: form.payment_type,
+    credit_days: form.payment_type === "credit" ? (parseInt(form.credit_days) || 30) : null,
     issue_date: form.issue_date,
     supply_date: form.supply_date,
     due_date: form.due_date || null,
@@ -179,8 +194,9 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
     if (!validate()) return;
     setSaving(true); setError("");
     try {
-      await createInvoice(buildPayload() as any);
-      router.push(`${base}/reps/invoices`);
+      if (draftId) await updateInvoice(draftId, buildPayload() as any);
+      else await createInvoice(buildPayload() as any);
+      router.push(`${base}/reps/me/invoices`);
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || "Error");
     } finally { setSaving(false); }
@@ -191,11 +207,11 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
     if (!validate()) return;
     setSaving(true); setError("");
     try {
-      const { data: inv } = await createInvoice(buildPayload() as any);
+      const inv = draftId ? (await updateInvoice(draftId, buildPayload() as any)).data : (await createInvoice(buildPayload() as any)).data;
       if (!inv?.id) throw new Error("خطأ في إنشاء الفاتورة");
       /* submit = تغيير الحالة لـ submitted — تنتظر المحاسب */
-      await api.post(`/sales/invoices/${inv.id}/submit`);
-      router.push(`${base}/reps/invoices`);
+      await submitInvoice(inv.id);
+      router.push(`${base}/reps/me/invoices`);
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || "Error");
     } finally { setSaving(false); }
@@ -231,7 +247,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
               {ar ? "حفظ كمسودة" : "Save Draft"}
             </button>
             <button onClick={handleSubmitForReview} disabled={saving}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#2563EB", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#0B5D4A", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               {saving ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال للمراجعة" : "Send for Review")}
             </button>
@@ -248,7 +264,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
       )}
 
       {/* بانر workflow */}
-      <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#1E40AF" }}>
+      <div style={{ background: "#E8F1E9", border: "1px solid #9BBBAD", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#1E40AF" }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>
           {ar
@@ -279,7 +295,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
                 ))}
               </select>
               <Link href={`${base}/reps/me/customers?action=new`}
-                style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", fontSize: 12, color: "#2563EB", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
+                style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", fontSize: 12, color: "#0B5D4A", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                 + {ar ? "عميل جديد" : "New"}
               </Link>
             </div>
@@ -295,8 +311,8 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
                 <button key={type} type="button" onClick={() => handlePaymentTypeChange(type)}
                   style={{
                     flex: 1, padding: "8px 12px", borderRadius: 8, border: "2px solid",
-                    borderColor: form.payment_type === type ? (type === "cash" ? "#2563EB" : "#D97706") : "var(--border)",
-                    background: form.payment_type === type ? (type === "cash" ? "#2563EB" : "#D97706") : "var(--surface)",
+                    borderColor: form.payment_type === type ? (type === "cash" ? "#0B5D4A" : "#D97706") : "var(--border)",
+                    background: form.payment_type === type ? (type === "cash" ? "#0B5D4A" : "#D97706") : "var(--surface)",
                     color: form.payment_type === type ? "white" : "var(--text-primary)",
                     fontWeight: 700, fontSize: 13, cursor: "pointer",
                   }}>
@@ -367,10 +383,10 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
           ))}
           <div style={{ borderTop: "2px solid var(--border)", paddingTop: 10, display: "flex", justifyContent: "space-between" }}>
             <span style={{ fontWeight: 800, fontSize: 15 }}>{ar ? "الإجمالي" : "Total"}</span>
-            <span style={{ fontWeight: 800, fontSize: 18, color: "#2563EB" }}>{fmt(totals.total)} SAR</span>
+            <span style={{ fontWeight: 800, fontSize: 18, color: "#0B5D4A" }}>{fmt(totals.total)} SAR</span>
           </div>
           <button onClick={handleSubmitForReview} disabled={saving}
-            style={{ marginTop: 8, width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "#2563EB", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            style={{ marginTop: 8, width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "#0B5D4A", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             {saving ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال للمراجعة" : "Send for Review")}
           </button>
           <button onClick={handleSaveDraft} disabled={saving}
@@ -385,7 +401,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: 700, fontSize: 14 }}>{ar ? "أسطر الفاتورة" : "Invoice Lines"}</span>
           <button onClick={addLine}
-            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#2563EB" }}>
+            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#0B5D4A" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             {ar ? "إضافة سطر" : "Add Line"}
           </button>
@@ -443,7 +459,7 @@ export default function RepNewInvoicePage({ params: { locale } }: { params: { lo
                         value={line.vat_rate} min="0" max="100"
                         onChange={e => setLine(i, "vat_rate", e.target.value)} />
                     </td>
-                    <td style={{ padding: "10px 16px", textAlign: "end", fontWeight: 700, color: "#2563EB", verticalAlign: "top", paddingTop: 14 }}>
+                    <td style={{ padding: "10px 16px", textAlign: "end", fontWeight: 700, color: "#0B5D4A", verticalAlign: "top", paddingTop: 14 }}>
                       {fmt(c.total)} SAR
                     </td>
                     <td style={{ padding: "10px 8px", verticalAlign: "top" }}>

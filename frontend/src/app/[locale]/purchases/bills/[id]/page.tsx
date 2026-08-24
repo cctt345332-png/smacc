@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getBill, confirmBill, createBillPayment, getBillPayments, getVendor } from "@/lib/purchases";
 import { getCompany } from "@/lib/settings";
@@ -35,7 +35,14 @@ const emptyPayment = {
   ap_account_id: "",
 };
 
-export default function BillDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function BillDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [bill, setBill] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);

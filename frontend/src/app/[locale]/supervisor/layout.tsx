@@ -1,4 +1,14 @@
 import SupervisorLayout from "@/components/layout/SupervisorLayout";
-export default function Layout({ children, params: { locale } }: { children: React.ReactNode; params: { locale: string } }) {
+export default async function Layout(props: { children: React.ReactNode; params: Promise<{ locale: string }> }) {
+  const params = await props.params;
+
+  const {
+    locale
+  } = params;
+
+  const {
+    children
+  } = props;
+
   return <SupervisorLayout locale={locale}>{children}</SupervisorLayout>;
 }

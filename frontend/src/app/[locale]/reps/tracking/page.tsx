@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, use } from "react";
 import Link from "next/link";
 import { getAllRepsLiveLocations, getReps, getSupervisors, getRepLocationHistory } from "@/lib/reps";
 
@@ -32,10 +32,17 @@ function buildTrips(pts:HistoryPoint[]):Trip[]{
   return trips;
 }
 
-export default function RepsTrackingPage({params:{locale}}:{params:{locale:string}}){
+export default function RepsTrackingPage(props:{params: Promise<{locale:string}>}) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar=locale==="ar";
   const mapRef=useRef<HTMLDivElement>(null);
   const leafletMap=useRef<any>(null);
+  const mapInitToken=useRef(0);
   const markersRef=useRef<Record<string,any>>({});
   const routeLayersRef=useRef<any[]>([]);
 
@@ -131,17 +138,41 @@ export default function RepsTrackingPage({params:{locale}}:{params:{locale:strin
     return()=>document.removeEventListener("click",close);
   },[quickCard]);
 
-  // تهيئة الخريطة
+  // تهيئة الخريطة: تمنع السباق بين الاستيراد غير المتزامن وFast Refresh.
   useEffect(()=>{
-    if(!mapRef.current||leafletMap.current)return;
-    import("leaflet").then(L=>{
+    const container=mapRef.current;
+    if(!container||leafletMap.current)return;
+    const token=++mapInitToken.current;
+    let disposed=false;
+
+    const initialize=async()=>{
+      const L=await import("leaflet");
+      if(disposed||token!==mapInitToken.current||leafletMap.current||!mapRef.current)return;
+      const mapContainer=mapRef.current as HTMLDivElement & {_leaflet_id?:number};
+      // Leaflet قد يحتفظ بالمعرف على العنصر بعد Fast Refresh؛ نمسحه قبل إنشاء خريطة جديدة.
+      if(mapContainer._leaflet_id)delete mapContainer._leaflet_id;
       // @ts-ignore
       delete L.Icon.Default.prototype._getIconUrl;
-      const map=L.map(mapRef.current!,{center:[24.7136,46.6753],zoom:11});
+      const map=L.map(mapContainer,{center:[24.7136,46.6753],zoom:11});
       L.tileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ar",{attribution:"Google Maps",maxZoom:19}).addTo(map);
       leafletMap.current={map,L};
-    });
-    return()=>{leafletMap.current?.map.remove();leafletMap.current=null;};
+      requestAnimationFrame(()=>map.invalidateSize());
+    };
+
+    void initialize();
+    return()=>{
+      disposed=true;
+      mapInitToken.current+=1;
+      const current=leafletMap.current;
+      if(current?.map){
+        current.map.off();
+        current.map.remove();
+        leafletMap.current=null;
+      }
+      markersRef.current={};
+      routeLayersRef.current=[];
+      if(mapRef.current)delete (mapRef.current as HTMLDivElement & {_leaflet_id?:number})._leaflet_id;
+    };
   },[]);
 
   // Leaflet CSS

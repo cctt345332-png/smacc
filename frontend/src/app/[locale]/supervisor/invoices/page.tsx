@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getSupervisorInvoices } from "@/lib/reps";
 import api from "@/lib/api";
 
@@ -17,7 +17,13 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
 };
 
-export default function SupervisorInvoicesPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SupervisorInvoicesPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [invoices, setInvoices]   = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);

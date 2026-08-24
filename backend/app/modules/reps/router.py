@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
 from app.modules.reps import service
+from app.modules.sales.schemas import CreditNoteCreate
 
 router = APIRouter(prefix="/reps", tags=["reps"])
 
@@ -157,6 +158,26 @@ async def my_submit_invoice(
     """المندوب يقدّم فاتورته للمحاسب"""
     from app.modules.sales.service import submit_invoice
     return await submit_invoice(db, user["tenant_id"], user["user_id"], invoice_id)
+
+
+@router.post("/me/credit-notes", status_code=201)
+async def my_create_credit_note(
+    data: CreditNoteCreate,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """ينشئ المندوب مرتجعًا (إشعارًا دائنًا) لفاتورة تخصه فقط بعد تأكيدها."""
+    from app.modules.sales import service as sales_service
+    from app.models.sales import InvoiceStatus
+    original = await sales_service.get_invoice(db, user["tenant_id"], data.original_invoice_id)
+    rep = await service.get_rep_by_user(db, user["user_id"])
+    if not rep or original.rep_id != rep.id:
+        from fastapi import HTTPException
+        raise HTTPException(403, "لا يمكنك إنشاء مرتجع لفاتورة مندوب آخر")
+    if original.status not in (InvoiceStatus.CONFIRMED, InvoiceStatus.PAID, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE):
+        from fastapi import HTTPException
+        raise HTTPException(400, "لا يمكن إنشاء مرتجع إلا لفاتورة مؤكدة أو مرتبطة بسند قبض")
+    return await sales_service.create_credit_note(db, user["tenant_id"], user["user_id"], data)
 
 
 @router.get("/me/payments")

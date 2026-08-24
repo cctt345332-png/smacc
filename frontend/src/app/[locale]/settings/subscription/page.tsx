@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { PLANS, PLANS_LIST, type PlanKey } from "@/lib/activityConfig";
@@ -141,7 +141,13 @@ function PlanCard({ plan, currentPlan, ar, locale }: {
 }
 
 // ─── الصفحة الرئيسية ──────────────────────────────────────────────────
-export default function SubscriptionPage({ params: { locale } }: { params: { locale: string } }) {
+export default function SubscriptionPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const { plan: storePlan } = useAuthStore();
   const [company, setCompany] = useState<any>(null);

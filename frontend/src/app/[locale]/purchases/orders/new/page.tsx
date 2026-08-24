@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getVendors, createPurchaseOrder } from "@/lib/purchases";
@@ -27,7 +27,13 @@ function calcLine(l: Line) {
   return { taxable, vatAmt, total: taxable + vatAmt };
 }
 
-export default function NewPurchaseOrderPage({ params: { locale } }: { params: { locale: string } }) {
+export default function NewPurchaseOrderPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const router = useRouter();
   const [vendors, setVendors] = useState<any[]>([]);

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getPayments, createPayment, getInvoices } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
@@ -24,7 +24,13 @@ const emptyForm = {
   notes: "",
 };
 
-export default function PaymentsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function PaymentsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [payments, setPayments] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);

@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
-import { getCustomers, createCustomer } from "@/lib/sales";
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "@/lib/sales";
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
 
@@ -28,13 +28,20 @@ const emptyForm = {
   payment_terms_days: "30", credit_limit: "0", notes: "",
 };
 
-export default function CustomersPage({ params: { locale } }: { params: { locale: string } }) {
+export default function CustomersPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [activeTab, setActiveTab] = useState<"basic" | "address" | "financial" | "docs">("basic");
@@ -62,12 +69,23 @@ export default function CustomersPage({ params: { locale } }: { params: { locale
   }, []);
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const openNew = () => { setEditingCustomer(null); setForm({ ...emptyForm }); setDocs({}); setActiveTab("basic"); setShowModal(true); };
+  const openEdit = (customer: any) => {
+    setEditingCustomer(customer);
+    setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(emptyForm).map(([key, value]) => [key, customer[key] == null ? value : String(customer[key])])) });
+    setDocs({}); setActiveTab("basic"); setShowModal(true);
+  };
+  const handleDelete = async (customer: any) => {
+    if (!window.confirm(ar ? `حذف العميل «${customer.name_ar}»؟ لا يمكن التراجع.` : `Delete ${customer.name_ar}? This cannot be undone.`)) return;
+    try { await deleteCustomer(customer.id); await load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف العميل" : "Could not delete customer")); }
+  };
 
   const handleSave = async () => {
     if (!form.name_ar) return alert(ar ? "الاسم بالعربي مطلوب" : "Arabic name is required");
     setSaving(true);
     try {
-      const { data } = await createCustomer({
+      const payload = {
         ...form,
         payment_terms_days: parseInt(form.payment_terms_days) || 30,
         credit_limit: parseFloat(form.credit_limit) || 0,
@@ -82,7 +100,8 @@ export default function CustomersPage({ params: { locale } }: { params: { locale
         phone2: form.phone2 || null,
         website: form.website || null,
         notes: form.notes || null,
-      });
+      };
+      const { data } = editingCustomer ? await updateCustomer(editingCustomer.id, payload) : await createCustomer(payload);
       // رفع الملفات إذا وجدت
       for (const [docType, b64] of Object.entries(docs)) {
         if (b64) {
@@ -93,6 +112,7 @@ export default function CustomersPage({ params: { locale } }: { params: { locale
         }
       }
       setShowModal(false);
+      setEditingCustomer(null);
       setForm({ ...emptyForm });
       setDocs({});
       setActiveTab("basic");
@@ -142,7 +162,7 @@ export default function CustomersPage({ params: { locale } }: { params: { locale
           <h1 className="page-title">{ar ? "العملاء" : "Customers"}</h1>
           <p className="page-subtitle">{ar ? "إدارة قاعدة بيانات العملاء" : "Manage customer database"}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm }); setDocs({}); setActiveTab("basic"); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={openNew}>
           <Icon name="plus" size={16} /> {ar ? "+ عميل جديد" : "+ New Customer"}
         </button>
       </div>
@@ -208,8 +228,9 @@ export default function CustomersPage({ params: { locale } }: { params: { locale
                       <td><span className={`badge ${c.is_active !== false ? "badge-success" : "badge-gray"}`}>{c.is_active !== false ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}</span></td>
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
-                          <Link href={`/${locale}/sales/customers/${c.id}`} className="btn btn-ghost btn-sm btn-icon"><Icon name="view" size={14} /></Link>
-                          <button className="btn btn-ghost btn-sm btn-icon"><Icon name="edit" size={14} /></button>
+                          <Link href={`/${locale}/sales/customers/${c.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "عرض العميل" : "View customer"}><Icon name="view" size={14} /></Link>
+                          <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "تعديل العميل" : "Edit customer"} onClick={() => openEdit(c)}><Icon name="edit" size={14} /></button>
+                          <button className="btn btn-danger btn-sm btn-icon" title={ar ? "حذف العميل" : "Delete customer"} onClick={() => handleDelete(c)}>×</button>
                         </div>
                       </td>
                     </tr>
@@ -228,7 +249,7 @@ export default function CustomersPage({ params: { locale } }: { params: { locale
             {/* Header */}
             <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <div>
-                <h2 style={{ fontSize: 16, fontWeight: 700 }}>{ar ? "عميل جديد" : "New Customer"}</h2>
+                <h2 style={{ fontSize: 16, fontWeight: 700 }}>{editingCustomer ? (ar ? "تعديل العميل" : "Edit Customer") : (ar ? "عميل جديد" : "New Customer")}</h2>
                 <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                   {CUSTOMER_TYPES.map(t => (
                     <button key={t.value} onClick={() => upd("customer_type", t.value)}
@@ -453,7 +474,7 @@ export default function CustomersPage({ params: { locale } }: { params: { locale
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn-secondary" onClick={() => setShowModal(false)}>{ar ? "إلغاء" : "Cancel"}</button>
                 <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                  {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ العميل" : "Save Customer")}
+                  {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editingCustomer ? (ar ? "حفظ التعديل" : "Save Changes") : (ar ? "حفظ العميل" : "Save Customer"))}
                 </button>
               </div>
             </div>

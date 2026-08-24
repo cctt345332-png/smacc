@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getAssets, getAssetsSummary } from "@/lib/assets";
 import { Icon } from "@/components/ui/Icons";
@@ -15,7 +15,13 @@ const STATUS_EN: Record<string, string> = {
   active: "Active", disposed: "Disposed", scrapped: "Scrapped", under_maintenance: "Maintenance",
 };
 
-export default function AssetsPage({ params: { locale } }: { params: { locale: string } }) {
+export default function AssetsPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const [assets, setAssets] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);

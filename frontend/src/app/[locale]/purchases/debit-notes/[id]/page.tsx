@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getDebitNote, getBill, getVendor } from "@/lib/purchases";
 import { getCompany } from "@/lib/settings";
@@ -15,7 +15,14 @@ const STATUS_MAP: Record<string, { ar: string; badge: string }> = {
   cancelled: { ar: "ملغى",  badge: "badge-danger" },
 };
 
-export default function DebitNoteDetailPage({ params: { locale, id } }: { params: { locale: string; id: string } }) {
+export default function DebitNoteDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale,
+    id
+  } = params;
+
   const ar = locale === "ar";
   const [note, setNote] = useState<any>(null);
   const [vendor, setVendor] = useState<any>(null);
@@ -66,7 +73,7 @@ export default function DebitNoteDetailPage({ params: { locale, id } }: { params
             <span className={`badge ${status.badge}`}>{status.ar}</span>
           </div>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>
+        <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/purchases/debit-notes/${id}/print`, "_blank")}>
           <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
         </button>
       </div>

@@ -1,10 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, use } from "react";
 import Link from "next/link";
 import { getTrialBalance } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
-export default function IncomeStatementPage({ params: { locale } }: { params: { locale: string } }) {
+export default function IncomeStatementPage(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const now = new Date();
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
@@ -39,7 +46,7 @@ export default function IncomeStatementPage({ params: { locale } }: { params: { 
           <h1 className="page-title">{ar ? "قائمة الدخل" : "Income Statement"}</h1>
           <p className="page-subtitle">{ar ? "الإيرادات والمصروفات وصافي الربح" : "Revenue, expenses and net profit"}</p>
         </div>
-        {data && <button className="btn btn-secondary btn-sm" onClick={() => window.print()}>🖨️ {ar ? "طباعة" : "Print"}</button>}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "قائمة الدخل" : "Income Statement"} subtitle={ar ? "الإيرادات والمصروفات وصافي الربح" : "Revenue, expenses and net profit"} period={`${fromDate} — ${toDate}`} reportCode={`IS-${toDate.replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الإيرادات" : "Total revenue", value: `${fmt(data.totalRevenue)} SAR`, tone: "green" }, { label: ar ? "إجمالي المصروفات" : "Total expenses", value: `${fmt(data.totalExpense)} SAR`, tone: "red" }, { label: ar ? "صافي الربح / الخسارة" : "Net profit / loss", value: `${fmt(data.netProfit)} SAR`, tone: data.netProfit >= 0 ? "green" : "red" }]} tables={[{ title: ar ? "الإيرادات" : "Revenue", headers: [ar ? "رمز الحساب" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "قيمة الفترة" : "Period amount"], rows: data.revenues.filter((r: any) => Math.abs(Number(r.period_credit) - Number(r.period_debit)) >= 0.01).map((r: any) => [r.account_code, ar ? r.account_name_ar : r.account_name_en, `${fmt(Number(r.period_credit) - Number(r.period_debit))} SAR`]), totals: [ar ? "إجمالي الإيرادات" : "Total revenue", "", `${fmt(data.totalRevenue)} SAR`] }, { title: ar ? "المصروفات" : "Expenses", headers: [ar ? "رمز الحساب" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "قيمة الفترة" : "Period amount"], rows: data.expenses.filter((r: any) => Math.abs(Number(r.period_debit) - Number(r.period_credit)) >= 0.01).map((r: any) => [r.account_code, ar ? r.account_name_ar : r.account_name_en, `${fmt(Number(r.period_debit) - Number(r.period_credit))} SAR`]), totals: [ar ? "صافي الربح / الخسارة" : "Net profit / loss", "", `${fmt(data.netProfit)} SAR`] }]} />}
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
@@ -60,6 +67,7 @@ export default function IncomeStatementPage({ params: { locale } }: { params: { 
 
       {data && (
         <>
+          <div id="report-content-income-statement">
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
               { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: data.totalRevenue, color: "#059669", icon: "trending" as const },
@@ -124,6 +132,7 @@ export default function IncomeStatementPage({ params: { locale } }: { params: { 
                 </span>
               </div>
             </div>
+          </div>
           </div>
         </>
       )}

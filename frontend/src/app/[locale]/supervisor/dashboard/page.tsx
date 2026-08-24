@@ -1,12 +1,18 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { getSupervisorSummary, getSupervisorReps } from "@/lib/reps";
 import { useAuthStore } from "@/store/authStore";
 import Link from "next/link";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
-export default function SupervisorDashboard({ params: { locale } }: { params: { locale: string } }) {
+export default function SupervisorDashboard(props: { params: Promise<{ locale: string }> }) {
+  const params = use(props.params);
+
+  const {
+    locale
+  } = params;
+
   const ar = locale === "ar";
   const base = `/${locale}`;
   const { user } = useAuthStore();
