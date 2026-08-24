@@ -35,6 +35,7 @@ type PendingInvoice = {
   total: number;
   currency_code?: string;
   submitted_at?: string;
+  status?: string;
   invoice_payment_method?: string;
   rep_id?: string;
   rep_name?: string;
@@ -92,7 +93,13 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
     }
     setSystemSummary(systemRes.data);
     setRecentTx(Array.isArray(journalRes.data) ? journalRes.data.slice(0, 6) : []);
-    setPendingInvoices(Array.isArray(pendingRes.data) ? pendingRes.data : []);
+    // لا يظهر في هذا الطابور إلا ما قدّمه المندوب للمراجعة. أي فاتورة
+    // اعتمدها المحاسب تتحول إلى confirmed فتختفي فوراً من هذا القسم.
+    setPendingInvoices(
+      Array.isArray(pendingRes.data)
+        ? pendingRes.data.filter((invoice: PendingInvoice) => invoice.status === "submitted")
+        : []
+    );
     setLoading(false);
   }, []);
 

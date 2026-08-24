@@ -14,7 +14,7 @@ from app.models.sales import (
 )
 from app.models.reps import SalesRep
 from app.models.user import User
-from app.models.purchases import Bill
+from app.models.inventory import ProductVariant, StockMovement
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
     QuotationCreate, CreditNoteCreate, RefundRequestCreate
@@ -1167,14 +1167,42 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
     sales_total = sum((invoice.total or Decimal("0")) for invoice in monthly_invoices)
     sales_before_vat = sum((invoice.taxable_amount or Decimal("0")) for invoice in monthly_invoices)
 
-    purchase_cost_r = await db.execute(
-        select(func.coalesce(func.sum(Bill.taxable_amount), 0)).where(
-            Bill.tenant_id == tenant_id,
-            Bill.bill_date >= month_start,
+    # الربح الإجمالي ليس (المبيعات - كل مشتريات الشهر): ففاتورة الشراء قد
+    # تمثل مخزوناً لم يُبع بعد. نعتمد تكلفة حركات المخزون الخارجة والمرتبطة
+    # بالفواتير المؤكدة فقط، بما يشمل التكلفة الفعلية للسيريال والدفعات.
+    cost_of_sales_r = await db.execute(
+        select(
+            func.coalesce(
+                func.sum((-StockMovement.quantity) * StockMovement.unit_cost),
+                0,
+            )
+        )
+        .join(Invoice, Invoice.id == StockMovement.reference_id)
+        .where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.reference_type == "invoice",
+            StockMovement.quantity < 0,
+            Invoice.status.in_(confirmed_statuses),
+            Invoice.issue_date >= month_start,
         )
     )
-    purchase_cost = Decimal(str(purchase_cost_r.scalar() or 0))
-    estimated_gross_profit = sales_before_vat - purchase_cost
+    stock_cost_of_sales = Decimal(str(cost_of_sales_r.scalar() or 0))
+
+    # المتغيرات (مثل مقاسات/ألوان الملابس) تُخصم من رصيدها مباشرة في المسار
+    # الحالي ولا تنشئ StockMovement، لذلك تحسب تكلفتها من سعر تكلفة المتغير.
+    variant_cost_r = await db.execute(
+        select(func.coalesce(func.sum(InvoiceLine.quantity * ProductVariant.cost_price), 0))
+        .join(Invoice, Invoice.id == InvoiceLine.invoice_id)
+        .join(ProductVariant, ProductVariant.id == InvoiceLine.variant_id)
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_(confirmed_statuses),
+            Invoice.issue_date >= month_start,
+        )
+    )
+    variant_cost_of_sales = Decimal(str(variant_cost_r.scalar() or 0))
+    cost_of_sales = stock_cost_of_sales + variant_cost_of_sales
+    estimated_gross_profit = sales_before_vat - cost_of_sales
 
     new_customers_r = await db.execute(
         select(func.count(Customer.id)).where(
@@ -1201,6 +1229,7 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
         "sales_before_vat": float(sales_before_vat),
         "invoice_count": len(monthly_invoices),
         "estimated_gross_profit": float(estimated_gross_profit),
+        "cost_of_sales": float(cost_of_sales),
         "gross_margin_pct": round(margin, 1),
         "new_customers": int(new_customers_r.scalar() or 0),
         "total_customers": int(total_customers_r.scalar() or 0),
@@ -1313,6 +1342,7 @@ async def get_submitted_invoices(db: AsyncSession, tenant_id: str, rep_id: str |
         .options(selectinload(Invoice.lines))
         .where(
             Invoice.tenant_id == tenant_id,
+            Invoice.rep_id.is_not(None),
             Invoice.status == InvoiceStatus.SUBMITTED,
         )
     )
