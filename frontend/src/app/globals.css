@@ -1,9 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap');
+@import "./ledger-dashboard.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import "./ledger-dashboard.css";
-
-@import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --primary: #2563EB;
