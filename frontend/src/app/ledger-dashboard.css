@@ -331,3 +331,76 @@
   [dir="rtl"] .legacy-app-shell .header.collapsed { right:var(--sidebar-collapsed); }
   [dir="ltr"] .legacy-app-shell .header.collapsed { left:var(--sidebar-collapsed); }
 }
+
+/* Accessibility pass: raise operational microcopy by ~3px without changing page titles. */
+.legacy-app-shell .legacy-global-menubar a { font-size:12px; }
+.legacy-app-shell .sidebar-section-label { font-size:12px; }
+.legacy-app-shell .sidebar-item { font-size:13px; }
+.legacy-app-shell .sidebar-submenu-item { font-size:13px; }
+.legacy-app-shell .sidebar-collapse-btn { font-size:12px; }
+.legacy-app-shell .header-search input { font-size:12px; }
+.legacy-app-shell .header-icon-btn,
+.legacy-app-shell .lang-switcher { font-size:12px; }
+.legacy-app-shell .profile-avatar { font-size:12px; }
+.legacy-app-shell .profile-name { font-size:13px; }
+.legacy-app-shell .profile-role,
+.legacy-app-shell .legacy-notification-count { font-size:11px; }
+.legacy-app-shell .page-subtitle { font-size:13px; }
+.legacy-app-shell .breadcrumb { font-size:12px; }
+.legacy-app-shell .card-title { font-size:13px; }
+.legacy-app-shell .btn { font-size:13px; }
+.legacy-app-shell .btn-sm { font-size:12px; }
+.legacy-app-shell .btn-lg { font-size:14px; }
+.legacy-app-shell th { font-size:12px; }
+.legacy-app-shell td { font-size:13px; }
+.legacy-app-shell .badge { font-size:12px; }
+.legacy-app-shell .form-label { font-size:13px; }
+.legacy-app-shell .form-input,
+.legacy-app-shell .form-select,
+.legacy-app-shell .input { font-size:13px; }
+.legacy-app-shell .form-hint,
+.legacy-app-shell .form-error { font-size:12px; }
+.legacy-app-shell .stat-label { font-size:13px; }
+.legacy-app-shell .dropdown-item,
+.legacy-app-shell .legacy-dropdown-header,
+.legacy-app-shell .legacy-dropdown-empty,
+.legacy-app-shell .legacy-notification-row strong,
+.legacy-app-shell .legacy-dropdown-footer { font-size:13px; }
+.legacy-app-shell .legacy-dropdown-header span,
+.legacy-app-shell .legacy-notification-row span { font-size:12px; }
+.legacy-app-shell [role="tab"] { font-size:13px; }
+
+.legacy-erp .legacy-titlebar-meta,
+.legacy-erp .legacy-menubar-info,
+.legacy-erp .legacy-workspace-path,
+.legacy-erp .legacy-workspace-meta,
+.legacy-erp .legacy-summary-label,
+.legacy-erp .legacy-sheet-caption,
+.legacy-erp .legacy-filter-row,
+.legacy-erp .legacy-account-name,
+.legacy-erp .legacy-account-value,
+.legacy-erp .legacy-total-row,
+.legacy-erp .legacy-followup-title,
+.legacy-erp .legacy-followup-value,
+.legacy-erp .legacy-statusbar { font-size:13px; }
+.legacy-erp .legacy-tool,
+.legacy-erp .legacy-mini-button,
+.legacy-erp .legacy-module,
+.legacy-erp .legacy-action-cell-title,
+.legacy-erp .legacy-table th,
+.legacy-erp .legacy-table td,
+.legacy-erp .legacy-status { font-size:12px; }
+.legacy-erp .legacy-summary-note,
+.legacy-erp .legacy-action-cell-note,
+.legacy-erp .legacy-empty-inner span,
+.legacy-erp .legacy-account-key,
+.legacy-erp .legacy-followup-note { font-size:11px; }
+.legacy-erp .legacy-number { font-size:13px !important; }
+
+@media (max-width:768px) {
+  .legacy-app-shell .sidebar-item,
+  .legacy-app-shell .sidebar-submenu-item,
+  .legacy-app-shell .btn,
+  .legacy-app-shell th,
+  .legacy-app-shell td { font-size:12px; }
+}
