@@ -44,6 +44,11 @@ export default function RepInvoicePrintPage(
           vat_amount:      inv.vat_amount,
           total:           inv.total,
           paid_amount:     inv.paid_amount,
+          invoice_payment_method: inv.invoice_payment_method,
+          credit_days:     inv.credit_days,
+          cheque_number:   inv.cheque_number,
+          cheque_date:     inv.cheque_date,
+          bank_name:       inv.bank_name,
           lines:           inv.lines || [],
         };
         setDoc(mapped);

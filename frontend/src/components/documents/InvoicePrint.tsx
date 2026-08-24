@@ -113,6 +113,12 @@ export interface InvoicePrintDoc {
   vat_amount: number;
   total: number;
   paid_amount?: number;
+  // طريقة الدفع على مستوى الفاتورة
+  invoice_payment_method?: string;
+  credit_days?: number;
+  cheque_number?: string;
+  cheque_date?: string;
+  bank_name?: string;
   // أسطر
   lines: {
     description_ar: string;
@@ -142,8 +148,19 @@ const COLORS = {
 
 const STATUS_AR: Record<string, string> = {
   draft: "مسودة", confirmed: "مؤكدة", paid: "مدفوعة",
-  partial: "جزئية", cancelled: "ملغاة", submitted: "بانتظار المراجعة",
-  approved: "موافق عليها", rejected: "مرفوضة", overdue: "متأخرة",
+  partial: "مدفوعة جزئيًا", cancelled: "ملغاة", submitted: "بانتظار المراجعة",
+  approved: "تمت الموافقة", rejected: "معادة للمندوب", overdue: "متأخرة السداد",
+};
+
+const PAYMENT_METHOD_AR: Record<string, string> = {
+  cash: "نقدًا",
+  transfer: "تحويل بنكي",
+  bank_transfer: "تحويل بنكي",
+  credit: "آجل",
+  cheque: "شيك",
+  mada: "مدى",
+  stc_pay: "STC Pay",
+  credit_card: "بطاقة ائتمان",
 };
 
 export default function InvoicePrint({ doc, company, party, locale, type }: Props) {
@@ -152,6 +169,8 @@ export default function InvoicePrint({ doc, company, party, locale, type }: Prop
 
   const issueDate = doc.issue_date || doc.bill_date;
   const remaining = Number(doc.total || 0) - Number(doc.paid_amount || 0);
+  const paymentMethod = doc.invoice_payment_method || "";
+  const paymentLabel = PAYMENT_METHOD_AR[paymentMethod] || paymentMethod;
 
   const titleAr = type === "sale"
     ? (doc.invoice_type === "simplified" ? "فاتورة ضريبية مبسطة" : "فاتورة ضريبية")
@@ -347,6 +366,30 @@ export default function InvoicePrint({ doc, company, party, locale, type }: Prop
             )}
           </div>
         </div>
+
+        {/* ── طريقة الدفع ── */}
+        {type === "sale" && paymentLabel && (
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 0,
+            border: "1px solid #E5E7EB", borderRadius: 8, marginBottom: 16, overflow: "hidden",
+          }}>
+            <div style={{ padding: "10px 14px", borderInlineEnd: "1px solid #E5E7EB", background: "#F8FAFC" }}>
+              <div style={{ fontSize: 10, color: "#6B7280", marginBottom: 3 }}>{ar ? "طريقة الدفع" : "Payment method"}</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: color.primary }}>{paymentLabel}</div>
+            </div>
+            <div style={{ padding: "10px 14px" }}>
+              {paymentMethod === "credit" && doc.credit_days ? (
+                <><div style={{ fontSize: 10, color: "#6B7280", marginBottom: 3 }}>{ar ? "مدة الائتمان" : "Credit period"}</div><div style={{ fontSize: 13, fontWeight: 700 }}>{ar ? `${doc.credit_days} يوم` : `${doc.credit_days} days`}</div></>
+              ) : paymentMethod === "cheque" && (doc.cheque_number || doc.cheque_date) ? (
+                <><div style={{ fontSize: 10, color: "#6B7280", marginBottom: 3 }}>{ar ? "بيانات الشيك" : "Cheque details"}</div><div style={{ fontSize: 13, fontWeight: 700 }}>{[doc.cheque_number, doc.cheque_date].filter(Boolean).join(" — ")}</div></>
+              ) : paymentMethod === "transfer" || paymentMethod === "bank_transfer" ? (
+                <><div style={{ fontSize: 10, color: "#6B7280", marginBottom: 3 }}>{ar ? "البنك" : "Bank"}</div><div style={{ fontSize: 13, fontWeight: 700 }}>{doc.bank_name || "—"}</div></>
+              ) : (
+                <><div style={{ fontSize: 10, color: "#6B7280", marginBottom: 3 }}>{ar ? "حالة الدفع" : "Payment status"}</div><div style={{ fontSize: 13, fontWeight: 700 }}>{Number(doc.paid_amount || 0) >= Number(doc.total || 0) ? (ar ? "مدفوعة" : "Paid") : (ar ? "حسب السندات المسجلة" : "As recorded")}</div></>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── جدول الأسطر ── */}
         <div style={{ border: "1px solid #E5E7EB", borderRadius: 8, marginBottom: 16, overflow: "hidden" }}>

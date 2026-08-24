@@ -37,6 +37,17 @@ const PAYMENT_METHODS = [
   { value: "stc_pay",       ar: "STC Pay",         en: "STC Pay" },
 ];
 
+const INVOICE_PAYMENT_LABELS: Record<string, string> = {
+  cash: "نقداً",
+  transfer: "تحويل بنكي",
+  bank_transfer: "تحويل بنكي",
+  credit: "آجل",
+  cheque: "شيك",
+  mada: "مدى",
+  stc_pay: "STC Pay",
+  credit_card: "بطاقة ائتمان",
+};
+
 const emptyPayment = {
   amount: "",
   payment_method: "bank_transfer",
@@ -148,6 +159,8 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
 
   const status = STATUS_MAP[invoice.status] || { ar: invoice.status, badge: "badge-gray" };
   const remaining = Number(invoice.total || 0) - Number(invoice.paid_amount || 0);
+  const invoicePaymentMethod = invoice.invoice_payment_method || "";
+  const invoicePaymentLabel = INVOICE_PAYMENT_LABELS[invoicePaymentMethod] || invoicePaymentMethod;
 
   return (
     <>
@@ -264,6 +277,30 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
             }} ar={ar} />
           </div>
         </div>
+
+        {/* ── طريقة الدفع المختارة عند إنشاء الفاتورة ── */}
+        {invoicePaymentLabel && (
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            borderBottom: "1px solid var(--border)", background: "#F8FAFC",
+          }}>
+            <div style={{ padding: "14px 28px", borderInlineEnd: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>{ar ? "طريقة الدفع" : "Payment method"}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "var(--primary)" }}>{invoicePaymentLabel}</div>
+            </div>
+            <div style={{ padding: "14px 28px" }}>
+              {invoicePaymentMethod === "credit" && invoice.credit_days ? (
+                <><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>{ar ? "مدة الائتمان" : "Credit period"}</div><div style={{ fontSize: 14, fontWeight: 700 }}>{ar ? `${invoice.credit_days} يوم` : `${invoice.credit_days} days`}</div></>
+              ) : invoicePaymentMethod === "cheque" && (invoice.cheque_number || invoice.cheque_date) ? (
+                <><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>{ar ? "بيانات الشيك" : "Cheque details"}</div><div style={{ fontSize: 14, fontWeight: 700 }}>{[invoice.cheque_number, invoice.cheque_date].filter(Boolean).join(" — ")}</div></>
+              ) : invoicePaymentMethod === "transfer" || invoicePaymentMethod === "bank_transfer" ? (
+                <><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>{ar ? "البنك" : "Bank"}</div><div style={{ fontSize: 14, fontWeight: 700 }}>{invoice.bank_name || "—"}</div></>
+              ) : (
+                <><div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", marginBottom: 5 }}>{ar ? "حالة التحصيل" : "Collection status"}</div><div style={{ fontSize: 14, fontWeight: 700 }}>{Number(invoice.paid_amount || 0) >= Number(invoice.total || 0) ? (ar ? "مدفوعة" : "Paid") : (ar ? "حسب السندات المسجلة" : "As recorded")}</div></>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── جدول الأسطر ── */}
         <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
