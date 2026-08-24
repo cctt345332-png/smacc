@@ -80,7 +80,7 @@ export default function Header({ locale, collapsed, onMobileMenuClick }: { local
         </div>
       </div>
       <div className="legacy-global-menubar">
-        <nav><Link href={`${base}/dashboard`}>{locale === "ar" ? "الرئيسية" : "Home"}</Link><Link href={`${base}/accounting`}>{locale === "ar" ? "العمليات" : "Operations"}</Link><Link href={`${base}/reports`}>{locale === "ar" ? "التقارير" : "Reports"}</Link><Link href={`${base}/settings`}>{locale === "ar" ? "الإعدادات" : "Settings"}</Link></nav>
+        <nav><Link href={`${base}/dashboard`}>{locale === "ar" ? "الرئيسية" : "Home"}</Link><Link href={`${base}/accounting/journal`}>{locale === "ar" ? "العمليات" : "Operations"}</Link><Link href={`${base}/reports`}>{locale === "ar" ? "التقارير" : "Reports"}</Link><Link href={`${base}/settings`}>{locale === "ar" ? "الإعدادات" : "Settings"}</Link></nav>
       </div>
       <nav className="legacy-quickbar" aria-label={locale === "ar" ? "العمليات السريعة" : "Quick operations"}>
         <Link className="legacy-quick-action legacy-quick-action-main" href={`${base}/sales/invoices/new`}><Icon name="invoice" size={17} /><span>{locale === "ar" ? "فاتورة مبيعات" : "Sales invoice"}</span></Link>
