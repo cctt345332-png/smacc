@@ -102,15 +102,16 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
                 <th>{ar ? "الكود" : "Code"}</th>
                 <th>{ar ? "التاريخ" : "Date"}</th>
                 <th>{ar ? "وقت الحضور" : "Check-in time"}</th>
+                <th>{ar ? "موقع الحضور" : "Check-in location"}</th>
                 <th>{ar ? "الحالة" : "Status"}</th>
                 <th>{ar ? "المصدر" : "Source"}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)" }}>{ar ? "جاري تحميل سجل الحضور..." : "Loading attendance..."}</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)" }}>{ar ? "جاري تحميل سجل الحضور..." : "Loading attendance..."}</td></tr>
               ) : records.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)" }}>{ar ? "لا توجد سجلات لهذا التاريخ." : "No attendance records for this date."}</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: 28, color: "var(--text-muted)" }}>{ar ? "لا توجد سجلات لهذا التاريخ." : "No attendance records for this date."}</td></tr>
               ) : records.map((record) => {
                 const present = record.status === "present";
                 return (
@@ -119,6 +120,11 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
                     <td dir="ltr" style={{ fontFamily: "monospace" }}>{record.rep_code}</td>
                     <td dir="ltr">{record.attendance_date}</td>
                     <td dir="ltr" style={{ fontFamily: "monospace", fontWeight: present ? 700 : 400 }}>{formatTime(record.check_in_at, ar)}</td>
+                    <td>{record.check_in_latitude != null && record.check_in_longitude != null ? (
+                      <a href={`https://www.google.com/maps?q=${record.check_in_latitude},${record.check_in_longitude}`} target="_blank" rel="noreferrer" style={{ color: "#3E0865", fontWeight: 700, textDecoration: "underline", whiteSpace: "nowrap" }}>
+                        {ar ? "فتح الموقع" : "Open map"}{record.check_in_accuracy != null ? ` (${Math.round(record.check_in_accuracy)}m)` : ""}
+                      </a>
+                    ) : "—"}</td>
                     <td><span style={{ display: "inline-flex", padding: "3px 8px", borderRadius: 3, fontWeight: 700, fontSize: 11, background: present ? "#ECFDF3" : "#FFFAEB", color: present ? "#067647" : "#B54708" }}>{present ? (ar ? "حاضر" : "Present") : (ar ? "لم يسجل / غائب" : "Not checked in")}</span></td>
                     <td>{present ? (ar ? "لوحة المندوب" : "Rep dashboard") : "—"}</td>
                   </tr>

@@ -1077,3 +1077,15 @@ tbody tr:hover { background: #FAFBFC; }
     border-radius: 10px !important;
   }
 }
+
+/* محرر منطقة عمل المندوب: أدوات ثم خريطة بعرض كامل في الجوال. */
+@media (max-width: 768px) {
+  .rep-zone-editor-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .rep-zone-editor-grid > .card:last-child,
+  .rep-zone-editor-grid > .card:last-child > div {
+    min-height: 380px !important;
+    height: 380px !important;
+  }
+}

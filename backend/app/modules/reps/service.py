@@ -1,6 +1,8 @@
 """
 خدمة المناديب — إنشاء المنديب + مستودعه + فلترة المخزون والمبيعات
 """
+import json
+import math
 import uuid
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
@@ -9,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, select, func
 from fastapi import HTTPException
 
-from app.models.reps import RepAttendance, SalesRep
+from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, SalesRep
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Invoice, Payment
+from app.models.notifications import Notification, NotificationSeverity, NotificationType
 
 
 # ─── إنشاء مندوب ─────────────────────────────────────────────────────
@@ -535,8 +538,16 @@ async def get_my_attendance_status(db: AsyncSession, tenant_id: str, user_id: st
     }
 
 
-async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
-    """يسجل المندوب حضوره الفعلي مرة واحدة من الساعة 5 مساءً حتى منتصف الليل."""
+async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str, location: dict) -> dict:
+    """يسجل المندوب حضوره الفعلي مع موقع جديد التقطه جهازه عند الضغط على الزر."""
+    latitude, longitude = _validate_coordinates(location.get("latitude"), location.get("longitude"))
+    try:
+        accuracy = float(location.get("accuracy")) if location.get("accuracy") is not None else None
+    except (TypeError, ValueError):
+        raise HTTPException(400, "دقة موقع الحضور غير صحيحة")
+    if accuracy is not None and (accuracy < 0 or accuracy > 10_000):
+        raise HTTPException(400, "دقة موقع الحضور خارج النطاق")
+
     rep = await _current_rep_for_user(db, tenant_id, user_id)
     local_now = _saudi_now()
     if not _is_attendance_window_open(local_now):
@@ -557,6 +568,8 @@ async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str)
             "attendance_date": attendance_date.isoformat(),
             "check_in_at": _as_saudi_iso(existing.check_in_at),
             "status": existing.status,
+            "check_in_latitude": float(existing.check_in_latitude) if existing.check_in_latitude is not None else None,
+            "check_in_longitude": float(existing.check_in_longitude) if existing.check_in_longitude is not None else None,
             "already_checked_in": True,
         }
 
@@ -568,6 +581,9 @@ async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str)
         check_in_at=local_now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None),
         status="present",
         source="rep_dashboard",
+        check_in_latitude=latitude,
+        check_in_longitude=longitude,
+        check_in_accuracy=accuracy,
         created_at=datetime.utcnow(),
     )
     db.add(record)
@@ -591,6 +607,8 @@ async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str)
             "attendance_date": attendance_date.isoformat(),
             "check_in_at": _as_saudi_iso(existing.check_in_at),
             "status": existing.status,
+            "check_in_latitude": float(existing.check_in_latitude) if existing.check_in_latitude is not None else None,
+            "check_in_longitude": float(existing.check_in_longitude) if existing.check_in_longitude is not None else None,
             "already_checked_in": True,
         }
 
@@ -599,6 +617,9 @@ async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str)
         "attendance_date": attendance_date.isoformat(),
         "check_in_at": _as_saudi_iso(record.check_in_at),
         "status": record.status,
+        "check_in_latitude": latitude,
+        "check_in_longitude": longitude,
+        "check_in_accuracy": accuracy,
         "already_checked_in": False,
     }
 
@@ -643,6 +664,9 @@ async def get_rep_attendance(
             "attendance_date": target_date.isoformat(),
             "status": attendance.status if attendance else "absent",
             "check_in_at": _as_saudi_iso(attendance.check_in_at) if attendance else None,
+            "check_in_latitude": float(attendance.check_in_latitude) if attendance and attendance.check_in_latitude is not None else None,
+            "check_in_longitude": float(attendance.check_in_longitude) if attendance and attendance.check_in_longitude is not None else None,
+            "check_in_accuracy": float(attendance.check_in_accuracy) if attendance and attendance.check_in_accuracy is not None else None,
             "source": attendance.source if attendance else None,
         })
 
@@ -655,3 +679,236 @@ async def get_rep_attendance(
             "absent": sum(1 for item in records if item["status"] == "absent"),
         },
     }
+
+
+# ─── حدود مناطق عمل المناديب ───────────────────────────────────────────
+def _validate_coordinates(latitude: float, longitude: float) -> tuple[float, float]:
+    try:
+        lat, lng = float(latitude), float(longitude)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "إحداثيات الموقع غير صحيحة")
+    if not -90 <= lat <= 90 or not -180 <= lng <= 180:
+        raise HTTPException(400, "إحداثيات الموقع خارج النطاق المسموح")
+    return lat, lng
+
+
+def _distance_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """حساب المسافة الجغرافية بالمتر باستخدام Haversine."""
+    earth_radius = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lng2 - lng1)
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return earth_radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _point_in_polygon(latitude: float, longitude: float, points: list[dict]) -> bool:
+    """اختبار شعاع بسيط للمضلع؛ النقاط بصيغة {lat, lng}."""
+    inside = False
+    j = len(points) - 1
+    for i, point in enumerate(points):
+        yi, xi = float(point["lat"]), float(point["lng"])
+        yj, xj = float(points[j]["lat"]), float(points[j]["lng"])
+        intersects = ((yi > latitude) != (yj > latitude)) and (
+            longitude < (xj - xi) * (latitude - yi) / ((yj - yi) or 1e-15) + xi
+        )
+        if intersects:
+            inside = not inside
+        j = i
+    return inside
+
+
+def _location_inside_zone(zone: RepGeoZone, latitude: float, longitude: float) -> bool:
+    if zone.boundary_type == "circle":
+        if zone.center_latitude is None or zone.center_longitude is None or zone.radius_meters is None:
+            return False
+        return _distance_meters(latitude, longitude, float(zone.center_latitude), float(zone.center_longitude)) <= float(zone.radius_meters)
+
+    if zone.boundary_type == "polygon" and zone.polygon_json:
+        try:
+            points = json.loads(zone.polygon_json)
+            return isinstance(points, list) and len(points) >= 3 and _point_in_polygon(latitude, longitude, points)
+        except (ValueError, TypeError, KeyError):
+            return False
+    return False
+
+
+def _serialize_geo_zone(zone: RepGeoZone | None) -> dict | None:
+    if not zone:
+        return None
+    return {
+        "id": zone.id,
+        "rep_id": zone.rep_id,
+        "name": zone.name,
+        "boundary_type": zone.boundary_type,
+        "center_latitude": float(zone.center_latitude) if zone.center_latitude is not None else None,
+        "center_longitude": float(zone.center_longitude) if zone.center_longitude is not None else None,
+        "radius_meters": float(zone.radius_meters) if zone.radius_meters is not None else None,
+        "polygon": json.loads(zone.polygon_json) if zone.polygon_json else None,
+        "is_active": zone.is_active,
+    }
+
+
+async def get_rep_geo_zone(db: AsyncSession, tenant_id: str, rep_id: str) -> dict | None:
+    result = await db.execute(
+        select(RepGeoZone).where(RepGeoZone.tenant_id == tenant_id, RepGeoZone.rep_id == rep_id)
+    )
+    return _serialize_geo_zone(result.scalar_one_or_none())
+
+
+async def save_rep_geo_zone(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) -> dict:
+    rep_result = await db.execute(
+        select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id, SalesRep.is_active == True)
+    )
+    if not rep_result.scalar_one_or_none():
+        raise HTTPException(404, "المندوب غير موجود أو غير نشط")
+
+    boundary_type = data.get("boundary_type")
+    if boundary_type not in {"circle", "polygon"}:
+        raise HTTPException(400, "نوع المنطقة يجب أن يكون دائرة أو مضلعاً")
+
+    center_latitude = center_longitude = radius_meters = polygon_json = None
+    if boundary_type == "circle":
+        center_latitude, center_longitude = _validate_coordinates(data.get("center_latitude"), data.get("center_longitude"))
+        try:
+            radius_meters = float(data.get("radius_meters"))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "نصف القطر مطلوب بالمتر")
+        if radius_meters < 10 or radius_meters > 100_000:
+            raise HTTPException(400, "نصف القطر يجب أن يكون بين 10 و100000 متر")
+    else:
+        points = data.get("polygon")
+        if not isinstance(points, list) or len(points) < 3:
+            raise HTTPException(400, "المضلع يحتاج ثلاث نقاط على الأقل")
+        safe_points = []
+        for point in points:
+            lat, lng = _validate_coordinates(point.get("lat"), point.get("lng"))
+            safe_points.append({"lat": lat, "lng": lng})
+        polygon_json = json.dumps(safe_points, ensure_ascii=False)
+
+    existing_result = await db.execute(
+        select(RepGeoZone).where(RepGeoZone.tenant_id == tenant_id, RepGeoZone.rep_id == rep_id)
+    )
+    zone = existing_result.scalar_one_or_none()
+    if not zone:
+        zone = RepGeoZone(id=str(uuid.uuid4()), tenant_id=tenant_id, rep_id=rep_id)
+        db.add(zone)
+
+    zone.name = str(data.get("name") or "منطقة عمل المندوب")[:200]
+    zone.boundary_type = boundary_type
+    zone.center_latitude = center_latitude
+    zone.center_longitude = center_longitude
+    zone.radius_meters = radius_meters
+    zone.polygon_json = polygon_json
+    zone.is_active = bool(data.get("is_active", True))
+    zone.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(zone)
+    return _serialize_geo_zone(zone) or {}
+
+
+async def record_geo_transition(
+    db: AsyncSession,
+    tenant_id: str,
+    rep: SalesRep,
+    location_id: str,
+    latitude: float,
+    longitude: float,
+    occurred_at: datetime,
+) -> dict | None:
+    """يفحص المنطقة عند وصول موقع جديد فقط؛ لا يغير حفظ الموقع ولا يولد تنبيهاً مكرراً."""
+    zone_result = await db.execute(
+        select(RepGeoZone).where(
+            RepGeoZone.tenant_id == tenant_id,
+            RepGeoZone.rep_id == rep.id,
+            RepGeoZone.is_active == True,
+        )
+    )
+    zone = zone_result.scalar_one_or_none()
+    if not zone:
+        return None
+
+    inside = _location_inside_zone(zone, latitude, longitude)
+    new_type = "entered" if inside else "exited"
+    last_result = await db.execute(
+        select(RepGeoEvent)
+        .where(
+            RepGeoEvent.tenant_id == tenant_id,
+            RepGeoEvent.rep_id == rep.id,
+            RepGeoEvent.zone_id == zone.id,
+            RepGeoEvent.occurred_at >= zone.updated_at,
+        )
+        .order_by(RepGeoEvent.occurred_at.desc())
+        .limit(1)
+    )
+    last_event = last_result.scalar_one_or_none()
+    if last_event and last_event.event_type == new_type:
+        return None
+
+    initial = last_event is None
+    event = RepGeoEvent(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        rep_id=rep.id,
+        zone_id=zone.id,
+        event_type=new_type,
+        is_initial=initial,
+        latitude=latitude,
+        longitude=longitude,
+        source_location_id=location_id,
+        occurred_at=occurred_at,
+        created_at=datetime.utcnow(),
+    )
+    db.add(event)
+
+    if not initial:
+        managers = await db.execute(
+            select(User.id).where(User.tenant_id == tenant_id, User.role.in_(["manager", "accountant"]))
+        )
+        rep_name_result = await db.execute(select(User.full_name).where(User.id == rep.user_id))
+        rep_name = rep_name_result.scalar_one_or_none() or rep.rep_code
+        verb_ar, verb_en = ("دخل", "entered") if new_type == "entered" else ("خرج", "left")
+        for manager_id in managers.scalars().all():
+            db.add(Notification(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant_id,
+                user_id=manager_id,
+                type=NotificationType.GENERAL,
+                severity=NotificationSeverity.WARNING,
+                title_ar=f"{verb_ar} المندوب منطقة العمل",
+                title_en=f"Rep {verb_en} work zone",
+                message_ar=f"المندوب {rep_name} {verb_ar} منطقة العمل: {zone.name}.",
+                message_en=f"Rep {rep_name} {verb_en} the work zone: {zone.name}.",
+                reference_id=event.id,
+                reference_type="rep_geo_event",
+                created_at=datetime.utcnow(),
+            ))
+
+    return {"event_type": new_type, "is_initial": initial, "zone_id": zone.id}
+
+
+async def get_rep_geo_events(
+    db: AsyncSession,
+    tenant_id: str,
+    rep_id: str,
+    date_value: str | None = None,
+) -> list[dict]:
+    query = select(RepGeoEvent).where(RepGeoEvent.tenant_id == tenant_id, RepGeoEvent.rep_id == rep_id)
+    if date_value:
+        try:
+            target = datetime.strptime(date_value, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(400, "صيغة التاريخ يجب أن تكون YYYY-MM-DD")
+        from datetime import timedelta
+        start = datetime.combine(target, time.min)
+        end = start + timedelta(days=1)
+        query = query.where(RepGeoEvent.occurred_at >= start, RepGeoEvent.occurred_at < end)
+    result = await db.execute(query.order_by(RepGeoEvent.occurred_at.asc()))
+    return [{
+        "id": event.id,
+        "event_type": event.event_type,
+        "is_initial": event.is_initial,
+        "latitude": float(event.latitude),
+        "longitude": float(event.longitude),
+        "occurred_at": _as_saudi_iso(event.occurred_at),
+    } for event in result.scalars().all()]

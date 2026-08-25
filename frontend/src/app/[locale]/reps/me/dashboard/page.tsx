@@ -142,11 +142,28 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
     if (checkingIn) return;
     setCheckingIn(true);
     try {
-      await checkInMyAttendance();
+      if (typeof navigator === "undefined" || !navigator.geolocation) {
+        throw new Error(ar ? "الموقع الجغرافي غير مدعوم في هذا الجهاز." : "Geolocation is not available on this device.");
+      }
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 20_000,
+          maximumAge: 0,
+        });
+      });
+      await checkInMyAttendance({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy ?? undefined,
+      });
       const response = await getMyAttendanceStatus();
       setAttendance(response.data);
     } catch (error: any) {
-      alert(error?.response?.data?.detail || (ar ? "تعذر تسجيل الحضور، حاول مرة أخرى." : "Could not record attendance. Please try again."));
+      const locationError = typeof error?.code === "number"
+        ? (ar ? "يجب السماح بموقع الجهاز لتسجيل الحضور." : "Location permission is required to check in.")
+        : null;
+      alert(locationError || error?.response?.data?.detail || error?.message || (ar ? "تعذر تسجيل الحضور، حاول مرة أخرى." : "Could not record attendance. Please try again."));
     } finally {
       setCheckingIn(false);
     }

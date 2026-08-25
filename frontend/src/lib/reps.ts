@@ -67,7 +67,19 @@ export const getMySummary = () => api.get("/reps/me/summary");
 
 export const getMyAttendanceStatus = () => api.get("/reps/me/attendance/today");
 
-export const checkInMyAttendance = () => api.post("/reps/me/attendance/check-in");
+export const checkInMyAttendance = (data: {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+}) => api.post("/reps/me/attendance/check-in", data);
+
+export const getRepGeoZone = (repId: string) => api.get(`/reps/${repId}/geo-zone`);
+
+export const saveRepGeoZone = (repId: string, data: object) =>
+  api.put(`/reps/${repId}/geo-zone`, data);
+
+export const getRepGeoEvents = (repId: string, date?: string) =>
+  api.get(`/reps/${repId}/geo-events${date ? `?date=${date}` : ""}`);
 
 // ─── تتبع مواقع المناديب ──────────────────────────────────────────────
 

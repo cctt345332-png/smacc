@@ -1,18 +1,20 @@
 "use client";
 import { useEffect, useRef, useState, useCallback, use } from "react";
 import Link from "next/link";
-import { getAllRepsLiveLocations, getReps, getSupervisors, getRepLocationHistory } from "@/lib/reps";
+import { getAllRepsLiveLocations, getReps, getSupervisors, getRepLocationHistory, getRepGeoEvents } from "@/lib/reps";
 
 const PIN_COLORS = ["#5A187E","#059669","#DC2626","#D97706","#75617F","#0891B2","#BE185D","#15803D","#B45309","#4338CA"];
 const SUPERVISOR_COLOR = "#4C126D";
-const fmtTime=(iso:string)=>{try{return new Date(iso.endsWith("Z")?iso:iso+"Z").toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
-const fmtDateTime=(iso:string)=>{try{return new Date(iso.endsWith("Z")?iso:iso+"Z").toLocaleString("ar-SA",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
+const normaliseIso=(iso:string)=>/(Z|[+-]\d{2}:\d{2})$/.test(iso)?iso:`${iso}Z`;
+const fmtTime=(iso:string)=>{try{return new Date(normaliseIso(iso)).toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
+const fmtDateTime=(iso:string)=>{try{return new Date(normaliseIso(iso)).toLocaleString("ar-SA",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
 const fmtDur=(m:number)=>{const h=Math.floor(m/60);return h>0?`${h}h ${m%60}m`:`${m}m`;};
 const todayStr=()=>new Date().toISOString().slice(0,10);
 
 interface LiveLocation{rep_id:string;rep_code:string;rep_name:string;person_type?:"rep"|"supervisor";latitude:number;longitude:number;accuracy?:number;speed?:number;heading?:number;battery_level?:number;is_moving:boolean;recorded_at:string;}
 interface HistoryPoint{latitude:number;longitude:number;speed?:number;is_moving:boolean;recorded_at:string;}
 interface Trip{type:"move"|"stop";start:string;end:string;dur:number;maxSpd?:number;avgSpd?:number;}
+interface GeoEvent{id:string;event_type:"entered"|"exited";is_initial:boolean;latitude:number;longitude:number;occurred_at:string;}
 
 function buildTrips(pts:HistoryPoint[]):Trip[]{
   if(pts.length<2)return[];
@@ -60,6 +62,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
   const [tripPanel,setTripPanel]=useState<LiveLocation|null>(null);
   const [tripDate,setTripDate]=useState(todayStr());
   const [tripHistory,setTripHistory]=useState<HistoryPoint[]>([]);
+  const [geoEvents,setGeoEvents]=useState<GeoEvent[]>([]);
   const [tripLoading,setTripLoading]=useState(false);
   const [selectedTripIdx,setSelectedTripIdx]=useState<number|null>(null);
 
@@ -123,11 +126,14 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
   // جلب تاريخ الرحلات
   useEffect(()=>{
     if(!tripPanel)return;
-    setTripLoading(true);setTripHistory([]);setSelectedTripIdx(null);
-    getRepLocationHistory(tripPanel.rep_id,tripDate)
-      .then(r=>setTripHistory(Array.isArray(r.data)?r.data:[]))
-      .catch(()=>setTripHistory([]))
-      .finally(()=>setTripLoading(false));
+    setTripLoading(true);setTripHistory([]);setGeoEvents([]);setSelectedTripIdx(null);
+    Promise.all([
+      getRepLocationHistory(tripPanel.rep_id,tripDate).catch(()=>({data:[]})),
+      getRepGeoEvents(tripPanel.rep_id,tripDate).catch(()=>({data:[]})),
+    ]).then(([historyResponse, eventsResponse])=>{
+      setTripHistory(Array.isArray(historyResponse.data)?historyResponse.data:[]);
+      setGeoEvents(Array.isArray(eventsResponse.data)?eventsResponse.data:[]);
+    }).finally(()=>setTripLoading(false));
   },[tripPanel,tripDate]);
 
   // تنظيف المسار عند إغلاق شريط الرحلات
@@ -220,6 +226,17 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
       window.setTimeout(() => {
         mapRef.current?.closest(".rep-tracking-map")?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 0);
+    }
+  };
+
+  const focusGeoEvent = (event: GeoEvent) => {
+    const current = leafletMap.current;
+    if (!current) return;
+    const { map, L } = current;
+    L.circleMarker([event.latitude, event.longitude], { radius: 10, color: event.event_type === "entered" ? "#067647" : "#B42318", fillColor: "#fff", fillOpacity: 1, weight: 3 }).addTo(map);
+    map.flyTo([event.latitude, event.longitude], 16, { duration: 0.65 });
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
+      window.setTimeout(() => mapRef.current?.closest(".rep-tracking-map")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
     }
   };
 
@@ -351,6 +368,21 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
                   );
                 })}
               </div>
+              {geoEvents.length > 0 && (
+                <div style={{marginTop:14,borderTop:"1px solid var(--border)",paddingTop:12}}>
+                  <div style={{fontWeight:800,fontSize:12,color:"var(--text-primary)",marginBottom:7}}>{ar?"أحداث منطقة العمل":"Work-zone events"}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {geoEvents.map(event=>{
+                      const entered=event.event_type==="entered";
+                      const initial=event.is_initial;
+                      return <button key={event.id} type="button" onClick={()=>focusGeoEvent(event)} style={{textAlign:"start",padding:"8px 9px",border:"1px solid var(--border)",borderInlineStart:`3px solid ${entered?"#067647":"#B42318"}`,background:entered?"#ECFDF3":"#FEF3F2",borderRadius:6,cursor:"pointer"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{fontWeight:800,fontSize:11,color:entered?"#067647":"#B42318"}}>{initial?(ar?"حالة بداية التتبع":"Initial location state"):(entered?(ar?"دخل منطقة العمل":"Entered work zone"):(ar?"خرج من منطقة العمل":"Left work zone"))}</span><span style={{fontSize:10,color:"var(--text-muted)"}}>{fmtTime(event.occurred_at)}</span></div>
+                        <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{ar?"اضغط لعرض موقع الحدث على الخريطة":"Click to view the event on the map"}</div>
+                      </button>;
+                    })}
+                  </div>
+                </div>
+              )}
             </>)}
           </div>
         </div>

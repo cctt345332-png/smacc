@@ -209,11 +209,12 @@ async def my_attendance_today(
 
 @router.post("/me/attendance/check-in", status_code=201)
 async def my_attendance_check_in(
+    data: dict,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """يسجل المندوب حضوره الفعلي من لوحة المندوب."""
-    return await service.check_in_my_attendance(db, user["tenant_id"], user["user_id"])
+    """يسجل المندوب حضوره الفعلي وموقعه الجديد من لوحة المندوب."""
+    return await service.check_in_my_attendance(db, user["tenant_id"], user["user_id"], data)
 
 
 @router.get("/me/transfers")
@@ -460,6 +461,38 @@ async def rep_transfers(
     return result
 
 
+@router.get("/{rep_id}/geo-zone")
+async def get_rep_geo_zone(
+    rep_id: str,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """حدود منطقة عمل المندوب للإدارة."""
+    return await service.get_rep_geo_zone(db, user["tenant_id"], rep_id)
+
+
+@router.put("/{rep_id}/geo-zone")
+async def save_rep_geo_zone(
+    rep_id: str,
+    data: dict,
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """حفظ حدود منطقة عمل المندوب؛ لا يغير بيانات التتبع التاريخية."""
+    return await service.save_rep_geo_zone(db, user["tenant_id"], rep_id, data)
+
+
+@router.get("/{rep_id}/geo-events")
+async def get_rep_geo_events(
+    rep_id: str,
+    date: str | None = None,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """أحداث دخول وخروج منطقة العمل للمندوب."""
+    return await service.get_rep_geo_events(db, user["tenant_id"], rep_id, date)
+
+
 @router.get("/{rep_id}/summary")
 async def rep_summary(
     rep_id: str,
@@ -513,8 +546,18 @@ async def post_my_location(
         created_at=datetime.utcnow(),
     )
     db.add(loc)
+    # فحص المنطقة إضافة لاحقة لحفظ الموقع، ولا يغيّر نقاط المسار أو تردد التتبع.
+    geo_event = await service.record_geo_transition(
+        db, user["tenant_id"], rep, loc.id,
+        float(loc.latitude), float(loc.longitude), loc.recorded_at,
+    )
     await db.commit()
-    return {"id": loc.id, "rep_id": loc.rep_id, "recorded_at": loc.recorded_at.isoformat()}
+    return {
+        "id": loc.id,
+        "rep_id": loc.rep_id,
+        "recorded_at": loc.recorded_at.isoformat(),
+        "geo_event": geo_event,
+    }
 
 
 @router.get("/me/location/latest")
