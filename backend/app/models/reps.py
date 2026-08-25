@@ -2,7 +2,7 @@
 نموذج المناديب (Sales Representatives)
 كل مندوب = مستخدم بدور sales_rep + مستودع خاص مرتبط به
 """
-from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Text, Date, Integer
+from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Text, Date, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, date
 from decimal import Decimal
@@ -42,6 +42,23 @@ class SalesRep(Base):
     commission_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RepAttendance(Base):
+    """سجل حضور يومي للمندوب، مستقل عن حضور الموظفين وتتبع الموقع."""
+    __tablename__ = "rep_attendance"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "rep_id", "attendance_date", name="uq_rep_attendance_daily"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    rep_id: Mapped[str] = mapped_column(String, ForeignKey("sales_reps.id"), index=True)
+    attendance_date: Mapped[date] = mapped_column(Date, index=True)
+    check_in_at: Mapped[datetime] = mapped_column(DateTime)
+    status: Mapped[str] = mapped_column(String(30), default="present")
+    source: Mapped[str] = mapped_column(String(30), default="rep_dashboard")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

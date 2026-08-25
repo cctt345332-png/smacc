@@ -23,9 +23,12 @@ function buildTrips(pts:HistoryPoint[]):Trip[]{
       const seg=pts.slice(s,i);
       const dur=Math.max(1,Math.round((new Date(seg[seg.length-1].recorded_at).getTime()-new Date(seg[0].recorded_at).getTime())/60000));
       const spds=seg.map(p=>p.speed??0).filter(v=>v>0);
-      trips.push({type,start:seg[0].recorded_at,end:seg[seg.length-1].recorded_at,dur,
-        maxSpd:spds.length?Math.round(Math.max(...spds)):undefined,
-        avgSpd:spds.length?Math.round(spds.reduce((a,b)=>a+b,0)/spds.length):undefined});
+      // توقفات أقل من خمس دقائق تبقى ضمن خط المسار، لكنها لا تظهر كتوقف مستقل أو دبوس في التفاصيل.
+      if(type !== "stop" || dur >= 5){
+        trips.push({type,start:seg[0].recorded_at,end:seg[seg.length-1].recorded_at,dur,
+          maxSpd:spds.length?Math.round(Math.max(...spds)):undefined,
+          avgSpd:spds.length?Math.round(spds.reduce((a,b)=>a+b,0)/spds.length):undefined});
+      }
       s=i;
     }
   }
@@ -210,6 +213,16 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
 
   const flyTo=(loc:LiveLocation)=>{leafletMap.current?.map.flyTo([loc.latitude,loc.longitude],16,{duration:0.8});setQuickCard(loc);setTripPanel(null);};
 
+  const focusTrip = (index: number) => {
+    const nextIndex = selectedTripIdx === index ? null : index;
+    setSelectedTripIdx(nextIndex);
+    if (nextIndex !== null && typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
+      window.setTimeout(() => {
+        mapRef.current?.closest(".rep-tracking-map")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    }
+  };
+
   const visibleLocations=filterRep==="all"?(filterType==="all"?locations:locations.filter(l=>(l.person_type??"rep")===filterType)):locations.filter(l=>l.rep_id===filterRep);
   const trips=buildTrips(tripHistory);
   const totalMove=trips.filter(t=>t.type==="move").reduce((a,t)=>a+t.dur,0);
@@ -323,7 +336,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
                 {trips.map((t,i)=>{
                   const isSel=selectedTripIdx===i;
                   return(
-                    <div key={i} onClick={()=>setSelectedTripIdx(isSel?null:i)}
+                    <div key={i} onClick={()=>focusTrip(i)}
                       style={{padding:"8px 10px",background:isSel?(t.type==="move"?"#EFF6FF":"#FFFBEB"):"var(--bg)",borderRadius:10,borderLeft:`3px solid ${t.type==="move"?"#5A187E":"#D97706"}`,display:"flex",gap:8,cursor:"pointer",transition:"all .15s",boxShadow:isSel?"0 2px 8px rgba(0,0,0,.1)":"none"}}>
                       <span style={{fontSize:15}}>{t.type==="move"?"🚗":"⏸"}</span>
                       <div style={{flex:1}}>

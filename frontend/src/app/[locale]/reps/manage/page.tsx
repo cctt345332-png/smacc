@@ -156,9 +156,14 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
           <h1 className="page-title">{ar ? "إدارة المناديب" : "Sales Reps"}</h1>
           <p className="page-subtitle">{ar ? "إدارة فريق المبيعات الميداني — البيانات الشخصية والسيارات والأهداف" : "Manage field sales team — personal data, vehicles and targets"}</p>
         </div>
-        <button className="btn btn-primary" onClick={openAdd}>
-          + {ar ? "مندوب جديد" : "New Rep"}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className="btn btn-secondary" href={`/${locale}/reps/attendance`}>
+            {ar ? "الحضور والانصراف" : "Attendance"}
+          </Link>
+          <button className="btn btn-primary" onClick={openAdd}>
+            + {ar ? "مندوب جديد" : "New Rep"}
+          </button>
+        </div>
       </div>
 
       {/* ملخص سريع */}

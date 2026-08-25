@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getMySummary, getMyStock, getMyInvoices } from "@/lib/reps";
+import { checkInMyAttendance, getMyAttendanceStatus, getMySummary, getMyStock, getMyInvoices } from "@/lib/reps";
 import { useAuthStore } from "@/store/authStore";
 import api from "@/lib/api";
 
@@ -105,6 +105,8 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [attendance, setAttendance] = useState<any>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -117,6 +119,38 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
       setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
     }).finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadAttendance = async () => {
+      try {
+        const response = await getMyAttendanceStatus();
+        if (active) setAttendance(response.data);
+      } catch {
+        // لا نمنع لوحة المندوب عند تعذر الشبكة؛ يعود الفحص تلقائياً في الدقيقة التالية.
+      }
+    };
+    void loadAttendance();
+    const timer = window.setInterval(loadAttendance, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const handleCheckIn = async () => {
+    if (checkingIn) return;
+    setCheckingIn(true);
+    try {
+      await checkInMyAttendance();
+      const response = await getMyAttendanceStatus();
+      setAttendance(response.data);
+    } catch (error: any) {
+      alert(error?.response?.data?.detail || (ar ? "تعذر تسجيل الحضور، حاول مرة أخرى." : "Could not record attendance. Please try again."));
+    } finally {
+      setCheckingIn(false);
+    }
+  };
 
   const firstName = ((user as any)?.fullName || "").split(" ")[0];
   const pct = summary?.target_monthly > 0
@@ -325,6 +359,15 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
       {/* مسافة نهاية الصفحة */}
       <div style={{ height: 8 }} />
       {/* modal تفاصيل الفاتورة */}
+      {attendance?.requires_check_in && (
+        <MandatoryAttendanceModal
+          locale={locale}
+          serverTime={attendance.server_time}
+          saving={checkingIn}
+          onCheckIn={handleCheckIn}
+        />
+      )}
+
       {selectedInvoice && (
         <DashInvoiceModal
           inv={selectedInvoice}
@@ -332,6 +375,61 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
           onClose={() => setSelectedInvoice(null)}
         />
       )}
+    </div>
+  );
+}
+
+/* ── مربع الحضور الإلزامي للمندوب ───────────────────────────────── */
+function MandatoryAttendanceModal({
+  locale,
+  serverTime,
+  saving,
+  onCheckIn,
+}: {
+  locale: string;
+  serverTime?: string;
+  saving: boolean;
+  onCheckIn: () => void;
+}) {
+  const ar = locale === "ar";
+  const shownTime = serverTime
+    ? new Date(serverTime).toLocaleTimeString(ar ? "ar-SA" : "en-US", { hour: "2-digit", minute: "2-digit" })
+    : "";
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={ar ? "تسجيل حضور اليوم" : "Daily attendance check-in"}
+      style={{
+        position: "fixed", inset: 0, zIndex: 5000,
+        background: "rgba(25, 8, 38, 0.62)", backdropFilter: "blur(2px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 18,
+      }}
+    >
+      <div style={{
+        width: "100%", maxWidth: 390, background: "var(--surface)", border: "1px solid #C9B3D7",
+        borderRadius: 8, overflow: "hidden", boxShadow: "0 18px 48px rgba(25, 8, 38, 0.34)",
+      }}>
+        <div style={{ background: "#3E0865", color: "white", padding: "16px 18px", textAlign: "center" }}>
+          <div style={{ fontSize: 19, fontWeight: 800 }}>{ar ? "تسجيل حضور اليوم" : "Daily Check-in"}</div>
+          <div style={{ fontSize: 12, opacity: 0.9, marginTop: 4 }}>{ar ? "الحضور مطلوب قبل استخدام لوحة المندوب" : "Check-in is required before using the rep dashboard"}</div>
+        </div>
+        <div style={{ padding: "22px 20px 20px", textAlign: "center" }}>
+          <div style={{ width: 54, height: 54, borderRadius: "50%", margin: "0 auto 14px", background: "#F4EFF7", color: "#3E0865", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800 }}>✓</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{ar ? "سجّل وقت حضورك الفعلي الآن" : "Record your actual arrival time now"}</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 7 }}>{ar ? "سيظهر الوقت المسجل في إدارة الحضور والانصراف." : "The recorded time will appear in attendance management."}</div>
+          {shownTime && <div style={{ fontFamily: "monospace", fontSize: 13, color: "#3E0865", marginTop: 12, fontWeight: 700 }}>{shownTime}</div>}
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onCheckIn}
+            style={{ width: "100%", marginTop: 20, padding: "11px 14px", background: "#3E0865", color: "white", border: "none", borderRadius: 3, fontWeight: 800, fontSize: 14, cursor: saving ? "wait" : "pointer", opacity: saving ? 0.7 : 1 }}
+          >
+            {saving ? (ar ? "جاري تسجيل الحضور..." : "Recording check-in...") : (ar ? "تسجيل حضور اليوم" : "Check in now")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

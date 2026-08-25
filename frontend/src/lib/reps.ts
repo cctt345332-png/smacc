@@ -37,6 +37,14 @@ export const getRepSummary = (repId: string) =>
 export const getRepTransfers = (repId: string) =>
   api.get(`/reps/${repId}/transfers`);
 
+export const getRepAttendance = (date?: string, repId?: string) => {
+  const params = new URLSearchParams();
+  if (date) params.set("date", date);
+  if (repId) params.set("rep_id", repId);
+  const query = params.toString();
+  return api.get(`/reps/attendance${query ? `?${query}` : ""}`);
+};
+
 export const getMyTransfers = () =>
   api.get("/reps/me/transfers");
 
@@ -56,6 +64,10 @@ export const getMyInvoices = () => api.get("/reps/me/invoices");
 export const getMyPayments = () => api.get("/reps/me/payments");
 
 export const getMySummary = () => api.get("/reps/me/summary");
+
+export const getMyAttendanceStatus = () => api.get("/reps/me/attendance/today");
+
+export const checkInMyAttendance = () => api.post("/reps/me/attendance/check-in");
 
 // ─── تتبع مواقع المناديب ──────────────────────────────────────────────
 

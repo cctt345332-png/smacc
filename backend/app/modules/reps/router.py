@@ -198,6 +198,24 @@ async def my_summary(
     return await service.get_my_summary(db, user["tenant_id"], user["user_id"])
 
 
+@router.get("/me/attendance/today")
+async def my_attendance_today(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """حالة حضور اليوم للمندوب الحالي فقط."""
+    return await service.get_my_attendance_status(db, user["tenant_id"], user["user_id"])
+
+
+@router.post("/me/attendance/check-in", status_code=201)
+async def my_attendance_check_in(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """يسجل المندوب حضوره الفعلي من لوحة المندوب."""
+    return await service.check_in_my_attendance(db, user["tenant_id"], user["user_id"])
+
+
 @router.get("/me/transfers")
 async def my_transfers(
     user=Depends(get_current_user),
@@ -218,6 +236,17 @@ async def my_transfers(
 # ══════════════════════════════════════════════════════════════════
 # إدارة المناديب — للمدير فقط
 # ══════════════════════════════════════════════════════════════════
+
+@router.get("/attendance")
+async def list_rep_attendance(
+    date: str | None = None,
+    rep_id: str | None = None,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """سجل حضور المناديب اليومي للمدير والمحاسب."""
+    return await service.get_rep_attendance(db, user["tenant_id"], date, rep_id)
+
 
 @router.get("")
 async def list_reps(

@@ -2,13 +2,14 @@
 خدمة المناديب — إنشاء المنديب + مستودعه + فلترة المخزون والمبيعات
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import and_, select, func
 from fastapi import HTTPException
 
-from app.models.reps import SalesRep
+from app.models.reps import RepAttendance, SalesRep
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Invoice, Payment
@@ -468,4 +469,189 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
         "total_collected": float(total_collected),
         "outstanding": float((total_sales or 0) - total_collected),
         "stock_qty": float(stock_qty),
+    }
+
+
+# ─── حضور المناديب اليومي ──────────────────────────────────────────────
+SAUDI_TZ = ZoneInfo("Asia/Riyadh")
+ATTENDANCE_START = time(17, 0)
+
+
+def _saudi_now() -> datetime:
+    """وقت السعودية الموثوق من الخادم، لا من جهاز المندوب."""
+    return datetime.now(SAUDI_TZ)
+
+
+def _is_attendance_window_open(local_now: datetime) -> bool:
+    """نافذة التسجيل اليومية: 5 مساءً حتى قبل منتصف الليل."""
+    return ATTENDANCE_START <= local_now.timetz().replace(tzinfo=None) <= time(23, 59, 59, 999999)
+
+
+def _as_saudi_iso(value: datetime | None) -> str | None:
+    if not value:
+        return None
+    # كل التواريخ في قاعدة النظام تُخزن UTC بلا tzinfo.
+    from datetime import timezone
+    return value.replace(tzinfo=timezone.utc).astimezone(SAUDI_TZ).isoformat()
+
+
+async def _current_rep_for_user(db: AsyncSession, tenant_id: str, user_id: str) -> SalesRep:
+    result = await db.execute(
+        select(SalesRep).where(
+            SalesRep.tenant_id == tenant_id,
+            SalesRep.user_id == user_id,
+            SalesRep.is_active == True,
+        )
+    )
+    rep = result.scalar_one_or_none()
+    if not rep:
+        raise HTTPException(403, "هذا الحساب ليس مندوباً نشطاً")
+    return rep
+
+
+async def get_my_attendance_status(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """حالة حضور اليوم للمندوب، ويستخدمها مربع الحضور الإلزامي في لوحة المندوب."""
+    rep = await _current_rep_for_user(db, tenant_id, user_id)
+    local_now = _saudi_now()
+    attendance_date = local_now.date()
+    result = await db.execute(
+        select(RepAttendance).where(
+            RepAttendance.tenant_id == tenant_id,
+            RepAttendance.rep_id == rep.id,
+            RepAttendance.attendance_date == attendance_date,
+        )
+    )
+    record = result.scalar_one_or_none()
+    window_open = _is_attendance_window_open(local_now)
+    return {
+        "rep_id": rep.id,
+        "attendance_date": attendance_date.isoformat(),
+        "server_time": local_now.isoformat(),
+        "window_open": window_open,
+        "already_checked_in": bool(record),
+        "requires_check_in": bool(window_open and not record),
+        "check_in_at": _as_saudi_iso(record.check_in_at) if record else None,
+        "status": record.status if record else "absent",
+    }
+
+
+async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """يسجل المندوب حضوره الفعلي مرة واحدة من الساعة 5 مساءً حتى منتصف الليل."""
+    rep = await _current_rep_for_user(db, tenant_id, user_id)
+    local_now = _saudi_now()
+    if not _is_attendance_window_open(local_now):
+        raise HTTPException(400, "يبدأ تسجيل الحضور الساعة 5:00 مساءً بتوقيت السعودية")
+
+    attendance_date = local_now.date()
+    existing_result = await db.execute(
+        select(RepAttendance).where(
+            RepAttendance.tenant_id == tenant_id,
+            RepAttendance.rep_id == rep.id,
+            RepAttendance.attendance_date == attendance_date,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+    if existing:
+        return {
+            "id": existing.id,
+            "attendance_date": attendance_date.isoformat(),
+            "check_in_at": _as_saudi_iso(existing.check_in_at),
+            "status": existing.status,
+            "already_checked_in": True,
+        }
+
+    record = RepAttendance(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        rep_id=rep.id,
+        attendance_date=attendance_date,
+        check_in_at=local_now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None),
+        status="present",
+        source="rep_dashboard",
+        created_at=datetime.utcnow(),
+    )
+    db.add(record)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        # في حال ضغط المستخدم مرتين أو وصل طلبان معاً، نعيد السجل الموحّد.
+        existing_result = await db.execute(
+            select(RepAttendance).where(
+                RepAttendance.tenant_id == tenant_id,
+                RepAttendance.rep_id == rep.id,
+                RepAttendance.attendance_date == attendance_date,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if not existing:
+            raise
+        return {
+            "id": existing.id,
+            "attendance_date": attendance_date.isoformat(),
+            "check_in_at": _as_saudi_iso(existing.check_in_at),
+            "status": existing.status,
+            "already_checked_in": True,
+        }
+
+    return {
+        "id": record.id,
+        "attendance_date": attendance_date.isoformat(),
+        "check_in_at": _as_saudi_iso(record.check_in_at),
+        "status": record.status,
+        "already_checked_in": False,
+    }
+
+
+async def get_rep_attendance(
+    db: AsyncSession,
+    tenant_id: str,
+    attendance_date: str | None = None,
+    rep_id: str | None = None,
+) -> dict:
+    """قائمة إدارية للحضور تعرض الحاضرين وغير المسجلين في تاريخ محدد."""
+    local_today = _saudi_now().date()
+    try:
+        target_date = datetime.strptime(attendance_date, "%Y-%m-%d").date() if attendance_date else local_today
+    except ValueError:
+        raise HTTPException(400, "صيغة التاريخ يجب أن تكون YYYY-MM-DD")
+
+    query = (
+        select(SalesRep, User, RepAttendance)
+        .join(User, User.id == SalesRep.user_id)
+        .outerjoin(
+            RepAttendance,
+            and_(
+                RepAttendance.tenant_id == SalesRep.tenant_id,
+                RepAttendance.rep_id == SalesRep.id,
+                RepAttendance.attendance_date == target_date,
+            ),
+        )
+        .where(SalesRep.tenant_id == tenant_id, SalesRep.is_active == True)
+        .order_by(User.full_name.asc())
+    )
+    if rep_id:
+        query = query.where(SalesRep.id == rep_id)
+
+    rows = (await db.execute(query)).all()
+    records = []
+    for rep, user, attendance in rows:
+        records.append({
+            "rep_id": rep.id,
+            "rep_code": rep.rep_code,
+            "rep_name": user.full_name,
+            "attendance_date": target_date.isoformat(),
+            "status": attendance.status if attendance else "absent",
+            "check_in_at": _as_saudi_iso(attendance.check_in_at) if attendance else None,
+            "source": attendance.source if attendance else None,
+        })
+
+    return {
+        "attendance_date": target_date.isoformat(),
+        "records": records,
+        "summary": {
+            "total": len(records),
+            "present": sum(1 for item in records if item["status"] == "present"),
+            "absent": sum(1 for item in records if item["status"] == "absent"),
+        },
     }

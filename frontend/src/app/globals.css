@@ -1047,14 +1047,14 @@ tbody tr:hover { background: #FAFBFC; }
     min-height: 0 !important;
   }
   .rep-tracking-map {
-    order: 2;
+    order: 1;
     width: 100% !important;
     flex: none !important;
     height: min(52vh, 440px) !important;
     min-height: 320px !important;
   }
   .rep-tracking-trip-panel {
-    order: 1;
+    order: 2;
     width: 100% !important;
     min-height: 0 !important;
     max-height: none !important;
