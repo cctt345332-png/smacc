@@ -142,7 +142,7 @@ export default function PaymentDetailPage(props: { params: Promise<{ locale: str
               </div>
             )}
             {voucher.asset_id && (
-              <div style={{ fontSize: 12, color: "#65707E", marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: "#75617F", marginTop: 4 }}>
                 {ar ? "مرتبط بأصل ثابت" : "Linked to Fixed Asset"}
               </div>
             )}

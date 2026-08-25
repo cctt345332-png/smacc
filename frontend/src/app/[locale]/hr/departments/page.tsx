@@ -65,7 +65,7 @@ export default function DepartmentsPage(props: { params: Promise<{ locale: strin
 
       <div className="grid-3" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#485668" }}><IcBuilding /></div>
+          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#5A187E" }}><IcBuilding /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "عدد الأقسام" : "Departments"}</div>
             <div className="stat-value">{departments.length}</div>
@@ -109,7 +109,7 @@ export default function DepartmentsPage(props: { params: Promise<{ locale: strin
                 <tr key={dept.id}>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#485668", flexShrink: 0 }}><IcBuilding /></div>
+                      <div style={{ width: 36, height: 36, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#5A187E", flexShrink: 0 }}><IcBuilding /></div>
                       <div>
                         <div style={{ fontWeight: 600 }}>{dept.name_ar}</div>
                         {dept.name_en && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{dept.name_en}</div>}

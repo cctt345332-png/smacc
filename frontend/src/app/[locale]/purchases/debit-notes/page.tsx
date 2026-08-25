@@ -78,7 +78,7 @@ export default function DebitNotesPage(props: { params: Promise<{ locale: string
                 {items.map((dn: any) => (
                   <tr key={dn.id}>
                     <td>
-                      <Link href={`/${locale}/purchases/debit-notes/${dn.id}`} style={{ fontWeight: 700, color: "#65707E", textDecoration: "none" }}>
+                      <Link href={`/${locale}/purchases/debit-notes/${dn.id}`} style={{ fontWeight: 700, color: "#75617F", textDecoration: "none" }}>
                         {dn.debit_note_number}
                       </Link>
                     </td>
@@ -93,7 +93,7 @@ export default function DebitNotesPage(props: { params: Promise<{ locale: string
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(dn.issue_date).toLocaleDateString("en-SA")}</td>
                     <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{dn.reason}</td>
-                    <td style={{ textAlign: "end", fontWeight: 700, color: "#65707E" }}>{fmt(dn.total)} SAR</td>
+                    <td style={{ textAlign: "end", fontWeight: 700, color: "#75617F" }}>{fmt(dn.total)} SAR</td>
                     <td>
                       <span className={`badge ${dn.status === "confirmed" ? "badge-success" : "badge-warning"}`}>
                         {dn.status === "confirmed" ? (ar ? "مؤكد" : "Confirmed") : (ar ? "مسودة" : "Draft")}

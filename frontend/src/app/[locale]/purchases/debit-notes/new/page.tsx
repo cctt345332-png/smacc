@@ -271,7 +271,7 @@ export default function NewDebitNotePage(props: { params: Promise<{ locale: stri
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.taxable)}</td>
                     <td style={{ textAlign: "end", color: "var(--warning)", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.vatAmt)}</td>
-                    <td style={{ textAlign: "end", fontWeight: 700, color: "#65707E", verticalAlign: "top", paddingTop: 12 }}>{fmt(c.total)}</td>
+                    <td style={{ textAlign: "end", fontWeight: 700, color: "#75617F", verticalAlign: "top", paddingTop: 12 }}>{fmt(c.total)}</td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       {lines.length > 1 && <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} onClick={() => removeLine(i)}><Icon name="trash" size={14} /></button>}
                     </td>
@@ -294,7 +294,7 @@ export default function NewDebitNotePage(props: { params: Promise<{ locale: stri
             <div style={{ height: 1, background: "var(--border)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 700 }}>
               <span>{ar ? "إجمالي الإشعار" : "Debit Note Total"}</span>
-              <span style={{ color: "#65707E" }}>{fmt(totals.total)} SAR</span>
+              <span style={{ color: "#75617F" }}>{fmt(totals.total)} SAR</span>
             </div>
           </div>
         </div>

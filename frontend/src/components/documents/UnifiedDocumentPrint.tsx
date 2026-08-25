@@ -80,14 +80,14 @@ const address = (person: any) => [
 ].filter(Boolean).join("، ");
 
 const kindMeta: Record<PrintDocumentKind, { ar: string; en: string; accent: string; tax: boolean; negative?: boolean }> = {
-  tax_invoice: { ar: "فاتورة ضريبية", en: "Tax Invoice", accent: "#364152", tax: true },
-  simplified_invoice: { ar: "فاتورة ضريبية مبسطة", en: "Simplified Tax Invoice", accent: "#364152", tax: true },
+  tax_invoice: { ar: "فاتورة ضريبية", en: "Tax Invoice", accent: "#3E0865", tax: true },
+  simplified_invoice: { ar: "فاتورة ضريبية مبسطة", en: "Simplified Tax Invoice", accent: "#3E0865", tax: true },
   credit_note: { ar: "إشعار دائن / مرتجع مبيعات", en: "Credit Note / Sales Return", accent: "#B42318", tax: true, negative: true },
   debit_note: { ar: "إشعار مدين / مرتجع مشتريات", en: "Debit Note / Purchase Return", accent: "#9A3412", tax: false, negative: true },
   quotation: { ar: "عرض سعر", en: "Quotation", accent: "#155E75", tax: false },
-  sales_order: { ar: "أمر بيع", en: "Sales Order", accent: "#364152", tax: false },
-  purchase_order: { ar: "أمر شراء", en: "Purchase Order", accent: "#3B4656", tax: false },
-  purchase_bill: { ar: "فاتورة مورد", en: "Purchase Bill", accent: "#3B4656", tax: false },
+  sales_order: { ar: "أمر بيع", en: "Sales Order", accent: "#3E0865", tax: false },
+  purchase_order: { ar: "أمر شراء", en: "Purchase Order", accent: "#4C126D", tax: false },
+  purchase_bill: { ar: "فاتورة مورد", en: "Purchase Bill", accent: "#4C126D", tax: false },
   receipt: { ar: "سند قبض", en: "Receipt Voucher", accent: "#047857", tax: false },
   payment: { ar: "سند صرف", en: "Payment Voucher", accent: "#B45309", tax: false },
   expense: { ar: "سند مصروف", en: "Expense Voucher", accent: "#9F1239", tax: false },

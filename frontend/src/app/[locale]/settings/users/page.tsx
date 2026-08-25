@@ -17,8 +17,8 @@ const IcInfo   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="non
 // ─── الأدوار المتاحة ──────────────────────────────────────────────────
 const ROLES: { key: string; ar: string; en: string; color: string; bg: string; desc_ar: string; desc_en: string }[] = [
   { key: "admin",      ar: "مدير عام",        en: "Admin",       color: "#DC2626", bg: "#FEF2F2", desc_ar: "وصول كامل لكل شيء",                    desc_en: "Full access to everything" },
-  { key: "manager",    ar: "مدير",            en: "Manager",     color: "#65707E", bg: "#F5F3FF", desc_ar: "كل الوحدات بدون حذف",                  desc_en: "All modules without delete" },
-  { key: "accountant", ar: "محاسب",           en: "Accountant",  color: "#485668", bg: "#EFF6FF", desc_ar: "محاسبة، مبيعات، مشتريات، خزينة",       desc_en: "Accounting, sales, purchases, treasury" },
+  { key: "manager",    ar: "مدير",            en: "Manager",     color: "#75617F", bg: "#F5F3FF", desc_ar: "كل الوحدات بدون حذف",                  desc_en: "All modules without delete" },
+  { key: "accountant", ar: "محاسب",           en: "Accountant",  color: "#5A187E", bg: "#EFF6FF", desc_ar: "محاسبة، مبيعات، مشتريات، خزينة",       desc_en: "Accounting, sales, purchases, treasury" },
   { key: "sales",      ar: "مبيعات",          en: "Sales",       color: "#059669", bg: "#ECFDF5", desc_ar: "مبيعات وعملاء ومخزون (قراءة)",          desc_en: "Sales, customers, inventory (read)" },
   { key: "purchaser",  ar: "مشتريات",         en: "Purchaser",   color: "#D97706", bg: "#FFFBEB", desc_ar: "مشتريات وموردين ومخزون (قراءة)",        desc_en: "Purchases, vendors, inventory (read)" },
   { key: "cashier",    ar: "كاشير",           en: "Cashier",     color: "#0891B2", bg: "#ECFEFF", desc_ar: "نقطة البيع فقط",                        desc_en: "POS only" },
@@ -170,7 +170,7 @@ export default function UsersPage(props: { params: Promise<{ locale: string }> }
           <div className="card-body" style={{ padding: "14px 20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ color: "#485668" }}><IcUsers /></span>
+                <span style={{ color: "#5A187E" }}><IcUsers /></span>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{ar ? "استخدام المستخدمين" : "User Usage"}</span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: atLimit ? "#DC2626" : "var(--text-secondary)" }}>
@@ -181,7 +181,7 @@ export default function UsersPage(props: { params: Promise<{ locale: string }> }
               <div style={{
                 height: "100%",
                 width: `${Math.min((activeCount / userLimit) * 100, 100)}%`,
-                background: atLimit ? "#DC2626" : activeCount / userLimit >= 0.8 ? "#D97706" : "#485668",
+                background: atLimit ? "#DC2626" : activeCount / userLimit >= 0.8 ? "#D97706" : "#5A187E",
                 borderRadius: 4,
                 transition: "width 0.4s ease",
               }} />

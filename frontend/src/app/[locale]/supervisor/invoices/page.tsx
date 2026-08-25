@@ -9,7 +9,7 @@ const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: 
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
-  approved:  { ar: "موافق عليها",      color: "#485668", bg: "#EFF6FF" },
+  approved:  { ar: "موافق عليها",      color: "#5A187E", bg: "#EFF6FF" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
   confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
   paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
@@ -79,7 +79,7 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
                 style={{ background: "var(--surface)", borderRadius: 14, padding: "14px 16px",
                   border: "1px solid var(--border)", cursor: "pointer" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#65707E" }}>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#75617F" }}>
                     {inv.invoice_number}
                   </span>
                   <span style={{ fontWeight: 800, fontSize: 14 }}>{fmt(inv.total)} SAR</span>
@@ -115,7 +115,7 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
             <div style={{ width: 40, height: 4, background: "var(--border)", borderRadius: 2, margin: "0 auto 16px" }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
               <div>
-                <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#65707E" }}>
+                <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#75617F" }}>
                   {selected.invoice_number}
                 </div>
                 <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{selected.buyer_name_ar}</div>
@@ -123,7 +123,7 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => window.open(`/${locale}/sales/invoices/${selected.id}?print=1`, "_blank")}
                   style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #BFDBFE",
-                    background: "#EFF6FF", color: "#485668", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                    background: "#EFF6FF", color: "#5A187E", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
                   PDF
                 </button>
                 <button onClick={() => setSelected(null)}
@@ -133,7 +133,7 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
               {[
-                { label: ar ? "الإجمالي" : "Total", value: fmt(selected.total) + " SAR", color: "#65707E" },
+                { label: ar ? "الإجمالي" : "Total", value: fmt(selected.total) + " SAR", color: "#75617F" },
                 { label: ar ? "المدفوع" : "Paid",   value: fmt(selected.paid_amount) + " SAR", color: "#059669" },
                 { label: ar ? "المتبقي" : "Due",    value: fmt(Math.max(0, Number(selected.total) - Number(selected.paid_amount))) + " SAR", color: "#DC2626" },
                 { label: ar ? "التاريخ" : "Date",   value: fmtDate(selected.issue_date), color: "var(--text-primary)" },

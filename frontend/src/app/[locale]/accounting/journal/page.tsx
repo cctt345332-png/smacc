@@ -137,7 +137,7 @@ export default function JournalPage(props: { params: Promise<{ locale: string }>
                       {e.description_ar}
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{e.reference || "—"}</td>
-                    <td style={{ textAlign: "end", fontWeight: 600, color: "#485668" }}>
+                    <td style={{ textAlign: "end", fontWeight: 600, color: "#5A187E" }}>
                       {Number(e.total_debit).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 600, color: "#059669" }}>

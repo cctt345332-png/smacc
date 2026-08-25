@@ -247,7 +247,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
               {ar ? "حفظ كمسودة" : "Save Draft"}
             </button>
             <button onClick={handleSubmitForReview} disabled={saving}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#364152", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#3E0865", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               {saving ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال للمراجعة" : "Send for Review")}
             </button>
@@ -264,7 +264,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
       )}
 
       {/* بانر workflow */}
-      <div style={{ background: "#EFF2F5", border: "1px solid #9BBBAD", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#1E40AF" }}>
+      <div style={{ background: "#F4EFF7", border: "1px solid #9BBBAD", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#1E40AF" }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>
           {ar
@@ -295,7 +295,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
                 ))}
               </select>
               <Link href={`${base}/reps/me/customers?action=new`}
-                style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", fontSize: 12, color: "#364152", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
+                style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", fontSize: 12, color: "#3E0865", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                 + {ar ? "عميل جديد" : "New"}
               </Link>
             </div>
@@ -311,8 +311,8 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
                 <button key={type} type="button" onClick={() => handlePaymentTypeChange(type)}
                   style={{
                     flex: 1, padding: "8px 12px", borderRadius: 8, border: "2px solid",
-                    borderColor: form.payment_type === type ? (type === "cash" ? "#364152" : "#D97706") : "var(--border)",
-                    background: form.payment_type === type ? (type === "cash" ? "#364152" : "#D97706") : "var(--surface)",
+                    borderColor: form.payment_type === type ? (type === "cash" ? "#3E0865" : "#D97706") : "var(--border)",
+                    background: form.payment_type === type ? (type === "cash" ? "#3E0865" : "#D97706") : "var(--surface)",
                     color: form.payment_type === type ? "white" : "var(--text-primary)",
                     fontWeight: 700, fontSize: 13, cursor: "pointer",
                   }}>
@@ -383,10 +383,10 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
           ))}
           <div style={{ borderTop: "2px solid var(--border)", paddingTop: 10, display: "flex", justifyContent: "space-between" }}>
             <span style={{ fontWeight: 800, fontSize: 15 }}>{ar ? "الإجمالي" : "Total"}</span>
-            <span style={{ fontWeight: 800, fontSize: 18, color: "#364152" }}>{fmt(totals.total)} SAR</span>
+            <span style={{ fontWeight: 800, fontSize: 18, color: "#3E0865" }}>{fmt(totals.total)} SAR</span>
           </div>
           <button onClick={handleSubmitForReview} disabled={saving}
-            style={{ marginTop: 8, width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "#364152", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+            style={{ marginTop: 8, width: "100%", padding: "12px", borderRadius: 10, border: "none", background: "#3E0865", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
             {saving ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال للمراجعة" : "Send for Review")}
           </button>
           <button onClick={handleSaveDraft} disabled={saving}
@@ -401,7 +401,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
         <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: 700, fontSize: 14 }}>{ar ? "أسطر الفاتورة" : "Invoice Lines"}</span>
           <button onClick={addLine}
-            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#364152" }}>
+            style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, color: "#3E0865" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             {ar ? "إضافة سطر" : "Add Line"}
           </button>
@@ -459,7 +459,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
                         value={line.vat_rate} min="0" max="100"
                         onChange={e => setLine(i, "vat_rate", e.target.value)} />
                     </td>
-                    <td style={{ padding: "10px 16px", textAlign: "end", fontWeight: 700, color: "#364152", verticalAlign: "top", paddingTop: 14 }}>
+                    <td style={{ padding: "10px 16px", textAlign: "end", fontWeight: 700, color: "#3E0865", verticalAlign: "top", paddingTop: 14 }}>
                       {fmt(c.total)} SAR
                     </td>
                     <td style={{ padding: "10px 8px", verticalAlign: "top" }}>

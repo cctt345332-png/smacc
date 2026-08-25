@@ -108,7 +108,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
 
       <div className="grid-4" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#485668" }}><IcDollar /></div>
+          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#5A187E" }}><IcDollar /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "إجمالي الرواتب" : "Total Payroll"}</div>
             <div className="stat-value">{totalNet.toLocaleString()}</div>
@@ -116,7 +116,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#F5F3FF", color: "#65707E" }}><IcUsers /></div>
+          <div className="stat-icon" style={{ background: "#F5F3FF", color: "#75617F" }}><IcUsers /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "عدد الموظفين" : "Employees"}</div>
             <div className="stat-value">{records.length}</div>
@@ -169,7 +169,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                   <tr key={rec.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #485668, #65707E)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #5A187E, #75617F)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
                           {rec.employee?.full_name_ar?.charAt(0) || "?"}
                         </div>
                         <div>

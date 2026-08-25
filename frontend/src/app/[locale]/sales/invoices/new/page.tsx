@@ -317,7 +317,7 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
           <div className="card" style={{ borderColor: "#DBEAFE", background: "#EFF6FF" }}>
             <div className="card-body" style={{ padding: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <Icon name="tax" size={18} color="#485668" />
+                <Icon name="tax" size={18} color="#5A187E" />
                 <span style={{ fontWeight: 700, fontSize: 14, color: "#1E40AF" }}>
                   {ar ? "فاتورة ضريبية — ZATCA" : "ZATCA Tax Invoice"}
                 </span>

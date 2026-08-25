@@ -56,7 +56,7 @@ export default function ReceiptsPage(props: { params: Promise<{ locale: string }
         <div className="grid-3" style={{ marginBottom: 20 }}>
           {[
             { label: ar ? "إجمالي المقبوضات" : "Total Receipts", value: summary.total_receipts, color: "#059669" },
-            { label: ar ? "عدد السندات" : "Count", value: items.length, color: "#485668" },
+            { label: ar ? "عدد السندات" : "Count", value: items.length, color: "#5A187E" },
             { label: ar ? "مسودة" : "Draft", value: items.filter(i => i.status === "draft").length, color: "#D97706" },
           ].map(s => (
             <div key={s.label} className="stat-card">

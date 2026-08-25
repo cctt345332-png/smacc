@@ -99,7 +99,7 @@ export default function TransferDetailPage(props: { params: Promise<{ locale: st
             <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
               {company?.logo_data && <img src={company.logo_data} alt="Logo" style={{ height: 48, objectFit: "contain", borderRadius: 6 }} />}
               <div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#485668" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#5A187E" }}>
                   {ar ? "تحويل بنكي" : "Bank Transfer — تحويل بنكي"}
                 </div>
                 <span className={`badge ${status.badge}`} style={{ marginTop: 4 }}>{status.ar}</span>
@@ -126,8 +126,8 @@ export default function TransferDetailPage(props: { params: Promise<{ locale: st
         <div style={{ padding: "28px", display: "flex", justifyContent: "center" }}>
           <div style={{ textAlign: "center", background: "#EFF6FF", borderRadius: 12, padding: "24px 48px", border: "2px solid #BFDBFE" }}>
             <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>{ar ? "مبلغ التحويل" : "Transfer Amount"}</div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "#485668" }}>{fmt(voucher.amount)}</div>
-            <div style={{ fontSize: 14, color: "#485668", marginTop: 4 }}>SAR</div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#5A187E" }}>{fmt(voucher.amount)}</div>
+            <div style={{ fontSize: 14, color: "#5A187E", marginTop: 4 }}>SAR</div>
           </div>
         </div>
 

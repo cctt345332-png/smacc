@@ -31,8 +31,8 @@ export default function ContactPage() {
   };
 
   const contactInfo = [
-    { icon: <IcMail />,  color: "#364152", bg: "#EFF2F5", label: ar ? "البريد الإلكتروني" : "Email", value: PUBLIC_CONTACT.email, href: publicContactLinks.email },
-    { icon: <IcPhone />, color: "#65707E", bg: "#EAF5ED", label: ar ? "الهاتف / واتساب" : "Phone / WhatsApp", value: PUBLIC_CONTACT.phone, href: publicContactLinks.phone },
+    { icon: <IcMail />,  color: "#3E0865", bg: "#F4EFF7", label: ar ? "البريد الإلكتروني" : "Email", value: PUBLIC_CONTACT.email, href: publicContactLinks.email },
+    { icon: <IcPhone />, color: "#75617F", bg: "#EAF5ED", label: ar ? "الهاتف / واتساب" : "Phone / WhatsApp", value: PUBLIC_CONTACT.phone, href: publicContactLinks.phone },
     { icon: <IcClock />, color: "#647E6C", bg: "#EEF3EE", label: ar ? "العنوان" : "Address", value: ar ? PUBLIC_CONTACT.addressAr : PUBLIC_CONTACT.addressEn },
     { icon: <IcClock />, color: "#D97706", bg: "#FFFBEB", label: ar ? "ساعات العمل"      : "Working Hours", value: ar ? "الأحد — الخميس، 9ص — 6م" : "Sun — Thu, 9AM — 6PM" },
   ];
@@ -71,7 +71,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600, marginBottom: 2 }}>{c.label}</div>
-                    {c.href ? <a href={c.href} style={{ fontSize: 14, fontWeight: 700, color: "#364152" }}>{c.value}</a> : <div style={{ fontSize: 14, fontWeight: 700 }}>{c.value}</div>}
+                    {c.href ? <a href={c.href} style={{ fontSize: 14, fontWeight: 700, color: "#3E0865" }}>{c.value}</a> : <div style={{ fontSize: 14, fontWeight: 700 }}>{c.value}</div>}
                   </div>
                 </div>
               ))}
@@ -151,7 +151,7 @@ export default function ContactPage() {
                     style={{ resize: "vertical" }} />
                 </div>
                 <button type="submit" disabled={sending}
-                  style={{ padding: "12px", borderRadius: 2, background: "#364152", color: "white", fontWeight: 700, fontSize: 14, border: "1px solid #084535", cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.7 : 1 }}>
+                  style={{ padding: "12px", borderRadius: 2, background: "#3E0865", color: "white", fontWeight: 700, fontSize: 14, border: "1px solid #084535", cursor: sending ? "not-allowed" : "pointer", opacity: sending ? 0.7 : 1 }}>
                   {sending ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال الرسالة" : "Send Message")}
                 </button>
               </form>

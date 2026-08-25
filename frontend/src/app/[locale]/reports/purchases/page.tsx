@@ -109,8 +109,8 @@ export default function PurchasesReportPage(props: { params: Promise<{ locale: s
           {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr) repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
             {[
-              { label: ar ? "عدد الفواتير" : "Bill Count", value: bills.length, color: "#485668", isMoney: false },
-              { label: ar ? "المشتريات قبل الضريبة" : "Net Purchases", value: totalNet, color: "#65707E", isMoney: true },
+              { label: ar ? "عدد الفواتير" : "Bill Count", value: bills.length, color: "#5A187E", isMoney: false },
+              { label: ar ? "المشتريات قبل الضريبة" : "Net Purchases", value: totalNet, color: "#75617F", isMoney: true },
               { label: ar ? "ضريبة المدخلات" : "Input VAT", value: totalVAT, color: "#D97706", isMoney: true },
               { label: ar ? "إجمالي المشتريات" : "Gross Purchases", value: totalGross, color: "#059669", isMoney: true },
               { label: ar ? "المدفوع للموردين" : "Paid to Vendors", value: totalPaid, color: "#059669", isMoney: true },

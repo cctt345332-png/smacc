@@ -75,7 +75,7 @@ export default function CustomerDetailPage(props: { params: Promise<{ locale: st
       {/* Stats */}
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: `${fmt(totalInvoiced)} SAR`, color: "#485668", icon: <Icon name="invoice" size={20} /> },
+          { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: `${fmt(totalInvoiced)} SAR`, color: "#5A187E", icon: <Icon name="invoice" size={20} /> },
           { label: ar ? "المحصّل" : "Total Paid", value: `${fmt(totalPaid)} SAR`, color: "#059669", icon: <Icon name="wallet" size={20} /> },
           { label: ar ? "المستحق" : "Outstanding", value: `${fmt(outstanding)} SAR`, color: outstanding > 0 ? "#DC2626" : "#059669", icon: <Icon name="money" size={20} /> },
         ].map(s => (

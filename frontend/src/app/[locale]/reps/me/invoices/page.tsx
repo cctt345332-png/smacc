@@ -21,7 +21,7 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
     <button onClick={handleDownload}
       style={{
         width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #9BBBAD",
-        background: "#EFF2F5", color: "#364152", fontWeight: 700, fontSize: 14,
+        background: "#F4EFF7", color: "#3E0865", fontWeight: 700, fontSize: 14,
         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +36,7 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   draft:     { ar: "مسودة",              color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة",   color: "#D97706", bg: "#FEF3C7" },
-  approved:  { ar: "موافق عليها",        color: "#364152", bg: "#EFF2F5" },
+  approved:  { ar: "موافق عليها",        color: "#3E0865", bg: "#F4EFF7" },
   rejected:  { ar: "مرفوضة",             color: "#DC2626", bg: "#FEF2F2" },
   confirmed: { ar: "مؤكدة",              color: "#059669", bg: "#F0FDF4" },
   paid:      { ar: "مدفوعة",             color: "#059669", bg: "#F0FDF4" },
@@ -79,7 +79,7 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
         <div style={{ padding: "0 20px 16px", borderBottom: "1px solid var(--border)",
           display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#364152" }}>
+            <div style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#3E0865" }}>
               {inv.invoice_number}
             </div>
             <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>{data.buyer_name_ar}</div>
@@ -148,7 +148,7 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
                           {line.discount_pct > 0 && ` — خصم ${line.discount_pct}%`}
                         </div>
                       </div>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: "#364152", flexShrink: 0, marginInlineStart: 12 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: "#3E0865", flexShrink: 0, marginInlineStart: 12 }}>
                         {fmt(line.total || (line.quantity * line.unit_price))} SAR
                       </div>
                     </div>
@@ -173,7 +173,7 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 4,
                 display: "flex", justifyContent: "space-between" }}>
                 <span style={{ fontWeight: 800, fontSize: 15 }}>{ar ? "الإجمالي" : "Total"}</span>
-                <span style={{ fontWeight: 800, fontSize: 18, color: "#364152" }}>{fmt(data.total)} SAR</span>
+                <span style={{ fontWeight: 800, fontSize: 18, color: "#3E0865" }}>{fmt(data.total)} SAR</span>
               </div>
               {Number(data.paid_amount || 0) > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
@@ -254,7 +254,7 @@ export default function RepInvoicesPage(props: { params: Promise<{ locale: strin
           </p>
         </div>
         <Link href={`/${locale}/reps/me/invoices/new`}
-          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#364152",
+          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#3E0865",
             color: "white", fontWeight: 700, fontSize: 13, textDecoration: "none",
             display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -275,7 +275,7 @@ export default function RepInvoicesPage(props: { params: Promise<{ locale: strin
             {ar ? "لا توجد فواتير بعد" : "No invoices yet"}
           </div>
           <Link href={`/${locale}/reps/me/invoices/new`}
-            style={{ padding: "10px 20px", borderRadius: 10, background: "#364152",
+            style={{ padding: "10px 20px", borderRadius: 10, background: "#3E0865",
               color: "white", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
             + {ar ? "إنشاء فاتورة" : "Create Invoice"}
           </Link>
@@ -311,7 +311,7 @@ export default function RepInvoicesPage(props: { params: Promise<{ locale: strin
                 {/* البيانات */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#364152" }}>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 13, color: "#3E0865" }}>
                       {inv.invoice_number}
                     </span>
                     <span style={{ fontWeight: 800, fontSize: 14 }}>{fmt(inv.total)} SAR</span>
@@ -336,7 +336,7 @@ export default function RepInvoicesPage(props: { params: Promise<{ locale: strin
                 {/* إجراءات دورة الفاتورة */}
                 <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                   {["draft", "rejected"].includes(inv.status) && (
-                    <Link href={`/${locale}/reps/me/invoices/new?draft=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #9BBBAD", background: "#EFF2F5", color: "#364152", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "تعديل" : "Edit"}</Link>
+                    <Link href={`/${locale}/reps/me/invoices/new?draft=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #9BBBAD", background: "#F4EFF7", color: "#3E0865", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "تعديل" : "Edit"}</Link>
                   )}
                   {inv.status === "draft" && (
                     <button onClick={() => handleDeleteDraft(inv)} style={{ padding: "5px 8px", border: "1px solid #FECACA", background: "#FEF2F2", color: "#B42318", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>

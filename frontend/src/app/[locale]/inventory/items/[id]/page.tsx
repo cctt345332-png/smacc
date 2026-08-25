@@ -179,8 +179,8 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {[
                   { label: ar ? "في المخزون" : "In Stock", value: inStock.length, color: "#059669", suffix: "" },
-                  { label: ar ? "مباع" : "Sold", value: sold.length, color: "#485668", suffix: "" },
-                  { label: ar ? "قيمة المخزون (تكلفة)" : "Stock Value (Cost)", value: stockValue, color: "#65707E", suffix: " SAR" },
+                  { label: ar ? "مباع" : "Sold", value: sold.length, color: "#5A187E", suffix: "" },
+                  { label: ar ? "قيمة المخزون (تكلفة)" : "Stock Value (Cost)", value: stockValue, color: "#75617F", suffix: " SAR" },
                   { label: ar ? "الربح المحقق" : "Realized Profit", value: realizedProfit, color: realizedProfit >= 0 ? "#059669" : "#DC2626", suffix: " SAR" },
                 ].map(s => (
                   <div key={s.label} style={{ background: "#F8FAFC", borderRadius: 8, padding: "12px 14px" }}>
@@ -196,7 +196,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
                 {[
                   { label: ar ? "الكمية المتاحة" : "On Hand", value: fmt(item.quantity_on_hand), color: "#059669" },
                   { label: ar ? "الكمية المحجوزة" : "Reserved", value: fmt(item.quantity_reserved), color: "#D97706" },
-                  { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(Number(item.quantity_on_hand) * Number(item.cost_price))} SAR`, color: "#65707E" },
+                  { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(Number(item.quantity_on_hand) * Number(item.cost_price))} SAR`, color: "#75617F" },
                   { label: ar ? "نقطة إعادة الطلب" : "Reorder Point", value: fmt(item.reorder_point), color: Number(item.quantity_on_hand) <= Number(item.reorder_point) ? "#DC2626" : "#059669" },
                 ].map(s => (
                   <div key={s.label} style={{ background: "#F8FAFC", borderRadius: 8, padding: "12px 14px" }}>

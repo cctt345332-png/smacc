@@ -22,10 +22,10 @@ function AILogo({ size = 32 }: { size?: number }) {
         </mask>
         <g mask="url(#s_mask)">
           <path fill="#fff" d="M200 0H0v200h200V0z"/>
-          <path fill="#485668" fillOpacity="0.33" d="M200 0H0v200h200V0z"/>
+          <path fill="#5A187E" fillOpacity="0.33" d="M200 0H0v200h200V0z"/>
           <g filter="url(#s_blur)" style={{ animation: "ai-spin 8s linear infinite", transformOrigin: "center", transformBox: "fill-box" as const }}>
-            <path fill="#485668" d="M110 32H18v68h92V32z"/>
-            <path fill="#364152" d="M188-24H15v98h173v-98z"/>
+            <path fill="#5A187E" d="M110 32H18v68h92V32z"/>
+            <path fill="#3E0865" d="M188-24H15v98h173v-98z"/>
             <path fill="#3B82F6" d="M175 70H5v156h170V70z"/>
             <path fill="#60A5FA" d="M230 51H100v103h130V51z"/>
           </g>

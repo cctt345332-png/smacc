@@ -176,12 +176,12 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
                   <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, display: "flex", gap: 8 }}>
                     {s.item_sku && <span>{s.item_sku}</span>}
                     {isSerial
-                      ? <span style={{ color: "#65707E", fontWeight: 600 }}>{ar ? "سيريال" : "Serial"}</span>
+                      ? <span style={{ color: "#75617F", fontWeight: 600 }}>{ar ? "سيريال" : "Serial"}</span>
                       : <span style={{ color: qty > 0 ? "#059669" : "#DC2626" }}>{ar ? "متاح:" : "Avail:"} {qty}</span>
                     }
                   </div>
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#485668" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#5A187E" }}>
                   {Number(s.sale_price || 0).toFixed(2)} SAR
                 </div>
               </div>
@@ -205,7 +205,7 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
             title={ar ? "مسح باركود" : "Scan barcode"}
             style={{
               width: 40, height: 40, borderRadius: 8, border: "1px solid var(--border)",
-              background: "#EFF6FF", color: "#485668", cursor: "pointer",
+              background: "#EFF6FF", color: "#5A187E", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
             }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -243,7 +243,7 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
         borderRadius: 8, padding: "8px 12px",
       }}>
         <div style={{ width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-          background: isSerial ? "#65707E" : "#059669",
+          background: isSerial ? "#75617F" : "#059669",
           display: "flex", alignItems: "center", justifyContent: "center" }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
             {isSerial
@@ -260,7 +260,7 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
             <div style={{ fontSize: 11, color: "#059669" }}>{ar ? "متاح:" : "Avail:"} {value.available_qty}</div>
           )}
           {isSerial && (
-            <div style={{ fontSize: 11, color: "#65707E" }}>
+            <div style={{ fontSize: 11, color: "#75617F" }}>
               {value.serial_ids?.length
                 ? `${value.serial_ids.length} ${ar ? "سيريال محدد" : "serials selected"}`
                 : (ar ? "اختر السيريالات..." : "Select serials...")}
@@ -294,7 +294,7 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
             </div>
           ) : (
             <button type="button" onClick={() => setShowSerialPicker(true)}
-              style={{ width: "100%", padding: "10px", borderRadius: 8, border: "2px dashed #C4B5FD", background: "#F5F3FF", color: "#65707E", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+              style={{ width: "100%", padding: "10px", borderRadius: 8, border: "2px dashed #C4B5FD", background: "#F5F3FF", color: "#75617F", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
               {ar ? "تحديد السيريالات" : "Select Serials"}
             </button>
           )}
@@ -342,7 +342,7 @@ export default function RepStockItemPicker({ locale, value, onChange, stockItems
             style={{
               marginTop: 4, width: "100%", padding: "9px", borderRadius: 8,
               border: "1px dashed #C4B5FD", background: "#FAFAFF",
-              color: "#65707E", fontWeight: 600, fontSize: 12, cursor: "pointer",
+              color: "#75617F", fontWeight: 600, fontSize: 12, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
             }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

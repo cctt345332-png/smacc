@@ -85,8 +85,8 @@ export default function AttendancePage(props: { params: Promise<{ locale: string
           <div className="stat-content"><div className="stat-label">{ar ? "متأخر" : "Late"}</div><div className="stat-value" style={{ color: "#D97706" }}>{late}</div></div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#DBEAFE", color: "#485668" }}><IcCalendar /></div>
-          <div className="stat-content"><div className="stat-label">{ar ? "إجازة" : "On Leave"}</div><div className="stat-value" style={{ color: "#485668" }}>{onLeave}</div></div>
+          <div className="stat-icon" style={{ background: "#DBEAFE", color: "#5A187E" }}><IcCalendar /></div>
+          <div className="stat-content"><div className="stat-label">{ar ? "إجازة" : "On Leave"}</div><div className="stat-value" style={{ color: "#5A187E" }}>{onLeave}</div></div>
         </div>
       </div>
 
@@ -115,7 +115,7 @@ export default function AttendancePage(props: { params: Promise<{ locale: string
                     <tr key={rec.id}>
                       <td>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #485668, #65707E)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #5A187E, #75617F)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
                             {rec.employee?.full_name_ar?.charAt(0) || "?"}
                           </div>
                           <span style={{ fontWeight: 500 }}>{rec.employee?.full_name_ar || rec.employee_id}</span>

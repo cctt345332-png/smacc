@@ -83,7 +83,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
       <div className="grid-4" style={{ marginBottom: 20 }}>
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#EFF6FF" }}>
-            <Icon name="invoice" size={22} color="#485668" />
+            <Icon name="invoice" size={22} color="#5A187E" />
           </div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "إجمالي الفواتير" : "Total Invoiced"}</div>

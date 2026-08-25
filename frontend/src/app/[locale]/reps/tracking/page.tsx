@@ -3,8 +3,8 @@ import { useEffect, useRef, useState, useCallback, use } from "react";
 import Link from "next/link";
 import { getAllRepsLiveLocations, getReps, getSupervisors, getRepLocationHistory } from "@/lib/reps";
 
-const PIN_COLORS = ["#485668","#059669","#DC2626","#D97706","#65707E","#0891B2","#BE185D","#15803D","#B45309","#4338CA"];
-const SUPERVISOR_COLOR = "#3B4656";
+const PIN_COLORS = ["#5A187E","#059669","#DC2626","#D97706","#75617F","#0891B2","#BE185D","#15803D","#B45309","#4338CA"];
+const SUPERVISOR_COLOR = "#4C126D";
 const fmtTime=(iso:string)=>{try{return new Date(iso.endsWith("Z")?iso:iso+"Z").toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
 const fmtDateTime=(iso:string)=>{try{return new Date(iso.endsWith("Z")?iso:iso+"Z").toLocaleString("ar-SA",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
 const fmtDur=(m:number)=>{const h=Math.floor(m/60);return h>0?`${h}h ${m%60}m`:`${m}m`;};
@@ -92,7 +92,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
       if(seg.length<1)return;
       const isFocus=focusIdx===i;
       if(trip.type==="move"&&seg.length>=2){
-        const line=L.polyline(seg.map(p=>[p.latitude,p.longitude]),{color:"#485668",weight:isFocus?6:3.5,opacity:isFocus?1:0.75}).addTo(map);
+        const line=L.polyline(seg.map(p=>[p.latitude,p.longitude]),{color:"#5A187E",weight:isFocus?6:3.5,opacity:isFocus?1:0.75}).addTo(map);
         routeLayersRef.current.push(line);
       } else if(trip.type==="stop"){
         const icon=L.divIcon({html:`<div style="background:${isFocus?"#D97706":"#F59E0B"};color:white;border-radius:50%;width:${isFocus?26:20}px;height:${isFocus?26:20}px;display:flex;align-items:center;justify-content:center;font-size:${isFocus?12:10}px;font-weight:900;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4)">P</div>`,iconSize:[isFocus?26:20,isFocus?26:20],iconAnchor:[isFocus?13:10,isFocus?13:10],className:""});
@@ -196,7 +196,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
         ${spd!=null&&spd>0?`<div style="background:${color};color:white;font-size:8px;font-weight:800;padding:1px 5px;border-radius:8px;margin-bottom:1px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.3)">${spd} km/h</div>`:""}
         <div style="position:relative;width:30px;height:30px;overflow:hidden;flex-shrink:0">
           <img src="/car-icon.png" style="width:30px;height:30px;object-fit:contain;display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4)) hue-rotate(${isSup?240:loc.rep_id.charCodeAt(0)%360}deg) saturate(1.8)"/>
-          ${isSup?`<div style="position:absolute;top:-4px;right:-4px;background:#3B4656;color:white;border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;border:1px solid white">★</div>`:""}
+          ${isSup?`<div style="position:absolute;top:-4px;right:-4px;background:#4C126D;color:white;border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:900;border:1px solid white">★</div>`:""}
         </div></div>`;
       const iconH=spd!=null&&spd>0?46:30;
       const icon=L.divIcon({html:iconHtml,iconSize:[30,iconH],iconAnchor:[15,iconH],className:""});
@@ -215,8 +215,8 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
   const totalMove=trips.filter(t=>t.type==="move").reduce((a,t)=>a+t.dur,0);
   const totalStop=trips.filter(t=>t.type==="stop").reduce((a,t)=>a+t.dur,0);
   const maxSpd=trips.reduce((a,t)=>Math.max(a,t.maxSpd??0),0);
-  const panelColor=quickCard?(quickCard.person_type==="supervisor"?SUPERVISOR_COLOR:PIN_COLORS[quickCard.rep_id.charCodeAt(0)%PIN_COLORS.length]):"#485668";
-  const tripColor=tripPanel?(tripPanel.person_type==="supervisor"?SUPERVISOR_COLOR:PIN_COLORS[tripPanel.rep_id.charCodeAt(0)%PIN_COLORS.length]):"#485668";
+  const panelColor=quickCard?(quickCard.person_type==="supervisor"?SUPERVISOR_COLOR:PIN_COLORS[quickCard.rep_id.charCodeAt(0)%PIN_COLORS.length]):"#5A187E";
+  const tripColor=tripPanel?(tripPanel.person_type==="supervisor"?SUPERVISOR_COLOR:PIN_COLORS[tripPanel.rep_id.charCodeAt(0)%PIN_COLORS.length]):"#5A187E";
 
   return(<>
     <div className="page-header">
@@ -315,7 +315,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
             {!tripLoading&&trips.length===0&&<div style={{textAlign:"center",padding:24,color:"var(--text-muted)",fontSize:12}}>{ar?"لا توجد بيانات":"No data"}</div>}
             {!tripLoading&&trips.length>0&&(<>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:12}}>
-                <div style={{background:"#DBEAFE",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#364152"}}>{fmtDur(totalMove)}</div><div style={{fontSize:9,color:"#364152"}}>{ar?"حركة":"Move"}</div></div>
+                <div style={{background:"#DBEAFE",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#3E0865"}}>{fmtDur(totalMove)}</div><div style={{fontSize:9,color:"#3E0865"}}>{ar?"حركة":"Move"}</div></div>
                 <div style={{background:"#FEF3C7",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#B45309"}}>{fmtDur(totalStop)}</div><div style={{fontSize:9,color:"#B45309"}}>{ar?"توقف":"Stop"}</div></div>
                 <div style={{background:"#D1FAE5",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#059669"}}>{maxSpd>0?maxSpd:"-"}</div><div style={{fontSize:9,color:"#059669"}}>Max km/h</div></div>
               </div>
@@ -324,11 +324,11 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
                   const isSel=selectedTripIdx===i;
                   return(
                     <div key={i} onClick={()=>setSelectedTripIdx(isSel?null:i)}
-                      style={{padding:"8px 10px",background:isSel?(t.type==="move"?"#EFF6FF":"#FFFBEB"):"var(--bg)",borderRadius:10,borderLeft:`3px solid ${t.type==="move"?"#485668":"#D97706"}`,display:"flex",gap:8,cursor:"pointer",transition:"all .15s",boxShadow:isSel?"0 2px 8px rgba(0,0,0,.1)":"none"}}>
+                      style={{padding:"8px 10px",background:isSel?(t.type==="move"?"#EFF6FF":"#FFFBEB"):"var(--bg)",borderRadius:10,borderLeft:`3px solid ${t.type==="move"?"#5A187E":"#D97706"}`,display:"flex",gap:8,cursor:"pointer",transition:"all .15s",boxShadow:isSel?"0 2px 8px rgba(0,0,0,.1)":"none"}}>
                       <span style={{fontSize:15}}>{t.type==="move"?"🚗":"⏸"}</span>
                       <div style={{flex:1}}>
                         <div style={{display:"flex",justifyContent:"space-between"}}>
-                          <span style={{fontWeight:700,fontSize:11,color:t.type==="move"?"#485668":"#D97706"}}>{t.type==="move"?(ar?"تحرك":"Move"):(ar?"توقف":"Stop")}</span>
+                          <span style={{fontWeight:700,fontSize:11,color:t.type==="move"?"#5A187E":"#D97706"}}>{t.type==="move"?(ar?"تحرك":"Move"):(ar?"توقف":"Stop")}</span>
                           <span style={{fontWeight:700,fontSize:11}}>{fmtDur(t.dur)}</span>
                         </div>
                         <div style={{fontSize:10,color:"var(--text-muted)"}}>{fmtTime(t.start)} ← {fmtTime(t.end)}</div>

@@ -6,8 +6,8 @@ import { getSessions, openSession, getTerminals } from "@/lib/pos";
 import { Icon } from "@/components/ui/Icons";
 
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  mobile_phones: { label: "جوالات",    icon: "mobile",       color: "#485668", bg: "#EFF6FF" },
-  spare_parts:   { label: "قطع غيار",  icon: "spareParts",   color: "#65707E", bg: "#F5F3FF" },
+  mobile_phones: { label: "جوالات",    icon: "mobile",       color: "#5A187E", bg: "#EFF6FF" },
+  spare_parts:   { label: "قطع غيار",  icon: "spareParts",   color: "#75617F", bg: "#F5F3FF" },
   pharmacy:      { label: "صيدلية",    icon: "pharmacy",     color: "#059669", bg: "#ECFDF5" },
   grocery:       { label: "بقالة",     icon: "grocery",      color: "#D97706", bg: "#FFFBEB" },
   spices:        { label: "عطارة",     icon: "spices",       color: "#B45309", bg: "#FEF3C7" },
@@ -123,7 +123,7 @@ export default function POSSessionsPage() {
             <div style={{
               width: 56, height: 56, borderRadius: 14,
               background: "#EFF6FF", display: "flex", alignItems: "center",
-              justifyContent: "center", color: "#485668", margin: "0 auto 12px",
+              justifyContent: "center", color: "#5A187E", margin: "0 auto 12px",
             }}>
               <Icon name="session" size={28} />
             </div>
