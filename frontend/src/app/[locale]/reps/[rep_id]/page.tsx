@@ -310,10 +310,10 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                     {submittedInvoices.map((inv: any) => (
                       <tr key={inv.id}>
                         <td>
-                          <button onClick={() => setSelectedInvoice(inv)}
-                            style={{ fontWeight: 600, color: "var(--primary)", fontFamily: "monospace", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                          <Link href={`/${locale}/sales/invoices/${inv.id}`}
+                            style={{ fontWeight: 600, color: "var(--primary)", fontFamily: "monospace", textDecoration: "underline" }}>
                             {inv.invoice_number}
-                          </button>
+                          </Link>
                         </td>
                         <td>{inv.buyer_name_ar}</td>
                         <td>
@@ -328,7 +328,9 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                         <td style={{ textAlign: "end", fontWeight: 700 }}>{fmt(inv.total)} SAR</td>
                         <td>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setSelectedInvoice(inv)} style={{ fontSize: 12 }}>👁</button>
+                            <Link href={`/${locale}/sales/invoices/${inv.id}`} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>
+                              {ar ? "عرض" : "View"}
+                            </Link>
                             <button className="btn btn-primary btn-sm" disabled={actionLoading === inv.id} onClick={() => doApprove(inv.id)}>
                               {actionLoading === inv.id ? "..." : (ar ? "موافقة" : "Approve")}
                             </button>
@@ -373,8 +375,12 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                     const st = STATUS[inv.status] || STATUS.draft;
                     const remaining = Number(inv.total || 0) - Number(inv.paid_amount || 0);
                     return (
-                      <tr key={inv.id} style={{ cursor: "pointer" }} onClick={() => setSelectedInvoice(inv)}>
-                        <td style={{ fontWeight: 600, color: "var(--primary)", fontFamily: "monospace" }}>{inv.invoice_number}</td>
+                      <tr key={inv.id}>
+                        <td style={{ fontWeight: 600, fontFamily: "monospace" }}>
+                          <Link href={`/${locale}/sales/invoices/${inv.id}`} style={{ color: "var(--primary)", textDecoration: "underline" }}>
+                            {inv.invoice_number}
+                          </Link>
+                        </td>
                         <td>{inv.buyer_name_ar}</td>
                         <td>
                           <span style={{ background: st.bg, color: st.color, padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{st.ar}</span>
@@ -389,9 +395,9 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                           {remaining > 0.01 ? fmt(remaining) : "0.00"} SAR
                         </td>
                         <td>
-                          <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); setSelectedInvoice(inv); }} style={{ fontSize: 13 }}>
-                            👁 {ar ? "عرض" : "View"}
-                          </button>
+                          <Link href={`/${locale}/sales/invoices/${inv.id}`} className="btn btn-ghost btn-sm" style={{ fontSize: 13 }}>
+                            {ar ? "عرض الفاتورة" : "View Invoice"}
+                          </Link>
                         </td>
                       </tr>
                     );
