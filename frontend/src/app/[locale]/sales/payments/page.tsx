@@ -104,8 +104,8 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
           { label: ar ? "إجمالي المقبوض" : "Total Collected", value: `${fmt(total)} SAR`, color: "#059669" },
-          { label: ar ? "عدد السندات" : "Total Receipts", value: payments.length, color: "#587795" },
-          { label: ar ? "آخر قبض" : "Latest", value: payments[0] ? new Date(payments[0].payment_date).toLocaleDateString("ar-SA") : "—", color: "#5D7E9F" },
+          { label: ar ? "عدد السندات" : "Total Receipts", value: payments.length, color: "#485668" },
+          { label: ar ? "آخر قبض" : "Latest", value: payments[0] ? new Date(payments[0].payment_date).toLocaleDateString("ar-SA") : "—", color: "#65707E" },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div className="stat-content">

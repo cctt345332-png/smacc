@@ -74,15 +74,15 @@ export default function GosiPage(props: { params: Promise<{ locale: string }> })
           <div className="grid-3">
             <div style={{ padding: "16px 20px", background: "var(--bg)", borderRadius: 10, border: "1px solid var(--border)" }}>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>{ar ? "نسبة صاحب العمل" : "Employer Rate"}</div>
-              <div style={{ fontWeight: 700, fontSize: 28, color: "#587795" }}>{data?.employer_rate ?? 9}%</div>
+              <div style={{ fontWeight: 700, fontSize: 28, color: "#485668" }}>{data?.employer_rate ?? 9}%</div>
             </div>
             <div style={{ padding: "16px 20px", background: "#F5F3FF", borderRadius: 10, border: "1px solid #DDD6FE" }}>
               <div style={{ fontSize: 12, color: "#5B21B6", marginBottom: 6 }}>{ar ? "نسبة الموظف" : "Employee Rate"}</div>
-              <div style={{ fontWeight: 700, fontSize: 28, color: "#5D7E9F" }}>{data?.employee_rate ?? 9}%</div>
+              <div style={{ fontWeight: 700, fontSize: 28, color: "#65707E" }}>{data?.employee_rate ?? 9}%</div>
             </div>
             <div style={{ padding: "16px 20px", background: "linear-gradient(135deg, #EFF6FF, #F5F3FF)", borderRadius: 10, border: "1px solid #BFDBFE" }}>
               <div style={{ fontSize: 12, color: "#1E40AF", marginBottom: 6 }}>{ar ? "إجمالي GOSI الشهر" : "Total GOSI"}</div>
-              <div style={{ fontWeight: 700, fontSize: 24, color: "#587795" }}>{Number(data?.grand_total ?? 0).toLocaleString()} <span style={{ fontSize: 13, fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></div>
+              <div style={{ fontWeight: 700, fontSize: 24, color: "#485668" }}>{Number(data?.grand_total ?? 0).toLocaleString()} <span style={{ fontSize: 13, fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></div>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 16, padding: "12px 16px", background: "#FFFBEB", borderRadius: 8, border: "1px solid #FDE68A" }}>
@@ -96,7 +96,7 @@ export default function GosiPage(props: { params: Promise<{ locale: string }> })
 
       <div className="grid-3" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#587795" }}><IcDollar /></div>
+          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#485668" }}><IcDollar /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "حصة صاحب العمل" : "Employer Total"}</div>
             <div className="stat-value">{Number(data?.total_employer ?? 0).toLocaleString()}</div>
@@ -104,7 +104,7 @@ export default function GosiPage(props: { params: Promise<{ locale: string }> })
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#F5F3FF", color: "#5D7E9F" }}><IcDollar /></div>
+          <div className="stat-icon" style={{ background: "#F5F3FF", color: "#65707E" }}><IcDollar /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "حصة الموظفين" : "Employees Total"}</div>
             <div className="stat-value">{Number(data?.total_employee ?? 0).toLocaleString()}</div>
@@ -112,10 +112,10 @@ export default function GosiPage(props: { params: Promise<{ locale: string }> })
           </div>
         </div>
         <div className="stat-card" style={{ background: "linear-gradient(135deg, #EFF6FF, #F5F3FF)", border: "1px solid #BFDBFE" }}>
-          <div className="stat-icon" style={{ background: "white", color: "#587795" }}><IcShield /></div>
+          <div className="stat-icon" style={{ background: "white", color: "#485668" }}><IcShield /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "الإجمالي" : "Grand Total"}</div>
-            <div className="stat-value" style={{ color: "#587795" }}>{Number(data?.grand_total ?? 0).toLocaleString()}</div>
+            <div className="stat-value" style={{ color: "#485668" }}>{Number(data?.grand_total ?? 0).toLocaleString()}</div>
             <div style={{ fontSize: 11, color: "#3B82F6", marginTop: 2 }}>{ar ? "ر.س" : "SAR"}</div>
           </div>
         </div>
@@ -149,15 +149,15 @@ export default function GosiPage(props: { params: Promise<{ locale: string }> })
                   <tr key={i}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #587795, #5D7E9F)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #485668, #65707E)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
                           {line.employee_name?.charAt(0) || "?"}
                         </div>
                         <span style={{ fontWeight: 600, fontSize: 13 }}>{line.employee_name}</span>
                       </div>
                     </td>
                     <td style={{ fontWeight: 600 }}>{Number(line.basic_salary || 0).toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
-                    <td style={{ color: "#587795", fontWeight: 600 }}>{Number(line.employer_share || 0).toLocaleString()}</td>
-                    <td style={{ color: "#5D7E9F", fontWeight: 600 }}>{Number(line.employee_share || 0).toLocaleString()}</td>
+                    <td style={{ color: "#485668", fontWeight: 600 }}>{Number(line.employer_share || 0).toLocaleString()}</td>
+                    <td style={{ color: "#65707E", fontWeight: 600 }}>{Number(line.employee_share || 0).toLocaleString()}</td>
                     <td style={{ fontWeight: 700 }}>{Number(line.total || 0).toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
                   </tr>
                 ))}
@@ -166,8 +166,8 @@ export default function GosiPage(props: { params: Promise<{ locale: string }> })
                 <tr style={{ background: "#F8FAFC", fontWeight: 700 }}>
                   <td style={{ fontWeight: 700 }}>{ar ? "الإجمالي" : "Total"}</td>
                   <td style={{ fontWeight: 700 }}>{Number(data?.lines?.reduce((s: number, l: any) => s + Number(l.basic_salary || 0), 0) || 0).toLocaleString()}</td>
-                  <td style={{ color: "#587795", fontWeight: 700 }}>{Number(data?.total_employer ?? 0).toLocaleString()}</td>
-                  <td style={{ color: "#5D7E9F", fontWeight: 700 }}>{Number(data?.total_employee ?? 0).toLocaleString()}</td>
+                  <td style={{ color: "#485668", fontWeight: 700 }}>{Number(data?.total_employer ?? 0).toLocaleString()}</td>
+                  <td style={{ color: "#65707E", fontWeight: 700 }}>{Number(data?.total_employee ?? 0).toLocaleString()}</td>
                   <td style={{ fontWeight: 700, fontSize: 14 }}>{Number(data?.grand_total ?? 0).toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
                 </tr>
               </tfoot>

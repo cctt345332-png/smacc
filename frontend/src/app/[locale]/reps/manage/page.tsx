@@ -164,9 +164,9 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
       {/* ملخص سريع */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي المناديب" : "Total Reps", value: fmtNum(reps.length), color: "#587795" },
+          { label: ar ? "إجمالي المناديب" : "Total Reps", value: fmtNum(reps.length), color: "#485668" },
           { label: ar ? "المناديب النشطين" : "Active", value: fmtNum(reps.filter(r => r.is_active).length), color: "#059669" },
-          { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(totalSales) + " SAR", color: "#5D7E9F" },
+          { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(totalSales) + " SAR", color: "#65707E" },
           { label: ar ? "إجمالي المحصّل" : "Collected", value: fmt(totalCollected) + " SAR", color: "#D97706" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -260,7 +260,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                             {pct !== null && (
                               <div style={{ marginTop: 4 }}>
                                 <div style={{ height: 4, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${pct}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#587795", borderRadius: 2 }} />
+                                  <div style={{ height: "100%", width: `${pct}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#485668", borderRadius: 2 }} />
                                 </div>
                                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{pct}%</div>
                               </div>
@@ -287,7 +287,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                             className="btn btn-ghost btn-sm btn-icon"
                             title={ar ? "الدخول كمندوب" : "View as Rep"}
                             onClick={() => handleViewAsRep(rep)}
-                            style={{ color: "#5D7E9F" }}
+                            style={{ color: "#65707E" }}
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>

@@ -22,10 +22,10 @@ function AILogo({ size = 36 }: { size?: number }) {
         </mask>
         <g mask="url(#adm_mask)">
           <path fill="#fff" d="M200 0H0v200h200V0z"/>
-          <path fill="#587795" fillOpacity="0.33" d="M200 0H0v200h200V0z"/>
+          <path fill="#485668" fillOpacity="0.33" d="M200 0H0v200h200V0z"/>
           <g filter="url(#adm_blur)" style={{ animation: "ai-spin 8s linear infinite", transformOrigin: "center", transformBox: "fill-box" as const }}>
-            <path fill="#587795" d="M110 32H18v68h92V32z"/>
-            <path fill="#425E7A" d="M188-24H15v98h173v-98z"/>
+            <path fill="#485668" d="M110 32H18v68h92V32z"/>
+            <path fill="#364152" d="M188-24H15v98h173v-98z"/>
             <path fill="#3B82F6" d="M175 70H5v156h170V70z"/>
             <path fill="#60A5FA" d="M230 51H100v103h130V51z"/>
           </g>
@@ -59,7 +59,7 @@ const FEATURES = [
 
 const PLANS = ["trial", "starter", "professional", "enterprise"];
 const PLAN_COLORS: Record<string, string> = {
-  trial: "#059669", starter: "#587795", professional: "#5D7E9F", enterprise: "#0F172A"
+  trial: "#059669", starter: "#485668", professional: "#65707E", enterprise: "#0F172A"
 };
 const PLAN_AR: Record<string, string> = {
   trial: "تجريبية", starter: "أساسية", professional: "احترافية", enterprise: "مؤسسية"
@@ -472,8 +472,8 @@ export default function AdminAIPage() {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="grid-4">
             {[
-              { label: ar ? "إجمالي الرسائل" : "Total Messages",  value: stats.total_messages,  Icon: IcChart, color: "#587795", bg: "#EFF6FF" },
-              { label: ar ? "إجمالي الـ Tokens" : "Total Tokens", value: stats.total_tokens,    Icon: IcChart, color: "#5D7E9F", bg: "#F5F3FF" },
+              { label: ar ? "إجمالي الرسائل" : "Total Messages",  value: stats.total_messages,  Icon: IcChart, color: "#485668", bg: "#EFF6FF" },
+              { label: ar ? "إجمالي الـ Tokens" : "Total Tokens", value: stats.total_tokens,    Icon: IcChart, color: "#65707E", bg: "#F5F3FF" },
               { label: ar ? "شركات نشطة" : "Active Tenants",      value: stats.active_tenants,  Icon: IcUsers, color: "#059669", bg: "#ECFDF5" },
               { label: ar ? "شركات مفعّلة" : "Enabled Tenants",   value: stats.enabled_tenants, Icon: IcUsers, color: "#D97706", bg: "#FFFBEB" },
             ].map((k, i) => (

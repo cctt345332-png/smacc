@@ -8,7 +8,7 @@ type IconName = "journal" | "receipt" | "box" | "users" | "pos";
 const groups = (base: string, ar: boolean): { title: string; color: string; icon: IconName; reports: { label: string; href: string; desc: string }[] }[] => [
   {
     title: ar ? "تقارير المحاسبة المالية" : "Accounting Reports",
-    color: "#587795",
+    color: "#485668",
     icon: "journal",
     reports: [
       { label: ar ? "ميزان المراجعة" : "Trial Balance", href: `${base}/reports/accounting/trial-balance`, desc: ar ? "أرصدة جميع الحسابات" : "All account balances" },
@@ -29,7 +29,7 @@ const groups = (base: string, ar: boolean): { title: string; color: string; icon
   },
   {
     title: ar ? "تقارير المشتريات" : "Purchase Reports",
-    color: "#5D7E9F",
+    color: "#65707E",
     icon: "box" as IconName,
     reports: [
       { label: ar ? "تقرير المشتريات" : "Purchase Report", href: `${base}/reports/purchases`, desc: ar ? "إجمالي المشتريات" : "Total purchases" },

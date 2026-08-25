@@ -84,7 +84,7 @@ export default function BranchesPage(props: { params: Promise<{ locale: string }
           <div className="card-body" style={{ padding: "14px 20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ color: "#587795" }}><IcBuilding /></span>
+                <span style={{ color: "#485668" }}><IcBuilding /></span>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>{ar ? "استخدام الفروع" : "Branch Usage"}</span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: atLimit ? "#DC2626" : "var(--text-secondary)" }}>
@@ -95,7 +95,7 @@ export default function BranchesPage(props: { params: Promise<{ locale: string }
               <div style={{
                 height: "100%",
                 width: `${Math.min((branches.length / branchLimit) * 100, 100)}%`,
-                background: atLimit ? "#DC2626" : branches.length / branchLimit >= 0.8 ? "#D97706" : "#587795",
+                background: atLimit ? "#DC2626" : branches.length / branchLimit >= 0.8 ? "#D97706" : "#485668",
                 borderRadius: 4,
                 transition: "width 0.4s ease",
               }} />
@@ -118,7 +118,7 @@ export default function BranchesPage(props: { params: Promise<{ locale: string }
       {branches.length === 0 ? (
         <div className="card">
           <div className="empty-state">
-            <div style={{ color: "#587795", marginBottom: 12 }}><IcBuilding /></div>
+            <div style={{ color: "#485668", marginBottom: 12 }}><IcBuilding /></div>
             <div className="empty-state-title">{ar ? "لا توجد فروع بعد" : "No branches yet"}</div>
             <div className="empty-state-desc" style={{ marginBottom: 16 }}>
               {ar ? "أضف مستودعاً لإنشاء فرع" : "Add a warehouse to create a branch"}
@@ -134,7 +134,7 @@ export default function BranchesPage(props: { params: Promise<{ locale: string }
             <div key={branchName} className="card">
               <div className="card-header">
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#587795" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", color: "#485668" }}>
                     <IcBuilding />
                   </div>
                   <div>

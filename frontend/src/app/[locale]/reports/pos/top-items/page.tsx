@@ -95,7 +95,7 @@ export default function POSTopItemsPage(props: { params: Promise<{ locale: strin
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ width: 80, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${(item.total_qty / maxQty) * 100}%`, background: "#587795", borderRadius: 3 }} />
+                          <div style={{ height: "100%", width: `${(item.total_qty / maxQty) * 100}%`, background: "#485668", borderRadius: 3 }} />
                         </div>
                         <span style={{ fontWeight: 700 }}>{fmt(item.total_qty)}</span>
                       </div>

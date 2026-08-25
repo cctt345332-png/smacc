@@ -198,7 +198,7 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
             <tfoot>
               <tr style={{ background: "#F8FAFC", borderTop: "2px solid var(--border)" }}>
                 <td colSpan={3} style={{ padding: "12px 16px", fontWeight: 700, fontSize: 13 }}>{ar ? "الإجمالي" : "Total"}</td>
-                <td style={{ padding: "12px 16px", textAlign: "end", fontWeight: 700, fontSize: 14, color: "#587795" }}>
+                <td style={{ padding: "12px 16px", textAlign: "end", fontWeight: 700, fontSize: 14, color: "#485668" }}>
                   {totalDebit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </td>
                 <td style={{ padding: "12px 16px", textAlign: "end", fontWeight: 700, fontSize: 14, color: "#059669" }}>

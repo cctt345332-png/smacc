@@ -513,7 +513,7 @@ export default function NewBillPage(props: { params: Promise<{ locale: string }>
           <div className="card" style={{ borderColor: "#DBEAFE", background: "#EFF6FF" }}>
             <div className="card-body" style={{ padding: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <Icon name="tax" size={18} color="#587795" />
+                <Icon name="tax" size={18} color="#485668" />
                 <span style={{ fontWeight: 700, fontSize: 14, color: "#1E40AF" }}>
                   {ar ? "فاتورة ضريبية واردة — ZATCA" : "ZATCA Incoming Tax Invoice"}
                 </span>
@@ -627,7 +627,7 @@ export default function NewBillPage(props: { params: Promise<{ locale: string }>
                           width: 70, height: 36, display: "flex", alignItems: "center",
                           justifyContent: "center", background: "#F5F3FF",
                           border: "1px solid #C4B5FD", borderRadius: 6,
-                          fontWeight: 700, fontSize: 13, color: "#5D7E9F",
+                          fontWeight: 700, fontSize: 13, color: "#65707E",
                         }}>
                           {c.qty}
                         </div>
@@ -655,7 +655,7 @@ export default function NewBillPage(props: { params: Promise<{ locale: string }>
                         }
                       />
                       {isSerial && (
-                        <div style={{ fontSize: 10, color: "#5D7E9F", marginTop: 2 }}>
+                        <div style={{ fontSize: 10, color: "#65707E", marginTop: 2 }}>
                           {ar ? "تكلفة الشراء للوحدة" : "Purchase cost / unit"}
                         </div>
                       )}

@@ -83,7 +83,7 @@ export default function LedgerPage(props: { params: Promise<{ locale: string }> 
             <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
               {[
                 { label: ar ? "الحساب" : "Account", value: `${selectedAcc.code} — ${ar ? selectedAcc.name_ar : selectedAcc.name_en}` },
-                { label: ar ? "إجمالي المدين" : "Total Debit", value: `${fmt(totalDebit)} ${ar ? "ر.س" : "SAR"}`, color: "#587795" },
+                { label: ar ? "إجمالي المدين" : "Total Debit", value: `${fmt(totalDebit)} ${ar ? "ر.س" : "SAR"}`, color: "#485668" },
                 { label: ar ? "إجمالي الدائن" : "Total Credit", value: `${fmt(totalCredit)} ${ar ? "ر.س" : "SAR"}`, color: "#059669" },
                 { label: ar ? "الرصيد الختامي" : "Closing Balance", value: rows.length ? `${fmt(Number(rows[rows.length - 1].balance))} ${ar ? "ر.س" : "SAR"}` : "0.00", color: "#D97706" },
               ].map(s => (
@@ -122,7 +122,7 @@ export default function LedgerPage(props: { params: Promise<{ locale: string }> 
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(r.entry_date).toLocaleDateString("en-SA")}</td>
                         <td>{r.description}</td>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{r.reference || "—"}</td>
-                        <td style={{ textAlign: "end", color: "#587795", fontWeight: Number(r.debit) > 0 ? 600 : 400 }}>{Number(r.debit) > 0 ? fmt(Number(r.debit)) : "—"}</td>
+                        <td style={{ textAlign: "end", color: "#485668", fontWeight: Number(r.debit) > 0 ? 600 : 400 }}>{Number(r.debit) > 0 ? fmt(Number(r.debit)) : "—"}</td>
                         <td style={{ textAlign: "end", color: "#059669", fontWeight: Number(r.credit) > 0 ? 600 : 400 }}>{Number(r.credit) > 0 ? fmt(Number(r.credit)) : "—"}</td>
                         <td style={{ textAlign: "end", fontWeight: 700 }}>{fmt(Number(r.balance))}</td>
                       </tr>
@@ -131,7 +131,7 @@ export default function LedgerPage(props: { params: Promise<{ locale: string }> 
                   <tfoot>
                     <tr style={{ background: "#F8FAFC", borderTop: "2px solid var(--border)", fontWeight: 700 }}>
                       <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#587795" }}>{fmt(totalDebit)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#485668" }}>{fmt(totalDebit)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(totalCredit)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px" }}>{rows.length ? fmt(Number(rows[rows.length - 1].balance)) : "0.00"}</td>
                     </tr>

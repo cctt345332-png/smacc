@@ -10,8 +10,8 @@ import { Icon } from "@/components/ui/Icons";
 const ACTIVITY_CONFIG: Record<string, {
   label: string; icon: any; color: string; bg: string;
 }> = {
-  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#587795", bg: "#EFF6FF" },
-  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#5D7E9F", bg: "#F5F3FF" },
+  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#485668", bg: "#EFF6FF" },
+  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#65707E", bg: "#F5F3FF" },
   pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#059669", bg: "#ECFDF5" },
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#D97706", bg: "#FFFBEB" },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#B45309", bg: "#FEF3C7" },
@@ -111,14 +111,14 @@ export default function POSDashboardPage() {
             label: isAr ? "مبيعات اليوم" : "Today's Sales",
             value: loading ? "—" : `${fmt(todaySales)} ${sar}`,
             icon: "revenue" as const,
-            color: "#587795",
+            color: "#485668",
             bg: "#EFF6FF",
           },
           {
             label: isAr ? "إجمالي الجلسات" : "Total Sessions",
             value: loading ? "—" : String(sessions.length),
             icon: "chart" as const,
-            color: "#5D7E9F",
+            color: "#65707E",
             bg: "#F5F3FF",
           },
           {
@@ -158,7 +158,7 @@ export default function POSDashboardPage() {
             label: isAr ? "الجلسات" : "Sessions",
             desc: isAr ? "عرض وإدارة جلسات الكاشير" : "View and manage cashier sessions",
             href: `/${locale}/pos/sessions`,
-            color: "#587795",
+            color: "#485668",
             bg: "#EFF6FF",
           },
           {
@@ -166,7 +166,7 @@ export default function POSDashboardPage() {
             label: isAr ? "الأجهزة" : "Terminals",
             desc: isAr ? "إعداد أجهزة نقطة البيع" : "Configure POS terminals",
             href: `/${locale}/pos/terminals`,
-            color: "#5D7E9F",
+            color: "#65707E",
             bg: "#F5F3FF",
           },
         ].map((item) => (
@@ -342,7 +342,7 @@ export default function POSDashboardPage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#587795",
+              color: "#485668",
               margin: "0 auto 16px",
             }}
           >

@@ -76,8 +76,8 @@ export default function AssetReportsPage(props: { params: Promise<{ locale: stri
       {summary && (
         <div className="grid-4" style={{ marginBottom: 20 }}>
           {[
-            { label: ar ? "إجمالي الأصول" : "Total Assets", value: summary.total_assets, color: "#587795" },
-            { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(summary.total_cost)} ${ar ? "ر.س" : "SAR"}`, color: "#5D7E9F" },
+            { label: ar ? "إجمالي الأصول" : "Total Assets", value: summary.total_assets, color: "#485668" },
+            { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(summary.total_cost)} ${ar ? "ر.س" : "SAR"}`, color: "#65707E" },
             { label: ar ? "مجمع الاستهلاك" : "Accum. Dep.", value: `${fmt(summary.total_accumulated_depreciation)} ${ar ? "ر.س" : "SAR"}`, color: "#D97706" },
             { label: ar ? "القيمة الدفترية" : "Net Book Value", value: `${fmt(summary.total_book_value)} ${ar ? "ر.س" : "SAR"}`, color: "#059669" },
           ].map(s => (
@@ -141,7 +141,7 @@ export default function AssetReportsPage(props: { params: Promise<{ locale: stri
                         </>
                       )}
                       {reportType === "depreciation" && (
-                        <td style={{ textAlign: "end", color: "#5D7E9F" }}>{fmt(annualDep)}</td>
+                        <td style={{ textAlign: "end", color: "#65707E" }}>{fmt(annualDep)}</td>
                       )}
                       {reportType === "disposal" && (
                         <>

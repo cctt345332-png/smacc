@@ -70,7 +70,7 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
               { label: ar ? "ضريبة المبيعات (مخرجات)" : "Output VAT", value: data.summary.output_vat, color: "#059669", icon: "📤" },
-              { label: ar ? "ضريبة المشتريات (مدخلات)" : "Input VAT", value: data.summary.input_vat, color: "#587795", icon: "📥" },
+              { label: ar ? "ضريبة المشتريات (مدخلات)" : "Input VAT", value: data.summary.input_vat, color: "#485668", icon: "📥" },
               { label: ar ? "صافي الضريبة المستحقة" : "Net VAT Payable", value: data.summary.net_vat_payable, color: data.summary.net_vat_payable > 0 ? "#D97706" : "#059669", icon: "🏛️" },
             ].map(s => (
               <div key={s.label} className="stat-card">
@@ -131,7 +131,7 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
               </table>
 
               {/* المشتريات */}
-              <div style={{ padding: "12px 20px", background: "#EFF6FF", fontWeight: 700, color: "#587795", borderTop: "2px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ padding: "12px 20px", background: "#EFF6FF", fontWeight: 700, color: "#485668", borderTop: "2px solid var(--border)", borderBottom: "1px solid var(--border)" }}>
                 {ar ? "ثانياً: المشتريات (المدخلات)" : "II. Purchases (Input VAT)"}
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -139,12 +139,12 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
                   <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
                     <td style={{ padding: "12px 20px", fontSize: 13 }}>{ar ? "مشتريات خاضعة للضريبة (15%)" : "Standard rated purchases (15%)"}</td>
                     <td style={{ padding: "12px 20px", textAlign: "end" }}>{fmt(data.input_vat.standard_rated_purchases)}</td>
-                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#587795", fontWeight: 600 }}>{fmt(data.input_vat.standard_vat_amount)}</td>
+                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#485668", fontWeight: 600 }}>{fmt(data.input_vat.standard_vat_amount)}</td>
                   </tr>
                   <tr style={{ background: "#EFF6FF", fontWeight: 700 }}>
                     <td style={{ padding: "12px 20px" }}>{ar ? "إجمالي المشتريات" : "Total Purchases"}</td>
                     <td style={{ padding: "12px 20px", textAlign: "end" }}>{fmt(data.input_vat.standard_rated_purchases)}</td>
-                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#587795" }}>{fmt(data.input_vat.standard_vat_amount)}</td>
+                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#485668" }}>{fmt(data.input_vat.standard_vat_amount)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -160,7 +160,7 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
           </div>
 
           {/* ZATCA link */}
-          <div style={{ marginTop: 16, background: "linear-gradient(135deg,#1E3A5F,#587795)", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ marginTop: 16, background: "linear-gradient(135deg,#1E3A5F,#485668)", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
             <div style={{ color: "white" }}>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{ar ? "تقديم الإقرار لهيئة الزكاة والضريبة والجمارك" : "Submit Return to ZATCA"}</div>
               <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{ar ? "يتطلب تفعيل ربط زاتكا من الإعدادات" : "Requires ZATCA integration enabled in Settings"}</div>

@@ -6,23 +6,23 @@
 @tailwind utilities;
 
 :root {
-  --primary: #425E7A;
-  --primary-dark: #314A63;
-  --primary-light: #EDF3F8;
-  --secondary: #27364A;
-  --accent: #5D7E9F;
+  --primary: #364152;
+  --primary-dark: #252F3D;
+  --primary-light: #EFF2F5;
+  --secondary: #27313F;
+  --accent: #65707E;
   --success: #4A8175;
   --warning: #C7894A;
   --danger: #B85B5A;
   --sidebar-width: 260px;
   --sidebar-collapsed: 68px;
   --header-height: 60px;
-  --border: #D5DFE8;
-  --bg: #F4F6F8;
-  --surface: #FEFDFC;
-  --text-primary: #27364A;
-  --text-secondary: #657487;
-  --text-muted: #8A98A8;
+  --border: #D9DEE5;
+  --bg: #F6F7F8;
+  --surface: #FCFCFB;
+  --text-primary: #27313F;
+  --text-secondary: #65707E;
+  --text-muted: #8A929D;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -933,18 +933,18 @@ tbody tr:hover { background: #FAFBFC; }
 
 /* Legacy ERP access override: kept at the end to supersede the original auth theme. */
 .auth-page { background:#F2F4F0 !important; background-image:linear-gradient(rgba(11,93,74,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(11,93,74,.025) 1px,transparent 1px) !important; background-size:28px 28px !important; font-family:"IBM Plex Sans Arabic",Arial,sans-serif !important; }
-.auth-left { background:linear-gradient(180deg,#5D7E9F,#425E7A) !important; border-inline-end:1px solid #314A63 !important; }
+.auth-left { background:linear-gradient(180deg,#65707E,#364152) !important; border-inline-end:1px solid #252F3D !important; }
 .auth-left h1 { font-family:Cairo,sans-serif !important; }
 .auth-left [style*="borderRadius: 8"] { border-radius:2px !important; }
 .auth-right { background:transparent !important; }
 .auth-card { border:1px solid #C8D0C7 !important; border-radius:0 !important; background:#FFFEFA !important; box-shadow:3px 4px 0 rgba(11,93,74,.13) !important; }
-.auth-card::before { content:"نظام محاسبي — دخول المستخدم"; display:block; margin:-32px -32px 22px; padding:8px 12px; color:#fff; background:linear-gradient(180deg,#5D7E9F,#425E7A); border-bottom:1px solid #314A63; font-family:Cairo,sans-serif; font-size:11px; font-weight:800; }
+.auth-card::before { content:"نظام محاسبي — دخول المستخدم"; display:block; margin:-32px -32px 22px; padding:8px 12px; color:#fff; background:linear-gradient(180deg,#65707E,#364152); border-bottom:1px solid #252F3D; font-family:Cairo,sans-serif; font-size:11px; font-weight:800; }
 .auth-title { color:#2A4035 !important; font-family:Cairo,sans-serif !important; font-size:19px !important; }
 .auth-subtitle { color:#718077 !important; font-size:11px !important; }
 .auth-page .form-label { color:#42544A !important; font-family:Cairo,sans-serif !important; font-size:10px !important; font-weight:800 !important; }
 .auth-page .form-input { min-height:31px !important; border:1px solid #AEBBAF !important; border-radius:1px !important; background:#FFFEFA !important; font-family:"IBM Plex Sans Arabic",Arial,sans-serif !important; }
 .auth-page .btn { border-radius:2px !important; font-family:Cairo,sans-serif !important; }
-.auth-page .btn-primary { background:linear-gradient(180deg,#557695,#425E7A) !important; border-color:#314A63 !important; }
+.auth-page .btn-primary { background:linear-gradient(180deg,#485668,#364152) !important; border-color:#252F3D !important; }
 
 /* ─── نظام طباعة التقارير الموحد ─────────────────────────────────────── */
 .report-print-frame { display: none; }
@@ -965,7 +965,7 @@ tbody tr:hover { background: #FAFBFC; }
   .legacy-app-shell .form-group,
   .legacy-app-shell .card:has(.form-group) { display: none !important; }
   .legacy-app-shell, .legacy-app-shell .main-content, .legacy-app-shell .page-content { display: block !important; width: auto !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
-  .report-print-frame { display: flex !important; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #425E7A; padding: 0 0 8px; margin: 0 0 12px; color: #17342D; font-family: "IBM Plex Sans Arabic", Cairo, Arial, sans-serif; }
+  .report-print-frame { display: flex !important; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #364152; padding: 0 0 8px; margin: 0 0 12px; color: #17342D; font-family: "IBM Plex Sans Arabic", Cairo, Arial, sans-serif; }
   .report-print-brand { display: flex; gap: 9px; align-items: center; }
   .report-print-brand img { width: 38px; height: 38px; object-fit: contain; }
   .report-print-brand strong, .report-print-meta strong { display: block; font-size: 13px; }
@@ -973,11 +973,65 @@ tbody tr:hover { background: #FAFBFC; }
   .report-print-meta { text-align: end; }
   .legacy-app-shell .page-header { margin: 0 0 10px !important; padding: 0 0 8px !important; border-bottom: 1px solid #C8D0C7 !important; }
   .legacy-app-shell .breadcrumb { display: none !important; }
-  .legacy-app-shell .page-title { color: #425E7A !important; font-size: 18px !important; }
+  .legacy-app-shell .page-title { color: #364152 !important; font-size: 18px !important; }
   .legacy-app-shell .card, .legacy-app-shell .grid-2 > .card { box-shadow: none !important; border: 1px solid #C8D0C7 !important; break-inside: avoid; background: #fff !important; }
   .legacy-app-shell .card-header { background: #E9ECE6 !important; border-bottom: 1px solid #C8D0C7 !important; }
   .legacy-app-shell table { width: 100% !important; border-collapse: collapse !important; font-size: 9px !important; }
   .legacy-app-shell th, .legacy-app-shell td { border: 1px solid #C8D0C7 !important; padding: 5px !important; }
   .legacy-app-shell th { background: #E9ECE6 !important; color: #17342D !important; }
   .legacy-app-shell .table-wrapper { overflow: visible !important; border: none !important; }
+}
+
+
+/* ── Matte navy brand finish: no gradients, no teal carry-over ───────── */
+:root {
+  --primary:#364152;
+  --primary-dark:#252F3D;
+  --primary-light:#EFF2F5;
+  --secondary:#252F3D;
+  --accent:#65707E;
+  --border:#D9DEE5;
+  --bg:#F6F7F8;
+  --surface:#FCFCFB;
+  --text-primary:#27313F;
+  --text-secondary:#65707E;
+  --text-muted:#8A929D;
+}
+.btn-primary,
+.auth-page .btn-primary,
+.legacy-app-shell .btn-primary,
+.legacy-pos .btn-primary,
+.legacy-tool-main,
+.legacy-mini-button-primary,
+.legacy-action-cell-main,
+.ops-primary-action,
+.ops-approve-button {
+  background:#364152 !important;
+  background-image:none !important;
+  border-color:#252F3D !important;
+}
+.btn-primary:hover,
+.auth-page .btn-primary:hover,
+.legacy-app-shell .btn-primary:hover,
+.legacy-pos .btn-primary:hover,
+.legacy-tool-main:hover,
+.legacy-mini-button-primary:hover,
+.legacy-action-cell-main:hover,
+.ops-primary-action:hover,
+.ops-approve-button:hover {
+  background:#252F3D !important;
+  background-image:none !important;
+  border-color:#252F3D !important;
+}
+.legacy-titlebar,
+.legacy-app-shell .legacy-global-titlebar,
+.auth-left,
+.auth-card::before {
+  background:#364152 !important;
+  background-image:none !important;
+  border-color:#252F3D !important;
+}
+.auth-page {
+  background:#F6F7F8 !important;
+  background-image:linear-gradient(rgba(54,65,82,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(54,65,82,.018) 1px,transparent 1px) !important;
 }

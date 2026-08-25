@@ -94,8 +94,8 @@ export default function POSSalesReportPage(props: { params: Promise<{ locale: st
       <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
           { label: ar ? "إجمالي المبيعات"       : "Total Sales",    value: `${fmt(totalSales)} ${sar}`, icon: "revenue" as const, color: "#059669", bg: "#ECFDF5" },
-          { label: ar ? "إجمالي النقد"           : "Cash",           value: `${fmt(totalCash)} ${sar}`,  icon: "cash"    as const, color: "#587795", bg: "#EFF6FF" },
-          { label: ar ? "إجمالي البطاقة"         : "Card",           value: `${fmt(totalCard)} ${sar}`,  icon: "card"    as const, color: "#5D7E9F", bg: "#F5F3FF" },
+          { label: ar ? "إجمالي النقد"           : "Cash",           value: `${fmt(totalCash)} ${sar}`,  icon: "cash"    as const, color: "#485668", bg: "#EFF6FF" },
+          { label: ar ? "إجمالي البطاقة"         : "Card",           value: `${fmt(totalCard)} ${sar}`,  icon: "card"    as const, color: "#65707E", bg: "#F5F3FF" },
           { label: ar ? "ضريبة القيمة المضافة"   : "VAT",            value: `${fmt(totalVat)} ${sar}`,   icon: "tax"     as const, color: "#D97706", bg: "#FFFBEB" },
         ].map(s => (
           <div key={s.label} className="stat-card">

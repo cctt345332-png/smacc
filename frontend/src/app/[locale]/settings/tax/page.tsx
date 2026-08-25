@@ -176,7 +176,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
           <div className="grid-3">
             {[
               { label: ar ? "ضريبة المبيعات (مخرجات)" : "Output VAT", value: "0.00", color: "#059669", icon: "vatOut" as const },
-              { label: ar ? "ضريبة المشتريات (مدخلات)" : "Input VAT", value: "0.00", color: "#587795", icon: "vatIn" as const },
+              { label: ar ? "ضريبة المشتريات (مدخلات)" : "Input VAT", value: "0.00", color: "#485668", icon: "vatIn" as const },
               { label: ar ? "صافي الضريبة المستحقة" : "Net VAT Payable", value: "0.00", color: "#D97706", icon: "money" as const },
             ].map(item => (
               <div key={item.label} className="stat-card">

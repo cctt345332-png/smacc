@@ -15,9 +15,9 @@ export default function AboutPage() {
   const ar = locale === "ar";
 
   const values = [
-    { icon: <IcShield />, color: "#587795", bg: "#EFF6FF", title: ar ? "الامتثال أولاً" : "Compliance First",    desc: ar ? "نظامنا مبني من الأساس ليكون متوافقاً مع متطلبات زاتكا والفوترة الإلكترونية المرحلة الثانية" : "Our system is built from the ground up to comply with ZATCA Phase 2 e-invoicing requirements" },
+    { icon: <IcShield />, color: "#485668", bg: "#EFF6FF", title: ar ? "الامتثال أولاً" : "Compliance First",    desc: ar ? "نظامنا مبني من الأساس ليكون متوافقاً مع متطلبات زاتكا والفوترة الإلكترونية المرحلة الثانية" : "Our system is built from the ground up to comply with ZATCA Phase 2 e-invoicing requirements" },
     { icon: <IcTarget />, color: "#059669", bg: "#ECFDF5", title: ar ? "مصمم للسوق السعودي" : "Built for Saudi Market", desc: ar ? "نفهم احتياجات الأعمال السعودية — من الرقم الضريبي إلى العنوان الوطني إلى متطلبات GOSI" : "We understand Saudi business needs — from VAT numbers to national addresses to GOSI requirements" },
-    { icon: <IcUsers />,  color: "#5D7E9F", bg: "#F5F3FF", title: ar ? "سهولة الاستخدام" : "Ease of Use",         desc: ar ? "واجهة عربية أولاً، مصممة لتكون بسيطة وسريعة حتى بدون خبرة محاسبية" : "Arabic-first interface, designed to be simple and fast even without accounting experience" },
+    { icon: <IcUsers />,  color: "#65707E", bg: "#F5F3FF", title: ar ? "سهولة الاستخدام" : "Ease of Use",         desc: ar ? "واجهة عربية أولاً، مصممة لتكون بسيطة وسريعة حتى بدون خبرة محاسبية" : "Arabic-first interface, designed to be simple and fast even without accounting experience" },
   ];
 
   const stats = [
@@ -50,7 +50,7 @@ export default function AboutPage() {
         <div style={{ maxWidth: 800, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 24, textAlign: "center" }}>
           {stats.map((s, i) => (
             <div key={i}>
-              <div style={{ fontSize: 32, fontWeight: 800, color: "#587795", marginBottom: 4 }}>{s.value}</div>
+              <div style={{ fontSize: 32, fontWeight: 800, color: "#485668", marginBottom: 4 }}>{s.value}</div>
               <div style={{ fontSize: 13, color: "#94A3B8" }}>{s.label}</div>
             </div>
           ))}
@@ -102,7 +102,7 @@ export default function AboutPage() {
       </section>
 
       {/* CTA */}
-      <section style={{ padding: "48px 5%", background: "#587795", textAlign: "center" }}>
+      <section style={{ padding: "48px 5%", background: "#485668", textAlign: "center" }}>
         <h2 style={{ fontSize: 26, fontWeight: 800, color: "white", marginBottom: 12 }}>
           {ar ? "جاهز للبدء؟" : "Ready to get started?"}
         </h2>
@@ -110,7 +110,7 @@ export default function AboutPage() {
           {ar ? "ابدأ تجربتك المجانية 14 يوم — لا يلزم بطاقة ائتمان" : "Start your 14-day free trial — no credit card required"}
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          <Link href={`/${locale}/register`} style={{ padding: "12px 28px", borderRadius: 10, background: "white", color: "#587795", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+          <Link href={`/${locale}/register`} style={{ padding: "12px 28px", borderRadius: 10, background: "white", color: "#485668", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
             {ar ? "ابدأ مجاناً" : "Start Free"}
           </Link>
           <Link href={`/${locale}/landing/contact`} style={{ padding: "12px 28px", borderRadius: 10, background: "transparent", color: "white", fontWeight: 700, fontSize: 14, textDecoration: "none", border: "1.5px solid rgba(255,255,255,0.4)" }}>

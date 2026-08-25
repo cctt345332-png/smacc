@@ -28,7 +28,7 @@ const ALL_MODULES: { key: ModuleKey; ar: string; en: string }[] = [
 const DEFAULT_KEYS: PlanKey[] = ["trial", "starter", "professional", "enterprise"];
 const EMPTY_NEW = () => ({
   key: "", label_ar: "", label_en: "", price_monthly: 0, price_yearly: 0,
-  color: "#587795", bg: "#EFF6FF", popular: false,
+  color: "#485668", bg: "#EFF6FF", popular: false,
   limits: { invoices_per_month: 100, users: 5, warehouses: 1, branches: 1, pos_terminals: 1 },
   modules: ["dashboard", "accounting", "sales", "purchases", "inventory", "treasury", "reports"] as ModuleKey[],
   features_ar: [] as string[], features_en: [] as string[],
@@ -145,8 +145,8 @@ export default function PlansPage() {
               <div className="divider" style={{ margin: "4px 0" }} />
               {/* AI Support */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", borderRadius: 8, background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#587795" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 0 6h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1 0-6h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="10" r="1" fill="#587795" stroke="none"/><circle cx="15" cy="10" r="1" fill="#587795" stroke="none"/></svg>
-                <span style={{ fontSize: 11, color: "#587795", fontWeight: 600 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#485668" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 0 6h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1 0-6h1V6a4 4 0 0 1 4-4z"/><circle cx="9" cy="10" r="1" fill="#485668" stroke="none"/><circle cx="15" cy="10" r="1" fill="#485668" stroke="none"/></svg>
+                <span style={{ fontSize: 11, color: "#485668", fontWeight: 600 }}>
                   {ar ? "دعم AI: " : "AI: "}
                   {(plan.key === "trial" ? 20 : plan.key === "starter" ? 100 : plan.key === "professional" ? 500 : -1) === -1
                     ? (ar ? "غير محدود" : "Unlimited")

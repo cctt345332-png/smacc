@@ -99,7 +99,7 @@ export default function TrialBalancePage(props: { params: Promise<{ locale: stri
                     <td>{ar ? r.account_name_ar : r.account_name_en}</td>
                     <td style={{ textAlign: "end" }}>{Number(r.opening_debit) > 0 ? fmt(Number(r.opening_debit)) : "—"}</td>
                     <td style={{ textAlign: "end" }}>{Number(r.opening_credit) > 0 ? fmt(Number(r.opening_credit)) : "—"}</td>
-                    <td style={{ textAlign: "end", color: "#587795" }}>{Number(r.period_debit) > 0 ? fmt(Number(r.period_debit)) : "—"}</td>
+                    <td style={{ textAlign: "end", color: "#485668" }}>{Number(r.period_debit) > 0 ? fmt(Number(r.period_debit)) : "—"}</td>
                     <td style={{ textAlign: "end", color: "#059669" }}>{Number(r.period_credit) > 0 ? fmt(Number(r.period_credit)) : "—"}</td>
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{Number(r.closing_debit) > 0 ? fmt(Number(r.closing_debit)) : "—"}</td>
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{Number(r.closing_credit) > 0 ? fmt(Number(r.closing_credit)) : "—"}</td>
@@ -111,7 +111,7 @@ export default function TrialBalancePage(props: { params: Promise<{ locale: stri
                   <td colSpan={2} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.od)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.oc)}</td>
-                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#587795" }}>{fmt(totals.pd)}</td>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#485668" }}>{fmt(totals.pd)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(totals.pc)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.cd)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.cc)}</td>

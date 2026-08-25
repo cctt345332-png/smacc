@@ -9,8 +9,8 @@ const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2,
 
 const PAYMENT_LABELS: Record<string, { ar: string; en: string; color: string; bg: string }> = {
   cash:        { ar: "نقدي",           en: "Cash",        color: "#059669", bg: "#ECFDF5" },
-  mada:        { ar: "مدى",            en: "Mada",        color: "#587795", bg: "#EFF6FF" },
-  credit_card: { ar: "بطاقة ائتمان",  en: "Credit Card", color: "#5D7E9F", bg: "#F5F3FF" },
+  mada:        { ar: "مدى",            en: "Mada",        color: "#485668", bg: "#EFF6FF" },
+  credit_card: { ar: "بطاقة ائتمان",  en: "Credit Card", color: "#65707E", bg: "#F5F3FF" },
   stc_pay:     { ar: "STC Pay",        en: "STC Pay",     color: "#D97706", bg: "#FFFBEB" },
   split:       { ar: "مقسّم",          en: "Split",       color: "#64748B", bg: "#F1F5F9" },
 };
@@ -43,7 +43,7 @@ export default function POSPaymentsReportPage(props: { params: Promise<{ locale:
 
   const byMethod = [
     { key: "cash",        amount: totalCash,              label: PAYMENT_LABELS.cash },
-    { key: "card",        amount: totalCard,              label: { ar: "بطاقة (مدى/ائتمان/STC)", en: "Card (Mada/Credit/STC)", color: "#587795", bg: "#EFF6FF" } },
+    { key: "card",        amount: totalCard,              label: { ar: "بطاقة (مدى/ائتمان/STC)", en: "Card (Mada/Credit/STC)", color: "#485668", bg: "#EFF6FF" } },
     { key: "split",       amount: totalSales - totalCash - totalCard > 0 ? totalSales - totalCash - totalCard : 0, label: PAYMENT_LABELS.split },
   ].filter(m => m.amount > 0);
 

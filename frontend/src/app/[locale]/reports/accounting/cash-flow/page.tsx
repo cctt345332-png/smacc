@@ -81,14 +81,14 @@ export default function CashFlowPage(props: { params: Promise<{ locale: string }
           </div>
           <div style={{ padding: 0 }}>
             {/* Operating */}
-            <div style={{ padding: "12px 20px", background: "#EFF6FF", fontWeight: 700, color: "#587795", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ padding: "12px 20px", background: "#EFF6FF", fontWeight: 700, color: "#485668", borderBottom: "1px solid var(--border)" }}>
               {ar ? "أولاً: التدفقات من الأنشطة التشغيلية" : "I. Operating Activities"}
             </div>
             <Row label={ar ? "صافي الربح" : "Net Profit"} value={data.netProfit} indent />
             <Row label={ar ? "إجمالي التدفقات التشغيلية" : "Total Operating Cash Flow"} value={data.operating} bold />
 
             {/* Investing */}
-            <div style={{ padding: "12px 20px", background: "#F5F3FF", fontWeight: 700, color: "#5D7E9F", borderBottom: "1px solid var(--border)", marginTop: 8 }}>
+            <div style={{ padding: "12px 20px", background: "#F5F3FF", fontWeight: 700, color: "#65707E", borderBottom: "1px solid var(--border)", marginTop: 8 }}>
               {ar ? "ثانياً: التدفقات من الأنشطة الاستثمارية" : "II. Investing Activities"}
             </div>
             <Row label={ar ? "لا توجد حركات استثمارية" : "No investing activities"} value={0} indent />

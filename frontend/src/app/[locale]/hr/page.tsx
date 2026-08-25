@@ -56,8 +56,8 @@ export default function HRPage(props: { params: Promise<{ locale: string }> }) {
   if (loading) return <div className="empty-state"><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>;
 
   const quickLinks = [
-    { href: `/${locale}/hr/employees`,   labelAr: "الموظفون",   labelEn: "Employees",   icon: <IcUsers />,    color: "#587795", bg: "#EFF6FF" },
-    { href: `/${locale}/hr/departments`, labelAr: "الأقسام",    labelEn: "Departments", icon: <IcBuilding />, color: "#5D7E9F", bg: "#F5F3FF" },
+    { href: `/${locale}/hr/employees`,   labelAr: "الموظفون",   labelEn: "Employees",   icon: <IcUsers />,    color: "#485668", bg: "#EFF6FF" },
+    { href: `/${locale}/hr/departments`, labelAr: "الأقسام",    labelEn: "Departments", icon: <IcBuilding />, color: "#65707E", bg: "#F5F3FF" },
     { href: `/${locale}/hr/attendance`,  labelAr: "الحضور",     labelEn: "Attendance",  icon: <IcClock />,    color: "#059669", bg: "#ECFDF5" },
     { href: `/${locale}/hr/leaves`,      labelAr: "الإجازات",   labelEn: "Leaves",      icon: <IcCalendar />, color: "#D97706", bg: "#FFFBEB" },
     { href: `/${locale}/hr/payroll`,     labelAr: "الرواتب",    labelEn: "Payroll",     icon: <IcDollar />,   color: "#DC2626", bg: "#FEF2F2" },
@@ -78,7 +78,7 @@ export default function HRPage(props: { params: Promise<{ locale: string }> }) {
 
       <div className="grid-4" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#587795" }}><IcUsers /></div>
+          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#485668" }}><IcUsers /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "إجمالي الموظفين" : "Total Employees"}</div>
             <div className="stat-value">{summary?.total_employees ?? 0}</div>
@@ -153,7 +153,7 @@ export default function HRPage(props: { params: Promise<{ locale: string }> }) {
                   <tr key={emp.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #587795, #5D7E9F)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 8, background: "linear-gradient(135deg, #485668, #65707E)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>
                           {emp.full_name_ar?.charAt(0) || "?"}
                         </div>
                         <div>

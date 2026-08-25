@@ -11,8 +11,8 @@ const IcEyeOff= () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none
 
 const ROLE_LABELS: Record<string, { ar: string; en: string; color: string; bg: string }> = {
   admin:      { ar: "مدير عام",      en: "Admin",       color: "#DC2626", bg: "#FEF2F2" },
-  manager:    { ar: "مدير",          en: "Manager",     color: "#5D7E9F", bg: "#F5F3FF" },
-  accountant: { ar: "محاسب",         en: "Accountant",  color: "#587795", bg: "#EFF6FF" },
+  manager:    { ar: "مدير",          en: "Manager",     color: "#65707E", bg: "#F5F3FF" },
+  accountant: { ar: "محاسب",         en: "Accountant",  color: "#485668", bg: "#EFF6FF" },
   sales:      { ar: "مبيعات",        en: "Sales",       color: "#059669", bg: "#ECFDF5" },
   purchaser:  { ar: "مشتريات",       en: "Purchaser",   color: "#D97706", bg: "#FFFBEB" },
   cashier:    { ar: "كاشير",         en: "Cashier",     color: "#0891B2", bg: "#ECFEFF" },

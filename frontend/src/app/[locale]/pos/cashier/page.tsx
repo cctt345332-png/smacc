@@ -11,14 +11,14 @@ import { useAuthStore } from "@/store/authStore";
 
 // ─── Activity config ──────────────────────────────────────────────────
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string; tracking: string; allowPurchase: boolean }> = {
-  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#425E7A", bg: "#EDF3F8", tracking: "serial",   allowPurchase: true  },
+  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#364152", bg: "#EFF2F5", tracking: "serial",   allowPurchase: true  },
   spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#365F45", bg: "#EEF4ED", tracking: "serial",   allowPurchase: true  },
   pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#176545", bg: "#EAF5ED", tracking: "batch",    allowPurchase: false },
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#9A6B13", bg: "#FFF8E5", tracking: "quantity", allowPurchase: false },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#8B651D", bg: "#FCF5E2", tracking: "weight",   allowPurchase: false },
   clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#516A5B", bg: "#EDF2EC", tracking: "variant",  allowPurchase: false },
   construction:  { label: "مواد بناء",            icon: "construction", color: "#4D5C54", bg: "#E9ECE6", tracking: "quantity", allowPurchase: false },
-  general:       { label: "عام",                 icon: "general",      color: "#425E7A", bg: "#F2F6F1", tracking: "quantity", allowPurchase: false },
+  general:       { label: "عام",                 icon: "general",      color: "#364152", bg: "#F2F6F1", tracking: "quantity", allowPurchase: false },
 };
 
 interface CartLine {

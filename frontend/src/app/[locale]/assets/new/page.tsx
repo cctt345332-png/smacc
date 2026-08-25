@@ -230,7 +230,7 @@ export default function NewAssetPage(props: { params: Promise<{ locale: string }
                         </div>
                         <div>
                           <div style={{ color: "var(--text-muted)" }}>{ar ? "شهري" : "Monthly"}</div>
-                          <div style={{ fontWeight: 700, color: "#5D7E9F" }}>{monthly.toLocaleString("en-US", { minimumFractionDigits: 2 })} {ar ? "ر.س" : "SAR"}</div>
+                          <div style={{ fontWeight: 700, color: "#65707E" }}>{monthly.toLocaleString("en-US", { minimumFractionDigits: 2 })} {ar ? "ر.س" : "SAR"}</div>
                         </div>
                       </div>
                     );

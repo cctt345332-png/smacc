@@ -46,9 +46,9 @@ export default function StoreSettingsPage(props: { params: Promise<{ locale: str
   const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2500); };
 
   const quickLinks = [
-    { href: `/${locale}/inventory/items`,      labelAr: "إدارة المنتجات", labelEn: "Manage Products", icon: <IcPackage />,      color: "#587795", bg: "#EFF6FF" },
+    { href: `/${locale}/inventory/items`,      labelAr: "إدارة المنتجات", labelEn: "Manage Products", icon: <IcPackage />,      color: "#485668", bg: "#EFF6FF" },
     { href: `/${locale}/sales/orders`,         labelAr: "الطلبات",         labelEn: "Orders",           icon: <IcShoppingCart />, color: "#059669", bg: "#ECFDF5" },
-    { href: `/${locale}/inventory/categories`, labelAr: "التصنيفات",       labelEn: "Categories",       icon: <IcTag />,          color: "#5D7E9F", bg: "#F5F3FF" },
+    { href: `/${locale}/inventory/categories`, labelAr: "التصنيفات",       labelEn: "Categories",       icon: <IcTag />,          color: "#65707E", bg: "#F5F3FF" },
   ];
 
   // ── الباقة لا تدعم المتجر ─────────────────────────────────────────
@@ -205,12 +205,12 @@ export default function StoreSettingsPage(props: { params: Promise<{ locale: str
           {/* رابط المتجر */}
           {storeEnabled && (
             <div style={{ padding: "14px 18px", background: "linear-gradient(135deg, #EFF6FF, #F5F3FF)", borderRadius: 12, border: "1px solid #BFDBFE", display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ color: "#587795" }}><IcGlobe /></span>
+              <span style={{ color: "#485668" }}><IcGlobe /></span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 13, color: "#1E40AF" }}>{ar ? "رابط المتجر" : "Store URL"}</div>
                 <div style={{ fontSize: 12, color: "#3B82F6", fontFamily: "monospace", marginTop: 2 }}>smacc.sa/store/{storeSlug}</div>
               </div>
-              <a href={`https://smacc.sa/store/${storeSlug}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ background: "#587795", color: "white" }}>
+              <a href={`https://smacc.sa/store/${storeSlug}`} target="_blank" rel="noopener noreferrer" className="btn btn-sm" style={{ background: "#485668", color: "white" }}>
                 {ar ? "فتح" : "Open"}
               </a>
             </div>

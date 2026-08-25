@@ -55,7 +55,7 @@ export default function SupervisorLayout({ children, locale }: { children: React
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       {/* Top Bar */}
-      <header style={{ position: "sticky", top: 0, zIndex: 100, background: "#5D7E9F",
+      <header style={{ position: "sticky", top: 0, zIndex: 100, background: "#65707E",
         padding: "0 16px", height: 56, display: "flex", alignItems: "center",
         justifyContent: "space-between", boxShadow: "0 1px 8px rgba(0,0,0,0.15)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -100,10 +100,10 @@ export default function SupervisorLayout({ children, locale }: { children: React
             <button key={item.key} onClick={() => router.push(item.href)}
               style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
                 justifyContent: "center", gap: 3, border: "none", background: "transparent",
-                cursor: "pointer", color: active ? "#5D7E9F" : "var(--text-muted)",
+                cursor: "pointer", color: active ? "#65707E" : "var(--text-muted)",
                 padding: "6px 0", position: "relative" }}>
               {active && <span style={{ position: "absolute", top: 6, width: 4, height: 4,
-                borderRadius: "50%", background: "#5D7E9F" }} />}
+                borderRadius: "50%", background: "#65707E" }} />}
               <span style={{ marginTop: active ? 6 : 0 }}>{item.icon}</span>
               <span style={{ fontSize: 10, fontWeight: active ? 700 : 500 }}>{item.label}</span>
             </button>

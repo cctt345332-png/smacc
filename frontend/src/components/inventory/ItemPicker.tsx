@@ -242,7 +242,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2, display: "flex", gap: 8 }}>
                   <span>{item.sku}</span>
                   {item.tracking_type === "serial" && (
-                    <span style={{ color: "#5D7E9F", fontWeight: 600 }}>سيريال</span>
+                    <span style={{ color: "#65707E", fontWeight: 600 }}>سيريال</span>
                   )}
                   {item.tracking_type === "quantity" && (
                     <span style={{ color: item.quantity_on_hand > 0 ? "#059669" : "#DC2626" }}>
@@ -303,7 +303,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
         {/* أيقونة النوع */}
         <div style={{
           width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-          background: isSerial ? "#5D7E9F" : "#059669",
+          background: isSerial ? "#65707E" : "#059669",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -318,7 +318,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
           <div style={{ fontWeight: 700, fontSize: 13, color: isSerial ? "#5B21B6" : "#065F46", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {value.item_name}
           </div>
-          <div style={{ fontSize: 11, color: isSerial ? "#5D7E9F" : "#059669", marginTop: 1 }}>
+          <div style={{ fontSize: 11, color: isSerial ? "#65707E" : "#059669", marginTop: 1 }}>
             {isSerial
               ? (value.serial_number
                   ? `${value.serial_number}${value.condition ? ` — ${conditionAr[value.condition] || value.condition}` : ""}`
@@ -392,15 +392,15 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                 /* عرض السيريالات المدخلة */
                 <div style={{ background: "#F5F3FF", border: "1px solid #C4B5FD", borderRadius: 8, padding: "8px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#5D7E9F" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#65707E" }}>
                       📦 {value.new_serials.length} {ar ? "سيريال جديد" : "new serials"}
                     </span>
                     <button type="button" onClick={() => setShowPurchaseSerialInput(true)}
-                      style={{ background: "none", border: "1px solid #5D7E9F", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#5D7E9F", cursor: "pointer" }}>
+                      style={{ background: "none", border: "1px solid #65707E", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#65707E", cursor: "pointer" }}>
                       {ar ? "تعديل" : "Edit"}
                     </button>
                   </div>
-                  <div style={{ marginTop: 4, fontSize: 10, color: "#5D7E9F", fontFamily: "monospace" }}>
+                  <div style={{ marginTop: 4, fontSize: 10, color: "#65707E", fontFamily: "monospace" }}>
                     {value.new_serials.slice(0, 3).map(s => s.serial_number).join(" · ")}
                     {value.new_serials.length > 3 && ` +${value.new_serials.length - 3}`}
                   </div>
@@ -409,7 +409,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                 <button type="button" onClick={() => setShowPurchaseSerialInput(true)}
                   style={{
                     width: "100%", padding: "10px", borderRadius: 8, border: "2px dashed #C4B5FD",
-                    background: "#F5F3FF", color: "#5D7E9F", fontWeight: 600, fontSize: 13,
+                    background: "#F5F3FF", color: "#65707E", fontWeight: 600, fontSize: 13,
                     cursor: "pointer", textAlign: "center",
                   }}>
                   📦 {ar ? "إضافة أرقام السيريالات الجديدة" : "Add New Serial Numbers"}
@@ -467,7 +467,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                 <button type="button" onClick={() => setShowSerialPicker(true)}
                   style={{
                     width: "100%", padding: "10px", borderRadius: 8, border: "2px dashed #C4B5FD",
-                    background: "#F5F3FF", color: "#5D7E9F", fontWeight: 600, fontSize: 13,
+                    background: "#F5F3FF", color: "#65707E", fontWeight: 600, fontSize: 13,
                     cursor: "pointer", textAlign: "center",
                   }}>
                   📋 {ar ? "تحديد السيريالات من المخزون" : "Select Serials from Stock"}

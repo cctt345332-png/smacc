@@ -7,8 +7,8 @@ import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#587795", bg: "#EFF6FF" },
-  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#5D7E9F", bg: "#F5F3FF" },
+  mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#485668", bg: "#EFF6FF" },
+  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#65707E", bg: "#F5F3FF" },
   pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#059669", bg: "#ECFDF5" },
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#D97706", bg: "#FFFBEB" },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#B45309", bg: "#FEF3C7" },
@@ -147,8 +147,8 @@ export default function SessionDetailPage() {
       <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
           { label: isAr ? "إجمالي المبيعات" : "Total Sales",    value: `${fmt(Number(session.total_sales))} ${sar}`,    icon: "revenue"  as const, color: "#059669", bg: "#ECFDF5" },
-          { label: isAr ? "إجمالي النقد" : "Cash Sales",        value: `${fmt(Number(session.total_cash))} ${sar}`,     icon: "cash"     as const, color: "#587795", bg: "#EFF6FF" },
-          { label: isAr ? "إجمالي البطاقة" : "Card Sales",      value: `${fmt(Number(session.total_card))} ${sar}`,     icon: "card"     as const, color: "#5D7E9F", bg: "#F5F3FF" },
+          { label: isAr ? "إجمالي النقد" : "Cash Sales",        value: `${fmt(Number(session.total_cash))} ${sar}`,     icon: "cash"     as const, color: "#485668", bg: "#EFF6FF" },
+          { label: isAr ? "إجمالي البطاقة" : "Card Sales",      value: `${fmt(Number(session.total_card))} ${sar}`,     icon: "card"     as const, color: "#65707E", bg: "#F5F3FF" },
           { label: isAr ? "ضريبة القيمة المضافة" : "VAT",       value: `${fmt(Number(session.total_vat))} ${sar}`,      icon: "tax"      as const, color: "#D97706", bg: "#FFFBEB" },
         ].map((s) => (
           <div key={s.label} className="stat-card">
@@ -220,7 +220,7 @@ export default function SessionDetailPage() {
             ))}
             <div style={{ borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700 }}>
               <span>{isAr ? "النقد المتوقع" : "Expected Cash"}</span>
-              <span style={{ color: "#587795" }}>{fmt(expectedCash)} {sar}</span>
+              <span style={{ color: "#485668" }}>{fmt(expectedCash)} {sar}</span>
             </div>
             {actualCash != null && (
               <>

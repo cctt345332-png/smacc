@@ -75,8 +75,8 @@ export default function AssetsPage(props: { params: Promise<{ locale: string }> 
       {summary && (
         <div className="grid-4" style={{ marginBottom: 20 }}>
           {[
-            { label: ar ? "إجمالي الأصول" : "Total Assets", value: summary.total_assets, color: "#587795", icon: <Icon name="box" size={20} /> },
-            { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(summary.total_cost)} ${ar ? "ر.س" : "SAR"}`, color: "#5D7E9F", icon: <Icon name="money" size={20} /> },
+            { label: ar ? "إجمالي الأصول" : "Total Assets", value: summary.total_assets, color: "#485668", icon: <Icon name="box" size={20} /> },
+            { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(summary.total_cost)} ${ar ? "ر.س" : "SAR"}`, color: "#65707E", icon: <Icon name="money" size={20} /> },
             { label: ar ? "مجمع الاستهلاك" : "Accum. Depreciation", value: `${fmt(summary.total_accumulated_depreciation)} ${ar ? "ر.س" : "SAR"}`, color: "#D97706", icon: <Icon name="trendingDown" size={20} /> },
             { label: ar ? "القيمة الدفترية" : "Net Book Value", value: `${fmt(summary.total_book_value)} ${ar ? "ر.س" : "SAR"}`, color: "#059669", icon: <Icon name="chart" size={20} /> },
           ].map(s => (

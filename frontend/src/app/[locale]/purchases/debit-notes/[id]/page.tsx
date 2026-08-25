@@ -85,7 +85,7 @@ export default function DebitNoteDetailPage(props: { params: Promise<{ locale: s
             <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
               {company?.logo_data && <img src={company.logo_data} alt="Logo" style={{ height: 52, objectFit: "contain", borderRadius: 6 }} />}
               <div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#5D7E9F" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#65707E" }}>
                   {ar ? "مرتجع مشتريات" : "Purchase Return — مرتجع مشتريات"}
                 </div>
                 <span className={`badge ${status.badge}`} style={{ marginTop: 4 }}>{status.ar}</span>
@@ -170,7 +170,7 @@ export default function DebitNoteDetailPage(props: { params: Promise<{ locale: s
             <div style={{ height: 1, background: "var(--border)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 800 }}>
               <span>{ar ? "الإجمالي شامل الضريبة" : "TOTAL (incl. VAT)"}</span>
-              <span style={{ color: "#5D7E9F" }}>{fmt(note.total)} SAR</span>
+              <span style={{ color: "#65707E" }}>{fmt(note.total)} SAR</span>
             </div>
           </div>
         </div>

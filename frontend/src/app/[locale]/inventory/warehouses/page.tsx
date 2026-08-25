@@ -262,8 +262,8 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
       {/* إحصائيات */}
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي الأصناف" : "Total Items", value: totalItems, color: "#587795" },
-          { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(totalValue)} SAR`, color: "#5D7E9F" },
+          { label: ar ? "إجمالي الأصناف" : "Total Items", value: totalItems, color: "#485668" },
+          { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(totalValue)} SAR`, color: "#65707E" },
           { label: ar ? "أصناف منخفضة" : "Low Stock", value: lowStockCount, color: lowStockCount > 0 ? "#DC2626" : "#059669" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -321,7 +321,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                     {!selectedWarehouse && <td style={{ fontSize: 13 }}>{row.warehouse_name}</td>}
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(row.quantity)}</td>
                     <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#059669" : "#DC2626" }}>{fmt(row.available_qty)}</td>
-                    <td style={{ textAlign: "end", color: "#5D7E9F", fontWeight: 600 }}>{fmt(row.stock_value)} SAR</td>
+                    <td style={{ textAlign: "end", color: "#65707E", fontWeight: 600 }}>{fmt(row.stock_value)} SAR</td>
                     <td>
                       {row.is_low_stock
                         ? <span className="badge badge-danger">{ar ? "منخفض" : "Low Stock"}</span>
@@ -333,7 +333,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
               <tfoot>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                   <td colSpan={!selectedWarehouse ? 6 : 5} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
-                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#5D7E9F" }}>{fmt(totalValue)} SAR</td>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#65707E" }}>{fmt(totalValue)} SAR</td>
                   <td />
                 </tr>
               </tfoot>
@@ -411,7 +411,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                       <span style={{ background: "#F0FDF4", color: "#059669", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
                         {transferResult.total_lines} {ar ? "صنف" : "items"}
                       </span>
-                      <span style={{ background: "#EFF6FF", color: "#587795", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
+                      <span style={{ background: "#EFF6FF", color: "#485668", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
                         {transferResult.total_transferred} {ar ? "وحدة" : "units"}
                       </span>
                       {transferResult.total_errors > 0 && (
@@ -497,7 +497,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                   {/* 2. قائمة الأصناف */}
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>{ar ? "الأصناف المُحوَّلة" : "Items to Transfer"}</span>
-                    <span style={{ background: "#587795", color: "white", borderRadius: 20, padding: "1px 10px", fontSize: 11 }}>
+                    <span style={{ background: "#485668", color: "white", borderRadius: 20, padding: "1px 10px", fontSize: 11 }}>
                       {transferLines.filter(l => l.item).length} {ar ? "صنف" : "items"}
                     </span>
                   </div>

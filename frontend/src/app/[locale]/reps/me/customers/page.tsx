@@ -132,7 +132,7 @@ function LocationPicker({ locale, onSelect, onClose }: {
             <button onClick={() => coords && onSelect(coords.lat, coords.lng)}
               disabled={!coords}
               style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none",
-                background: "#425E7A", color: "white", cursor: "pointer",
+                background: "#364152", color: "white", cursor: "pointer",
                 fontSize: 13, fontWeight: 700 }}>
               {ar ? "تأكيد الموقع" : "Confirm Location"}
             </button>
@@ -238,7 +238,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
           </p>
         </div>
         <button onClick={openNew}
-          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#425E7A", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+          style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#364152", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           {ar ? "عميل جديد" : "New Customer"}
         </button>
@@ -263,7 +263,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
               {ar ? "لا يوجد عملاء" : "No customers found"}
             </div>
             <button onClick={openNew}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#425E7A", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#364152", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
               + {ar ? "أضف عميلاً" : "Add Customer"}
             </button>
           </div>
@@ -313,7 +313,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`} style={{ fontSize: 12, color: "#425E7A", fontWeight: 700, textDecoration: "none", padding: "4px 9px", border: "1px solid #9BBBAD", background: "#EDF3F8" }}>{ar ? "فاتورة" : "Invoice"}</Link>
+                        <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`} style={{ fontSize: 12, color: "#364152", fontWeight: 700, textDecoration: "none", padding: "4px 9px", border: "1px solid #9BBBAD", background: "#EFF2F5" }}>{ar ? "فاتورة" : "Invoice"}</Link>
                         <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#23463A", fontWeight: 700, padding: "4px 9px", border: "1px solid #AEB9B0", background: "#F7F9F5", cursor: "pointer" }}>{ar ? "تعديل" : "Edit"}</button>
                         <button onClick={() => handleDelete(c)} style={{ fontSize: 12, color: "#B42318", fontWeight: 700, padding: "4px 9px", border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
                       </div>
@@ -350,7 +350,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
               <div style={{ display: "flex", gap: 8 }}>
                 {[{ v: "individual", ar: "فرد", en: "Individual" }, { v: "company", ar: "شركة", en: "Company" }].map(t => (
                   <button key={t.v} type="button" onClick={() => upd("customer_type", t.v)}
-                    style={{ flex: 1, padding: "8px", borderRadius: 8, border: "2px solid", borderColor: form.customer_type === t.v ? "#425E7A" : "var(--border)", background: form.customer_type === t.v ? "#EDF3F8" : "var(--surface)", color: form.customer_type === t.v ? "#425E7A" : "var(--text-primary)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    style={{ flex: 1, padding: "8px", borderRadius: 8, border: "2px solid", borderColor: form.customer_type === t.v ? "#364152" : "var(--border)", background: form.customer_type === t.v ? "#EFF2F5" : "var(--surface)", color: form.customer_type === t.v ? "#364152" : "var(--text-primary)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     {ar ? t.ar : t.en}
                   </button>
                 ))}
@@ -421,7 +421,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                     {parseFloat(form.latitude).toFixed(5)}, {parseFloat(form.longitude).toFixed(5)}
                   </span>
                   <button type="button" onClick={() => setShowLocationPicker(true)}
-                    style={{ fontSize: 11, color: "#425E7A", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                    style={{ fontSize: 11, color: "#364152", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>
                     {ar ? "تعديل" : "Edit"}
                   </button>
                   <button type="button" onClick={() => { upd("latitude", ""); upd("longitude", ""); }}
@@ -433,7 +433,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                 <button type="button" onClick={() => setShowLocationPicker(true)}
                   style={{ width: "100%", padding: "10px", borderRadius: 10,
                     border: "2px dashed var(--border)", background: "var(--surface)",
-                    color: "#425E7A", fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    color: "#364152", fontWeight: 600, fontSize: 13, cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -451,7 +451,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                 {ar ? "إلغاء" : "Cancel"}
               </button>
               <button onClick={handleSave} disabled={saving}
-                style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: "#425E7A", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: "#364152", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editingCustomer ? (ar ? "حفظ التعديل" : "Save Changes") : (ar ? "حفظ العميل" : "Save Customer"))}
               </button>
             </div>

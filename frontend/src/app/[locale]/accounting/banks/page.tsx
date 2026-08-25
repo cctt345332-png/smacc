@@ -55,7 +55,7 @@ export default function BankAccountsPage(props: { params: Promise<{ locale: stri
       {/* Summary */}
       <div className="grid-3" style={{ marginBottom: 20 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#58779518", color: "#587795" }}><Icon name="bank" size={20} /></div>
+          <div className="stat-icon" style={{ background: "#48566818", color: "#485668" }}><Icon name="bank" size={20} /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "عدد الحسابات" : "Total Accounts"}</div>
             <div className="stat-value">{items.length}</div>

@@ -31,10 +31,10 @@ function AILogo({ size = 64 }: { size?: number }) {
         </mask>
         <g mask="url(#ai_mask)">
           <path fill="#fff" d="M200 0H0v200h200V0z"/>
-          <path fill="#587795" fillOpacity="0.33" d="M200 0H0v200h200V0z"/>
+          <path fill="#485668" fillOpacity="0.33" d="M200 0H0v200h200V0z"/>
           <g filter="url(#ai_blur)" style={{ animation: "ai-spin 8s linear infinite", transformOrigin: "center", transformBox: "fill-box" as const }}>
-            <path fill="#587795" d="M110 32H18v68h92V32z"/>
-            <path fill="#425E7A" d="M188-24H15v98h173v-98z"/>
+            <path fill="#485668" d="M110 32H18v68h92V32z"/>
+            <path fill="#364152" d="M188-24H15v98h173v-98z"/>
             <path fill="#3B82F6" d="M175 70H5v156h170V70z"/>
             <path fill="#60A5FA" d="M230 51H100v103h130V51z"/>
           </g>
@@ -64,7 +64,7 @@ function ToolResultCard({ result, ar }: { result: any; ar: boolean }) {
     <div style={{ marginTop: 8, background: "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0", overflow: "hidden", fontSize: 12 }}>
       <div style={{ background: "#EFF6FF", padding: "6px 12px", display: "flex", alignItems: "center", gap: 6, borderBottom: "1px solid #E2E8F0" }}>
         <IcChart2 />
-        <span style={{ fontWeight: 700, color: "#587795", fontSize: 11 }}>
+        <span style={{ fontWeight: 700, color: "#485668", fontSize: 11 }}>
           {ar ? "بيانات من النظام" : "Live Data from System"}
         </span>
         {result.period && <span style={{ color: "#64748B", fontSize: 10 }}>· {result.period}</span>}
@@ -583,7 +583,7 @@ export default function AIPage() {
                   transition={{ delay: 0.15 }}
                   style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}
                 >
-                  <span style={{ background: "linear-gradient(135deg, #587795, #60A5FA)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  <span style={{ background: "linear-gradient(135deg, #485668, #60A5FA)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                     {ar ? "كيف يمكنني مساعدتك؟" : "How can I help you?"}
                   </span>
                 </motion.h2>

@@ -30,7 +30,7 @@ const conditionAr: Record<string, string> = {
 
 const statusColor: Record<string, string> = {
   in_stock: "#059669",
-  sold: "#5D7E9F",
+  sold: "#65707E",
   returned: "#D97706",
 };
 
@@ -97,7 +97,7 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>
                   {ar ? "السيريالات في هذه الفاتورة" : "Serials in this bill"}
-                  <span style={{ marginInlineStart: 6, background: "#587795", color: "white", borderRadius: 20, padding: "1px 8px", fontSize: 11 }}>{serials.length}</span>
+                  <span style={{ marginInlineStart: 6, background: "#485668", color: "white", borderRadius: 20, padding: "1px 8px", fontSize: 11 }}>{serials.length}</span>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setSelected(serials.map(s => s.id))}>

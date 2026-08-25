@@ -88,8 +88,8 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
           <div id="report-content-sales">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr) repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
             {[
-              { label: ar ? "عدد الفواتير" : "Invoice Count", value: invoices.length, color: "#587795", isMoney: false },
-              { label: ar ? "المبيعات قبل الضريبة" : "Net Sales", value: totalNet, color: "#5D7E9F", isMoney: true },
+              { label: ar ? "عدد الفواتير" : "Invoice Count", value: invoices.length, color: "#485668", isMoney: false },
+              { label: ar ? "المبيعات قبل الضريبة" : "Net Sales", value: totalNet, color: "#65707E", isMoney: true },
               { label: ar ? "ضريبة القيمة المضافة" : "VAT Amount", value: totalVAT, color: "#D97706", isMoney: true },
               { label: ar ? "إجمالي المبيعات" : "Gross Sales", value: totalGross, color: "#059669", isMoney: true },
               { label: ar ? "المحصّل" : "Collected", value: totalPaid, color: "#059669", isMoney: true },

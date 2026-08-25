@@ -30,8 +30,8 @@ const IcGlobe     = () => <svg {...s}><circle cx="12" cy="12" r="10"/><line x1="
 
 const PLAN_CFG: Record<string, { ar: string; en: string; color: string; bg: string }> = {
   trial:        { ar: "تجريبية",  en: "Trial",        color: "#059669", bg: "#ECFDF5" },
-  starter:      { ar: "أساسية",   en: "Starter",      color: "#587795", bg: "#EFF6FF" },
-  professional: { ar: "احترافية", en: "Professional", color: "#5D7E9F", bg: "#F5F3FF" },
+  starter:      { ar: "أساسية",   en: "Starter",      color: "#485668", bg: "#EFF6FF" },
+  professional: { ar: "احترافية", en: "Professional", color: "#65707E", bg: "#F5F3FF" },
   enterprise:   { ar: "مؤسسية",  en: "Enterprise",   color: "#0F172A", bg: "#F8FAFC" },
 };
 
@@ -64,17 +64,17 @@ export default function SuperAdminDashboard() {
   );
 
   const kpis = [
-    { label: ar ? "إجمالي الشركات"    : "Total Companies",  value: stats?.total_tenants ?? 0,    Icon: IcBuilding, color: "#587795", bg: "#EFF6FF" },
+    { label: ar ? "إجمالي الشركات"    : "Total Companies",  value: stats?.total_tenants ?? 0,    Icon: IcBuilding, color: "#485668", bg: "#EFF6FF" },
     { label: ar ? "شركات نشطة"        : "Active Companies", value: stats?.active_tenants ?? 0,   Icon: IcCheck,    color: "#059669", bg: "#ECFDF5" },
-    { label: ar ? "إجمالي المستخدمين" : "Total Users",      value: stats?.total_users ?? 0,      Icon: IcUsers,    color: "#5D7E9F", bg: "#F5F3FF" },
+    { label: ar ? "إجمالي المستخدمين" : "Total Users",      value: stats?.total_users ?? 0,      Icon: IcUsers,    color: "#65707E", bg: "#F5F3FF" },
     { label: ar ? "باقات منتهية"      : "Expired Plans",    value: stats?.expired_plans ?? 0,    Icon: IcWarning,  color: "#DC2626", bg: "#FEF2F2" },
     { label: ar ? "شركات موقوفة"      : "Inactive",         value: stats?.inactive_tenants ?? 0, Icon: IcPause,    color: "#D97706", bg: "#FFFBEB" },
     { label: ar ? "جديدة هذا الشهر"  : "New This Month",   value: stats?.new_this_month ?? 0,   Icon: IcStar,     color: "#0891B2", bg: "#ECFEFF" },
   ];
 
   const quickActions = [
-    { href: `/${locale}/super-admin/tenants`,    label: ar ? "إدارة الشركات"       : "Manage Companies",  Icon: IcBuilding, color: "#587795", bg: "#EFF6FF" },
-    { href: `/${locale}/super-admin/plans`,      label: ar ? "تعديل الباقات"       : "Edit Plans",        Icon: IcDiamond,  color: "#5D7E9F", bg: "#F5F3FF" },
+    { href: `/${locale}/super-admin/tenants`,    label: ar ? "إدارة الشركات"       : "Manage Companies",  Icon: IcBuilding, color: "#485668", bg: "#EFF6FF" },
+    { href: `/${locale}/super-admin/plans`,      label: ar ? "تعديل الباقات"       : "Edit Plans",        Icon: IcDiamond,  color: "#65707E", bg: "#F5F3FF" },
     { href: `/${locale}/super-admin/activities`, label: ar ? "إدارة الأنشطة"       : "Manage Activities", Icon: IcTarget,   color: "#059669", bg: "#ECFDF5" },
     { href: `/${locale}/super-admin/landing`,    label: ar ? "تعديل صفحة الهبوط"  : "Edit Landing Page", Icon: IcGlobe,    color: "#D97706", bg: "#FFFBEB" },
   ];

@@ -123,7 +123,7 @@ export default function LeavesPage(props: { params: Promise<{ locale: string }> 
                   <tr key={req.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #587795, #5D7E9F)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #485668, #65707E)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
                           {emp?.full_name_ar?.charAt(0) || "?"}
                         </div>
                         <div>

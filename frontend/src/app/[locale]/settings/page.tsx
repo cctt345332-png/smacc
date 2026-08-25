@@ -39,7 +39,7 @@ export default function SettingsPage(props: { params: Promise<{ locale: string }
     {
       href: `/${locale}/settings/company`,
       icon: <IcBuilding />,
-      color: "#587795", bg: "#EFF6FF",
+      color: "#485668", bg: "#EFF6FF",
       title_ar: "بيانات الشركة",
       title_en: "Company Info",
       desc_ar: "الاسم، الشعار، العنوان، الرقم الضريبي",
@@ -48,7 +48,7 @@ export default function SettingsPage(props: { params: Promise<{ locale: string }
     {
       href: `/${locale}/settings/subscription`,
       icon: <IcStar />,
-      color: "#5D7E9F", bg: "#F5F3FF",
+      color: "#65707E", bg: "#F5F3FF",
       title_ar: "اشتراكي",
       title_en: "My Subscription",
       desc_ar: "الباقة الحالية، الاستخدام، الترقية",
@@ -120,7 +120,7 @@ export default function SettingsPage(props: { params: Promise<{ locale: string }
     {
       href: `/${locale}/settings/ai`,
       icon: <IcAI />,
-      color: "#587795", bg: "#EFF6FF",
+      color: "#485668", bg: "#EFF6FF",
       title_ar: "المساعد الذكي",
       title_en: "AI Assistant",
       desc_ar: "إعدادات الذكاء الاصطناعي ومزود الخدمة",

@@ -197,7 +197,7 @@ export default function BackupPage(props: { params: Promise<{ locale: string }> 
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#587795" }}><IcClock /></div>
+          <div className="stat-icon" style={{ background: "#EFF6FF", color: "#485668" }}><IcClock /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "عدد النسخ المحفوظة" : "Stored Backups"}</div>
             <div className="stat-value">{backups.length}</div>
@@ -205,7 +205,7 @@ export default function BackupPage(props: { params: Promise<{ locale: string }> 
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#F5F3FF", color: "#5D7E9F" }}><IcDownload /></div>
+          <div className="stat-icon" style={{ background: "#F5F3FF", color: "#65707E" }}><IcDownload /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "إجمالي الحجم" : "Total Size"}</div>
             <div className="stat-value" style={{ fontSize: 14 }}>

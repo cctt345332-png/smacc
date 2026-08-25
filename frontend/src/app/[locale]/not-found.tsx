@@ -7,7 +7,7 @@ export default function NotFound({ params }: { params?: { locale?: string } }) {
       background: "var(--bg)", flexDirection: "column", gap: 16, padding: 24, textAlign: "center"
     }}>
       <div style={{ width: 64, height: 64, borderRadius: 16, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#587795" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#485668" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
       </div>
