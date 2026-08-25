@@ -21,15 +21,15 @@ export default function PurchasesPage(props: { params: Promise<{ locale: string 
   }, []);
 
   const modules = [
-    { label: ar ? "الموردون" : "Vendors", href: `/${locale}/purchases/vendors`, icon: <Icon name="users" size={24} />, color: "#2563EB", desc: ar ? "إدارة قاعدة بيانات الموردين" : "Manage vendor database" },
-    { label: ar ? "أوامر الشراء" : "Purchase Orders", href: `/${locale}/purchases/orders`, icon: <Icon name="receipt" size={24} />, color: "#7C3AED", desc: ar ? "إنشاء وتتبع أوامر الشراء" : "Create and track purchase orders" },
+    { label: ar ? "الموردون" : "Vendors", href: `/${locale}/purchases/vendors`, icon: <Icon name="users" size={24} />, color: "#587795", desc: ar ? "إدارة قاعدة بيانات الموردين" : "Manage vendor database" },
+    { label: ar ? "أوامر الشراء" : "Purchase Orders", href: `/${locale}/purchases/orders`, icon: <Icon name="receipt" size={24} />, color: "#5D7E9F", desc: ar ? "إنشاء وتتبع أوامر الشراء" : "Create and track purchase orders" },
     { label: ar ? "الفواتير الواردة" : "Bills", href: `/${locale}/purchases/bills`, icon: <Icon name="invoice" size={24} />, color: "#059669", desc: ar ? "فواتير الموردين والمدفوعات" : "Vendor bills and payments" },
     { label: ar ? "مرتجعات المشتريات" : "Purchase Returns", href: `/${locale}/purchases/debit-notes`, icon: <Icon name="reverse" size={24} />, color: "#DC2626", desc: ar ? "إرجاع البضاعة للموردين" : "Return goods to vendors" },
   ];
 
   const reports = [
-    { label: ar ? "تقرير المشتريات" : "Purchases Report", href: `/${locale}/reports/purchases`, color: "#7C3AED" },
-    { label: ar ? "كشف حساب المورد" : "Vendor Statement", href: `/${locale}/reports/purchases/statement`, color: "#2563EB" },
+    { label: ar ? "تقرير المشتريات" : "Purchases Report", href: `/${locale}/reports/purchases`, color: "#5D7E9F" },
+    { label: ar ? "كشف حساب المورد" : "Vendor Statement", href: `/${locale}/reports/purchases/statement`, color: "#587795" },
     { label: ar ? "عمر ديون الموردين" : "AP Aging", href: `/${locale}/reports/purchases/aging`, color: "#DC2626" },
   ];
 
@@ -45,7 +45,7 @@ export default function PurchasesPage(props: { params: Promise<{ locale: string 
       {summary && (
         <div className="grid-3" style={{ marginBottom: 24 }}>
           {[
-            { label: ar ? "إجمالي الفواتير" : "Total Billed", value: `${fmt(summary.total_billed)} SAR`, color: "#7C3AED" },
+            { label: ar ? "إجمالي الفواتير" : "Total Billed", value: `${fmt(summary.total_billed)} SAR`, color: "#5D7E9F" },
             { label: ar ? "المدفوع" : "Total Paid", value: `${fmt(summary.total_paid)} SAR`, color: "#059669" },
             { label: ar ? "المستحق للموردين" : "Outstanding", value: `${fmt(summary.total_outstanding)} SAR`, color: "#DC2626" },
           ].map(s => (

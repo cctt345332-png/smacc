@@ -69,7 +69,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
         {/* Brand */}
         <div className="super-admin-brand">
-          <img src="/logo-masar-green.png" alt="MASAR" className="super-admin-brand-logo" />
+          <img src="/logo-masar-blue.png" alt="MASAR" className="super-admin-brand-logo" />
           <div className="super-admin-brand-caption">
             <span>{ar ? "إدارة المنصة" : "Platform Administration"}</span>
           </div>

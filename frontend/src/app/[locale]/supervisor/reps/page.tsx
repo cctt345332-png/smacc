@@ -44,8 +44,8 @@ export default function SupervisorRepsPage(props: { params: Promise<{ locale: st
               padding: "16px 18px", border: "1px solid var(--border)",
               display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 44, height: 44, borderRadius: "50%",
-                background: "#7C3AED18", display: "flex", alignItems: "center",
-                justifyContent: "center", color: "#7C3AED", fontWeight: 800, fontSize: 16 }}>
+                background: "#5D7E9F18", display: "flex", alignItems: "center",
+                justifyContent: "center", color: "#5D7E9F", fontWeight: 800, fontSize: 16 }}>
                 {rep.full_name?.charAt(0) || "R"}
               </div>
               <div style={{ flex: 1 }}>

@@ -45,7 +45,7 @@ export default function PrivacyPage() {
 
       <section style={{ padding: "32px 5% 56px", background: "#fff" }}>
         <div style={{ maxWidth: 760, margin: "0 auto" }}>
-          <div style={{ padding: "14px 16px", borderRadius: 10, background: "#EFF6FF", border: "1px solid #BFDBFE", marginBottom: 28, fontSize: 13, color: "#1D4ED8" }}>
+          <div style={{ padding: "14px 16px", borderRadius: 10, background: "#EFF6FF", border: "1px solid #BFDBFE", marginBottom: 28, fontSize: 13, color: "#425E7A" }}>
             {ar
               ? "نحن نأخذ خصوصيتك بجدية. هذه السياسة تشرح بوضوح ما نجمعه وكيف نستخدمه وكيف نحميه."
               : "We take your privacy seriously. This policy clearly explains what we collect, how we use it, and how we protect it."}

@@ -52,8 +52,8 @@ export default function MyStockPage(props: { params: Promise<{ locale: string }>
       {/* إحصائيات */}
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي الأصناف" : "Total Items", value: new Set(stock.map((r: any) => r.item_id)).size, color: "#2563EB" },
-          { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(totalValue)} SAR`, color: "#7C3AED" },
+          { label: ar ? "إجمالي الأصناف" : "Total Items", value: new Set(stock.map((r: any) => r.item_id)).size, color: "#587795" },
+          { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(totalValue)} SAR`, color: "#5D7E9F" },
           { label: ar ? "أصناف منخفضة" : "Low Stock", value: lowCount, color: lowCount > 0 ? "#DC2626" : "#059669" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -115,7 +115,7 @@ export default function MyStockPage(props: { params: Promise<{ locale: string }>
                     <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#059669" : "#DC2626" }}>
                       {fmt(row.available_qty)}
                     </td>
-                    <td style={{ textAlign: "end", color: "#7C3AED", fontWeight: 600 }}>{fmt(row.stock_value)} SAR</td>
+                    <td style={{ textAlign: "end", color: "#5D7E9F", fontWeight: 600 }}>{fmt(row.stock_value)} SAR</td>
                     <td>
                       {row.is_low_stock
                         ? <span className="badge badge-danger">{ar ? "منخفض" : "Low"}</span>
@@ -128,7 +128,7 @@ export default function MyStockPage(props: { params: Promise<{ locale: string }>
               <tfoot>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                   <td colSpan={5} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
-                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#7C3AED" }}>{fmt(totalValue)} SAR</td>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#5D7E9F" }}>{fmt(totalValue)} SAR</td>
                   <td />
                 </tr>
               </tfoot>

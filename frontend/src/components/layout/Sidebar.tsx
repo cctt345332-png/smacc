@@ -278,7 +278,7 @@ export default function Sidebar({ locale, collapsed, mobileOpen, onToggle }: {
 
       {/* Logo */}
       <div className="sidebar-logo">
-        <img src="/logo-ha.png" alt="Logo" style={{ height: 46, maxWidth: 180, objectFit: "contain" }} />
+        <img src="/logo-masar-blue.png" alt="Logo" style={{ height: 46, maxWidth: 180, objectFit: "contain" }} />
       </div>
 
       {/* Nav */}

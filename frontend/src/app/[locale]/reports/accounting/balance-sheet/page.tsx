@@ -82,14 +82,14 @@ export default function BalanceSheetPage(props: { params: Promise<{ locale: stri
           <div className="card">
             <div className="card-header"><span className="card-title">{ar ? "الأصول" : "Assets"}</span></div>
             <div className="card-body" style={{ padding: "12px 0" }}>
-              <Section title={ar ? "الأصول" : "Assets"} rows={data.assets} total={data.totalAssets} color="#2563EB" />
+              <Section title={ar ? "الأصول" : "Assets"} rows={data.assets} total={data.totalAssets} color="#587795" />
             </div>
           </div>
           <div className="card">
             <div className="card-header"><span className="card-title">{ar ? "الخصوم وحقوق الملكية" : "Liabilities & Equity"}</span></div>
             <div className="card-body" style={{ padding: "12px 0" }}>
               <Section title={ar ? "الخصوم" : "Liabilities"} rows={data.liabilities} total={data.totalLiabilities} color="#DC2626" />
-              <Section title={ar ? "حقوق الملكية" : "Equity"} rows={data.equity} total={data.totalEquity} color="#7C3AED" />
+              <Section title={ar ? "حقوق الملكية" : "Equity"} rows={data.equity} total={data.totalEquity} color="#5D7E9F" />
               <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", fontWeight: 800, fontSize: 15, background: "#F8FAFC", borderTop: "2px solid var(--border)" }}>
                 <span>{ar ? "إجمالي الخصوم وحقوق الملكية" : "Total Liabilities & Equity"}</span>
                 <span style={{ color: Math.abs(data.totalLiabilities + data.totalEquity - data.totalAssets) < 1 ? "#059669" : "#DC2626" }}>

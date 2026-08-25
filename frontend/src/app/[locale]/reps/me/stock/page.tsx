@@ -53,7 +53,7 @@ export default function RepStockPage(props: { params: Promise<{ locale: string }
           </div>
           <div style={{ background: "var(--surface)", borderRadius: 14, padding: "14px 16px", border: "1px solid var(--border)" }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{ar ? "القيمة الإجمالية" : "Total Value"}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: "#0B5D4A" }}>{fmt(totalVal)} SAR</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: "#425E7A" }}>{fmt(totalVal)} SAR</div>
           </div>
         </div>
       )}
@@ -119,7 +119,7 @@ export default function RepStockPage(props: { params: Promise<{ locale: string }
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
                   <div>
                     <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{ar ? "سعر البيع" : "Sale Price"}</div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: "#0B5D4A" }}>{fmt(s.sale_price)} SAR</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: "#425E7A" }}>{fmt(s.sale_price)} SAR</div>
                   </div>
                   {qty > 0 && (
                     <div style={{ textAlign: "end" }}>

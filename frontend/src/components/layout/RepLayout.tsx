@@ -289,12 +289,12 @@ export default function RepLayout({
   return (
     <div className="rep-legacy-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <style jsx global>{`
-        .rep-legacy-shell { --rep-green:#0B5D4A; --rep-paper:#FFFEFA; --rep-grid:#C8D0C7; --rep-soft:#E8F1E9; background-color:var(--rep-paper); background-image:linear-gradient(rgba(11,93,74,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(11,93,74,.035) 1px,transparent 1px); background-size:24px 24px; color:#1F2D27; }
+        .rep-legacy-shell { --rep-green:#425E7A; --rep-paper:#FFFEFA; --rep-grid:#C8D0C7; --rep-soft:#EDF3F8; background-color:var(--rep-paper); background-image:linear-gradient(rgba(11,93,74,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(11,93,74,.035) 1px,transparent 1px); background-size:24px 24px; color:#1F2D27; }
         .rep-legacy-shell .rep-legacy-menu { display:flex; align-items:center; gap:0; background:#E9ECE6; border-bottom:1px solid var(--rep-grid); min-height:34px; padding-inline:14px; overflow-x:auto; }
         .rep-legacy-shell .rep-legacy-menu a { color:#233B31; text-decoration:none; font-size:12px; font-weight:700; padding:8px 13px; border-inline-start:1px solid #D5DAD4; white-space:nowrap; }
         .rep-legacy-shell .rep-legacy-menu a:hover, .rep-legacy-shell .rep-legacy-menu a.active { background:var(--rep-soft); color:var(--rep-green); }
         .rep-legacy-shell .rep-legacy-toolbar { display:flex; align-items:center; gap:7px; padding:8px 14px; background:#FFFEFA; border-bottom:1px solid var(--rep-grid); }
-        .rep-legacy-shell .rep-legacy-toolbar a { background:linear-gradient(#16806a,#0B5D4A); color:#fff; border:1px solid #084938; border-radius:2px; padding:6px 10px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; }
+        .rep-legacy-shell .rep-legacy-toolbar a { background:linear-gradient(#16806a,#425E7A); color:#fff; border:1px solid #2D455E; border-radius:2px; padding:6px 10px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; }
         .rep-legacy-shell .rep-legacy-toolbar span { font-size:11px; color:#587066; margin-inline-start:5px; }
         .rep-legacy-shell main { max-width:1160px !important; padding:18px 20px 88px !important; }
         .rep-legacy-shell main > div > div { border-radius:2px; }
@@ -302,40 +302,40 @@ export default function RepLayout({
         .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { border-radius:1px !important; border-color:var(--rep-grid) !important; }
         .rep-legacy-shell .rep-legacy-note { font-family:"IBM Plex Sans Arabic", Cairo, sans-serif; font-size:11px; color:#577066; }
         /* طبقة موحدة لكافة صفحات المندوب: أزرار ونماذج وجداول Legacy ERP */
-        .rep-legacy-shell .btn-primary, .rep-legacy-shell .btn.btn-primary { background:linear-gradient(#16806A,#0B5D4A) !important; border:1px solid #084938 !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
+        .rep-legacy-shell .btn-primary, .rep-legacy-shell .btn.btn-primary { background:linear-gradient(#16806A,#425E7A) !important; border:1px solid #2D455E !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
         .rep-legacy-shell .btn-secondary, .rep-legacy-shell .btn.btn-secondary { background:#E9ECE6 !important; border:1px solid #AEB9B0 !important; color:#23463A !important; border-radius:2px !important; box-shadow:none !important; }
         .rep-legacy-shell .card, .rep-legacy-shell .table-wrapper { background:#FFFEFA !important; border-color:#C8D0C7 !important; border-radius:2px !important; box-shadow:none !important; }
-        .rep-legacy-shell .card-header { background:#E8F1E9 !important; border-bottom:1px solid #C8D0C7 !important; }
+        .rep-legacy-shell .card-header { background:#EDF3F8 !important; border-bottom:1px solid #C8D0C7 !important; }
         .rep-legacy-shell table { border-collapse:collapse !important; background:#FFFEFA !important; }
         .rep-legacy-shell th { background:#E9ECE6 !important; color:#28463A !important; border:1px solid #C8D0C7 !important; font-size:12px !important; }
         .rep-legacy-shell td { border:1px solid #D7DDD6 !important; }
         .rep-legacy-shell tr:hover td { background:#F0F6F0 !important; }
         .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { background:#FFFEFA !important; color:#1F2D27 !important; box-shadow:inset 0 1px 1px rgba(0,0,0,.03) !important; }
-        .rep-legacy-shell input:focus, .rep-legacy-shell select:focus, .rep-legacy-shell textarea:focus { outline:2px solid #9BBBAD !important; outline-offset:-1px !important; border-color:#0B5D4A !important; }
-        .rep-legacy-shell input[type="checkbox"], .rep-legacy-shell input[type="radio"] { accent-color:#0B5D4A !important; }
-        .rep-legacy-shell a[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell button[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell a[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell button[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell a[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell button[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell a[style*="background: rgb(99, 102, 241)"], .rep-legacy-shell button[style*="background: rgb(99, 102, 241)"] { background:linear-gradient(#16806A,#0B5D4A) !important; border:1px solid #084938 !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
-        .rep-legacy-shell [style*="color: rgb(37, 99, 235)"], .rep-legacy-shell [style*="color: rgb(124, 58, 237)"], .rep-legacy-shell [style*="color: rgb(59, 130, 246)"], .rep-legacy-shell [style*="color: rgb(99, 102, 241)"], .rep-legacy-shell [style*="color: rgb(79, 70, 229)"], .rep-legacy-shell [style*="color: rgb(139, 92, 246)"] { color:#0B5D4A !important; }
-        .rep-legacy-shell [style*="background: rgb(239, 246, 255)"], .rep-legacy-shell [style*="background: rgb(245, 243, 255)"], .rep-legacy-shell [style*="background: rgb(238, 242, 255)"], .rep-legacy-shell [style*="background: rgb(243, 244, 246)"] { background:#E8F1E9 !important; }
+        .rep-legacy-shell input:focus, .rep-legacy-shell select:focus, .rep-legacy-shell textarea:focus { outline:2px solid #9BBBAD !important; outline-offset:-1px !important; border-color:#425E7A !important; }
+        .rep-legacy-shell input[type="checkbox"], .rep-legacy-shell input[type="radio"] { accent-color:#425E7A !important; }
+        .rep-legacy-shell a[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell button[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell a[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell button[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell a[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell button[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell a[style*="background: rgb(99, 102, 241)"], .rep-legacy-shell button[style*="background: rgb(99, 102, 241)"] { background:linear-gradient(#16806A,#425E7A) !important; border:1px solid #2D455E !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
+        .rep-legacy-shell [style*="color: rgb(37, 99, 235)"], .rep-legacy-shell [style*="color: rgb(124, 58, 237)"], .rep-legacy-shell [style*="color: rgb(59, 130, 246)"], .rep-legacy-shell [style*="color: rgb(99, 102, 241)"], .rep-legacy-shell [style*="color: rgb(79, 70, 229)"], .rep-legacy-shell [style*="color: rgb(139, 92, 246)"] { color:#425E7A !important; }
+        .rep-legacy-shell [style*="background: rgb(239, 246, 255)"], .rep-legacy-shell [style*="background: rgb(245, 243, 255)"], .rep-legacy-shell [style*="background: rgb(238, 242, 255)"], .rep-legacy-shell [style*="background: rgb(243, 244, 246)"] { background:#EDF3F8 !important; }
         .rep-legacy-shell [style*="border: 1px solid rgb(191, 219, 254)"], .rep-legacy-shell [style*="border: 1.5px solid rgb(191, 219, 254)"] { border-color:#9BBBAD !important; }
         .rep-legacy-shell [style*="border-radius"] { border-radius:2px !important; }
         .rep-legacy-shell .empty-state { background:#FFFEFA !important; border:1px dashed #9BBBAD !important; border-radius:2px !important; }
         .rep-legacy-shell .rep-mobile-nav { display:none; }
-        @media (max-width: 799px) { .rep-legacy-shell .rep-legacy-menu { display:none; } .rep-legacy-shell .rep-legacy-toolbar span { display:none; } .rep-legacy-shell .rep-legacy-toolbar { justify-content:center; } .rep-legacy-shell .rep-mobile-nav { position:fixed; display:flex; align-items:stretch; justify-content:space-around; bottom:0; inset-inline:0; height:76px; background:#FFFEFA; border-top:2px solid #0B5D4A; box-shadow:0 -4px 12px rgba(11,93,74,.14); z-index:220; padding:5px 4px max(5px, env(safe-area-inset-bottom)); } .rep-legacy-shell .rep-mobile-nav button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:4px 2px; border:0 !important; border-radius:2px !important; background:transparent; color:#6B7E75; font-family:inherit; cursor:pointer; } .rep-legacy-shell .rep-mobile-nav .rep-nav-icon { width:31px; height:29px; display:flex; align-items:center; justify-content:center; border:1px solid transparent; } .rep-legacy-shell .rep-mobile-nav .rep-nav-label { font-size:11px; font-weight:800; white-space:nowrap; } .rep-legacy-shell .rep-mobile-nav button.active { color:#0B5D4A; background:#E8F1E9; border:1px solid #9BBBAD !important; } .rep-legacy-shell .rep-mobile-nav button.active .rep-nav-icon { background:#0B5D4A; color:#fff; border-color:#084938; } .rep-legacy-shell main { padding-bottom:94px !important; } }
+        @media (max-width: 799px) { .rep-legacy-shell .rep-legacy-menu { display:none; } .rep-legacy-shell .rep-legacy-toolbar span { display:none; } .rep-legacy-shell .rep-legacy-toolbar { justify-content:center; } .rep-legacy-shell .rep-mobile-nav { position:fixed; display:flex; align-items:stretch; justify-content:space-around; bottom:0; inset-inline:0; height:76px; background:#FFFEFA; border-top:2px solid #425E7A; box-shadow:0 -4px 12px rgba(11,93,74,.14); z-index:220; padding:5px 4px max(5px, env(safe-area-inset-bottom)); } .rep-legacy-shell .rep-mobile-nav button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:4px 2px; border:0 !important; border-radius:2px !important; background:transparent; color:#6B7E75; font-family:inherit; cursor:pointer; } .rep-legacy-shell .rep-mobile-nav .rep-nav-icon { width:31px; height:29px; display:flex; align-items:center; justify-content:center; border:1px solid transparent; } .rep-legacy-shell .rep-mobile-nav .rep-nav-label { font-size:11px; font-weight:800; white-space:nowrap; } .rep-legacy-shell .rep-mobile-nav button.active { color:#425E7A; background:#EDF3F8; border:1px solid #9BBBAD !important; } .rep-legacy-shell .rep-mobile-nav button.active .rep-nav-icon { background:#425E7A; color:#fff; border-color:#2D455E; } .rep-legacy-shell main { padding-bottom:94px !important; } }
         @media (min-width: 800px) { .rep-legacy-shell .rep-mobile-nav { display:none !important; } .rep-legacy-shell main { padding-bottom:28px !important; } }
       `}</style>
 
       {/* ── شريط تنبيه الدخول كمندوب ───────────────────────────── */}
       {isImpersonating && (
                 <div style={{
-          background: "#E8F1E9", color: "#0B5D4A",
+          background: "#EDF3F8", color: "#425E7A",
           borderBottom: "1px solid #C8D0C7", padding: "6px 14px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           fontSize: 11, fontWeight: 700, flexShrink: 0, zIndex: 200,
         }}>
           <span>{ar ? "وضع مراجعة المدير: بيانات المندوب" : "Manager review mode: rep data"}</span>
           <button onClick={handleExitImpersonation} style={{
-            background: "#FFFEFA", border: "1px solid #0B5D4A", borderRadius: 1,
-            color: "#0B5D4A", padding: "3px 9px", cursor: "pointer", fontWeight: 800, fontSize: 11,
+            background: "#FFFEFA", border: "1px solid #425E7A", borderRadius: 1,
+            color: "#425E7A", padding: "3px 9px", cursor: "pointer", fontWeight: 800, fontSize: 11,
           }}>{ar ? "العودة للإدارة" : "Back to Admin"}</button>
         </div>
       )}
@@ -343,9 +343,9 @@ export default function RepLayout({
       {/* ── Top Bar ────────────────────────────────────────────────── */}
       <header style={{
         position: "sticky", top: 0, zIndex: 100,
-        background: "linear-gradient(180deg,#11725D,#0B5D4A)",
+        background: "linear-gradient(180deg,#11725D,#425E7A)",
         color: "#fff",
-        borderBottom: "1px solid #084938",
+        borderBottom: "1px solid #2D455E",
         padding: "0 16px",
         height: 48,
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -355,8 +355,8 @@ export default function RepLayout({
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{
             width: 31, height: 31, borderRadius: 2,
-            background: "#E8F1E9",
-            color: "#0B5D4A", display: "flex", alignItems: "center",
+            background: "#EDF3F8",
+            color: "#425E7A", display: "flex", alignItems: "center",
             justifyContent: "center", fontWeight: 800, fontSize: 12,
             flexShrink: 0,
           }}>{initials}</div>

@@ -120,7 +120,7 @@ export default function SerialPicker({ locale, productId, productName, warehouse
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700 }}>
                   {ar ? "المتاح في المخزون" : "Available in stock"}
-                  <span style={{ marginInlineStart: 6, background: "#2563EB", color: "white", borderRadius: 20, padding: "1px 8px", fontSize: 11 }}>{available.length}</span>
+                  <span style={{ marginInlineStart: 6, background: "#587795", color: "white", borderRadius: 20, padding: "1px 8px", fontSize: 11 }}>{available.length}</span>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setSelected(available.map((s: any) => s.id))}>

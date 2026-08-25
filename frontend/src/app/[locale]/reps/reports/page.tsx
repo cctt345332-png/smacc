@@ -17,10 +17,10 @@ const STATUS_AR: Record<string, string> = Object.fromEntries(
   Object.entries(INVOICE_STATUS_PRESENTATION).map(([status, presentation]) => [status, presentation.ar])
 );
 const STATUS_COLOR: Record<string, string> = {
-  draft: "#6B7280", submitted: "#D97706", approved: "#2563EB",
+  draft: "#6B7280", submitted: "#D97706", approved: "#587795",
   rejected: "#DC2626", confirmed: "#059669", paid: "#059669",
   partial: "#D97706", overdue: "#DC2626", cancelled: "#6B7280",
-  sent: "#2563EB", zatca_pending: "#D97706", zatca_cleared: "#059669", zatca_rejected: "#DC2626",
+  sent: "#587795", zatca_pending: "#D97706", zatca_cleared: "#059669", zatca_rejected: "#DC2626",
 };
 const PAY_AR: Record<string, string> = { cash: "نقد", credit: "آجل", cheque: "شيك", transfer: "تحويل" };
 
@@ -287,10 +287,10 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
       {/* بطاقات الإجمالي */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي مبيعات الفريق" : "Team Sales",     value: fmt(totalSales) + " SAR",       color: "#2563EB" },
+          { label: ar ? "إجمالي مبيعات الفريق" : "Team Sales",     value: fmt(totalSales) + " SAR",       color: "#587795" },
           { label: ar ? "إجمالي المحصّل" : "Collected",             value: fmt(totalCollected) + " SAR",   color: "#059669" },
           { label: ar ? "إجمالي المستحق" : "Outstanding",           value: fmt(totalOutstanding) + " SAR", color: totalOutstanding > 0 ? "#DC2626" : "#059669" },
-          { label: ar ? "إجمالي العمولات" : "Commissions",          value: fmt(totalCommission) + " SAR",  color: "#7C3AED" },
+          { label: ar ? "إجمالي العمولات" : "Commissions",          value: fmt(totalCommission) + " SAR",  color: "#5D7E9F" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -380,7 +380,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                           <td style={{ textAlign: "end", fontSize: 13 }}>
                             {rep.target_monthly > 0 ? fmt(rep.target_monthly) + " SAR" : "—"}
                           </td>
-                          <td style={{ textAlign: "end", fontWeight: 700, color: "#2563EB" }}>
+                          <td style={{ textAlign: "end", fontWeight: 700, color: "#587795" }}>
                             {fmt(sum.total_sales || 0)} SAR
                           </td>
                           <td style={{ minWidth: 130 }}>
@@ -410,7 +410,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                               </span>
                             ) : <span style={{ color: "var(--text-muted)", fontSize: 12 }}>—</span>}
                           </td>
-                          <td style={{ textAlign: "end", fontWeight: 600, color: "#7C3AED" }}>
+                          <td style={{ textAlign: "end", fontWeight: 600, color: "#5D7E9F" }}>
                             {commission > 0 ? fmt(commission) + " SAR" : "—"}
                           </td>
                         </tr>
@@ -420,7 +420,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                   <tfoot>
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                       <td colSpan={4} style={{ padding: "10px 16px" }}>{ar ? "الإجمالي" : "Total"} ({repStats.length} {ar ? "مندوب" : "reps"})</td>
-                      <td style={{ textAlign: "end", padding: "10px 16px", color: "#2563EB" }}>{fmt(totalSales)} SAR</td>
+                      <td style={{ textAlign: "end", padding: "10px 16px", color: "#587795" }}>{fmt(totalSales)} SAR</td>
                       <td />
                       <td style={{ textAlign: "end", padding: "10px 16px", color: "#059669" }}>{fmt(totalCollected)} SAR</td>
                       <td style={{ textAlign: "end", padding: "10px 16px", color: totalOutstanding > 0 ? "#DC2626" : "#059669" }}>{fmt(totalOutstanding)} SAR</td>
@@ -428,7 +428,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                       <td style={{ textAlign: "end", padding: "10px 16px", color: "#D97706" }}>
                         {pendingInvoices.filter(i => i.rep_id && i.status === "submitted").length}
                       </td>
-                      <td style={{ textAlign: "end", padding: "10px 16px", color: "#7C3AED" }}>{fmt(totalCommission)} SAR</td>
+                      <td style={{ textAlign: "end", padding: "10px 16px", color: "#5D7E9F" }}>{fmt(totalCommission)} SAR</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -507,7 +507,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                         <td colSpan={6} style={{ padding: "10px 16px" }}>
                           {ar ? "الإجمالي" : "Total"} ({filteredInvoices.length})
                         </td>
-                        <td style={{ textAlign: "end", padding: "10px 16px", color: "#2563EB" }}>
+                        <td style={{ textAlign: "end", padding: "10px 16px", color: "#587795" }}>
                           {fmt(filteredInvoices.reduce((s: number, i: any) => s + Number(i.total || 0), 0))} SAR
                         </td>
                         <td style={{ textAlign: "end", padding: "10px 16px", color: "#059669" }}>

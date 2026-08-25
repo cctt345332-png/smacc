@@ -109,7 +109,7 @@ export default function ExpiryReportPage(props: { params: Promise<{ locale: stri
             { label: ar ? "منتهي الصلاحية" : "Expired", count: alerts.expired_count, value: alerts.expired_value, color: "#DC2626", bg: "#FEF2F2", icon: "alert" },
             { label: ar ? "ينتهي خلال 30 يوم" : "Expires in 30 days", count: rows.filter(r => r.status === "critical").length, value: rows.filter(r => r.status === "critical").reduce((s: number, r: any) => s + r.value, 0), color: "#EA580C", bg: "#FFF7ED", icon: "warning" },
             { label: ar ? "ينتهي خلال 90 يوم" : "Expires in 90 days", count: alerts.near_expiry_count, value: alerts.near_expiry_value, color: "#D97706", bg: "#FFFBEB", icon: "clock" },
-            { label: ar ? "إجمالي قيمة المخاطر" : "Total At-Risk Value", count: alerts.expired_count + alerts.near_expiry_count, value: alerts.expired_value + alerts.near_expiry_value, color: "#7C3AED", bg: "#F5F3FF", icon: "money" },
+            { label: ar ? "إجمالي قيمة المخاطر" : "Total At-Risk Value", count: alerts.expired_count + alerts.near_expiry_count, value: alerts.expired_value + alerts.near_expiry_value, color: "#5D7E9F", bg: "#F5F3FF", icon: "money" },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: "16px 20px", background: s.bg, border: `1px solid ${s.color}30` }}>
               <div style={{ fontSize: 12, color: s.color, fontWeight: 600, marginBottom: 6 }}>{s.label}</div>

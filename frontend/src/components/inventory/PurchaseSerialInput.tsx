@@ -84,14 +84,14 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
         {/* Header */}
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#7C3AED" }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#5D7E9F" }}>
               📦 {ar ? "إضافة سيريالات جديدة" : "Add New Serials"}
             </div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{productName}</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <span style={{
-              background: serials.length > 0 ? "#7C3AED" : "#F1F5F9",
+              background: serials.length > 0 ? "#5D7E9F" : "#F1F5F9",
               color: serials.length > 0 ? "white" : "var(--text-muted)",
               borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700,
             }}>
@@ -110,13 +110,13 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
             <button key={t.key} onClick={() => setTab(t.key)}
               style={{
                 flex: 1, padding: "10px", background: "none", border: "none",
-                borderBottom: tab === t.key ? "2px solid #7C3AED" : "2px solid transparent",
-                color: tab === t.key ? "#7C3AED" : "var(--text-secondary)",
+                borderBottom: tab === t.key ? "2px solid #5D7E9F" : "2px solid transparent",
+                color: tab === t.key ? "#5D7E9F" : "var(--text-secondary)",
                 fontWeight: tab === t.key ? 700 : 500, fontSize: 13, cursor: "pointer", marginBottom: -2,
               }}>
               {t.label}
               {t.key === "manual" && serials.length > 0 && (
-                <span style={{ marginInlineStart: 6, background: "#7C3AED", color: "white", borderRadius: 10, padding: "1px 6px", fontSize: 11 }}>
+                <span style={{ marginInlineStart: 6, background: "#5D7E9F", color: "white", borderRadius: 10, padding: "1px 6px", fontSize: 11 }}>
                   {serials.length}
                 </span>
               )}
@@ -129,7 +129,7 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
 
           {/* الإعدادات الافتراضية — تظهر في كلا التبويبين */}
           <div style={{ background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#7C3AED", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#5D7E9F", marginBottom: 8 }}>
               {ar ? "إعدادات افتراضية للدفعة" : "Batch Default Settings"}
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -138,8 +138,8 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
                   <button key={c} type="button" onClick={() => setDefaultCondition(c)}
                     style={{
                       padding: "5px 10px", borderRadius: 6, fontSize: 12, border: "1px solid",
-                      borderColor: defaultCondition === c ? "#7C3AED" : "var(--border)",
-                      background: defaultCondition === c ? "#7C3AED" : "white",
+                      borderColor: defaultCondition === c ? "#5D7E9F" : "var(--border)",
+                      background: defaultCondition === c ? "#5D7E9F" : "white",
                       color: defaultCondition === c ? "white" : "var(--text-secondary)",
                       cursor: "pointer", fontWeight: 600,
                     }}>
@@ -158,7 +158,7 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
               />
               {serials.length > 0 && (
                 <button type="button" onClick={applyToAll}
-                  style={{ padding: "5px 10px", borderRadius: 6, fontSize: 12, border: "1px solid #7C3AED", background: "white", color: "#7C3AED", cursor: "pointer", fontWeight: 600 }}>
+                  style={{ padding: "5px 10px", borderRadius: 6, fontSize: 12, border: "1px solid #5D7E9F", background: "white", color: "#5D7E9F", cursor: "pointer", fontWeight: 600 }}>
                   {ar ? "تطبيق على الكل" : "Apply to All"}
                 </button>
               )}
@@ -199,7 +199,7 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
                   {ar ? "أو Ctrl+Enter" : "or Ctrl+Enter"}
                 </span>
                 {serials.length > 0 && (
-                  <span style={{ fontSize: 12, color: "#7C3AED", marginInlineStart: "auto", fontWeight: 700 }}>
+                  <span style={{ fontSize: 12, color: "#5D7E9F", marginInlineStart: "auto", fontWeight: 700 }}>
                     ✅ {serials.length} {ar ? "سيريال في القائمة" : "serials in list"}
                   </span>
                 )}
@@ -276,7 +276,7 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
             {serials.length > 0 ? (
-              <span style={{ color: "#7C3AED", fontWeight: 700 }}>
+              <span style={{ color: "#5D7E9F", fontWeight: 700 }}>
                 {serials.length} {ar ? "سيريال جاهز للإضافة" : "serials ready to add"}
               </span>
             ) : (
@@ -288,7 +288,7 @@ export default function PurchaseSerialInput({ locale, productName, onConfirm, on
             <button
               type="button"
               className="btn btn-primary"
-              style={{ background: "#7C3AED", borderColor: "#7C3AED" }}
+              style={{ background: "#5D7E9F", borderColor: "#5D7E9F" }}
               onClick={() => onConfirm(serials.filter(s => s.serial_number.trim()))}
               disabled={serials.filter(s => s.serial_number.trim()).length === 0}
             >

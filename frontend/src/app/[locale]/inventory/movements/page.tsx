@@ -13,8 +13,8 @@ const TYPE_BADGE: Record<string, string> = {
   damage: "badge-danger", initial: "badge-gray",
 };
 const TYPE_COLOR: Record<string, string> = {
-  purchase: "#059669", sale: "#2563EB", return_in: "#D97706",
-  return_out: "#D97706", adjustment: "#6366F1", transfer: "#7C3AED",
+  purchase: "#059669", sale: "#587795", return_in: "#D97706",
+  return_out: "#D97706", adjustment: "#6366F1", transfer: "#5D7E9F",
   damage: "#DC2626", initial: "#94A3B8",
 };
 
@@ -90,7 +90,7 @@ export default function MovementsPage(props: { params: Promise<{ locale: string 
       {/* إحصائيات */}
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي الحركات" : "Total Movements", value: movements.length, color: "#2563EB" },
+          { label: ar ? "إجمالي الحركات" : "Total Movements", value: movements.length, color: "#587795" },
           { label: ar ? "قيمة الوارد" : "Total In Value", value: `${fmt(totalIn)} SAR`, color: "#059669" },
           { label: ar ? "قيمة الصادر" : "Total Out Value", value: `${fmt(totalOut)} SAR`, color: "#DC2626" },
         ].map(s => (

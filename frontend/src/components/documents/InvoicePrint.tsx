@@ -142,8 +142,8 @@ interface Props {
 
 // ألوان كل نوع
 const COLORS = {
-  sale:     { primary: "#1D4ED8", light: "#DBEAFE", badge: "#EFF6FF" },
-  purchase: { primary: "#7C3AED", light: "#EDE9FE", badge: "#F5F3FF" },
+  sale:     { primary: "#425E7A", light: "#DBEAFE", badge: "#EFF6FF" },
+  purchase: { primary: "#5D7E9F", light: "#EDE9FE", badge: "#F5F3FF" },
 };
 
 const STATUS_AR: Record<string, string> = {

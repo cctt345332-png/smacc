@@ -23,9 +23,9 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
   }, []);
 
   const modules = [
-    { label: ar ? "الأصناف" : "Items", href: `/${locale}/inventory/items`, icon: <Icon name="inventory" size={24} />, color: "#2563EB", desc: ar ? "إدارة المنتجات والأصناف" : "Manage products and items" },
+    { label: ar ? "الأصناف" : "Items", href: `/${locale}/inventory/items`, icon: <Icon name="inventory" size={24} />, color: "#587795", desc: ar ? "إدارة المنتجات والأصناف" : "Manage products and items" },
     { label: ar ? "التصنيفات" : "Categories", href: `/${locale}/inventory/categories`, icon: <Icon name="box" size={24} />, color: "#6366F1", desc: ar ? "تنظيم الأصناف في تصنيفات" : "Organize items into categories" },
-    { label: ar ? "المستودعات" : "Warehouses", href: `/${locale}/inventory/warehouses`, icon: <Icon name="bank" size={24} />, color: "#7C3AED", desc: ar ? "إدارة المستودعات والفروع" : "Manage warehouses and branches" },
+    { label: ar ? "المستودعات" : "Warehouses", href: `/${locale}/inventory/warehouses`, icon: <Icon name="bank" size={24} />, color: "#5D7E9F", desc: ar ? "إدارة المستودعات والفروع" : "Manage warehouses and branches" },
     { label: ar ? "حركات المخزون" : "Stock Movements", href: `/${locale}/inventory/movements`, icon: <Icon name="trending" size={24} />, color: "#059669", desc: ar ? "سجل جميع حركات المخزون" : "All stock movement history" },
     { label: ar ? "تسويات المخزون" : "Adjustments", href: `/${locale}/inventory/adjustments`, icon: <Icon name="edit" size={24} />, color: "#D97706", desc: ar ? "تصحيح أرصدة المخزون" : "Correct stock balances" },
   ];
@@ -45,8 +45,8 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
       {summary && (
         <div className="grid-4" style={{ marginBottom: 24 }}>
           {[
-            { label: ar ? "إجمالي الأصناف" : "Total Items", value: summary.total_items, color: "#2563EB", suffix: "" },
-            { label: ar ? "قيمة المخزون" : "Stock Value", value: fmt(summary.total_value), color: "#7C3AED", suffix: " SAR" },
+            { label: ar ? "إجمالي الأصناف" : "Total Items", value: summary.total_items, color: "#587795", suffix: "" },
+            { label: ar ? "قيمة المخزون" : "Stock Value", value: fmt(summary.total_value), color: "#5D7E9F", suffix: " SAR" },
             { label: ar ? "أصناف منخفضة" : "Low Stock", value: summary.low_stock_count, color: "#DC2626", suffix: "" },
             { label: ar ? "سيريالات متاحة" : "Serials In Stock", value: summary.serials_in_stock, color: "#059669", suffix: "" },
           ].map(s => (
@@ -88,7 +88,7 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
           {ar ? "التقارير" : "Reports"}
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link href={`/${locale}/reports/inventory`} className="btn btn-secondary btn-sm" style={{ color: "#2563EB", borderColor: "#2563EB40" }}>
+          <Link href={`/${locale}/reports/inventory`} className="btn btn-secondary btn-sm" style={{ color: "#587795", borderColor: "#58779540" }}>
             {ar ? "تقرير المخزون" : "Inventory Report"}
           </Link>
           <Link href={`/${locale}/reports/inventory/serial-profit`} className="btn btn-secondary btn-sm" style={{ color: "#059669", borderColor: "#05996940" }}>

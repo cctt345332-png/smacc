@@ -103,7 +103,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
           {/* Summary */}
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
-              { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: data.summary.total_invoiced, color: "#2563EB" },
+              { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: data.summary.total_invoiced, color: "#587795" },
               { label: ar ? "إجمالي المدفوعات" : "Total Paid", value: data.summary.total_paid, color: "#059669" },
               { label: ar ? "الرصيد المستحق" : "Closing Balance", value: data.summary.closing_balance, color: data.summary.closing_balance > 0 ? "#DC2626" : "#059669" },
             ].map(s => (
@@ -147,7 +147,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                         </td>
                         <td style={{ fontWeight: 600, color: "var(--primary)", fontSize: 12 }}>{t.reference}</td>
                         <td style={{ fontSize: 13 }}>{ar ? t.description_ar : t.description_en}</td>
-                        <td style={{ textAlign: "end", color: "#2563EB", fontWeight: t.debit > 0 ? 600 : 400 }}>
+                        <td style={{ textAlign: "end", color: "#587795", fontWeight: t.debit > 0 ? 600 : 400 }}>
                           {t.debit > 0 ? fmt(t.debit) : "—"}
                         </td>
                         <td style={{ textAlign: "end", color: "#059669", fontWeight: t.credit > 0 ? 600 : 400 }}>
@@ -162,7 +162,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                   <tfoot>
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                       <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الرصيد الختامي" : "Closing Balance"}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#2563EB" }}>{fmt(data.summary.total_invoiced)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#587795" }}>{fmt(data.summary.total_invoiced)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(data.summary.total_paid)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", fontSize: 15, color: data.summary.closing_balance > 0 ? "#DC2626" : "#059669" }}>
                         {fmt(data.summary.closing_balance)} SAR

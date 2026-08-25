@@ -197,7 +197,7 @@ export default function BillDetailPage(props: { params: Promise<{ locale: string
                 <img src={company.logo_data} alt="Logo" style={{ height: 52, objectFit: "contain", borderRadius: 6 }} />
               )}
               <div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#7C3AED" }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#5D7E9F" }}>
                   {ar ? "فاتورة واردة" : "Purchase Bill — فاتورة واردة"}
                 </div>
                 <span className={`badge ${status.badge}`} style={{ marginTop: 4 }}>{status.ar}</span>
@@ -310,7 +310,7 @@ export default function BillDetailPage(props: { params: Promise<{ locale: string
             <div style={{ height: 1, background: "var(--border)" }} />
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 800 }}>
               <span>{ar ? "الإجمالي شامل الضريبة" : "TOTAL (incl. VAT)"}</span>
-              <span style={{ color: "#7C3AED" }}>{fmt(bill.total)} SAR</span>
+              <span style={{ color: "#5D7E9F" }}>{fmt(bill.total)} SAR</span>
             </div>
             {Number(bill.paid_amount) > 0 && (
               <>

@@ -87,7 +87,7 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
           {/* Summary */}
           <div className="grid-4" style={{ marginBottom: 20 }}>
             {[
-              { label: ar ? "عدد الوحدات المباعة" : "Units Sold", value: data.summary.count, color: "#2563EB" },
+              { label: ar ? "عدد الوحدات المباعة" : "Units Sold", value: data.summary.count, color: "#587795" },
               { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(data.summary.total_cost)} SAR`, color: "#DC2626" },
               { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: `${fmt(data.summary.total_revenue)} SAR`, color: "#059669" },
               { label: ar ? "صافي الربح" : "Net Profit", value: `${fmt(data.summary.total_profit)} SAR`, color: data.summary.total_profit >= 0 ? "#059669" : "#DC2626" },

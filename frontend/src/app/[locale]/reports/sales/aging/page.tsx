@@ -66,7 +66,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
     { key: "days30", label: ar ? "1-30 يوم" : "1-30 Days", color: "#D97706" },
     { key: "days60", label: ar ? "31-60 يوم" : "31-60 Days", color: "#F97316" },
     { key: "days90", label: ar ? "61-90 يوم" : "61-90 Days", color: "#DC2626" },
-    { key: "over90", label: ar ? "أكثر من 90" : "Over 90 Days", color: "#7C3AED" },
+    { key: "over90", label: ar ? "أكثر من 90" : "Over 90 Days", color: "#5D7E9F" },
   ];
 
   return (
@@ -107,9 +107,9 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
                 <div style={{ fontSize: 11, color: "var(--text-muted)" }}>SAR</div>
               </div>
             ))}
-            <div className="card" style={{ padding: "14px 16px", flex: 1, minWidth: 140, borderColor: "#2563EB" }}>
+            <div className="card" style={{ padding: "14px 16px", flex: 1, minWidth: 140, borderColor: "#587795" }}>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{ar ? "الإجمالي" : "Total"}</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#2563EB" }}>{fmt(totals.total)}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#587795" }}>{fmt(totals.total)}</div>
               <div style={{ fontSize: 11, color: "var(--text-muted)" }}>SAR</div>
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
                             {(row as any)[c.key] > 0 ? fmt((row as any)[c.key]) : "—"}
                           </td>
                         ))}
-                        <td style={{ textAlign: "end", fontWeight: 700, color: "#2563EB" }}>{fmt(row.total)}</td>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: "#587795" }}>{fmt(row.total)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -149,7 +149,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
                       {cols.map(c => (
                         <td key={c.key} style={{ textAlign: "end", padding: "12px 16px", color: c.color }}>{fmt((totals as any)[c.key])}</td>
                       ))}
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#2563EB", fontSize: 15 }}>{fmt(totals.total)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#587795", fontSize: 15 }}>{fmt(totals.total)}</td>
                     </tr>
                   </tfoot>
                 </table>

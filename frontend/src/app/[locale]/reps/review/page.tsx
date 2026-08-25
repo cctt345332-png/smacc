@@ -10,14 +10,14 @@ const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year:"num
 const PAY_METHOD: Record<string, { ar: string; color: string }> = {
   cash:     { ar: "نقد",    color: "#059669" },
   credit:   { ar: "آجل",   color: "#D97706" },
-  cheque:   { ar: "شيك",   color: "#7C3AED" },
-  transfer: { ar: "تحويل", color: "#2563EB" },
+  cheque:   { ar: "شيك",   color: "#5D7E9F" },
+  transfer: { ar: "تحويل", color: "#587795" },
 };
 
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
-  approved:  { ar: "موافق عليها",      color: "#2563EB", bg: "#EFF6FF" },
+  approved:  { ar: "موافق عليها",      color: "#587795", bg: "#EFF6FF" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
   confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
   paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
@@ -68,7 +68,7 @@ function InvoiceDetailModal({
           display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#2563EB" }}>
+              <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: 18, color: "#587795" }}>
                 {inv.invoice_number}
               </span>
               <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
@@ -83,7 +83,7 @@ function InvoiceDetailModal({
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={handlePDF} disabled={downloading}
               style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid #BFDBFE",
-                background: "#EFF6FF", color: "#2563EB", fontSize: 13, fontWeight: 600,
+                background: "#EFF6FF", color: "#587795", fontSize: 13, fontWeight: 600,
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -155,7 +155,7 @@ function InvoiceDetailModal({
                           <td style={{ padding: "10px 12px" }}>
                             <div style={{ fontWeight: 600 }}>{line.description_ar}</div>
                             {line.serial_numbers?.length > 0 && (
-                              <div style={{ fontSize: 11, color: "#7C3AED", marginTop: 2, fontFamily: "monospace" }}>
+                              <div style={{ fontSize: 11, color: "#5D7E9F", marginTop: 2, fontFamily: "monospace" }}>
                                 {line.serial_numbers.slice(0, 3).join(", ")}
                                 {line.serial_numbers.length > 3 && ` +${line.serial_numbers.length - 3}`}
                               </div>
@@ -167,7 +167,7 @@ function InvoiceDetailModal({
                           <td style={{ padding: "10px 12px", fontWeight: 600 }}>{line.quantity}</td>
                           <td style={{ padding: "10px 12px" }}>{fmt(line.unit_price)} SAR</td>
                           <td style={{ padding: "10px 12px", color: "#D97706" }}>{line.vat_rate || 15}%</td>
-                          <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 700, color: "#2563EB" }}>
+                          <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 700, color: "#587795" }}>
                             {fmt(line.total || (line.quantity * line.unit_price))} SAR
                           </td>
                         </tr>
@@ -194,7 +194,7 @@ function InvoiceDetailModal({
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 4px",
                 fontWeight: 800, fontSize: 16 }}>
                 <span>{ar ? "الإجمالي" : "Total"}</span>
-                <span style={{ color: "#2563EB" }}>{fmt(d.total)} SAR</span>
+                <span style={{ color: "#587795" }}>{fmt(d.total)} SAR</span>
               </div>
               {Number(d.paid_amount || 0) > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
@@ -360,8 +360,8 @@ export default function ReviewPage(props: { params: Promise<{ locale: string }> 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
         {[
           { label: ar ? "إجمالي الفواتير المعلّقة" : "Pending Invoices", value: invoices.length, color: "#D97706" },
-          { label: ar ? "الفواتير المعروضة" : "Filtered", value: filtered.length, color: "#2563EB" },
-          { label: ar ? "إجمالي المبالغ المعلّقة" : "Pending Amount", value: fmt(invoices.reduce((s: number, i: any) => s + Number(i.total || 0), 0)) + " SAR", color: "#7C3AED" },
+          { label: ar ? "الفواتير المعروضة" : "Filtered", value: filtered.length, color: "#587795" },
+          { label: ar ? "إجمالي المبالغ المعلّقة" : "Pending Amount", value: fmt(invoices.reduce((s: number, i: any) => s + Number(i.total || 0), 0)) + " SAR", color: "#5D7E9F" },
           { label: ar ? "مبالغ الفواتير المعروضة" : "Filtered Amount", value: fmt(totalAmount) + " SAR", color: "#059669" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>

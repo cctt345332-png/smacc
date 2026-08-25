@@ -122,14 +122,14 @@ export default function RepReturnPage(props: { params: Promise<{ locale: string 
 
       <section className="card" style={{ padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "الفاتورة الأصلية" : "Original invoice"}</div><div style={{ fontFamily: "monospace", fontWeight: 800, color: "#0B5D4A" }}>{invoice?.invoice_number}</div></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "الفاتورة الأصلية" : "Original invoice"}</div><div style={{ fontFamily: "monospace", fontWeight: 800, color: "#425E7A" }}>{invoice?.invoice_number}</div></div>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "العميل" : "Customer"}</div><div style={{ fontWeight: 700 }}>{invoice?.buyer_name_ar}</div></div>
           <div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "إجمالي الفاتورة" : "Invoice total"}</div><div style={{ fontWeight: 800 }}>{fmt(invoice?.total)} SAR</div></div>
-          <div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "المقبوض بسندات القبض" : "Receipt amount"}</div><div style={{ fontWeight: 800, color: "#0B5D4A" }}>{fmt(invoice?.paid_amount)} SAR</div></div>
+          <div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "المقبوض بسندات القبض" : "Receipt amount"}</div><div style={{ fontWeight: 800, color: "#425E7A" }}>{fmt(invoice?.paid_amount)} SAR</div></div>
         </div>
       </section>
 
-      <div style={{ background: "#E8F1E9", border: "1px solid #9BBBAD", padding: "10px 13px", fontSize: 12, color: "#23463A" }}>
+      <div style={{ background: "#EDF3F8", border: "1px solid #9BBBAD", padding: "10px 13px", fontSize: 12, color: "#23463A" }}>
         {ar ? "المرتجع ينشئ إشعارًا دائنًا مرتبطًا بالفاتورة الأصلية. يظهر مبلغ سندات القبض أعلاه للمتابعة؛ أي صرف نقدي للعميل يُنفذ كسند صرف منفصل بعد اعتماد سياسة المنشأة." : "The return creates a credit note linked to the original invoice. Receipt amount is shown for reference; any customer cash refund is processed separately as a payment voucher under company policy."}
       </div>
 
@@ -146,7 +146,7 @@ export default function RepReturnPage(props: { params: Promise<{ locale: string 
       <section className="card" style={{ padding: 16 }}>
         <label style={{ display: "block", fontWeight: 800, fontSize: 13, marginBottom: 7 }}>{ar ? "سبب المرتجع" : "Return reason"}</label>
         <textarea className="form-input" rows={3} value={reason} onChange={e => setReason(e.target.value)} placeholder={ar ? "مثال: استلام صنف غير مطابق أو إلغاء طلب العميل" : "Example: item not as requested or customer cancellation"} />
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)", fontWeight: 800 }}><span>{ar ? "إجمالي المرتجع شامل الضريبة" : "Return total incl. VAT"}</span><span style={{ color: "#0B5D4A", fontFamily: "monospace" }}>{fmt(totals.total)} SAR</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border)", fontWeight: 800 }}><span>{ar ? "إجمالي المرتجع شامل الضريبة" : "Return total incl. VAT"}</span><span style={{ color: "#425E7A", fontFamily: "monospace" }}>{fmt(totals.total)} SAR</span></div>
         <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} disabled={saving} onClick={submit}>{saving ? (ar ? "جاري إنشاء المرتجع..." : "Creating return...") : (ar ? "إنشاء الإشعار الدائن للمرتجع" : "Create Return Credit Note")}</button>
       </section>
     </div>

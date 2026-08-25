@@ -131,7 +131,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
       h1 { font-size: 18px; margin-bottom: 4px; }
       .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
       table { width: 100%; border-collapse: collapse; }
-      thead tr { background: #2563EB; color: white; }
+      thead tr { background: #587795; color: white; }
       thead th { padding: 8px 10px; font-size: 12px; font-weight: 700; text-align: start; }
       tbody tr:nth-child(even) { background: #f9fafb; }
       @media print {

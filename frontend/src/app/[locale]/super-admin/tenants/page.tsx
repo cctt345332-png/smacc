@@ -20,8 +20,8 @@ const IcChevronR= () => <svg {...s}><polyline points="9 18 15 12 9 6"/></svg>;
 
 const PLAN_CFG: Record<string, { ar: string; en: string; color: string; bg: string }> = {
   trial:        { ar: "تجريبية",  en: "Trial",        color: "#059669", bg: "#DCFCE7" },
-  starter:      { ar: "أساسية",   en: "Starter",      color: "#2563EB", bg: "#DBEAFE" },
-  professional: { ar: "احترافية", en: "Professional", color: "#7C3AED", bg: "#EDE9FE" },
+  starter:      { ar: "أساسية",   en: "Starter",      color: "#587795", bg: "#DBEAFE" },
+  professional: { ar: "احترافية", en: "Professional", color: "#5D7E9F", bg: "#EDE9FE" },
   enterprise:   { ar: "مؤسسية",  en: "Enterprise",   color: "#0F172A", bg: "#F1F5F9" },
 };
 const ACT_AR: Record<string, string> = {

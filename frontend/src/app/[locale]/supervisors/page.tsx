@@ -114,7 +114,7 @@ export default function SupervisorsPage(props: { params: Promise<{ locale: strin
                 {sup.reps && sup.reps.length > 0 ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {sup.reps.map((r: any) => (
-                      <span key={r.id} style={{ background: "#EFF6FF", color: "#2563EB",
+                      <span key={r.id} style={{ background: "#EFF6FF", color: "#587795",
                         padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
                         {r.rep_code}
                       </span>

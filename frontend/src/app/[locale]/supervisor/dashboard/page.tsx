@@ -54,8 +54,8 @@ export default function SupervisorDashboard(props: { params: Promise<{ locale: s
       {/* إحصائيات */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {[
-          { label: ar ? "عدد المناديب" : "My Reps",        value: String(summary?.rep_count || 0),    color: "#7C3AED" },
-          { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(summary?.total_sales) + " SAR", color: "#2563EB" },
+          { label: ar ? "عدد المناديب" : "My Reps",        value: String(summary?.rep_count || 0),    color: "#5D7E9F" },
+          { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(summary?.total_sales) + " SAR", color: "#587795" },
           { label: ar ? "المقبوض" : "Collected",           value: fmt(summary?.total_collected) + " SAR", color: "#059669" },
           { label: ar ? "المستحق" : "Outstanding",         value: fmt(summary?.outstanding) + " SAR", color: Number(summary?.outstanding) > 0 ? "#DC2626" : "#059669" },
         ].map(s => (
@@ -73,8 +73,8 @@ export default function SupervisorDashboard(props: { params: Promise<{ locale: s
           {ar ? "الإجراءات السريعة" : "Quick Actions"}
         </div>
         {[
-          { label: ar ? "فواتير مناديبي" : "Invoices",   desc: ar ? "عرض فواتير مناديبي" : "View rep invoices", href: `${base}/supervisor/invoices`, color: "#2563EB" },
-          { label: ar ? "التقارير" : "Reports",           desc: ar ? "تقارير الأداء" : "Performance reports",  href: `${base}/supervisor/reports`,  color: "#7C3AED" },
+          { label: ar ? "فواتير مناديبي" : "Invoices",   desc: ar ? "عرض فواتير مناديبي" : "View rep invoices", href: `${base}/supervisor/invoices`, color: "#587795" },
+          { label: ar ? "التقارير" : "Reports",           desc: ar ? "تقارير الأداء" : "Performance reports",  href: `${base}/supervisor/reports`,  color: "#5D7E9F" },
           { label: ar ? "مناديبي" : "My Reps",            desc: ar ? `${reps.length} مندوب` : `${reps.length} reps`, href: `${base}/supervisor/reps`, color: "#059669" },
         ].map(a => (
           <Link key={a.href} href={a.href} style={{ textDecoration: "none" }}>
@@ -109,9 +109,9 @@ export default function SupervisorDashboard(props: { params: Promise<{ locale: s
               <div key={rep.id} style={{ background: "var(--surface)", borderRadius: 14,
                 padding: "12px 16px", border: "1px solid var(--border)",
                 display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#7C3AED18",
+                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#5D7E9F18",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "#7C3AED", fontWeight: 800, fontSize: 12 }}>
+                  color: "#5D7E9F", fontWeight: 800, fontSize: 12 }}>
                   {rep.full_name?.charAt(0) || "R"}
                 </div>
                 <div>

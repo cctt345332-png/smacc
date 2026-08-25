@@ -123,7 +123,7 @@ export default function AlertSettingsPage(props: { params: Promise<{ locale: str
       )}
 
       {/* الأصول الثابتة */}
-      <Section title={ar ? "الأصول الثابتة" : "Fixed Assets"} color="#2563EB">
+      <Section title={ar ? "الأصول الثابتة" : "Fixed Assets"} color="#587795">
         <AlertRow label={ar ? "انتهاء الضمان" : "Warranty Expiry"} desc={ar ? "تنبيه قبل انتهاء ضمان الأصل" : "Alert before asset warranty expires"} enabled={settings.asset_warranty_alert} onToggle={v => upd("asset_warranty_alert", v)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "التنبيه قبل:" : "Alert before:"}</span>
@@ -173,7 +173,7 @@ export default function AlertSettingsPage(props: { params: Promise<{ locale: str
       </Section>
 
       {/* المشتريات */}
-      <Section title={ar ? "المشتريات" : "Purchases"} color="#7C3AED">
+      <Section title={ar ? "المشتريات" : "Purchases"} color="#5D7E9F">
         <AlertRow label={ar ? "فواتير موردين متأخرة" : "Overdue Bills"} desc={ar ? "تنبيه عند تأخر دفع فواتير الموردين" : "Alert when supplier bills are overdue"} enabled={settings.purchases_overdue_alert} onToggle={v => upd("purchases_overdue_alert", v)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "بعد:" : "After:"}</span>

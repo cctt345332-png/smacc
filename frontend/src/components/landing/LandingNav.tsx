@@ -52,7 +52,7 @@ export default function LandingNav({ locale }: LandingNavProps) {
         }}>
           {/* Logo — logo-ha فقط */}
           <Link href={`/${locale}/landing`} style={{ display: "flex", alignItems: "center", textDecoration: "none" }}>
-            <img src="/logo-ha.png" alt="Masar" style={{ height: 56, maxWidth: 220, objectFit: "contain" }} />
+            <img src="/logo-masar-blue.png" alt="Masar" style={{ height: 56, maxWidth: 220, objectFit: "contain" }} />
           </Link>
 
           {/* Desktop links */}
@@ -60,7 +60,7 @@ export default function LandingNav({ locale }: LandingNavProps) {
             {links.map(l => (
               <Link key={l.href} href={l.href} style={{
                 padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 600,
-                color: isActive(l.href) ? "#2563EB" : "#64748B",
+                color: isActive(l.href) ? "#587795" : "#64748B",
                 background: isActive(l.href) ? "#EFF6FF" : "transparent",
                 textDecoration: "none", transition: "all 0.15s",
               }}>
@@ -79,7 +79,7 @@ export default function LandingNav({ locale }: LandingNavProps) {
             </Link>
             <Link href={`/${locale}/register`} style={{
               padding: "7px 16px", borderRadius: 8, fontSize: 13, fontWeight: 700,
-              background: "#2563EB", color: "white", textDecoration: "none",
+              background: "#587795", color: "white", textDecoration: "none",
             }}>
               {ar ? "ابدأ مجاناً" : "Start Free"}
             </Link>
@@ -105,7 +105,7 @@ export default function LandingNav({ locale }: LandingNavProps) {
           {links.map(l => (
             <Link key={l.href} href={l.href} onClick={() => setOpen(false)} style={{
               padding: "10px 12px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-              color: isActive(l.href) ? "#2563EB" : "#0F172A",
+              color: isActive(l.href) ? "#587795" : "#0F172A",
               background: isActive(l.href) ? "#EFF6FF" : "transparent",
               textDecoration: "none",
             }}>
@@ -122,7 +122,7 @@ export default function LandingNav({ locale }: LandingNavProps) {
             </Link>
             <Link href={`/${locale}/register`} onClick={() => setOpen(false)} style={{
               flex: 1, textAlign: "center", padding: "10px", borderRadius: 8,
-              fontSize: 14, fontWeight: 700, background: "#2563EB",
+              fontSize: 14, fontWeight: 700, background: "#587795",
               color: "white", textDecoration: "none",
             }}>
               {ar ? "ابدأ مجاناً" : "Start Free"}

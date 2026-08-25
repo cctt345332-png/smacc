@@ -13,10 +13,10 @@ function AILogoSmall() {
         </mask>
         <g mask="url(#w_mask)">
           <path fill="#fff" d="M200 0H0v200h200V0z"/>
-          <path fill="#2563EB" fillOpacity="0.4" d="M200 0H0v200h200V0z"/>
+          <path fill="#587795" fillOpacity="0.4" d="M200 0H0v200h200V0z"/>
           <g filter="url(#w_blur)" style={{ animation: "ai-spin 6s linear infinite", transformOrigin: "center", transformBox: "fill-box" as const }}>
-            <path fill="#2563EB" d="M110 32H18v68h92V32z"/>
-            <path fill="#1D4ED8" d="M188-24H15v98h173v-98z"/>
+            <path fill="#587795" d="M110 32H18v68h92V32z"/>
+            <path fill="#425E7A" d="M188-24H15v98h173v-98z"/>
             <path fill="#3B82F6" d="M175 70H5v156h170V70z"/>
             <path fill="#60A5FA" d="M230 51H100v103h130V51z"/>
           </g>
@@ -102,7 +102,7 @@ export default function AIWidget({ locale }: { locale: string }) {
             width: 18,
             height: 18,
             borderRadius: "50%",
-            background: "#2563EB",
+            background: "#587795",
             color: "white",
             fontSize: 10,
             fontWeight: 700,

@@ -9,7 +9,7 @@ export default function LandingFooter({ locale }: { locale: string }) {
           {/* Brand */}
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <img src="/logo-ha.png" alt="Logo" style={{ height: 44, maxWidth: 160, objectFit: "contain" }} />
+              <img src="/logo-masar-blue.png" alt="Logo" style={{ height: 44, maxWidth: 160, objectFit: "contain" }} />
             </div>
             <p style={{ fontSize: 12, lineHeight: 1.7, color: "#64748B" }}>
               {ar ? "نظام ERP سحابي متوافق مع زاتكا — مصمم للأعمال السعودية" : "Cloud ERP compliant with ZATCA — designed for Saudi businesses"}

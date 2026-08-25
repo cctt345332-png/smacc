@@ -78,10 +78,10 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
       {/* إحصائيات */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {[
-          { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(totalSales) + " SAR", color: "#7C3AED" },
+          { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(totalSales) + " SAR", color: "#5D7E9F" },
           { label: ar ? "المقبوض" : "Collected", value: fmt(totalCollected) + " SAR", color: "#059669" },
           { label: ar ? "المستحق" : "Outstanding", value: fmt(totalSales - totalCollected) + " SAR", color: "#DC2626" },
-          { label: ar ? "عدد الفواتير" : "Invoices", value: String(summary?.invoice_count || 0), color: "#2563EB" },
+          { label: ar ? "عدد الفواتير" : "Invoices", value: String(summary?.invoice_count || 0), color: "#587795" },
         ].map(s => (
           <div key={s.label} style={{ background: "var(--surface)", borderRadius: 14, padding: "14px 16px", border: "1px solid var(--border)" }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>{s.label}</div>
@@ -110,7 +110,7 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
                     {rep.rep_code} · {repInvoices.length} {ar ? "فاتورة" : "invoices"}
                   </div>
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: "#7C3AED" }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#5D7E9F" }}>
                   {fmt(repSales)} SAR
                 </div>
               </div>

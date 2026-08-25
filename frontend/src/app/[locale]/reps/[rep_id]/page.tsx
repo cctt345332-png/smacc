@@ -11,7 +11,7 @@ const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US") : "—";
 const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   draft:     { ar: "مسودة",            color: "#6B7280", bg: "#F3F4F6" },
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FFFBEB" },
-  approved:  { ar: "موافق عليها",      color: "#2563EB", bg: "#EFF6FF" },
+  approved:  { ar: "موافق عليها",      color: "#587795", bg: "#EFF6FF" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
   confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
   paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
@@ -175,8 +175,8 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
       {summary && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12, marginBottom: 20 }}>
           {[
-            { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(summary.total_sales) + " SAR", color: "#2563EB" },
-            { label: ar ? "عدد الفواتير" : "Invoices",       value: summary.invoice_count,             color: "#7C3AED" },
+            { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(summary.total_sales) + " SAR", color: "#587795" },
+            { label: ar ? "عدد الفواتير" : "Invoices",       value: summary.invoice_count,             color: "#5D7E9F" },
             { label: ar ? "المحصّل" : "Collected",            value: fmt(summary.total_collected) + " SAR", color: "#059669" },
             { label: ar ? "المستحق" : "Outstanding",          value: fmt(summary.outstanding) + " SAR",     color: Number(summary.outstanding) > 0 ? "#DC2626" : "#059669" },
             { label: ar ? "المخزون" : "Stock Qty",            value: Number(summary.stock_qty || 0).toLocaleString("en-US"), color: "#D97706" },
@@ -257,22 +257,22 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
               <div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{ar ? "الهدف الشهري" : "Monthly Target"}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: "#2563EB" }}>{rep.target_monthly > 0 ? fmt(rep.target_monthly) + " SAR" : "—"}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#587795" }}>{rep.target_monthly > 0 ? fmt(rep.target_monthly) + " SAR" : "—"}</div>
               </div>
               <div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{ar ? "نسبة التحقق" : "Achievement"}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: pct !== null ? (pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB") : "var(--text-muted)" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: pct !== null ? (pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#587795") : "var(--text-muted)" }}>
                   {pct !== null ? `${pct}%` : "—"}
                 </div>
                 {pct !== null && (
                   <div style={{ marginTop: 6, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#2563EB", borderRadius: 3, transition: "width 0.3s" }} />
+                    <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#587795", borderRadius: 3, transition: "width 0.3s" }} />
                   </div>
                 )}
               </div>
               <div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{ar ? "نسبة العمولة" : "Commission %"}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: "#7C3AED" }}>{rep.commission_pct > 0 ? `${rep.commission_pct}%` : "—"}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: "#5D7E9F" }}>{rep.commission_pct > 0 ? `${rep.commission_pct}%` : "—"}</div>
                 {rep.commission_pct > 0 && summary && (
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
                     {ar ? "المستحق:" : "Due:"} {fmt(Number(summary.total_sales || 0) * Number(rep.commission_pct) / 100)} SAR
@@ -749,7 +749,7 @@ function TrackingTab({
     map.eachLayer((l: any) => { if (l._isTrackLayer) map.removeLayer(l); });
 
     const coords: [number, number][] = trackPoints.map(p => [p.latitude, p.longitude]);
-    const polyline = L.polyline(coords, { color: "#2563EB", weight: 3, opacity: 0.8 });
+    const polyline = L.polyline(coords, { color: "#587795", weight: 3, opacity: 0.8 });
     polyline._isTrackLayer = true;
     polyline.addTo(map);
 
@@ -768,7 +768,7 @@ function TrackingTab({
     trackPoints.forEach((p, i) => {
       if (i === 0 || i === trackPoints.length - 1 || i % 5 !== 0) return;
       const time = new Date(p.recorded_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-      const dot = L.circleMarker([p.latitude, p.longitude], { radius: 5, color: "#7C3AED", fillColor: "#7C3AED", fillOpacity: 0.7, weight: 1 });
+      const dot = L.circleMarker([p.latitude, p.longitude], { radius: 5, color: "#5D7E9F", fillColor: "#5D7E9F", fillOpacity: 0.7, weight: 1 });
       dot._isTrackLayer = true;
       dot.bindTooltip(time, { permanent: false }).addTo(map);
     });
