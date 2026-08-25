@@ -4,6 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { getUnreadCount } from "@/lib/notifications";
+import PageBackButton from "./PageBackButton";
 
 /* ══════════════════════════════════════════════════════════════════
    RepLayout — واجهة المندوب الحصرية
@@ -409,6 +410,7 @@ export default function RepLayout({
         <Link href={`${base}/reps/me/reports`} className={pathname.includes("/reports") ? "active" : ""}>{ar ? "تقارير المندوب" : "Rep Reports"}</Link>
       </div>
       <div className="rep-legacy-toolbar">
+        <PageBackButton locale={locale} fallbackPath={`${base}/reps/me/dashboard`} className="rep-legacy-back" />
         <Link href={`${base}/reps/me/invoices/new`}>{ar ? "+ فاتورة مبيعات" : "+ Sales Invoice"}</Link>
         <Link href={`${base}/reps/me/payments`}>{ar ? "سند قبض" : "Receipt"}</Link>
         <Link href={`${base}/reps/me/invoices`}>{ar ? "مرتجع مبيعات" : "Sales Return"}</Link>

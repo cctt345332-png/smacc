@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { getUnreadCount } from "@/lib/notifications";
+import PageBackButton from "./PageBackButton";
 
 const NavIcons = {
   home: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
@@ -87,6 +88,9 @@ export default function SupervisorLayout({ children, locale }: { children: React
 
       {/* المحتوى */}
       <main style={{ flex: 1, padding: "16px 16px 80px", maxWidth: 640, width: "100%", margin: "0 auto" }}>
+        <div className="supervisor-back" style={{ display: "flex", justifyContent: "flex-start", marginBottom: 10 }}>
+          <PageBackButton locale={locale} fallbackPath={`${base}/supervisor/dashboard`} />
+        </div>
         {children}
       </main>
 

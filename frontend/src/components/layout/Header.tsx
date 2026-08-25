@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { getUnreadCount, getNotifications, markRead, markAllRead } from "@/lib/notifications";
 import { Icon } from "@/components/ui/Icons";
+import PageBackButton from "./PageBackButton";
 
 const IconSearch = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
 const IconBell = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
@@ -90,6 +91,7 @@ export default function Header({ locale, collapsed, onMobileMenuClick }: { local
         <Link className="legacy-quick-action" href={`${base}/treasury/receipts/new`}><Icon name="cash" size={17} /><span>{locale === "ar" ? "سند قبض" : "Receipt"}</span></Link>
         <Link className="legacy-quick-action" href={`${base}/treasury/payments/new`}><Icon name="wallet" size={17} /><span>{locale === "ar" ? "سند صرف" : "Payment"}</span></Link>
         <Link className="legacy-quick-action" href={`${base}/accounting/journal/new`}><Icon name="journal" size={17} /><span>{locale === "ar" ? "قيد يومي" : "Journal entry"}</span></Link>
+        <PageBackButton locale={locale} fallbackPath={`${base}/dashboard`} className="legacy-quick-back" />
       </nav>
     </header>
   );

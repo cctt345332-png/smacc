@@ -1089,3 +1089,112 @@ tbody tr:hover { background: #FAFBFC; }
     height: 380px !important;
   }
 }
+
+/* ── تنقل موحد: زر الرجوع في المساحة اليسرى لشريط الاختصارات ─────────── */
+.app-back-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #AAB8AA;
+  background: #F8FAF6;
+  color: #405248;
+  cursor: pointer;
+  font-family: Cairo, "IBM Plex Sans Arabic", sans-serif;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .14s ease, color .14s ease, border-color .14s ease;
+}
+
+.app-back-button:hover {
+  background: #F4EFF7;
+  color: #3E0865;
+  border-color: #3E0865;
+}
+
+.app-back-button:active {
+  transform: scale(.97);
+}
+
+.legacy-app-shell .legacy-quickbar .legacy-quick-back {
+  min-width: 86px;
+  margin-inline-start: auto;
+  padding: 4px 12px;
+  border-inline-start: 1px solid #AEBBAF;
+  border-inline-end: 1px solid #AEBBAF;
+  border-top: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: #F4EFF7;
+  color: #3E0865;
+  font-size: 10px;
+}
+
+.legacy-app-shell .legacy-quickbar .legacy-quick-back:hover {
+  background: #3E0865;
+  color: #fff;
+}
+
+/* إجراءات الجداول تبقى صفًا واحدًا قابلًا للسحب بدلاً من التفافها عموديًا. */
+.rep-table-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: max-content;
+  flex-wrap: nowrap !important;
+}
+
+/* في رؤوس الصفحات: لا تُحوّل مجموعات الأزرار إلى عمود في الشاشات الصغيرة. */
+@media (max-width: 768px) {
+  .legacy-app-shell .page-header > div[style*="display: flex"],
+  .legacy-app-shell .page-header > div[style*="display:flex"] {
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .legacy-app-shell .page-header > div[style*="display: flex"] > .btn,
+  .legacy-app-shell .page-header > div[style*="display:flex"] > .btn,
+  .legacy-app-shell .page-header > div[style*="display: flex"] > select,
+  .legacy-app-shell .page-header > div[style*="display:flex"] > select {
+    flex: 0 0 auto;
+  }
+
+  /* الخريطة تصبح سياق طبقات مستقلاً، لذلك لا تتجاوز القائمة أو طبقة التعتيم. */
+  .rep-tracking-map {
+    isolation: isolate;
+    z-index: 0 !important;
+  }
+
+  .legacy-app-shell .sidebar { z-index: 10050; }
+  .legacy-app-shell .sidebar-overlay { z-index: 10040; }
+
+  .legacy-app-shell .legacy-quickbar .legacy-quick-back {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .rep-legacy-back,
+  .supervisor-back,
+  .super-admin-back {
+    min-height: 28px;
+    padding: 4px 10px;
+    border-radius: 2px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .rep-legacy-back,
+  .supervisor-back,
+  .super-admin-back {
+    display: none;
+  }
+}

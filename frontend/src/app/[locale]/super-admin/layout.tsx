@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useSuperAdminStore } from "@/store/superAdminStore";
+import PageBackButton from "@/components/layout/PageBackButton";
 
 // ─── SVG Icons (نفس نمط Icons.tsx) ───────────────────────────────────
 const s = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -151,6 +152,9 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
         {/* Page content */}
         <main className="page-content animate-fade">
+          <div className="super-admin-back" style={{ display: "flex", justifyContent: "flex-start", marginBottom: 10 }}>
+            <PageBackButton locale={locale} fallbackPath={`/${locale}/super-admin/dashboard`} />
+          </div>
           {children}
         </main>
       </div>
