@@ -1035,3 +1035,45 @@ tbody tr:hover { background: #FAFBFC; }
   background:#F6F7F8 !important;
   background-image:linear-gradient(rgba(54,65,82,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(54,65,82,.018) 1px,transparent 1px) !important;
 }
+
+
+/* Rep tracking: mobile-first stacked workspace. */
+@media (max-width: 768px) {
+  .rep-tracking-workspace {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .rep-tracking-map {
+    order: 2;
+    width: 100% !important;
+    flex: none !important;
+    height: min(52vh, 440px) !important;
+    min-height: 320px !important;
+  }
+  .rep-tracking-trip-panel {
+    order: 1;
+    width: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    overflow: visible !important;
+  }
+  .rep-tracking-trip-list {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .rep-tracking-map {
+    height: 360px !important;
+    min-height: 360px !important;
+    border-radius: 10px !important;
+  }
+  .rep-tracking-trip-panel {
+    border-radius: 10px !important;
+  }
+}

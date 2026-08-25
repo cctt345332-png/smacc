@@ -275,8 +275,8 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
     </div>
 
     {/* الخريطة + شريط الرحلات */}
-    <div style={{display:"flex",gap:12,flex:1,minHeight:0,height:"calc(100vh - 280px)"}}>
-      <div style={{flex:1,borderRadius:16,overflow:"hidden",border:"1px solid var(--border)",position:"relative",minHeight:300}}>
+    <div className="rep-tracking-workspace" style={{display:"flex",gap:12,flex:1,minHeight:0,height:"calc(100vh - 280px)"}}>
+      <div className="rep-tracking-map" style={{flex:1,borderRadius:16,overflow:"hidden",border:"1px solid var(--border)",position:"relative",minHeight:300}}>
         <div ref={mapRef} style={{width:"100%",height:"100%"}}/>
         <div style={{position:"absolute",top:10,right:10,zIndex:1000,background:"white",borderRadius:8,padding:"4px 10px",boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:11,fontWeight:600}}>{visibleLocations.length} {ar?"نشط":"active"}</div>
         {quickCard&&(
@@ -302,7 +302,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
       </div>
 
       {tripPanel&&(
-        <div style={{width:300,background:"var(--surface)",borderRadius:16,border:"1px solid var(--border)",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
+        <div className="rep-tracking-trip-panel" style={{width:300,background:"var(--surface)",borderRadius:16,border:"1px solid var(--border)",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
           <div style={{background:tripColor,padding:"12px 14px",color:"white",display:"flex",alignItems:"center",gap:10}}>
             <button onClick={()=>setTripPanel(null)} style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:6,color:"white",cursor:"pointer",padding:"2px 8px",fontSize:14}}>✕</button>
             <div style={{flex:1}}><div style={{fontWeight:800,fontSize:13}}>{tripPanel.rep_name}</div><div style={{fontSize:10,opacity:.85}}>{ar?"تفصيل الرحلات":"Trip Details"}</div></div>
@@ -310,7 +310,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
           <div style={{padding:"10px 14px",borderBottom:"1px solid var(--border)"}}>
             <input type="date" value={tripDate} onChange={e=>setTripDate(e.target.value)} style={{width:"100%",padding:"6px 8px",borderRadius:8,border:"1px solid var(--border)",fontSize:12,background:"var(--bg)",color:"var(--text)"}}/>
           </div>
-          <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
+          <div className="rep-tracking-trip-list" style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
             {tripLoading&&<div style={{textAlign:"center",padding:24,color:"var(--text-muted)",fontSize:12}}>{ar?"جاري التحميل...":"Loading..."}</div>}
             {!tripLoading&&trips.length===0&&<div style={{textAlign:"center",padding:24,color:"var(--text-muted)",fontSize:12}}>{ar?"لا توجد بيانات":"No data"}</div>}
             {!tripLoading&&trips.length>0&&(<>
