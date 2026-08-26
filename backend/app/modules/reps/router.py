@@ -209,11 +209,11 @@ async def my_attendance_today(
 
 @router.post("/me/attendance/check-in", status_code=201)
 async def my_attendance_check_in(
-    data: dict,
+    data: dict | None = None,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """يسجل المندوب حضوره الفعلي وموقعه الجديد من لوحة المندوب."""
+    """يسجل حضور المندوب بالموقع الحالي أو بآخر نقطة تتبع حديثة."""
     return await service.check_in_my_attendance(db, user["tenant_id"], user["user_id"], data)
 
 

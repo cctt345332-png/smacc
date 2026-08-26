@@ -4,14 +4,14 @@
 import json
 import math
 import uuid
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, select, func
 from fastapi import HTTPException
 
-from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, SalesRep
+from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, RepLocation, SalesRep
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Invoice, Payment
@@ -538,17 +538,41 @@ async def get_my_attendance_status(db: AsyncSession, tenant_id: str, user_id: st
     }
 
 
-async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str, location: dict) -> dict:
-    """يسجل المندوب حضوره الفعلي مع موقع جديد التقطه جهازه عند الضغط على الزر."""
-    latitude, longitude = _validate_coordinates(location.get("latitude"), location.get("longitude"))
-    try:
-        accuracy = float(location.get("accuracy")) if location.get("accuracy") is not None else None
-    except (TypeError, ValueError):
-        raise HTTPException(400, "دقة موقع الحضور غير صحيحة")
-    if accuracy is not None and (accuracy < 0 or accuracy > 10_000):
-        raise HTTPException(400, "دقة موقع الحضور خارج النطاق")
-
+async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str, location: dict | None = None) -> dict:
+    """يسجل الحضور بموقع الجهاز الحالي، أو بآخر نقطة تتبع حديثة أُرسلت تلقائياً."""
     rep = await _current_rep_for_user(db, tenant_id, user_id)
+    requested_location = location or {}
+    has_fresh_device_location = (
+        requested_location.get("latitude") is not None
+        and requested_location.get("longitude") is not None
+    )
+
+    if has_fresh_device_location:
+        latitude, longitude = _validate_coordinates(
+            requested_location.get("latitude"), requested_location.get("longitude")
+        )
+        try:
+            accuracy = float(requested_location.get("accuracy")) if requested_location.get("accuracy") is not None else None
+        except (TypeError, ValueError):
+            raise HTTPException(400, "دقة موقع الحضور غير صحيحة")
+        if accuracy is not None and (accuracy < 0 or accuracy > 10_000):
+            raise HTTPException(400, "دقة موقع الحضور خارج النطاق")
+        source = "rep_dashboard"
+    else:
+        latest_location_result = await db.execute(
+            select(RepLocation)
+            .where(RepLocation.tenant_id == tenant_id, RepLocation.rep_id == rep.id)
+            .order_by(RepLocation.recorded_at.desc())
+            .limit(1)
+        )
+        latest_location = latest_location_result.scalar_one_or_none()
+        latest_allowed_at = datetime.utcnow() - timedelta(minutes=5)
+        if not latest_location or latest_location.recorded_at < latest_allowed_at:
+            raise HTTPException(400, "تعذر تسجيل الحضور تلقائياً، حاول مرة أخرى بعد لحظات")
+        latitude = float(latest_location.latitude)
+        longitude = float(latest_location.longitude)
+        accuracy = float(latest_location.accuracy) if latest_location.accuracy is not None else None
+        source = "rep_dashboard_tracking"
     local_now = _saudi_now()
     if not _is_attendance_window_open(local_now):
         raise HTTPException(400, "يبدأ تسجيل الحضور الساعة 5:00 مساءً بتوقيت السعودية")
@@ -580,7 +604,7 @@ async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str,
         attendance_date=attendance_date,
         check_in_at=local_now.astimezone(ZoneInfo("UTC")).replace(tzinfo=None),
         status="present",
-        source="rep_dashboard",
+        source=source,
         check_in_latitude=latitude,
         check_in_longitude=longitude,
         check_in_accuracy=accuracy,

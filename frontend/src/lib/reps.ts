@@ -67,11 +67,11 @@ export const getMySummary = () => api.get("/reps/me/summary");
 
 export const getMyAttendanceStatus = () => api.get("/reps/me/attendance/today");
 
-export const checkInMyAttendance = (data: {
+export const checkInMyAttendance = (data?: {
   latitude: number;
   longitude: number;
   accuracy?: number;
-}) => api.post("/reps/me/attendance/check-in", data);
+}) => api.post("/reps/me/attendance/check-in", data ?? {});
 
 export const getRepGeoZone = (repId: string) => api.get(`/reps/${repId}/geo-zone`);
 
