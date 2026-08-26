@@ -3,8 +3,6 @@
  */
 import * as Location from "expo-location";
 import * as SecureStore from "expo-secure-store";
-import * as Camera from "expo-camera";
-import * as AV from "expo-av";
 import * as Notifications from "expo-notifications";
 import { Platform, Linking } from "react-native";
 import { LOCATION_TASK_NAME, TOKEN_KEY, API_URL_KEY } from "./locationTask";
@@ -19,10 +17,8 @@ export async function clearCredentials() {
   await SecureStore.deleteItemAsync(API_URL_KEY);
 }
 
-/** طلب جميع الأذونات عند الإقلاع */
+/** طلب أذونات الإشعارات فقط عند الإقلاع؛ الموقع يطلبه التتبع عند الحاجة. */
 export async function requestAllPermissions(): Promise<void> {
-  try { await Camera.requestCameraPermissionsAsync(); } catch {}
-  try { await AV.Audio.requestPermissionsAsync(); } catch {}
   try {
     await Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowBadge: true, allowSound: true },

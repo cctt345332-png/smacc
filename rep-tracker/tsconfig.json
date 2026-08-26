@@ -20,7 +20,8 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "app"
   ],
   "extends": "expo/tsconfig.base"
 }
