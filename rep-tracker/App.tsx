@@ -15,7 +15,6 @@ import {
   clearCredentials,
   startBackgroundTracking,
   stopBackgroundTracking,
-  isTrackingActive,
   requestAllPermissions,
 } from "./src/locationService";
 import { TOKEN_KEY } from "./src/locationTask";
@@ -26,6 +25,7 @@ const SUPERVISOR_URL = "https://www.masa-erp.com/ar/supervisor/dashboard";
 const ADMIN_DASHBOARD_URL = "https://www.masa-erp.com/ar/dashboard";
 const SUPER_ADMIN_URL = "https://www.masa-erp.com/ar/super-admin/dashboard";
 const API_URL = "https://api.masa-erp.com";
+const LOAD_TIMEOUT_MS = 20_000;
 
 /** decode JWT payload بدون atob — غير متوفرة في RN native layer */
 function decodeJwtRole(token: string): string {
@@ -63,11 +63,30 @@ function tracksLocation(role: string): boolean {
 
 export default function App() {
   const webRef = useRef<any>(null);
+  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [webError, setWebError] = useState<string | null>(null);
   const [tracking, setTracking] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [webUrl, setWebUrl] = useState(APP_URL);
   const appState = useRef(AppState.currentState);
+
+  const clearLoadTimer = useCallback(() => {
+    if (loadTimer.current) {
+      clearTimeout(loadTimer.current);
+      loadTimer.current = null;
+    }
+  }, []);
+
+  const beginLoading = useCallback(() => {
+    clearLoadTimer();
+    setWebError(null);
+    setLoading(true);
+    loadTimer.current = setTimeout(() => {
+      setLoading(false);
+      setWebError("تعذر فتح النظام خلال الوقت المتوقع. تحقق من اتصال الإنترنت ثم أعد المحاولة.");
+    }, LOAD_TIMEOUT_MS);
+  }, [clearLoadTimer]);
 
   /** يمسح الجلسة فقط عند تسجيل خروج أو تبديل حساب صريح. */
   const clearAccountSession = useCallback(async () => {
@@ -75,9 +94,10 @@ export default function App() {
     await clearCredentials();
     setTracking(false);
     setToken(null);
-    setLoading(true);
+    setWebError(null);
+    beginLoading();
     setWebUrl(APP_URL);
-  }, []);
+  }, [beginLoading]);
 
   /* ── إقلاع ─────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -107,6 +127,23 @@ export default function App() {
     };
 
     void init();
+    return clearLoadTimer;
+  }, [clearLoadTimer]);
+
+  /* ── استخراج آخر توكن فعلي من WebView ──────────────────────────── */
+  const extractToken = useCallback(() => {
+    webRef.current?.injectJavaScript(`
+      (function() {
+        try {
+          const raw = localStorage.getItem('erp-auth');
+          const data = raw ? JSON.parse(raw) : null;
+          const token = data?.state?.token || null;
+          // عدم وجود توكن في صفحة الدخول طبيعي، وليس تسجيل خروج.
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'token', token: token }));
+        } catch(e) {}
+      })();
+      true;
+    `);
   }, []);
 
   /* ── رصد حالة التطبيق ──────────────────────────────────────────── */
@@ -118,53 +155,50 @@ export default function App() {
       appState.current = nextState;
     });
     return () => sub.remove();
-  }, []);
-
-  /* ── استخراج آخر توكن فعلي من WebView ──────────────────────────── */
-  const extractToken = useCallback(() => {
-    webRef.current?.injectJavaScript(`
-      (function() {
-        try {
-          const raw = localStorage.getItem('erp-auth');
-          const data = raw ? JSON.parse(raw) : null;
-          const token = data?.state?.token || null;
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: token ? 'token' : 'logout', token: token }));
-        } catch(e) {}
-      })();
-      true;
-    `);
-  }, []);
+  }, [extractToken]);
 
   /* ── معالجة الرسائل من WebView ─────────────────────────────────── */
   const onMessage = useCallback(async (event: any) => {
     try {
       const msg = JSON.parse(event.nativeEvent.data);
 
+      // تسجيل الخروج يُعالج فقط إن كانت هناك جلسة محفوظة أصلًا.
+      // صفحة الدخول بدون توكن لا يجب أن تعيد تشغيل الصفحة أو طبقة التحميل.
       if (msg.type === "logout") {
-        await clearAccountSession();
+        if (token) await clearAccountSession();
         return;
       }
 
-      if (msg.type === "token" && msg.token && msg.token !== token) {
-        const role = decodeJwtRole(msg.token);
-        setToken(msg.token);
-        await saveCredentials(msg.token, API_URL);
-        setWebUrl(dashboardForRole(role));
+      if (msg.type !== "token" || !msg.token || msg.token === token) return;
 
-        if (tracksLocation(role)) {
-          setTracking(await startBackgroundTracking());
-        } else {
-          await stopBackgroundTracking();
-          setTracking(false);
-        }
+      const role = decodeJwtRole(msg.token);
+      setToken(msg.token);
+      await saveCredentials(msg.token, API_URL);
+      setWebUrl(dashboardForRole(role));
+
+      if (tracksLocation(role)) {
+        setTracking(await startBackgroundTracking());
+      } else {
+        await stopBackgroundTracking();
+        setTracking(false);
       }
     } catch {}
   }, [clearAccountSession, token]);
 
+  const onLoadStart = useCallback(() => {
+    beginLoading();
+  }, [beginLoading]);
+
   const onLoadEnd = useCallback(() => {
+    clearLoadTimer();
     setLoading(false);
     setTimeout(extractToken, 800);
-  }, [extractToken]);
+  }, [clearLoadTimer, extractToken]);
+
+  const retryWebView = useCallback(() => {
+    beginLoading();
+    webRef.current?.reload();
+  }, [beginLoading]);
 
   /** تبديل حساب من التطبيق: يسمح لمسح جلسة الموقع ثم يعيد صفحة الدخول. */
   const switchAccount = useCallback(() => {
@@ -203,7 +237,8 @@ export default function App() {
         try {
           const data = value ? JSON.parse(value) : null;
           const token = data?.state?.token || null;
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: token ? 'token' : 'logout', token: token }));
+          // لا نرسل logout عند عدم وجود توكن؛ صفحة الدخول حالة طبيعية.
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'token', token: token }));
         } catch(e) {}
       };
 
@@ -251,6 +286,7 @@ export default function App() {
         ref={webRef}
         source={{ uri: webUrl }}
         style={styles.webview}
+        onLoadStart={onLoadStart}
         onLoadEnd={onLoadEnd}
         onMessage={onMessage}
         injectedJavaScriptBeforeContentLoaded={SESSION_BRIDGE_JS}
@@ -261,13 +297,35 @@ export default function App() {
         sharedCookiesEnabled
         allowsInlineMediaPlayback
         geolocationEnabled={false}
-        onError={e => console.log("WebView error:", e.nativeEvent)}
+        onError={e => {
+          clearLoadTimer();
+          setLoading(false);
+          setWebError("تعذر الاتصال بالنظام. تحقق من الإنترنت ثم حاول مرة أخرى.");
+          console.log("WebView error:", e.nativeEvent);
+        }}
+        onHttpError={e => {
+          if (e.nativeEvent.statusCode >= 400) {
+            clearLoadTimer();
+            setLoading(false);
+            setWebError("تعذر فتح النظام حاليًا. حاول مرة أخرى بعد لحظات.");
+          }
+        }}
       />
 
-      {loading && (
+      {loading && !webError && (
         <View style={styles.loader}>
           <ActivityIndicator size="large" color="#3E0865" />
           <Text style={styles.loaderText}>جاري التحميل...</Text>
+        </View>
+      )}
+
+      {webError && (
+        <View style={styles.errorPanel}>
+          <Text style={styles.errorTitle}>تعذر فتح النظام</Text>
+          <Text style={styles.errorText}>{webError}</Text>
+          <Pressable onPress={retryWebView} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>إعادة المحاولة</Text>
+          </Pressable>
         </View>
       )}
     </View>
@@ -308,4 +366,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loaderText: { color: "#6B7280", fontSize: 14 },
+  errorPanel: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "white",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+    gap: 12,
+  },
+  errorTitle: { color: "#3E0865", fontSize: 18, fontWeight: "800" },
+  errorText: { color: "#6B7280", fontSize: 14, textAlign: "center", lineHeight: 22 },
+  retryButton: { backgroundColor: "#3E0865", paddingHorizontal: 18, paddingVertical: 10, borderRadius: 7, marginTop: 4 },
+  retryButtonText: { color: "white", fontSize: 14, fontWeight: "700" },
 });
