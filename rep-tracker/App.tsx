@@ -4,7 +4,7 @@
  */
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
-  View, StyleSheet, ActivityIndicator,
+  View, StyleSheet,
   Text, AppState, Platform, Pressable, Alert,
 } from "react-native";
 import { WebView } from "react-native-webview";
@@ -25,7 +25,6 @@ const SUPERVISOR_URL = "https://www.masa-erp.com/ar/supervisor/dashboard";
 const ADMIN_DASHBOARD_URL = "https://www.masa-erp.com/ar/dashboard";
 const SUPER_ADMIN_URL = "https://www.masa-erp.com/ar/super-admin/dashboard";
 const API_URL = "https://api.masa-erp.com";
-const LOAD_TIMEOUT_MS = 20_000;
 
 /** decode JWT payload بدون atob — غير متوفرة في RN native layer */
 function decodeJwtRole(token: string): string {
@@ -63,30 +62,10 @@ function tracksLocation(role: string): boolean {
 
 export default function App() {
   const webRef = useRef<any>(null);
-  const loadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [webError, setWebError] = useState<string | null>(null);
   const [tracking, setTracking] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [webUrl, setWebUrl] = useState(APP_URL);
   const appState = useRef(AppState.currentState);
-
-  const clearLoadTimer = useCallback(() => {
-    if (loadTimer.current) {
-      clearTimeout(loadTimer.current);
-      loadTimer.current = null;
-    }
-  }, []);
-
-  const beginLoading = useCallback(() => {
-    clearLoadTimer();
-    setWebError(null);
-    setLoading(true);
-    loadTimer.current = setTimeout(() => {
-      setLoading(false);
-      setWebError("تعذر فتح النظام خلال الوقت المتوقع. تحقق من اتصال الإنترنت ثم أعد المحاولة.");
-    }, LOAD_TIMEOUT_MS);
-  }, [clearLoadTimer]);
 
   /** يمسح الجلسة فقط عند تسجيل خروج أو تبديل حساب صريح. */
   const clearAccountSession = useCallback(async () => {
@@ -94,10 +73,8 @@ export default function App() {
     await clearCredentials();
     setTracking(false);
     setToken(null);
-    setWebError(null);
-    beginLoading();
     setWebUrl(APP_URL);
-  }, [beginLoading]);
+  }, []);
 
   /* ── إقلاع ─────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -127,8 +104,7 @@ export default function App() {
     };
 
     void init();
-    return clearLoadTimer;
-  }, [clearLoadTimer]);
+  }, []);
 
   /* ── استخراج آخر توكن فعلي من WebView ──────────────────────────── */
   const extractToken = useCallback(() => {
@@ -163,7 +139,7 @@ export default function App() {
       const msg = JSON.parse(event.nativeEvent.data);
 
       // تسجيل الخروج يُعالج فقط إن كانت هناك جلسة محفوظة أصلًا.
-      // صفحة الدخول بدون توكن لا يجب أن تعيد تشغيل الصفحة أو طبقة التحميل.
+      // صفحة الدخول بدون توكن لا يجب أن تعيد تشغيل الصفحة.
       if (msg.type === "logout") {
         if (token) await clearAccountSession();
         return;
@@ -185,20 +161,10 @@ export default function App() {
     } catch {}
   }, [clearAccountSession, token]);
 
-  const onLoadStart = useCallback(() => {
-    beginLoading();
-  }, [beginLoading]);
-
   const onLoadEnd = useCallback(() => {
-    clearLoadTimer();
-    setLoading(false);
-    setTimeout(extractToken, 800);
-  }, [clearLoadTimer, extractToken]);
-
-  const retryWebView = useCallback(() => {
-    beginLoading();
-    webRef.current?.reload();
-  }, [beginLoading]);
+    // لا نعرض طبقة تحميل Native؛ صفحة الويب تتحكم في تحميلها وتنقلها بنفسها.
+    setTimeout(extractToken, 500);
+  }, [extractToken]);
 
   /** تبديل حساب من التطبيق: يسمح لمسح جلسة الموقع ثم يعيد صفحة الدخول. */
   const switchAccount = useCallback(() => {
@@ -286,7 +252,6 @@ export default function App() {
         ref={webRef}
         source={{ uri: webUrl }}
         style={styles.webview}
-        onLoadStart={onLoadStart}
         onLoadEnd={onLoadEnd}
         onMessage={onMessage}
         injectedJavaScriptBeforeContentLoaded={SESSION_BRIDGE_JS}
@@ -297,37 +262,8 @@ export default function App() {
         sharedCookiesEnabled
         allowsInlineMediaPlayback
         geolocationEnabled={false}
-        onError={e => {
-          clearLoadTimer();
-          setLoading(false);
-          setWebError("تعذر الاتصال بالنظام. تحقق من الإنترنت ثم حاول مرة أخرى.");
-          console.log("WebView error:", e.nativeEvent);
-        }}
-        onHttpError={e => {
-          if (e.nativeEvent.statusCode >= 400) {
-            clearLoadTimer();
-            setLoading(false);
-            setWebError("تعذر فتح النظام حاليًا. حاول مرة أخرى بعد لحظات.");
-          }
-        }}
+        onError={e => console.log("WebView error:", e.nativeEvent)}
       />
-
-      {loading && !webError && (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#3E0865" />
-          <Text style={styles.loaderText}>جاري التحميل...</Text>
-        </View>
-      )}
-
-      {webError && (
-        <View style={styles.errorPanel}>
-          <Text style={styles.errorTitle}>تعذر فتح النظام</Text>
-          <Text style={styles.errorText}>{webError}</Text>
-          <Pressable onPress={retryWebView} style={styles.retryButton}>
-            <Text style={styles.retryButtonText}>إعادة المحاولة</Text>
-          </Pressable>
-        </View>
-      )}
     </View>
   );
 }
@@ -358,24 +294,4 @@ const styles = StyleSheet.create({
   switchButtonPressed: { opacity: 0.72 },
   switchButtonText: { color: "white", fontSize: 12, fontWeight: "700" },
   webview: { flex: 1 },
-  loader: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "white",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
-  },
-  loaderText: { color: "#6B7280", fontSize: 14 },
-  errorPanel: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "white",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 28,
-    gap: 12,
-  },
-  errorTitle: { color: "#3E0865", fontSize: 18, fontWeight: "800" },
-  errorText: { color: "#6B7280", fontSize: 14, textAlign: "center", lineHeight: 22 },
-  retryButton: { backgroundColor: "#3E0865", paddingHorizontal: 18, paddingVertical: 10, borderRadius: 7, marginTop: 4 },
-  retryButtonText: { color: "white", fontSize: 14, fontWeight: "700" },
 });
