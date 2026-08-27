@@ -116,6 +116,17 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   });
 
   const typeInfo = (type: string) => TYPES.find(t => t.value === type);
+  const replacementBlockers = legacyReplacement ? [
+    { count: legacyReplacement.accounts_with_opening_balance, ar: "حساب له رصيد افتتاحي", en: "account balance" },
+    { count: legacyReplacement.journal_line_references, ar: "سطر قيد محاسبي", en: "journal line" },
+    { count: legacyReplacement.customer_account_references, ar: "ربط عميل", en: "customer link" },
+    { count: legacyReplacement.vendor_account_references, ar: "ربط مورد", en: "vendor link" },
+    { count: legacyReplacement.bank_account_references, ar: "ربط بنك أو صندوق", en: "bank/cash link" },
+    { count: legacyReplacement.budget_line_references, ar: "سطر موازنة", en: "budget line" },
+    { count: legacyReplacement.asset_category_references, ar: "ربط فئة أصل", en: "asset category link" },
+    { count: legacyReplacement.pos_terminal_references, ar: "ربط نقطة بيع", en: "POS terminal link" },
+    { count: legacyReplacement.voucher_account_references, ar: "سند خزينة", en: "treasury voucher" },
+  ].filter(item => Number(item.count) > 0) : [];
 
   const handleInitializeDefaultChart = async () => {
     if (!confirm(ar
@@ -275,7 +286,21 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
               {!readiness.legacy_chart_imported && readiness.account_count > 0 && legacyReplacement && !legacyReplacement.can_replace && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-                  {ar ? "يوجد دليل حسابات قائم، لكن ظهرت له أرصدة أو حركة أو مراجع محاسبية. لذلك لن يظهر زر الاستبدال ولن يحذف النظام أي حساب." : "An existing chart has balances, transactions, or accounting references. The replacement action is unavailable and no account will be deleted."}
+                  {ar ? (
+                    <>
+                      <strong>تم منع الاستبدال لحماية البيانات.</strong>{" "}
+                      سبب المنع: {replacementBlockers.length
+                        ? replacementBlockers.map(item => `${item.count} ${item.ar}`).join("، ")
+                        : "الدليل غير مؤهل للاستبدال حاليًا"}. لن يحذف النظام أي حساب.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Replacement was blocked to protect data.</strong>{" "}
+                      Reason: {replacementBlockers.length
+                        ? replacementBlockers.map(item => `${item.count} ${item.en}`).join(", ")
+                        : "the chart is not eligible for replacement"}. No account will be deleted.
+                    </>
+                  )}
                 </div>
               )}
 
