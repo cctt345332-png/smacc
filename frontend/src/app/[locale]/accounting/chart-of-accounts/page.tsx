@@ -24,12 +24,12 @@ const NATURES = [
 
 const MAPPING_LABELS: Record<string, string> = {
   default_cash: "الصندوق الافتراضي", default_bank: "البنك الافتراضي",
-  default_card: "مدى وشبكة", default_wallet: "المحافظ الرقمية",
+  default_card: "تحصيل البطاقة (حساب التسوية)", default_wallet: "المحفظة الرقمية (حساب التسوية)",
   default_ar: "ذمم العملاء", default_ap: "ذمم الموردين",
   inventory: "المخزون", vat_input: "ضريبة المدخلات", vat_output: "ضريبة المخرجات",
   sales_goods: "مبيعات البضائع", sales_services: "إيرادات الخدمات",
   sales_discounts: "خصم المبيعات", other_income: "إيرادات أخرى",
-  cogs_goods: "تكلفة البضاعة المباعة", cost_services: "تكلفة الخدمات",
+  cogs_goods: "تكلفة البضاعة المباعة", cost_services: "تكلفة الخدمات / مصروف عام",
   employee_advances: "عهد الموظفين", rep_collections: "عهد تحصيل المناديب",
   payroll_payable: "رواتب مستحقة", payroll_expense: "مصروف الرواتب",
   accrued_expenses: "مصروفات مستحقة", operating_expenses: "مصروفات تشغيلية",
@@ -115,7 +115,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
   const handleInitializeDefaultChart = async () => {
     if (!confirm(ar
-      ? "سيتم إنشاء شجرة حسابات بأرصدة صفرية فقط. لن تتغير أي فاتورة أو عميل أو قيد سابق. هل تريد المتابعة؟"
+      ? "سيتم إنشاء الشجرة الرسمية ذات الأكواد الستة بأرصدة صفرية فقط. لن تتغير أو يعاد ترقيم أي فاتورة أو عميل أو مورد أو قيد سابق. هل تريد المتابعة؟"
       : "This creates a zero-balance chart only. Existing invoices, parties, and journal entries will not change. Continue?")) return;
     setSetupBusy(true);
     try {
@@ -182,7 +182,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, maxWidth: 760 }}>
-                {ar ? "هذه المرحلة تنشئ الحسابات بأرصدة صفرية وتجهز خريطة الربط فقط. القيود التلقائية تبقى غير مفعلة، ولا يتم تعديل أي فاتورة أو عميل أو قيد سابق." : "This step creates zero-balance accounts and operational mappings only. Automatic posting stays disabled and existing transactions remain unchanged."}
+                {ar ? "تنشئ هذه المرحلة الشجرة الرسمية ذات الأكواد الستة بأرصدة صفرية وخريطة الربط فقط. القيود التلقائية تبقى غير مفعلة، ولا يتم تعديل أو إعادة ترقيم أي فاتورة أو عميل أو مورد أو قيد سابق." : "This step creates the official six-digit, zero-balance chart and operational mappings only. Automatic posting stays disabled and existing transactions remain unchanged."}
               </p>
             </div>
             {readiness && !readiness.chart_initialized && (
@@ -217,7 +217,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
               {!readiness.chart_initialized && readiness.account_count > 0 && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-                  {ar ? "لدى الشركة حسابات موجودة مسبقًا. لن ينشئ النظام شجرة ثانية فوقها؛ سنضيف مطابقة الحسابات اليدوية في الدفعة التالية." : "Existing accounts were found. The system will not create a duplicate chart; manual account matching is planned for the next phase."}
+                  {ar ? "لدى الشركة حسابات موجودة مسبقًا. لن يستبدل النظام تلك الحسابات أو يعيد ترقيمها أو ينشئ شجرة ثانية فوقها. يلزم قرار محاسب ومطابقة يدوية مستقلة قبل أي انتقال إلى الشجرة ذات الست خانات." : "Existing accounts were found. The system will not replace, renumber, or overlay them; a separately approved manual mapping is required before migrating to the six-digit chart."}
                 </div>
               )}
 
@@ -376,7 +376,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
               <div className="grid-2">
                 <div className="form-group">
                   <label className="form-label">{ar ? "كود الحساب" : "Account Code"} <span className="required">*</span></label>
-                  <input className="form-input" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="1000" />
+                  <input className="form-input" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="100000" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">{ar ? "الحساب الأب" : "Parent Account"}</label>
