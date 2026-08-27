@@ -20,6 +20,7 @@ from app.modules.sales.schemas import (
     QuotationCreate, CreditNoteCreate, RefundRequestCreate
 )
 from app.core.audit import record_audit
+from app.modules.accounting.service import is_operational_auto_posting_enabled
 
 
 # ─── QR Code Generator (ZATCA TLV format) ───────────────────────────
@@ -350,7 +351,7 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
     if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.APPROVED):
         raise HTTPException(400, f"لا يمكن تأكيد فاتورة بحالة '{invoice.status.value}'")
 
-    if invoice.fiscal_year_id:
+    if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
         journal_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
         invoice.journal_entry_id = journal_id
 
@@ -574,7 +575,7 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
         invoice.status = InvoiceStatus.PARTIAL
 
     # ── قيد سند القبض التلقائي ──────────────────────────────────────
-    if invoice.fiscal_year_id:
+    if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
         journal_id = await _create_payment_journal(
             db, tenant_id, user_id, payment, invoice, data.bank_account_id
         )
@@ -924,7 +925,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
         record_audit(db, tenant_id, user_id, "create", "credit_note", cn.id,
                      credit_note_number=cn.credit_note_number, original_invoice_id=original.id,
                      total=cn.total, line_count=len(validated_lines))
-        if original.fiscal_year_id:
+        if original.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
             await _create_credit_note_journal(db, tenant_id, user_id, cn, original)
         await db.commit()
     except Exception:
@@ -1295,7 +1296,7 @@ async def approve_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
     await db.flush()  # نحفظ APPROVED مؤقتاً
 
     # تأكيد الفاتورة تلقائياً بعد الموافقة — يخصم المخزون
-    if invoice.fiscal_year_id:
+    if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
         try:
             journal_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
             invoice.journal_entry_id = journal_id
@@ -1337,7 +1338,7 @@ async def confirm_approved_invoice(db: AsyncSession, tenant_id: str, user_id: st
     if invoice.status != InvoiceStatus.APPROVED:
         raise HTTPException(400, f"لا يمكن تأكيد فاتورة بحالة '{invoice.status.value}' — يجب أن تكون موافقاً عليها أولاً")
 
-    if invoice.fiscal_year_id:
+    if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
         journal_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
         invoice.journal_entry_id = journal_id
 

@@ -8,9 +8,10 @@ from fastapi import HTTPException
 from app.models.accounting import (
     Account, FiscalYear, CostCenter, Currency,
     JournalEntry, JournalEntryLine, BankAccount,
-    Budget, BudgetLine, VATSetting,
+    Budget, BudgetLine, VATSetting, AccountingSetup, AccountingAccountMapping,
     JournalEntryStatus, AccountType
 )
+from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_CODES, REQUIRED_MAPPING_KEYS
 from app.modules.accounting.schemas import (
     AccountCreate, AccountUpdate, FiscalYearCreate, CostCenterCreate,
     CurrencyCreate, JournalEntryCreate, BankAccountCreate,
@@ -426,3 +427,286 @@ async def get_ledger(db: AsyncSession, tenant_id: str, account_id: str,
             "balance": balance,
         })
     return result
+
+
+# ─── Default Chart & Operational Mapping ─────────────────────────────
+async def _get_accounting_setup(db: AsyncSession, tenant_id: str) -> AccountingSetup | None:
+    result = await db.execute(
+        select(AccountingSetup).where(AccountingSetup.tenant_id == tenant_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _get_account_mapping_rows(db: AsyncSession, tenant_id: str) -> list[AccountingAccountMapping]:
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(
+        select(AccountingAccountMapping)
+        .options(selectinload(AccountingAccountMapping.account))
+        .where(AccountingAccountMapping.tenant_id == tenant_id)
+        .order_by(AccountingAccountMapping.mapping_key)
+    )
+    return list(result.scalars().all())
+
+
+async def get_accounting_readiness(db: AsyncSession, tenant_id: str) -> dict:
+    """فحص قراءة فقط. لا ينشئ حسابات ولا يغير بيانات الشركات القائمة."""
+    from app.models.sales import Customer, Invoice, Payment, InvoiceStatus
+    from app.models.purchases import Vendor, Bill, BillStatus
+
+    setup = await _get_accounting_setup(db, tenant_id)
+    mappings = await _get_account_mapping_rows(db, tenant_id)
+    mapping_by_key = {mapping.mapping_key: mapping for mapping in mappings}
+    active_mappings = [mapping for mapping in mappings if mapping.account and mapping.account.is_active and mapping.account.is_posting]
+
+    account_count = (await db.execute(
+        select(func.count(Account.id)).where(Account.tenant_id == tenant_id)
+    )).scalar() or 0
+    customer_without_ar = (await db.execute(
+        select(func.count(Customer.id)).where(
+            Customer.tenant_id == tenant_id,
+            Customer.ar_account_id.is_(None),
+        )
+    )).scalar() or 0
+    vendor_without_ap = (await db.execute(
+        select(func.count(Vendor.id)).where(
+            Vendor.tenant_id == tenant_id,
+            Vendor.ap_account_id.is_(None),
+        )
+    )).scalar() or 0
+    bank_without_gl = (await db.execute(
+        select(func.count(BankAccount.id)).where(
+            BankAccount.tenant_id == tenant_id,
+            BankAccount.gl_account_id.is_(None),
+        )
+    )).scalar() or 0
+    financial_statuses = (
+        InvoiceStatus.CONFIRMED,
+        InvoiceStatus.PAID,
+        InvoiceStatus.PARTIAL,
+        InvoiceStatus.OVERDUE,
+    )
+    invoice_without_journal = (await db.execute(
+        select(func.count(Invoice.id)).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_(financial_statuses),
+            Invoice.journal_entry_id.is_(None),
+        )
+    )).scalar() or 0
+    payment_without_journal = (await db.execute(
+        select(func.count(Payment.id)).where(
+            Payment.tenant_id == tenant_id,
+            Payment.journal_entry_id.is_(None),
+        )
+    )).scalar() or 0
+    financial_bill_statuses = (
+        BillStatus.CONFIRMED,
+        BillStatus.PAID,
+        BillStatus.PARTIAL,
+        BillStatus.OVERDUE,
+    )
+    bill_without_journal = (await db.execute(
+        select(func.count(Bill.id)).where(
+            Bill.tenant_id == tenant_id,
+            Bill.status.in_(financial_bill_statuses),
+            Bill.journal_entry_id.is_(None),
+        )
+    )).scalar() or 0
+
+    missing_required_keys = [key for key in REQUIRED_MAPPING_KEYS if key not in mapping_by_key]
+    invalid_mapping_keys = [
+        mapping.mapping_key for mapping in mappings
+        if not mapping.account or not mapping.account.is_active or not mapping.account.is_posting
+    ]
+
+    return {
+        "chart_initialized": bool(setup and setup.chart_initialized_at),
+        "chart_initialized_at": setup.chart_initialized_at if setup else None,
+        "auto_posting_enabled": bool(setup and setup.auto_posting_enabled),
+        "account_count": int(account_count),
+        "mapping_count": len(mappings),
+        "active_mapping_count": len(active_mappings),
+        "missing_required_keys": missing_required_keys,
+        "invalid_mapping_keys": invalid_mapping_keys,
+        "customer_without_ar": int(customer_without_ar),
+        "vendor_without_ap": int(vendor_without_ap),
+        "bank_without_gl": int(bank_without_gl),
+        "financial_invoice_without_journal": int(invoice_without_journal),
+        "payment_without_journal": int(payment_without_journal),
+        "bill_without_journal": int(bill_without_journal),
+        "legacy_transactions_untouched": True,
+    }
+
+
+async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """ينشئ قالب الشجرة للشركة الفارغة فقط، بأرصدة صفرية ومن دون تفعيل قيود تلقائية."""
+    existing_setup = await _get_accounting_setup(db, tenant_id)
+    account_count = (await db.execute(
+        select(func.count(Account.id)).where(Account.tenant_id == tenant_id)
+    )).scalar() or 0
+
+    if existing_setup and existing_setup.chart_initialized_at:
+        raise HTTPException(409, "شجرة الحسابات الافتراضية مهيأة بالفعل لهذه الشركة")
+    if account_count:
+        raise HTTPException(
+            409,
+            "توجد حسابات حالية لهذه الشركة؛ لن ينشئ النظام شجرة تلقائية فوقها. استخدم مطابقة الحسابات اليدوية أولًا.",
+        )
+
+    accounts_by_code: dict[str, Account] = {}
+    for code, name_ar, name_en, account_type, nature, parent_code, is_posting, allow_direct_posting in DEFAULT_CHART:
+        account = Account(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_id,
+            code=code,
+            name_ar=name_ar,
+            name_en=name_en,
+            account_type=account_type,
+            nature=nature,
+            parent_id=accounts_by_code[parent_code].id if parent_code else None,
+            level=1 if parent_code is None else accounts_by_code[parent_code].level + 1,
+            is_active=True,
+            is_posting=is_posting,
+            allow_direct_posting=allow_direct_posting,
+            opening_balance=Decimal("0"),
+        )
+        accounts_by_code[code] = account
+        db.add(account)
+
+    setup = existing_setup or AccountingSetup(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        chart_initialized_by=user_id,
+    )
+    setup.chart_initialized_at = datetime.utcnow()
+    setup.chart_initialized_by = user_id
+    setup.auto_posting_enabled = False
+    setup.updated_at = datetime.utcnow()
+    if not existing_setup:
+        db.add(setup)
+
+    for mapping_key, account_code in DEFAULT_MAPPING_CODES.items():
+        db.add(AccountingAccountMapping(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_id,
+            mapping_key=mapping_key,
+            account_id=accounts_by_code[account_code].id,
+            updated_at=datetime.utcnow(),
+        ))
+
+    # تهيئة إعداد الضريبة المرجعي فقط. لا يغير مبالغ أو حالات فواتير سابقة.
+    vat = await get_vat_settings(db, tenant_id)
+    if not vat:
+        vat = VATSetting(id=str(uuid.uuid4()), tenant_id=tenant_id)
+        db.add(vat)
+    vat.vat_account_id = accounts_by_code[DEFAULT_MAPPING_CODES["vat_output"]].id
+    vat.vat_receivable_account_id = accounts_by_code[DEFAULT_MAPPING_CODES["vat_input"]].id
+    vat.updated_at = datetime.utcnow()
+
+    await db.commit()
+    return await get_accounting_readiness(db, tenant_id)
+
+
+async def apply_default_party_mappings(db: AsyncSession, tenant_id: str) -> dict:
+    """يربط فقط الأطراف بلا حساب بالذمم العامة؛ لا ينشئ قيدًا ولا يغير رصيدًا أو فاتورة."""
+    from app.models.sales import Customer
+    from app.models.purchases import Vendor
+
+    mappings = {row.mapping_key: row for row in await _get_account_mapping_rows(db, tenant_id)}
+    ar = mappings.get("default_ar")
+    ap = mappings.get("default_ap")
+    if not ar or not ap:
+        raise HTTPException(409, "يجب تهيئة شجرة الحسابات وخريطة الربط أولًا")
+    if not ar.account.is_active or not ar.account.is_posting or not ap.account.is_active or not ap.account.is_posting:
+        raise HTTPException(409, "حسابات الذمم الافتراضية غير صالحة أو غير نشطة")
+
+    customers_result = await db.execute(
+        select(Customer).where(Customer.tenant_id == tenant_id, Customer.ar_account_id.is_(None))
+    )
+    customers = list(customers_result.scalars().all())
+    for customer in customers:
+        customer.ar_account_id = ar.account_id
+
+    vendors_result = await db.execute(
+        select(Vendor).where(Vendor.tenant_id == tenant_id, Vendor.ap_account_id.is_(None))
+    )
+    vendors = list(vendors_result.scalars().all())
+    for vendor in vendors:
+        vendor.ap_account_id = ap.account_id
+
+    await db.commit()
+    return {
+        "customers_linked": len(customers),
+        "vendors_linked": len(vendors),
+        "journal_entries_created": 0,
+        "invoices_changed": 0,
+        "payments_changed": 0,
+    }
+
+
+async def get_operational_account_mappings(db: AsyncSession, tenant_id: str) -> list[AccountingAccountMapping]:
+    return await _get_account_mapping_rows(db, tenant_id)
+
+
+async def update_operational_account_mapping(
+    db: AsyncSession, tenant_id: str, mapping_key: str, account_id: str
+) -> AccountingAccountMapping:
+    if mapping_key not in DEFAULT_MAPPING_CODES:
+        raise HTTPException(404, "مفتاح الربط المحاسبي غير معروف")
+
+    account = await db.get(Account, account_id)
+    if not account or account.tenant_id != tenant_id:
+        raise HTTPException(404, "الحساب غير موجود لهذه الشركة")
+    if not account.is_active or not account.is_posting:
+        raise HTTPException(400, "يجب اختيار حساب نشط ونهائي قابل للقيد")
+
+    result = await db.execute(
+        select(AccountingAccountMapping).where(
+            AccountingAccountMapping.tenant_id == tenant_id,
+            AccountingAccountMapping.mapping_key == mapping_key,
+        )
+    )
+    mapping = result.scalar_one_or_none()
+    if not mapping:
+        mapping = AccountingAccountMapping(
+            id=str(uuid.uuid4()), tenant_id=tenant_id,
+            mapping_key=mapping_key, account_id=account.id,
+        )
+        db.add(mapping)
+    else:
+        mapping.account_id = account.id
+        mapping.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(mapping)
+    return mapping
+
+
+async def is_operational_auto_posting_enabled(db: AsyncSession, tenant_id: str) -> bool:
+    """يحافظ على السلوك القديم للشركات غير المهيأة، ويوقف القيود التلقائية للشركة
+    التي أنشأت الشجرة حتى تفعّلها صراحة في مرحلة لاحقة."""
+    setup = await _get_accounting_setup(db, tenant_id)
+    return setup is None or bool(setup.auto_posting_enabled)
+
+
+async def get_operational_account(db: AsyncSession, tenant_id: str, mapping_key: str) -> Account:
+    """يعيد حسابًا نهائيًا صالحًا من خريطة الربط، أو رسالة إعداد واضحة."""
+    from sqlalchemy.orm import selectinload
+
+    if mapping_key not in DEFAULT_MAPPING_CODES:
+        raise HTTPException(404, "مفتاح الربط المحاسبي غير معروف")
+
+    result = await db.execute(
+        select(AccountingAccountMapping)
+        .options(selectinload(AccountingAccountMapping.account))
+        .where(
+            AccountingAccountMapping.tenant_id == tenant_id,
+            AccountingAccountMapping.mapping_key == mapping_key,
+        )
+    )
+    mapping = result.scalar_one_or_none()
+    if not mapping or not mapping.account:
+        raise HTTPException(409, f"حساب الربط '{mapping_key}' غير مهيأ لهذه الشركة")
+    account = mapping.account
+    if account.tenant_id != tenant_id or not account.is_active or not account.is_posting:
+        raise HTTPException(409, f"حساب الربط '{mapping_key}' غير نشط أو غير قابل للقيد")
+    return account

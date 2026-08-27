@@ -1,4 +1,4 @@
-from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Integer, Text, Enum as SAEnum
+from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Integer, Text, Enum as SAEnum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 from decimal import Decimal
@@ -211,3 +211,35 @@ class VATSetting(Base):
     zatca_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_zatca_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ─── Accounting Setup & Operational Mapping ───────────────────────────
+# طبقة مستقلة عن الفواتير والقيود الحالية. لا تفعّل القيود التلقائية
+# ولا تنشئ أرصدة أو حركات عند تكوينها.
+class AccountingSetup(Base):
+    __tablename__ = "accounting_setups"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), unique=True, index=True)
+    chart_initialized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    chart_initialized_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    auto_posting_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AccountingAccountMapping(Base):
+    """حساب نهائي مرتبط بمفتاح تشغيلي ثابت للشركة، مثل default_ar أو inventory."""
+    __tablename__ = "accounting_account_mappings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "mapping_key", name="uq_accounting_mapping_tenant_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    mapping_key: Mapped[str] = mapped_column(String(80), index=True)
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    account: Mapped["Account"] = relationship("Account")

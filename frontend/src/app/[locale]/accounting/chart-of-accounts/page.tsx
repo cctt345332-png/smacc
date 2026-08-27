@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getAccounts, createAccount, updateAccount, deleteAccount } from "@/lib/accounting";
+import {
+  getAccounts, createAccount, updateAccount, deleteAccount,
+  getAccountingReadiness, initializeDefaultChart, applyDefaultPartyMappings,
+  getOperationalAccountMappings, updateOperationalAccountMapping,
+} from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
@@ -18,6 +22,21 @@ const NATURES = [
   { value: "credit", ar: "دائن", en: "Credit" },
 ];
 
+const MAPPING_LABELS: Record<string, string> = {
+  default_cash: "الصندوق الافتراضي", default_bank: "البنك الافتراضي",
+  default_card: "مدى وشبكة", default_wallet: "المحافظ الرقمية",
+  default_ar: "ذمم العملاء", default_ap: "ذمم الموردين",
+  inventory: "المخزون", vat_input: "ضريبة المدخلات", vat_output: "ضريبة المخرجات",
+  sales_goods: "مبيعات البضائع", sales_services: "إيرادات الخدمات",
+  sales_discounts: "خصم المبيعات", other_income: "إيرادات أخرى",
+  cogs_goods: "تكلفة البضاعة المباعة", cost_services: "تكلفة الخدمات",
+  employee_advances: "عهد الموظفين", rep_collections: "عهد تحصيل المناديب",
+  payroll_payable: "رواتب مستحقة", payroll_expense: "مصروف الرواتب",
+  accrued_expenses: "مصروفات مستحقة", operating_expenses: "مصروفات تشغيلية",
+  inventory_adjustment_gain: "زيادة تسوية المخزون", inventory_adjustment_loss: "عجز أو تلف المخزون",
+  capital: "رأس المال",
+};
+
 export default function ChartOfAccountsPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
 
@@ -33,6 +52,9 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   const [editItem, setEditItem] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [readiness, setReadiness] = useState<any>(null);
+  const [mappings, setMappings] = useState<any[]>([]);
   const [form, setForm] = useState({
     code: "", name_ar: "", name_en: "", account_type: "asset",
     nature: "debit", parent_id: "", opening_balance: "0",
@@ -40,10 +62,14 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   });
 
   const load = async () => {
-    try {
-      const { data } = await getAccounts();
-      setAccounts(data);
-    } catch { } finally { setLoading(false); }
+    setLoading(true);
+    const [accountsResult, readinessResult, mappingsResult] = await Promise.allSettled([
+      getAccounts(), getAccountingReadiness(), getOperationalAccountMappings(),
+    ]);
+    if (accountsResult.status === "fulfilled") setAccounts(accountsResult.value.data);
+    if (readinessResult.status === "fulfilled") setReadiness(readinessResult.value.data);
+    if (mappingsResult.status === "fulfilled") setMappings(mappingsResult.value.data);
+    setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
@@ -87,6 +113,44 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
   const typeInfo = (type: string) => TYPES.find(t => t.value === type);
 
+  const handleInitializeDefaultChart = async () => {
+    if (!confirm(ar
+      ? "سيتم إنشاء شجرة حسابات بأرصدة صفرية فقط. لن تتغير أي فاتورة أو عميل أو قيد سابق. هل تريد المتابعة؟"
+      : "This creates a zero-balance chart only. Existing invoices, parties, and journal entries will not change. Continue?")) return;
+    setSetupBusy(true);
+    try {
+      await initializeDefaultChart();
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر تهيئة الشجرة" : "Unable to initialize the chart"));
+    } finally { setSetupBusy(false); }
+  };
+
+  const handleApplyPartyMappings = async () => {
+    if (!confirm(ar
+      ? "سيتم ربط العملاء والموردين الذين بلا حساب بالذمم العامة فقط، من دون إنشاء أي قيود أو تعديل الفواتير. هل تريد المتابعة؟"
+      : "Only unmapped customers and vendors will be linked to the general receivable/payable accounts. No journal entries or invoices will change. Continue?")) return;
+    setSetupBusy(true);
+    try {
+      const { data } = await applyDefaultPartyMappings();
+      alert(ar ? `تم ربط ${data.customers_linked} عميل و${data.vendors_linked} مورد مرجعيًا.` : `Linked ${data.customers_linked} customers and ${data.vendors_linked} vendors.`);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر ربط الأطراف" : "Unable to map parties"));
+    } finally { setSetupBusy(false); }
+  };
+
+  const handleMappingChange = async (mappingKey: string, accountId: string) => {
+    if (!accountId) return;
+    setSetupBusy(true);
+    try {
+      await updateOperationalAccountMapping(mappingKey, accountId);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر حفظ الربط" : "Unable to save mapping"));
+    } finally { setSetupBusy(false); }
+  };
+
   return (
     <>
       <div className="page-header">
@@ -102,6 +166,103 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
         <div style={{ display: "flex", gap: 8 }}>
           <StructuredReportPrintButton locale={locale} title={ar ? "دليل الحسابات" : "Chart of Accounts"} subtitle={ar ? "الهيكل المحاسبي للشركة" : "Company account structure"} period={ar ? "كما في تاريخ الطباعة" : "As of print date"} orientation="landscape" reportCode={`COA-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الحسابات" : "Total accounts", value: String(filtered.length), tone: "green" }, ...TYPES.map(t => ({ label: ar ? t.ar : t.en, value: String(accounts.filter(a => a.account_type === t.value).length), tone: "neutral" as const }))]} tables={[{ headers: [ar ? "الكود" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "النوع" : "Type", ar ? "الطبيعة" : "Nature", ar ? "افتتاحي" : "Opening", ar ? "قابل للترحيل" : "Posting"], rows: filtered.map(a => [String(a.code), String(ar ? a.name_ar : a.name_en || a.name_ar), String(ar ? typeInfo(a.account_type)?.ar : typeInfo(a.account_type)?.en || a.account_type), a.nature === "debit" ? (ar ? "مدين" : "Debit") : (ar ? "دائن" : "Credit"), Number(a.opening_balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 }), a.is_posting ? (ar ? "نعم" : "Yes") : (ar ? "لا" : "No")]) }]} />
           <button className="btn btn-primary btn-sm" onClick={openNew}>+ {ar ? "حساب جديد" : "New Account"}</button>
+        </div>
+      </div>
+
+      {/* Default chart and safe mapping setup */}
+      <div className="card" style={{ marginBottom: 16, borderInlineStart: "4px solid var(--primary)" }}>
+        <div className="card-body" style={{ padding: "16px 18px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <Icon name="journal" size={18} />
+                <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{ar ? "تهيئة شجرة الحسابات والربط" : "Chart setup and mapping"}</h2>
+                {readiness && <span className={`badge ${readiness.chart_initialized ? "badge-success" : "badge-warning"}`}>
+                  {readiness.chart_initialized ? (ar ? "الشجرة مهيأة" : "Chart ready") : (ar ? "غير مهيأة" : "Not initialized")}
+                </span>}
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, maxWidth: 760 }}>
+                {ar ? "هذه المرحلة تنشئ الحسابات بأرصدة صفرية وتجهز خريطة الربط فقط. القيود التلقائية تبقى غير مفعلة، ولا يتم تعديل أي فاتورة أو عميل أو قيد سابق." : "This step creates zero-balance accounts and operational mappings only. Automatic posting stays disabled and existing transactions remain unchanged."}
+              </p>
+            </div>
+            {readiness && !readiness.chart_initialized && (
+              <button className="btn btn-primary btn-sm" onClick={handleInitializeDefaultChart} disabled={setupBusy || readiness.account_count > 0}>
+                {setupBusy ? (ar ? "جاري التهيئة..." : "Initializing...") : (ar ? "تهيئة الشجرة الافتراضية" : "Initialize default chart")}
+              </button>
+            )}
+          </div>
+
+          {readiness ? (
+            <>
+              <div className="grid-4" style={{ marginTop: 14, marginBottom: 12 }}>
+                <div style={{ background: "var(--surface-muted)", padding: "10px 12px", border: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? "الحسابات الحالية" : "Current accounts"}</div>
+                  <strong style={{ fontSize: 18 }}>{readiness.account_count}</strong>
+                </div>
+                <div style={{ background: "var(--surface-muted)", padding: "10px 12px", border: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? "ربط العملاء المتبقي" : "Customers to map"}</div>
+                  <strong style={{ fontSize: 18 }}>{readiness.customer_without_ar}</strong>
+                </div>
+                <div style={{ background: "var(--surface-muted)", padding: "10px 12px", border: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? "ربط الموردين المتبقي" : "Vendors to map"}</div>
+                  <strong style={{ fontSize: 18 }}>{readiness.vendor_without_ap}</strong>
+                </div>
+                <div style={{ background: "var(--surface-muted)", padding: "10px 12px", border: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? "القيود التلقائية" : "Automatic posting"}</div>
+                  <strong style={{ fontSize: 13, color: readiness.auto_posting_enabled ? "var(--success)" : "var(--warning)" }}>
+                    {readiness.auto_posting_enabled ? (ar ? "مفعلة" : "Enabled") : (ar ? "غير مفعلة بأمان" : "Safely disabled")}
+                  </strong>
+                </div>
+              </div>
+
+              {!readiness.chart_initialized && readiness.account_count > 0 && (
+                <div className="alert alert-warning" style={{ marginBottom: 0 }}>
+                  {ar ? "لدى الشركة حسابات موجودة مسبقًا. لن ينشئ النظام شجرة ثانية فوقها؛ سنضيف مطابقة الحسابات اليدوية في الدفعة التالية." : "Existing accounts were found. The system will not create a duplicate chart; manual account matching is planned for the next phase."}
+                </div>
+              )}
+
+              {readiness.chart_initialized && (
+                <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                    <div>
+                      <h3 style={{ fontSize: 14, margin: 0 }}>{ar ? "خريطة الربط المحاسبي" : "Operational account mapping"}</h3>
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "3px 0 0" }}>{ar ? "غيّر الحساب النهائي لكل عملية عند الحاجة. لا يقبل النظام الحسابات التجميعية أو الموقوفة." : "Choose the final posting account for each operation. Parent and inactive accounts are rejected."}</p>
+                    </div>
+                    {(readiness.customer_without_ar > 0 || readiness.vendor_without_ap > 0) && (
+                      <button className="btn btn-secondary btn-sm" onClick={handleApplyPartyMappings} disabled={setupBusy}>
+                        {setupBusy ? (ar ? "جاري الربط..." : "Mapping...") : (ar ? "ربط العملاء والموردين بلا حساب" : "Map unmapped parties")}
+                      </button>
+                    )}
+                  </div>
+                  <div className="table-wrapper" style={{ border: "1px solid var(--border)" }}>
+                    <table>
+                      <thead><tr><th>{ar ? "العملية" : "Operation"}</th><th>{ar ? "الحساب المرتبط" : "Linked account"}</th></tr></thead>
+                      <tbody>
+                        {mappings.map((mapping) => (
+                          <tr key={mapping.mapping_key}>
+                            <td style={{ fontWeight: 600 }}>{MAPPING_LABELS[mapping.mapping_key] || mapping.mapping_key}</td>
+                            <td>
+                              <select className="form-input form-select" style={{ minWidth: 240, maxWidth: 420 }} value={mapping.account_id}
+                                onChange={(e) => handleMappingChange(mapping.mapping_key, e.target.value)} disabled={setupBusy}>
+                                {accounts.filter((account) => account.is_active && account.is_posting).map((account) => (
+                                  <option key={account.id} value={account.id}>{account.code} — {ar ? account.name_ar : account.name_en}</option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="alert alert-info" style={{ marginTop: 12, marginBottom: 0 }}>
+                    {ar ? "بياناتك التاريخية لم تتغير. مؤشرات المراجعة تعرض فقط ما يحتاج قرارًا محاسبيًا لاحقًا؛ لن يتم إنشاء قيود بأثر رجعي تلقائيًا." : "Historical data remains unchanged. Review indicators require an accounting decision later; no backdated entries will be created automatically."}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, margin: "14px 0 0" }}>{ar ? "تعذر جلب حالة التهيئة حاليًا. تأكد من تحديث الخلفية ثم أعد فتح الصفحة." : "Unable to load setup status. Update the backend and reload this page."}</p>
+          )}
         </div>
       </div>
 

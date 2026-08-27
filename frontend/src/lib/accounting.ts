@@ -44,3 +44,12 @@ export const getTrialBalance = (from_date: string, to_date: string) =>
   api.get("/accounting/reports/trial-balance", { params: { from_date, to_date } });
 export const getLedger = (account_id: string, from_date: string, to_date: string) =>
   api.get(`/accounting/reports/ledger/${account_id}`, { params: { from_date, to_date } });
+
+
+// Default chart and operational account mapping
+export const getAccountingReadiness = () => api.get("/accounting/setup/readiness");
+export const initializeDefaultChart = () => api.post("/accounting/setup/initialize");
+export const applyDefaultPartyMappings = () => api.post("/accounting/setup/apply-default-party-mappings");
+export const getOperationalAccountMappings = () => api.get("/accounting/setup/mappings");
+export const updateOperationalAccountMapping = (mappingKey: string, accountId: string) =>
+  api.put(`/accounting/setup/mappings/${mappingKey}`, { account_id: accountId });

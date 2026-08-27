@@ -242,3 +242,43 @@ class LedgerLine(BaseModel):
     debit: Decimal
     credit: Decimal
     balance: Decimal
+
+
+# ─── Accounting Setup & Operational Mapping ──────────────────────────
+class AccountMappingUpdate(BaseModel):
+    account_id: str
+
+
+class AccountMappingOut(BaseModel):
+    id: str
+    mapping_key: str
+    account_id: str
+    account_code: Optional[str] = None
+    account_name_ar: Optional[str] = None
+    updated_at: datetime
+
+
+class AccountingReadinessOut(BaseModel):
+    chart_initialized: bool
+    chart_initialized_at: Optional[datetime] = None
+    auto_posting_enabled: bool
+    account_count: int
+    mapping_count: int
+    active_mapping_count: int
+    missing_required_keys: List[str]
+    invalid_mapping_keys: List[str]
+    customer_without_ar: int
+    vendor_without_ap: int
+    bank_without_gl: int
+    financial_invoice_without_journal: int
+    payment_without_journal: int
+    bill_without_journal: int
+    legacy_transactions_untouched: bool
+
+
+class DefaultPartyMappingResult(BaseModel):
+    customers_linked: int
+    vendors_linked: int
+    journal_entries_created: int
+    invoices_changed: int
+    payments_changed: int

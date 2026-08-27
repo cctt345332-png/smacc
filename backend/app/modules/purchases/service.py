@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
+from app.modules.accounting.service import is_operational_auto_posting_enabled
 
 from app.models.purchases import (
     Vendor, PurchaseOrder, PurchaseOrderLine,
@@ -350,7 +351,7 @@ async def confirm_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: 
     if bill.status != BillStatus.DRAFT:
         raise HTTPException(400, "Only draft bills can be confirmed")
 
-    if bill.fiscal_year_id:
+    if bill.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
         journal_id = await _create_bill_journal(db, tenant_id, user_id, bill)
         bill.journal_entry_id = journal_id
 
@@ -1138,7 +1139,8 @@ async def create_debit_note(db: AsyncSession, tenant_id: str, user_id: str, data
     await _return_inventory_for_debit_note(db, tenant_id, dn)
 
     # ── قيد محاسبي لإشعار المدين (مرتجع مشتريات) ──────────────────
-    await _create_debit_note_journal(db, tenant_id, user_id, dn, bill)
+    if await is_operational_auto_posting_enabled(db, tenant_id):
+        await _create_debit_note_journal(db, tenant_id, user_id, dn, bill)
     await db.commit()
 
     return dn

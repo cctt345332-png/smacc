@@ -16,6 +16,7 @@ from app.modules.accounting.schemas import (
     BudgetCreate, BudgetOut,
     VATSettingUpdate, VATSettingOut,
     TrialBalanceLine, LedgerLine,
+    AccountMappingUpdate, AccountMappingOut, AccountingReadinessOut, DefaultPartyMappingResult,
 )
 
 router = APIRouter(prefix="/accounting", tags=["accounting"])
@@ -156,6 +157,51 @@ async def get_vat_settings(tenant_id=Depends(get_tenant_id), db: AsyncSession = 
 @router.put("/vat-settings", response_model=VATSettingOut)
 async def upsert_vat_settings(data: VATSettingUpdate, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await service.upsert_vat_settings(db, tenant_id, data)
+
+
+# ─── Accounting Setup & Operational Mapping ──────────────────────────
+@router.get("/setup/readiness", response_model=AccountingReadinessOut)
+async def accounting_readiness(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_accounting_readiness(db, user["tenant_id"])
+
+
+@router.post("/setup/initialize", response_model=AccountingReadinessOut)
+async def initialize_default_chart(
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.initialize_default_chart(db, user["tenant_id"], user["user_id"])
+
+
+@router.post("/setup/apply-default-party-mappings", response_model=DefaultPartyMappingResult)
+async def apply_default_party_mappings(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.apply_default_party_mappings(db, user["tenant_id"])
+
+
+@router.get("/setup/mappings", response_model=list[AccountMappingOut])
+async def list_operational_account_mappings(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_operational_account_mappings(db, user["tenant_id"])
+
+
+@router.put("/setup/mappings/{mapping_key}", response_model=AccountMappingOut)
+async def update_operational_account_mapping(
+    mapping_key: str,
+    data: AccountMappingUpdate,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_operational_account_mapping(
+        db, user["tenant_id"], mapping_key, data.account_id
+    )
 
 
 # ─── Reports ─────────────────────────────────────────────────────────
