@@ -17,6 +17,7 @@ from app.modules.accounting.schemas import (
     VATSettingUpdate, VATSettingOut,
     TrialBalanceLine, LedgerLine,
     AccountMappingUpdate, AccountMappingOut, AccountingReadinessOut, DefaultPartyMappingResult,
+    LegacyChartReplacementReadinessOut,
 )
 
 router = APIRouter(prefix="/accounting", tags=["accounting"])
@@ -176,12 +177,30 @@ async def initialize_default_chart(
     return await service.initialize_default_chart(db, user["tenant_id"], user["user_id"])
 
 
+@router.get("/setup/legacy-chart-replacement-readiness", response_model=LegacyChartReplacementReadinessOut)
+async def legacy_chart_replacement_readiness(
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_legacy_chart_replacement_readiness(db, user["tenant_id"])
+
+
 @router.post("/setup/import-legacy-company-chart", response_model=AccountingReadinessOut)
 async def import_legacy_company_chart(
     user=Depends(require_role(["manager"])),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.import_legacy_company_chart(db, user["tenant_id"], user["user_id"])
+
+
+@router.post("/setup/replace-empty-chart-with-legacy-company-chart", response_model=AccountingReadinessOut)
+async def replace_empty_chart_with_legacy_company_chart(
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.replace_empty_chart_with_legacy_company_chart(
+        db, user["tenant_id"], user["user_id"],
+    )
 
 
 @router.post("/setup/apply-default-party-mappings", response_model=DefaultPartyMappingResult)

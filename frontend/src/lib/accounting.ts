@@ -49,7 +49,9 @@ export const getLedger = (account_id: string, from_date: string, to_date: string
 // Default chart and operational account mapping
 export const getAccountingReadiness = () => api.get("/accounting/setup/readiness");
 export const initializeDefaultChart = () => api.post("/accounting/setup/initialize");
+export const getLegacyChartReplacementReadiness = () => api.get("/accounting/setup/legacy-chart-replacement-readiness");
 export const importLegacyCompanyChart = () => api.post("/accounting/setup/import-legacy-company-chart");
+export const replaceEmptyChartWithLegacyCompanyChart = () => api.post("/accounting/setup/replace-empty-chart-with-legacy-company-chart");
 export const applyDefaultPartyMappings = () => api.post("/accounting/setup/apply-default-party-mappings");
 export const getOperationalAccountMappings = () => api.get("/accounting/setup/mappings");
 export const updateOperationalAccountMapping = (mappingKey: string, accountId: string) =>

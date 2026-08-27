@@ -19,15 +19,19 @@ from app.models.sales import Customer, Invoice
 
 
 class FakeResult:
-    def __init__(self, *, one=None, scalar=None):
+    def __init__(self, *, one=None, scalar=None, all_values=None):
         self._one = one
         self._scalar = scalar
+        self._all_values = list(all_values or [])
 
     def scalar_one_or_none(self):
         return self._one
 
     def scalar(self):
         return self._scalar
+
+    def scalars(self):
+        return SimpleNamespace(all=lambda: self._all_values)
 
 
 class FakeSession:
@@ -229,6 +233,103 @@ def test_legacy_chart_import_creates_only_zero_balance_chart_records(monkeypatch
         assert setup.legacy_chart_imported_by == "user-1"
         assert setup.auto_posting_enabled is False
         assert db.commits == 1
+
+    asyncio.run(run())
+
+
+def test_legacy_chart_replacement_readiness_requires_no_balance_or_references(monkeypatch):
+    class CountSession:
+        def __init__(self, counts):
+            self.counts = list(counts)
+
+        async def execute(self, _statement):
+            return FakeResult(scalar=self.counts.pop(0))
+
+    async def run():
+        async def no_setup(*_args):
+            return None
+
+        monkeypatch.setattr(service, "_get_accounting_setup", no_setup)
+        safe = await service.get_legacy_chart_replacement_readiness(
+            CountSession([61, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), "tenant-1"
+        )
+        assert safe["account_count"] == 61
+        assert safe["can_replace"] is True
+
+        blocked = await service.get_legacy_chart_replacement_readiness(
+            CountSession([61, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0]), "tenant-1"
+        )
+        assert blocked["journal_line_references"] == 1
+        assert blocked["can_replace"] is False
+
+    asyncio.run(run())
+
+
+def test_legacy_chart_replacement_refuses_when_safety_check_fails(monkeypatch):
+    async def run():
+        db = FakeSession()
+
+        async def blocked_readiness(*_args):
+            return {"legacy_chart_imported": False, "account_count": 61, "can_replace": False}
+
+        monkeypatch.setattr(service, "get_legacy_chart_replacement_readiness", blocked_readiness)
+        with pytest.raises(HTTPException, match="لا يمكن استبدال الدليل"):
+            await service.replace_empty_chart_with_legacy_company_chart(db, "tenant-1", "user-1")
+        assert db.records == []
+        assert db.commits == 0
+
+    asyncio.run(run())
+
+
+def test_legacy_chart_replacement_replaces_only_an_unreferenced_empty_chart(monkeypatch):
+    class ReplaceSession(FakeSession):
+        def __init__(self):
+            super().__init__()
+            self.executed = []
+            self.vat = SimpleNamespace(vat_account_id="old-account-1", vat_receivable_account_id=None, updated_at=None)
+
+        async def execute(self, statement):
+            self.executed.append(str(statement))
+            if len(self.executed) == 1:
+                return FakeResult(all_values=["old-account-1", "old-account-2"])
+            if len(self.executed) == 3:
+                return FakeResult(all_values=[self.vat])
+            return FakeResult()
+
+    async def run():
+        db = ReplaceSession()
+        setup = SimpleNamespace(
+            chart_initialized_at=object(), chart_initialized_by="user-0",
+            legacy_chart_imported_at=None, legacy_chart_imported_by=None,
+            auto_posting_enabled=True, updated_at=None,
+        )
+
+        async def safe_readiness(*_args):
+            return {"legacy_chart_imported": False, "account_count": 61, "can_replace": True}
+
+        async def existing_setup(*_args):
+            return setup
+
+        async def readiness_after_import(*_args):
+            return {"legacy_chart_imported": True, "account_count": 500}
+
+        monkeypatch.setattr(service, "get_legacy_chart_replacement_readiness", safe_readiness)
+        monkeypatch.setattr(service, "_get_accounting_setup", existing_setup)
+        monkeypatch.setattr(service, "get_accounting_readiness", readiness_after_import)
+
+        result = await service.replace_empty_chart_with_legacy_company_chart(db, "tenant-1", "user-1")
+        created_accounts = [record for record in db.records if isinstance(record, Account)]
+        assert result["legacy_chart_imported"] is True
+        assert len(created_accounts) == len(LEGACY_COMPANY_CHART) == 500
+        assert all(account.opening_balance == 0 for account in created_accounts)
+        assert all(not isinstance(record, (JournalEntry, Invoice, Customer, Vendor)) for record in db.records)
+        assert setup.chart_initialized_at is None
+        assert setup.legacy_chart_imported_at is not None
+        assert setup.auto_posting_enabled is False
+        assert db.vat.vat_account_id is None
+        assert db.commits == 1
+        assert any("DELETE FROM accounting_account_mappings" in statement for statement in db.executed)
+        assert any("DELETE FROM accounts" in statement for statement in db.executed)
 
     asyncio.run(run())
 

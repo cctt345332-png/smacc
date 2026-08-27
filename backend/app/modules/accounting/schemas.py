@@ -285,3 +285,20 @@ class DefaultPartyMappingResult(BaseModel):
     journal_entries_created: int
     invoices_changed: int
     payments_changed: int
+
+
+class LegacyChartReplacementReadinessOut(BaseModel):
+    account_count: int
+    accounts_with_opening_balance: int
+    journal_line_references: int
+    customer_account_references: int
+    vendor_account_references: int
+    bank_account_references: int
+    budget_line_references: int
+    asset_category_references: int
+    pos_terminal_references: int
+    voucher_account_references: int
+    removable_mapping_references: int
+    removable_vat_account_references: int
+    legacy_chart_imported: bool
+    can_replace: bool

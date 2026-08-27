@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, delete
 from fastapi import HTTPException
 
 from app.models.accounting import (
@@ -626,27 +626,8 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
     return await get_accounting_readiness(db, tenant_id)
 
 
-async def import_legacy_company_chart(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
-    """يجلب شجرة النظام السابق لهذه الشركة الفارغة فقط.
-
-    القالب محفوظ من الملف النصي المعتمد بكل أرقامه ومسمياته ومستوياته. لا ينشئ
-    هذا الإجراء أي قيد أو فاتورة أو عميل أو مورد أو رصيد افتتاحي، ولا ينشئ خريطة
-    ربط تلقائية. وجود رمز مكرر في المصدر محفوظ كما هو، وتعتمد العلاقات الداخلية
-    على مفتاح المصدر لا على رمز الحساب وحده.
-    """
-    existing_setup = await _get_accounting_setup(db, tenant_id)
-    account_count = (await db.execute(
-        select(func.count(Account.id)).where(Account.tenant_id == tenant_id)
-    )).scalar() or 0
-
-    if existing_setup and existing_setup.legacy_chart_imported_at:
-        raise HTTPException(409, "تم جلب شجرة النظام السابق لهذه الشركة بالفعل")
-    if account_count:
-        raise HTTPException(
-            409,
-            "توجد حسابات حالية لهذه الشركة؛ لا يمكن جلب شجرة النظام السابق فوق بيانات قائمة.",
-        )
-
+async def _add_legacy_company_chart_records(db: AsyncSession, tenant_id: str) -> None:
+    """يبني حسابات الشجرة المخصصة في الذاكرة قبل حفظ المعاملة."""
     accounts_by_source_key: dict[str, Account] = {}
     for source_key, code, name_ar, account_type, nature, parent_source_key, level, is_posting, allow_direct_posting in LEGACY_COMPANY_CHART:
         account = Account(
@@ -671,7 +652,13 @@ async def import_legacy_company_chart(db: AsyncSession, tenant_id: str, user_id:
         accounts_by_source_key[source_key] = account
         db.add(account)
 
+
+async def _mark_legacy_chart_imported(
+    db: AsyncSession, tenant_id: str, user_id: str, existing_setup: AccountingSetup | None,
+) -> None:
     setup = existing_setup or AccountingSetup(id=str(uuid.uuid4()), tenant_id=tenant_id)
+    setup.chart_initialized_at = None
+    setup.chart_initialized_by = None
     setup.legacy_chart_imported_at = datetime.utcnow()
     setup.legacy_chart_imported_by = user_id
     setup.auto_posting_enabled = False
@@ -679,6 +666,159 @@ async def import_legacy_company_chart(db: AsyncSession, tenant_id: str, user_id:
     if not existing_setup:
         db.add(setup)
 
+
+async def get_legacy_chart_replacement_readiness(db: AsyncSession, tenant_id: str) -> dict:
+    """فحص قراءة فقط قبل استبدال دليل قديم؛ لا يغير أي سجل."""
+    from app.models.assets import AssetCategory
+    from app.models.pos import POSTerminal
+    from app.models.purchases import Vendor
+    from app.models.sales import Customer
+    from app.models.treasury import Voucher
+
+    setup = await _get_accounting_setup(db, tenant_id)
+    account_ids = select(Account.id).where(Account.tenant_id == tenant_id)
+
+    async def count_references(statement) -> int:
+        return int((await db.execute(statement)).scalar() or 0)
+
+    account_count = await count_references(select(func.count(Account.id)).where(Account.tenant_id == tenant_id))
+    accounts_with_opening_balance = await count_references(
+        select(func.count(Account.id)).where(Account.tenant_id == tenant_id, Account.opening_balance != 0)
+    )
+    journal_line_references = await count_references(
+        select(func.count(JournalEntryLine.id)).where(JournalEntryLine.account_id.in_(account_ids))
+    )
+    customer_account_references = await count_references(
+        select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id, Customer.ar_account_id.in_(account_ids))
+    )
+    vendor_account_references = await count_references(
+        select(func.count(Vendor.id)).where(Vendor.tenant_id == tenant_id, Vendor.ap_account_id.in_(account_ids))
+    )
+    bank_account_references = await count_references(
+        select(func.count(BankAccount.id)).where(BankAccount.tenant_id == tenant_id, BankAccount.gl_account_id.in_(account_ids))
+    )
+    budget_line_references = await count_references(
+        select(func.count(BudgetLine.id)).where(BudgetLine.account_id.in_(account_ids))
+    )
+    asset_category_references = await count_references(
+        select(func.count(AssetCategory.id)).where(
+            AssetCategory.tenant_id == tenant_id,
+            or_(
+                AssetCategory.asset_account_id.in_(account_ids),
+                AssetCategory.accumulated_dep_account_id.in_(account_ids),
+                AssetCategory.depreciation_expense_account_id.in_(account_ids),
+                AssetCategory.gain_on_disposal_account_id.in_(account_ids),
+                AssetCategory.loss_on_disposal_account_id.in_(account_ids),
+            ),
+        )
+    )
+    pos_terminal_references = await count_references(
+        select(func.count(POSTerminal.id)).where(
+            POSTerminal.tenant_id == tenant_id,
+            or_(
+                POSTerminal.cash_account_id.in_(account_ids),
+                POSTerminal.sales_account_id.in_(account_ids),
+                POSTerminal.vat_account_id.in_(account_ids),
+            ),
+        )
+    )
+    voucher_account_references = await count_references(
+        select(func.count(Voucher.id)).where(
+            Voucher.tenant_id == tenant_id,
+            or_(
+                Voucher.debit_account_id.in_(account_ids),
+                Voucher.credit_account_id.in_(account_ids),
+                Voucher.vat_account_id.in_(account_ids),
+            ),
+        )
+    )
+    removable_mapping_references = await count_references(
+        select(func.count(AccountingAccountMapping.id)).where(
+            AccountingAccountMapping.tenant_id == tenant_id,
+            AccountingAccountMapping.account_id.in_(account_ids),
+        )
+    )
+    removable_vat_account_references = await count_references(
+        select(func.count(VATSetting.id)).where(
+            VATSetting.tenant_id == tenant_id,
+            or_(
+                VATSetting.vat_account_id.in_(account_ids),
+                VATSetting.vat_receivable_account_id.in_(account_ids),
+            ),
+        )
+    )
+
+    blocking_counts = (
+        accounts_with_opening_balance,
+        journal_line_references,
+        customer_account_references,
+        vendor_account_references,
+        bank_account_references,
+        budget_line_references,
+        asset_category_references,
+        pos_terminal_references,
+        voucher_account_references,
+    )
+    return {
+        "account_count": account_count,
+        "accounts_with_opening_balance": accounts_with_opening_balance,
+        "journal_line_references": journal_line_references,
+        "customer_account_references": customer_account_references,
+        "vendor_account_references": vendor_account_references,
+        "bank_account_references": bank_account_references,
+        "budget_line_references": budget_line_references,
+        "asset_category_references": asset_category_references,
+        "pos_terminal_references": pos_terminal_references,
+        "voucher_account_references": voucher_account_references,
+        "removable_mapping_references": removable_mapping_references,
+        "removable_vat_account_references": removable_vat_account_references,
+        "legacy_chart_imported": bool(setup and setup.legacy_chart_imported_at),
+        "can_replace": bool(account_count) and not any(blocking_counts) and not bool(setup and setup.legacy_chart_imported_at),
+    }
+
+
+async def import_legacy_company_chart(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """يجلب شجرة النظام السابق للشركة الفارغة فقط."""
+    existing_setup = await _get_accounting_setup(db, tenant_id)
+    account_count = (await db.execute(
+        select(func.count(Account.id)).where(Account.tenant_id == tenant_id)
+    )).scalar() or 0
+    if existing_setup and existing_setup.legacy_chart_imported_at:
+        raise HTTPException(409, "تم جلب شجرة النظام السابق لهذه الشركة بالفعل")
+    if account_count:
+        raise HTTPException(409, "توجد حسابات حالية لهذه الشركة؛ استخدم الاستبدال المحمي إذا كانت خالية من الحركات والارتباطات.")
+
+    await _add_legacy_company_chart_records(db, tenant_id)
+    await _mark_legacy_chart_imported(db, tenant_id, user_id, existing_setup)
+    await db.commit()
+    return await get_accounting_readiness(db, tenant_id)
+
+
+async def replace_empty_chart_with_legacy_company_chart(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """يستبدل دليلًا قديمًا غير مستخدم بعد فحص كل المراجع داخل الشركة."""
+    readiness = await get_legacy_chart_replacement_readiness(db, tenant_id)
+    if readiness["legacy_chart_imported"]:
+        raise HTTPException(409, "تم جلب شجرة النظام السابق لهذه الشركة بالفعل")
+    if not readiness["account_count"]:
+        raise HTTPException(409, "لا يوجد دليل قائم لاستبداله؛ استخدم زر جلب الشجرة للشركة الفارغة")
+    if not readiness["can_replace"]:
+        raise HTTPException(409, "لا يمكن استبدال الدليل لأن بعض حساباته لها أرصدة أو حركات أو ارتباطات قائمة. لم يتم حذف أي حساب.")
+
+    existing_setup = await _get_accounting_setup(db, tenant_id)
+    old_account_result = await db.execute(select(Account.id).where(Account.tenant_id == tenant_id))
+    old_account_ids = set(old_account_result.scalars().all())
+    # خريطة الربط وإعداد الضريبة مراجع إعدادات فقط. تزال قبل حذف الحسابات الفارغة
+    # كي لا تبقى مراجع يتيمة، ولا يمس ذلك أي فاتورة أو قيد أو عميل أو مورد.
+    await db.execute(delete(AccountingAccountMapping).where(AccountingAccountMapping.tenant_id == tenant_id))
+    vat_rows = await db.execute(select(VATSetting).where(VATSetting.tenant_id == tenant_id))
+    for vat in vat_rows.scalars().all():
+        if vat.vat_account_id in old_account_ids or vat.vat_receivable_account_id in old_account_ids:
+            vat.vat_account_id = None
+            vat.vat_receivable_account_id = None
+            vat.updated_at = datetime.utcnow()
+    await db.execute(delete(Account).where(Account.tenant_id == tenant_id))
+    await _add_legacy_company_chart_records(db, tenant_id)
+    await _mark_legacy_chart_imported(db, tenant_id, user_id, existing_setup)
     await db.commit()
     return await get_accounting_readiness(db, tenant_id)
 

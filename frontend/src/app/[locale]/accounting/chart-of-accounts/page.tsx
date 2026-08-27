@@ -3,7 +3,8 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import {
   getAccounts, createAccount, updateAccount, deleteAccount,
-  getAccountingReadiness, initializeDefaultChart, importLegacyCompanyChart, applyDefaultPartyMappings,
+  getAccountingReadiness, getLegacyChartReplacementReadiness, initializeDefaultChart,
+  importLegacyCompanyChart, replaceEmptyChartWithLegacyCompanyChart, applyDefaultPartyMappings,
   getOperationalAccountMappings, updateOperationalAccountMapping,
 } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
@@ -54,6 +55,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   const [saving, setSaving] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
   const [readiness, setReadiness] = useState<any>(null);
+  const [legacyReplacement, setLegacyReplacement] = useState<any>(null);
   const [mappings, setMappings] = useState<any[]>([]);
   const [form, setForm] = useState({
     code: "", name_ar: "", name_en: "", account_type: "asset",
@@ -63,11 +65,13 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
   const load = async () => {
     setLoading(true);
-    const [accountsResult, readinessResult, mappingsResult] = await Promise.allSettled([
-      getAccounts(), getAccountingReadiness(), getOperationalAccountMappings(),
+    const [accountsResult, readinessResult, replacementResult, mappingsResult] = await Promise.allSettled([
+      getAccounts(), getAccountingReadiness(), getLegacyChartReplacementReadiness(), getOperationalAccountMappings(),
     ]);
     if (accountsResult.status === "fulfilled") setAccounts(accountsResult.value.data);
     if (readinessResult.status === "fulfilled") setReadiness(readinessResult.value.data);
+    if (replacementResult.status === "fulfilled") setLegacyReplacement(replacementResult.value.data);
+    else setLegacyReplacement(null);
     if (mappingsResult.status === "fulfilled") setMappings(mappingsResult.value.data);
     setLoading(false);
   };
@@ -139,6 +143,19 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } finally { setSetupBusy(false); }
   };
 
+  const handleReplaceEmptyChartWithLegacy = async () => {
+    if (!confirm(ar
+      ? "سيحذف النظام دليل الحسابات الحالي الفارغ لهذه الشركة فقط ثم يجلب شجرة النظام السابق الكاملة بأرصدة صفرية. تم التحقق آليًا من عدم وجود أرصدة أو قيود أو روابط عملاء أو موردين أو مراجع محاسبية مرتبطة بالحسابات. لا يمكن التراجع بعد الحفظ. لن يعدل النظام أي فاتورة قائمة. هل تريد المتابعة؟"
+      : "The current empty chart for this company only will be deleted and replaced with the complete legacy chart at zero balances. The system verified that no balances, journal entries, customer/vendor links, or accounting references use these accounts. This cannot be undone, and no existing invoice will be changed. Continue?")) return;
+    setSetupBusy(true);
+    try {
+      await replaceEmptyChartWithLegacyCompanyChart();
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر استبدال الدليل الفارغ" : "Unable to replace the empty chart"));
+    } finally { setSetupBusy(false); }
+  };
+
   const handleApplyPartyMappings = async () => {
     if (!confirm(ar
       ? "سيتم ربط العملاء والموردين الذين بلا حساب بالذمم العامة فقط، من دون إنشاء أي قيود أو تعديل الفواتير. هل تريد المتابعة؟"
@@ -199,7 +216,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, maxWidth: 760 }}>
-                {ar ? "يمكنك إما تهيئة الشجرة الافتراضية ذات الأكواد الستة، أو جلب شجرة النظام السابق المكتملة للشركة الحالية فقط إذا كانت بلا حسابات. كلا الخيارين يبدأ بأرصدة صفرية، ويبقي القيود التلقائية غير مفعلة، ولا يعدل أي فاتورة أو عميل أو مورد أو قيد سابق." : "You may initialize the official six-digit default chart or import the complete legacy chart for this company only when it has no accounts. Both options start at zero balances, keep automatic posting disabled, and leave existing transactions unchanged."}
+                {ar ? "يمكنك تهيئة الشجرة الافتراضية ذات الأكواد الستة، أو جلب شجرة النظام السابق للشركة الحالية. وإذا كان فيها دليل قديم خالٍ تمامًا من الأرصدة والحركات والارتباطات، يظهر زر استبدال لمرة واحدة بعد تحقق النظام. جميع المسارات تبقي القيود التلقائية غير مفعلة ولا تعدل الفواتير أو العملاء أو الموردين أو القيود." : "You may initialize the official six-digit default chart or import the legacy chart for this company. When an existing chart is completely empty and unreferenced, the system presents a one-time replacement action after verification. All paths keep automatic posting disabled and leave transactions and parties unchanged."}
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -211,6 +228,11 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
               {readiness && !readiness.legacy_chart_imported && readiness.account_count === 0 && (
                 <button className="btn btn-secondary btn-sm" onClick={handleImportLegacyCompanyChart} disabled={setupBusy}>
                   {setupBusy ? (ar ? "جاري الجلب..." : "Importing...") : (ar ? "جلب شجرة النظام السابق لهذه الشركة" : "Import legacy chart for this company")}
+                </button>
+              )}
+              {readiness && !readiness.legacy_chart_imported && legacyReplacement?.can_replace && (
+                <button className="btn btn-secondary btn-sm" onClick={handleReplaceEmptyChartWithLegacy} disabled={setupBusy}>
+                  {setupBusy ? (ar ? "جاري الاستبدال..." : "Replacing...") : (ar ? "استبدال الدليل الفارغ بشجرة النظام السابق" : "Replace empty chart with legacy chart")}
                 </button>
               )}
             </div>
@@ -245,9 +267,15 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </div>
               )}
 
-              {!readiness.chart_initialized && !readiness.legacy_chart_imported && readiness.account_count > 0 && (
+              {legacyReplacement?.can_replace && !readiness.legacy_chart_imported && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-                  {ar ? "لدى الشركة حسابات موجودة مسبقًا. لن يستبدل النظام تلك الحسابات أو يعيد ترقيمها أو ينشئ شجرة ثانية فوقها. يلزم قرار محاسب ومطابقة يدوية مستقلة قبل أي انتقال إلى شجرة أخرى." : "Existing accounts were found. The system will not replace, renumber, or overlay them; a separately approved manual mapping is required before migrating to another chart."}
+                  {ar ? `تم فحص ${legacyReplacement.account_count} حسابًا: لا توجد أرصدة افتتاحية أو قيود أو روابط عملاء أو موردين أو بنوك أو موازنات أو أصول أو نقاط بيع أو سندات. يمكنك استخدام زر الاستبدال لمرة واحدة.` : `The ${legacyReplacement.account_count} accounts were checked: no balances, journal entries, customer/vendor/bank/budget/asset/POS/voucher references exist. You may use the one-time replacement button.`}
+                </div>
+              )}
+
+              {!readiness.legacy_chart_imported && readiness.account_count > 0 && legacyReplacement && !legacyReplacement.can_replace && (
+                <div className="alert alert-warning" style={{ marginBottom: 0 }}>
+                  {ar ? "يوجد دليل حسابات قائم، لكن ظهرت له أرصدة أو حركة أو مراجع محاسبية. لذلك لن يظهر زر الاستبدال ولن يحذف النظام أي حساب." : "An existing chart has balances, transactions, or accounting references. The replacement action is unavailable and no account will be deleted."}
                 </div>
               )}
 
