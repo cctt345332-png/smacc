@@ -215,6 +215,7 @@ DEFAULT_MAPPING_CODES: dict[str, str] = {
     "capital": "310001",
     "sales_goods": "411001",
     "sales_services": "412003",
+    "sales_returns": "420000",
     "sales_discounts": "430000",
     "other_income": "440004",
     "cogs_goods": "511000",

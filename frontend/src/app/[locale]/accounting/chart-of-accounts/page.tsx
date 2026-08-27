@@ -28,7 +28,7 @@ const MAPPING_LABELS: Record<string, string> = {
   default_ar: "ذمم العملاء", default_ap: "ذمم الموردين",
   inventory: "المخزون", vat_input: "ضريبة المدخلات", vat_output: "ضريبة المخرجات",
   sales_goods: "مبيعات البضائع", sales_services: "إيرادات الخدمات",
-  sales_discounts: "خصم المبيعات", other_income: "إيرادات أخرى",
+  sales_returns: "مردودات المبيعات", sales_discounts: "خصم المبيعات", other_income: "إيرادات أخرى",
   cogs_goods: "تكلفة البضاعة المباعة", cost_services: "تكلفة الخدمات / مصروف عام",
   employee_advances: "عهد الموظفين", rep_collections: "عهد تحصيل المناديب",
   payroll_payable: "رواتب مستحقة", payroll_expense: "مصروف الرواتب",

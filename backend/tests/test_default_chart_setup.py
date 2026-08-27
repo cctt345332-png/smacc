@@ -73,6 +73,7 @@ def test_every_operational_mapping_targets_a_posting_account():
         "vat_output": "214001",
         "sales_goods": "411001",
         "sales_services": "412003",
+        "sales_returns": "420000",
         "sales_discounts": "430000",
         "cogs_goods": "511000",
         "employee_advances": "117001",
