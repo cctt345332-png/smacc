@@ -3,6 +3,7 @@ import api from "./api";
 // Customers
 export const getCustomers = (search?: string) => api.get("/sales/customers", { params: search ? { search } : {} });
 export const getCustomer = (id: string) => api.get(`/sales/customers/${id}`);
+export const getCustomerReceivableAccounts = () => api.get("/sales/customers/ar-accounts");
 export const createCustomer = (data: any) => api.post("/sales/customers", data);
 export const updateCustomer = (id: string, data: any) => api.patch(`/sales/customers/${id}`, data);
 export const deleteCustomer = (id: string) => api.delete(`/sales/customers/${id}`);

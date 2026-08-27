@@ -15,6 +15,7 @@ from app.models.sales import (
 from app.models.reps import SalesRep
 from app.models.user import User
 from app.models.inventory import ProductVariant, StockMovement
+from app.models.accounting import Account
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
     QuotationCreate, CreditNoteCreate, RefundRequestCreate
@@ -96,10 +97,24 @@ async def get_customer(db: AsyncSession, tenant_id: str, customer_id: str):
     return c
 
 
+async def _validate_customer_ar_account(
+    db: AsyncSession, tenant_id: str, ar_account_id: str | None,
+) -> None:
+    """يتحقق من حساب ذمم اختياري؛ لا ينشئ أو يعدل أي حركة مالية."""
+    if ar_account_id is None:
+        return
+    account = await db.get(Account, ar_account_id)
+    if not account or account.tenant_id != tenant_id:
+        raise HTTPException(400, "حساب العميل المختار غير موجود لهذه الشركة")
+    if not account.is_active or not account.is_posting or not account.is_customer_account:
+        raise HTTPException(400, "يجب اختيار حساب عميل نشط ونهائي من فروع العملاء")
+
+
 async def create_customer(
     db: AsyncSession, tenant_id: str, data: CustomerCreate,
     rep_id: str | None = None, actor_user_id: str | None = None,
 ):
+    await _validate_customer_ar_account(db, tenant_id, data.ar_account_id)
     customer = Customer(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
@@ -120,8 +135,13 @@ async def update_customer(
     actor_user_id: str | None = None,
 ):
     c = await get_customer(db, tenant_id, customer_id)
-    changed_fields = list(data.model_dump(exclude_none=True).keys())
-    for k, v in data.model_dump(exclude_none=True).items():
+    updates = data.model_dump(exclude_none=True)
+    # يسمح الحقل الاختياري بإزالة الحساب صراحة، ولا يغير الحقول الأخرى عند إرسالها فارغة.
+    if "ar_account_id" in data.model_fields_set:
+        await _validate_customer_ar_account(db, tenant_id, data.ar_account_id)
+        updates["ar_account_id"] = data.ar_account_id
+    changed_fields = list(updates.keys())
+    for k, v in updates.items():
         setattr(c, k, v)
     record_audit(db, tenant_id, actor_user_id, "update", "customer", c.id,
                  changed_fields=changed_fields)

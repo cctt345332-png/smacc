@@ -46,6 +46,7 @@ class Account(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_posting: Mapped[bool] = mapped_column(Boolean, default=True)  # can post entries
     allow_direct_posting: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_customer_account: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     opening_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -223,6 +224,8 @@ class AccountingSetup(Base):
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), unique=True, index=True)
     chart_initialized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     chart_initialized_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    legacy_chart_imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    legacy_chart_imported_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
     auto_posting_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

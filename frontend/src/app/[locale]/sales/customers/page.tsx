@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
-import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "@/lib/sales";
+import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getCustomerReceivableAccounts } from "@/lib/sales";
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
 
@@ -25,7 +25,7 @@ const emptyForm = {
   address_postal: "", address_additional: "",
   address_country: "SA",
   phone: "", phone2: "", email: "", website: "",
-  payment_terms_days: "30", credit_limit: "0", notes: "",
+  payment_terms_days: "30", credit_limit: "0", ar_account_id: "", notes: "",
 };
 
 export default function CustomersPage(props: { params: Promise<{ locale: string }> }) {
@@ -37,6 +37,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
 
   const ar = locale === "ar";
   const [customers, setCustomers] = useState<any[]>([]);
+  const [customerAccounts, setCustomerAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
@@ -54,6 +55,13 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    if (!showModal) return;
+    getCustomerReceivableAccounts()
+      .then(({ data }) => setCustomerAccounts(data))
+      .catch(() => setCustomerAccounts([]));
+  }, [showModal]);
 
   // فتح modal إضافة عميل تلقائياً إذا جاء من الداشبورد
   useEffect(() => {
@@ -89,6 +97,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
         ...form,
         payment_terms_days: parseInt(form.payment_terms_days) || 30,
         credit_limit: parseFloat(form.credit_limit) || 0,
+        ar_account_id: form.ar_account_id || null,
         vat_number: form.vat_number || null,
         cr_number: form.cr_number || null,
         national_id: form.national_id || null,
@@ -424,6 +433,20 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                       <label className="form-label">{ar ? "حد الائتمان (ر.س)" : "Credit Limit (SAR)"}</label>
                       <input type="number" className="form-input" value={form.credit_limit} onChange={e => upd("credit_limit", e.target.value)} min="0" />
                     </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{ar ? "حساب ذمم العميل" : "Customer receivable account"}</label>
+                    <select className="form-input form-select" value={form.ar_account_id} onChange={e => upd("ar_account_id", e.target.value)}>
+                      <option value="">{ar ? "بدون اختيار — لا يتغير ربط العميل" : "No selection — keep customer unlinked"}</option>
+                      {customerAccounts.map(account => (
+                        <option key={account.id} value={account.id}>{account.code} — {account.name_ar}</option>
+                      ))}
+                    </select>
+                    <p className="form-hint">
+                      {customerAccounts.length
+                        ? (ar ? "تظهر الحسابات النهائية التابعة لفروع العملاء والمدن فقط. الاختيار لا ينشئ قيدًا ولا يغير الفواتير السابقة." : "Only final customer and city accounts are listed. Selecting one creates no journal entry and does not alter prior invoices.")
+                        : (ar ? "تظهر الخيارات بعد جلب شجرة النظام السابق للشركة الحالية. لا يتم اختيار حساب تلقائيًا." : "Options appear after importing the legacy chart for this company. No account is selected automatically.")}
+                    </p>
                   </div>
                   <div className="form-group">
                     <label className="form-label">{ar ? "ملاحظات" : "Notes"}</label>

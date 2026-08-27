@@ -3,7 +3,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import {
   getAccounts, createAccount, updateAccount, deleteAccount,
-  getAccountingReadiness, initializeDefaultChart, applyDefaultPartyMappings,
+  getAccountingReadiness, initializeDefaultChart, importLegacyCompanyChart, applyDefaultPartyMappings,
   getOperationalAccountMappings, updateOperationalAccountMapping,
 } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
@@ -126,6 +126,19 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } finally { setSetupBusy(false); }
   };
 
+  const handleImportLegacyCompanyChart = async () => {
+    if (!confirm(ar
+      ? "سيتم جلب شجرة النظام السابق الكاملة إلى الشركة الحالية فقط، بأرصدة صفرية. لا تتغير الفواتير أو العملاء أو الموردون أو القيود الحالية، ولا يمكن تكرار الجلب بعد نجاحه. هل تريد المتابعة؟"
+      : "This imports the complete legacy chart into this company only with zero balances. Existing transactions and parties will not change, and the import cannot be repeated. Continue?")) return;
+    setSetupBusy(true);
+    try {
+      await importLegacyCompanyChart();
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر جلب شجرة النظام السابق" : "Unable to import the legacy chart"));
+    } finally { setSetupBusy(false); }
+  };
+
   const handleApplyPartyMappings = async () => {
     if (!confirm(ar
       ? "سيتم ربط العملاء والموردين الذين بلا حساب بالذمم العامة فقط، من دون إنشاء أي قيود أو تعديل الفواتير. هل تريد المتابعة؟"
@@ -177,19 +190,30 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <Icon name="journal" size={18} />
                 <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{ar ? "تهيئة شجرة الحسابات والربط" : "Chart setup and mapping"}</h2>
-                {readiness && <span className={`badge ${readiness.chart_initialized ? "badge-success" : "badge-warning"}`}>
-                  {readiness.chart_initialized ? (ar ? "الشجرة مهيأة" : "Chart ready") : (ar ? "غير مهيأة" : "Not initialized")}
+                {readiness && <span className={`badge ${(readiness.chart_initialized || readiness.legacy_chart_imported) ? "badge-success" : "badge-warning"}`}>
+                  {readiness.legacy_chart_imported
+                    ? (ar ? "تم جلب الشجرة المخصصة" : "Custom chart imported")
+                    : readiness.chart_initialized
+                      ? (ar ? "الشجرة مهيأة" : "Chart ready")
+                      : (ar ? "غير مهيأة" : "Not initialized")}
                 </span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, maxWidth: 760 }}>
-                {ar ? "تنشئ هذه المرحلة الشجرة الرسمية ذات الأكواد الستة بأرصدة صفرية وخريطة الربط فقط. القيود التلقائية تبقى غير مفعلة، ولا يتم تعديل أو إعادة ترقيم أي فاتورة أو عميل أو مورد أو قيد سابق." : "This step creates the official six-digit, zero-balance chart and operational mappings only. Automatic posting stays disabled and existing transactions remain unchanged."}
+                {ar ? "يمكنك إما تهيئة الشجرة الافتراضية ذات الأكواد الستة، أو جلب شجرة النظام السابق المكتملة للشركة الحالية فقط إذا كانت بلا حسابات. كلا الخيارين يبدأ بأرصدة صفرية، ويبقي القيود التلقائية غير مفعلة، ولا يعدل أي فاتورة أو عميل أو مورد أو قيد سابق." : "You may initialize the official six-digit default chart or import the complete legacy chart for this company only when it has no accounts. Both options start at zero balances, keep automatic posting disabled, and leave existing transactions unchanged."}
               </p>
             </div>
-            {readiness && !readiness.chart_initialized && (
-              <button className="btn btn-primary btn-sm" onClick={handleInitializeDefaultChart} disabled={setupBusy || readiness.account_count > 0}>
-                {setupBusy ? (ar ? "جاري التهيئة..." : "Initializing...") : (ar ? "تهيئة الشجرة الافتراضية" : "Initialize default chart")}
-              </button>
-            )}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {readiness && !readiness.chart_initialized && !readiness.legacy_chart_imported && (
+                <button className="btn btn-primary btn-sm" onClick={handleInitializeDefaultChart} disabled={setupBusy || readiness.account_count > 0}>
+                  {setupBusy ? (ar ? "جاري التهيئة..." : "Initializing...") : (ar ? "تهيئة الشجرة الافتراضية" : "Initialize default chart")}
+                </button>
+              )}
+              {readiness && !readiness.legacy_chart_imported && readiness.account_count === 0 && (
+                <button className="btn btn-secondary btn-sm" onClick={handleImportLegacyCompanyChart} disabled={setupBusy}>
+                  {setupBusy ? (ar ? "جاري الجلب..." : "Importing...") : (ar ? "جلب شجرة النظام السابق لهذه الشركة" : "Import legacy chart for this company")}
+                </button>
+              )}
+            </div>
           </div>
 
           {readiness ? (
@@ -215,9 +239,15 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </div>
               </div>
 
-              {!readiness.chart_initialized && readiness.account_count > 0 && (
+              {readiness.legacy_chart_imported && (
+                <div className="alert alert-success" style={{ marginBottom: 0 }}>
+                  {ar ? "تم جلب شجرة النظام السابق لهذه الشركة بأرصدة صفرية. اختفى زر الجلب ولن يعيد النظام الجلب فوق الشجرة الحالية. لم تتغير الفواتير أو العملاء أو الموردون أو القيود." : "The legacy chart was imported for this company with zero balances. The import button is now hidden and no transactions or parties were changed."}
+                </div>
+              )}
+
+              {!readiness.chart_initialized && !readiness.legacy_chart_imported && readiness.account_count > 0 && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-                  {ar ? "لدى الشركة حسابات موجودة مسبقًا. لن يستبدل النظام تلك الحسابات أو يعيد ترقيمها أو ينشئ شجرة ثانية فوقها. يلزم قرار محاسب ومطابقة يدوية مستقلة قبل أي انتقال إلى الشجرة ذات الست خانات." : "Existing accounts were found. The system will not replace, renumber, or overlay them; a separately approved manual mapping is required before migrating to the six-digit chart."}
+                  {ar ? "لدى الشركة حسابات موجودة مسبقًا. لن يستبدل النظام تلك الحسابات أو يعيد ترقيمها أو ينشئ شجرة ثانية فوقها. يلزم قرار محاسب ومطابقة يدوية مستقلة قبل أي انتقال إلى شجرة أخرى." : "Existing accounts were found. The system will not replace, renumber, or overlay them; a separately approved manual mapping is required before migrating to another chart."}
                 </div>
               )}
 

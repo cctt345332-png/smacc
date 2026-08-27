@@ -8,6 +8,7 @@ from app.core.tenant import get_current_user, get_tenant_id, require_role, get_r
 from app.core.plan_limits import check_plan_limit
 from app.modules.sales import service
 from app.modules.sales import orders_service
+from app.modules.accounting.schemas import AccountOut
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, CustomerOut,
     InvoiceCreate, InvoiceOut, InvoiceReject,
@@ -31,6 +32,15 @@ async def list_customers(
     if user["role"] == "sales_rep":
         rep_id = await get_rep_id_for_user(db, user["user_id"])
     return await service.get_customers(db, user["tenant_id"], search, rep_id)
+
+
+@router.get("/customers/ar-accounts", response_model=list[AccountOut])
+async def list_customer_receivable_accounts(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.modules.accounting import service as accounting_service
+    return await accounting_service.get_customer_receivable_accounts(db, user["tenant_id"])
 
 
 @router.get("/customers/{customer_id}", response_model=CustomerOut)

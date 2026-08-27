@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from app.modules.accounting import service
 from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_CODES, REQUIRED_MAPPING_KEYS
+from app.modules.accounting.legacy_company_chart import LEGACY_COMPANY_CHART
 from app.models.accounting import (
     Account,
     AccountingAccountMapping,
@@ -157,6 +158,76 @@ def test_chart_initialization_creates_zero_balance_accounts_and_mappings(monkeyp
         assert {mapping.mapping_key for mapping in created_mappings} == set(DEFAULT_MAPPING_CODES)
         assert setup.auto_posting_enabled is False
         assert vat.vat_account_id and vat.vat_receivable_account_id
+        assert db.commits == 1
+
+    asyncio.run(run())
+
+
+def test_legacy_company_chart_preserves_all_source_accounts_and_hierarchy():
+    assert len(LEGACY_COMPANY_CHART) == 500
+    source_keys = [row[0] for row in LEGACY_COMPANY_CHART]
+    assert len(source_keys) == len(set(source_keys))
+    assert {(code, name, level) for _key, code, name, _type, _nature, _parent, level, _posting, _direct in LEGACY_COMPANY_CHART} >= {
+        ("1", "الأصول", 1),
+        ("121", "العملاء", 3),
+        ("1200", "عملاء المدينة", 4),
+        ("120001", "مكالمة فون", 5),
+        ("203", "عملاء الرياض", 3),
+        ("20301", "عالم المشاهير للاتصالات", 4),
+        ("2", "الخصوم", 1),
+        ("4", "صافي المبيعات", 1),
+        ("00", "الميزانية", 1),
+    }
+    # الرمز 8 مكرر فعلًا في المصدر، وعلاقة الأبناء تحفظ بالمفتاح الداخلي.
+    duplicate_eights = [row for row in LEGACY_COMPANY_CHART if row[1] == "8"]
+    assert {(row[2], row[5]) for row in duplicate_eights} == {
+        ("صندوق المدينة", "legacy_002"),
+        ("الرواد للاتصالات جديد", "legacy_286"),
+    }
+    parent_keys = {row[5] for row in LEGACY_COMPANY_CHART if row[5]}
+    assert all(row[7] is False and row[8] is False for row in LEGACY_COMPANY_CHART if row[0] in parent_keys)
+
+
+def test_legacy_chart_import_refuses_to_overlay_existing_accounts(monkeypatch):
+    async def run():
+        db = FakeSession(results=[FakeResult(scalar=1)])
+
+        async def no_setup(*_args):
+            return None
+        monkeypatch.setattr(service, "_get_accounting_setup", no_setup)
+
+        with pytest.raises(HTTPException, match="توجد حسابات حالية"):
+            await service.import_legacy_company_chart(db, "tenant-1", "user-1")
+        assert db.records == []
+        assert db.commits == 0
+
+    asyncio.run(run())
+
+
+def test_legacy_chart_import_creates_only_zero_balance_chart_records(monkeypatch):
+    async def run():
+        db = FakeSession(results=[FakeResult(scalar=0)])
+
+        async def no_setup(*_args):
+            return None
+
+        async def readiness_after_import(*_args):
+            return {"legacy_chart_imported": True, "legacy_transactions_untouched": True}
+
+        monkeypatch.setattr(service, "_get_accounting_setup", no_setup)
+        monkeypatch.setattr(service, "get_accounting_readiness", readiness_after_import)
+
+        result = await service.import_legacy_company_chart(db, "tenant-1", "user-1")
+        created_accounts = [record for record in db.records if isinstance(record, Account)]
+        setup = next(record for record in db.records if isinstance(record, AccountingSetup))
+
+        assert result["legacy_chart_imported"] is True
+        assert len(created_accounts) == len(LEGACY_COMPANY_CHART) == 500
+        assert all(account.opening_balance == 0 for account in created_accounts)
+        assert all(not isinstance(record, (JournalEntry, Invoice, Customer, Vendor)) for record in db.records)
+        assert setup.legacy_chart_imported_at is not None
+        assert setup.legacy_chart_imported_by == "user-1"
+        assert setup.auto_posting_enabled is False
         assert db.commits == 1
 
     asyncio.run(run())

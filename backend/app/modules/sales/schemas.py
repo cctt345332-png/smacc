@@ -62,6 +62,7 @@ class CustomerUpdate(BaseModel):
     website: Optional[str] = None
     credit_limit: Optional[Decimal] = None
     payment_terms_days: Optional[int] = None
+    ar_account_id: Optional[str] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
 
@@ -91,6 +92,7 @@ class CustomerOut(BaseModel):
     website: Optional[str]
     credit_limit: Decimal
     payment_terms_days: int
+    ar_account_id: Optional[str]
     is_active: bool
     notes: Optional[str]
     created_at: datetime

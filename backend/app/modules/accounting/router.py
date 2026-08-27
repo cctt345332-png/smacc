@@ -176,6 +176,14 @@ async def initialize_default_chart(
     return await service.initialize_default_chart(db, user["tenant_id"], user["user_id"])
 
 
+@router.post("/setup/import-legacy-company-chart", response_model=AccountingReadinessOut)
+async def import_legacy_company_chart(
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.import_legacy_company_chart(db, user["tenant_id"], user["user_id"])
+
+
 @router.post("/setup/apply-default-party-mappings", response_model=DefaultPartyMappingResult)
 async def apply_default_party_mappings(
     user=Depends(require_role(["manager", "accountant"])),

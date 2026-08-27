@@ -38,6 +38,7 @@ class AccountOut(BaseModel):
     level: int
     is_active: bool
     is_posting: bool
+    is_customer_account: bool = False
     opening_balance: Decimal
     model_config = {"from_attributes": True}
 
@@ -261,6 +262,8 @@ class AccountMappingOut(BaseModel):
 class AccountingReadinessOut(BaseModel):
     chart_initialized: bool
     chart_initialized_at: Optional[datetime] = None
+    legacy_chart_imported: bool
+    legacy_chart_imported_at: Optional[datetime] = None
     auto_posting_enabled: bool
     account_count: int
     mapping_count: int

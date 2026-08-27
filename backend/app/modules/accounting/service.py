@@ -12,6 +12,10 @@ from app.models.accounting import (
     JournalEntryStatus, AccountType
 )
 from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_CODES, REQUIRED_MAPPING_KEYS
+from app.modules.accounting.legacy_company_chart import (
+    LEGACY_COMPANY_CHART,
+    LEGACY_CUSTOMER_ACCOUNT_SOURCE_KEYS,
+)
 from app.modules.accounting.schemas import (
     AccountCreate, AccountUpdate, FiscalYearCreate, CostCenterCreate,
     CurrencyCreate, JournalEntryCreate, BankAccountCreate,
@@ -25,6 +29,19 @@ async def get_accounts(db: AsyncSession, tenant_id: str):
         select(Account).where(Account.tenant_id == tenant_id).order_by(Account.code)
     )
     return r.scalars().all()
+
+
+async def get_customer_receivable_accounts(db: AsyncSession, tenant_id: str):
+    """يعيد حسابات العملاء النهائية الموسومة من الشجرة المخصصة فقط."""
+    result = await db.execute(
+        select(Account).where(
+            Account.tenant_id == tenant_id,
+            Account.is_customer_account.is_(True),
+            Account.is_active.is_(True),
+            Account.is_posting.is_(True),
+        ).order_by(Account.code, Account.name_ar)
+    )
+    return result.scalars().all()
 
 
 async def create_account(db: AsyncSession, tenant_id: str, data: AccountCreate):
@@ -522,6 +539,8 @@ async def get_accounting_readiness(db: AsyncSession, tenant_id: str) -> dict:
     return {
         "chart_initialized": bool(setup and setup.chart_initialized_at),
         "chart_initialized_at": setup.chart_initialized_at if setup else None,
+        "legacy_chart_imported": bool(setup and setup.legacy_chart_imported_at),
+        "legacy_chart_imported_at": setup.legacy_chart_imported_at if setup else None,
         "auto_posting_enabled": bool(setup and setup.auto_posting_enabled),
         "account_count": int(account_count),
         "mapping_count": len(mappings),
@@ -602,6 +621,63 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
     vat.vat_account_id = accounts_by_code[DEFAULT_MAPPING_CODES["vat_output"]].id
     vat.vat_receivable_account_id = accounts_by_code[DEFAULT_MAPPING_CODES["vat_input"]].id
     vat.updated_at = datetime.utcnow()
+
+    await db.commit()
+    return await get_accounting_readiness(db, tenant_id)
+
+
+async def import_legacy_company_chart(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """يجلب شجرة النظام السابق لهذه الشركة الفارغة فقط.
+
+    القالب محفوظ من الملف النصي المعتمد بكل أرقامه ومسمياته ومستوياته. لا ينشئ
+    هذا الإجراء أي قيد أو فاتورة أو عميل أو مورد أو رصيد افتتاحي، ولا ينشئ خريطة
+    ربط تلقائية. وجود رمز مكرر في المصدر محفوظ كما هو، وتعتمد العلاقات الداخلية
+    على مفتاح المصدر لا على رمز الحساب وحده.
+    """
+    existing_setup = await _get_accounting_setup(db, tenant_id)
+    account_count = (await db.execute(
+        select(func.count(Account.id)).where(Account.tenant_id == tenant_id)
+    )).scalar() or 0
+
+    if existing_setup and existing_setup.legacy_chart_imported_at:
+        raise HTTPException(409, "تم جلب شجرة النظام السابق لهذه الشركة بالفعل")
+    if account_count:
+        raise HTTPException(
+            409,
+            "توجد حسابات حالية لهذه الشركة؛ لا يمكن جلب شجرة النظام السابق فوق بيانات قائمة.",
+        )
+
+    accounts_by_source_key: dict[str, Account] = {}
+    for source_key, code, name_ar, account_type, nature, parent_source_key, level, is_posting, allow_direct_posting in LEGACY_COMPANY_CHART:
+        account = Account(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_id,
+            code=code,
+            name_ar=name_ar,
+            # المصدر عربي؛ الاحتفاظ بالاسم نفسه في الحقل الثاني يمنع اختراع ترجمة
+            # غير معتمدة من المستخدم ويحافظ على ظهور الحساب في كل لغات الواجهة.
+            name_en=name_ar,
+            account_type=account_type,
+            nature=nature,
+            parent_id=accounts_by_source_key[parent_source_key].id if parent_source_key else None,
+            level=level,
+            is_active=True,
+            is_posting=is_posting,
+            allow_direct_posting=allow_direct_posting,
+            is_customer_account=source_key in LEGACY_CUSTOMER_ACCOUNT_SOURCE_KEYS,
+            opening_balance=Decimal("0"),
+            notes=f"مجلوب من شجرة النظام السابق — السطر {source_key.removeprefix('legacy_')}",
+        )
+        accounts_by_source_key[source_key] = account
+        db.add(account)
+
+    setup = existing_setup or AccountingSetup(id=str(uuid.uuid4()), tenant_id=tenant_id)
+    setup.legacy_chart_imported_at = datetime.utcnow()
+    setup.legacy_chart_imported_by = user_id
+    setup.auto_posting_enabled = False
+    setup.updated_at = datetime.utcnow()
+    if not existing_setup:
+        db.add(setup)
 
     await db.commit()
     return await get_accounting_readiness(db, tenant_id)
