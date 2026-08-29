@@ -101,9 +101,12 @@ async def get_customer(db: AsyncSession, tenant_id: str, customer_id: str):
 
 async def _validate_customer_ar_account(
     db: AsyncSession, tenant_id: str, ar_account_id: str | None,
+    *, required: bool = False,
 ) -> None:
-    """يتحقق من حساب ذمم اختياري؛ لا ينشئ أو يعدل أي حركة مالية."""
+    """يتحقق من حساب العميل الرئيسي دون إنشاء حركة مالية."""
     if ar_account_id is None:
+        if required:
+            raise HTTPException(400, "يجب اختيار حساب العميل الرئيسي من شجرة الحسابات")
         return
     account = await db.get(Account, ar_account_id)
     if not account or account.tenant_id != tenant_id:
@@ -116,7 +119,7 @@ async def create_customer(
     db: AsyncSession, tenant_id: str, data: CustomerCreate,
     rep_id: str | None = None, actor_user_id: str | None = None,
 ):
-    await _validate_customer_ar_account(db, tenant_id, data.ar_account_id)
+    await _validate_customer_ar_account(db, tenant_id, data.ar_account_id, required=True)
     customer = Customer(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,

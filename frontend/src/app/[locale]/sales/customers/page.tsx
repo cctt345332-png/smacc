@@ -91,6 +91,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
 
   const handleSave = async () => {
     if (!form.name_ar) return alert(ar ? "الاسم بالعربي مطلوب" : "Arabic name is required");
+    if (!editingCustomer && !form.ar_account_id) return alert(ar ? "يجب اختيار حساب العميل الرئيسي من شجرة الحسابات" : "Select the customer's main account from the chart of accounts");
     setSaving(true);
     try {
       const payload = {
@@ -435,16 +436,16 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">{ar ? "حساب ذمم العميل" : "Customer receivable account"}</label>
-                    <select className="form-input form-select" value={form.ar_account_id} onChange={e => upd("ar_account_id", e.target.value)}>
-                      <option value="">{ar ? "بدون اختيار — لا يتغير ربط العميل" : "No selection — keep customer unlinked"}</option>
+                    <label className="form-label">{ar ? "حساب العميل الرئيسي" : "Customer main account"} {!editingCustomer && <span className="required">*</span>}</label>
+                    <select className="form-input form-select" value={form.ar_account_id} onChange={e => upd("ar_account_id", e.target.value)} required={!editingCustomer}>
+                      <option value="">{ar ? "اختر حساب العميل من شجرة الحسابات" : "Select the customer account from the chart"}</option>
                       {customerAccounts.map(account => (
                         <option key={account.id} value={account.id}>{account.code} — {account.name_ar}</option>
                       ))}
                     </select>
                     <p className="form-hint">
                       {customerAccounts.length
-                        ? (ar ? "تظهر الحسابات النهائية التابعة لفروع العملاء والمدن فقط. الاختيار لا ينشئ قيدًا ولا يغير الفواتير السابقة." : "Only final customer and city accounts are listed. Selecting one creates no journal entry and does not alter prior invoices.")
+                        ? (ar ? "يجب اختيار حساب نهائي نشط من شجرة الحسابات. هذا الحساب هو حساب العميل في القيود وكشوف الحساب." : "Select an active posting account from the chart. This is the customer's account in entries and statements.")
                         : (ar ? "تظهر الخيارات بعد جلب شجرة النظام السابق للشركة الحالية. لا يتم اختيار حساب تلقائيًا." : "Options appear after importing the legacy chart for this company. No account is selected automatically.")}
                     </p>
                   </div>
