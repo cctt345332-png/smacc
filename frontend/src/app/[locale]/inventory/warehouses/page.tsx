@@ -214,7 +214,9 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
     finally { setSaving(false); }
   };
 
-  const totalValue = stock.reduce((s, r) => s + r.stock_value, 0);
+  const totalQuantity = stock.reduce((s, r) => s + Number(r.quantity || 0), 0);
+  const totalAvailable = stock.reduce((s, r) => s + Number(r.available_qty || 0), 0);
+  const totalValue = stock.reduce((s, r) => s + Number(r.stock_value || 0), 0);
   const lowStockCount = stock.filter(r => r.is_low_stock).length;
   const totalItems = new Set(stock.map(r => r.item_id)).size;
 
@@ -332,7 +334,13 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
               </tbody>
               <tfoot>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-                  <td colSpan={!selectedWarehouse ? 6 : 5} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                  <td colSpan={!selectedWarehouse ? 4 : 3} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "var(--text-primary)" }}>
+                    {fmt(totalQuantity)} {ar ? "وحدة" : "units"}
+                  </td>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>
+                    {fmt(totalAvailable)} {ar ? "متاح" : "available"}
+                  </td>
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "#75617F" }}>{fmt(totalValue)} SAR</td>
                   <td />
                 </tr>
