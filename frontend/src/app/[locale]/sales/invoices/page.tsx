@@ -166,6 +166,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                 <tr>
                   <th>{ar ? "رقم الفاتورة" : "Invoice #"}</th>
                   <th>{ar ? "العميل" : "Customer"}</th>
+                  <th>{ar ? "المندوب" : "Sales Rep"}</th>
                   <th>{ar ? "النوع" : "Type"}</th>
                   <th>{ar ? "التاريخ" : "Date"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th>
@@ -190,6 +191,16 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                         </Link>
                       </td>
                       <td>{inv.buyer_name_ar || inv.customer?.name_ar || "—"}</td>
+                      <td>
+                        {inv.rep_name || inv.rep_code ? (
+                          <div>
+                            <div style={{ fontWeight: 600 }}>{inv.rep_name || "—"}</div>
+                            {inv.rep_code && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{inv.rep_code}</div>}
+                          </div>
+                        ) : (
+                          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{ar ? "مبيعات مباشرة" : "Direct sale"}</span>
+                        )}
+                      </td>
                       <td><span className={`badge ${itype.badge}`}>{itype.ar}</span></td>
                       <td style={{ color: "var(--text-secondary)", fontSize: 12 }}>
                         <div>{inv.issue_date?.split("T")[0]}</div>
