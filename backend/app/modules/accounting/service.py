@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, delete
+from sqlalchemy import select, func, and_, or_, delete, update
 from fastapi import HTTPException
 
 from app.models.accounting import (
@@ -748,11 +748,11 @@ async def get_legacy_chart_replacement_readiness(db: AsyncSession, tenant_id: st
         )
     )
 
+    # روابط العملاء والموردين يمكن فصلها وإعادة اختيارها بعد جلب شجرة المدن؛
+    # لا نحذف سجلات الأطراف ولا فواتيرها، لذلك لا تُعد مانعًا للاستبدال.
     blocking_counts = (
         accounts_with_opening_balance,
         journal_line_references,
-        customer_account_references,
-        vendor_account_references,
         bank_account_references,
         budget_line_references,
         asset_category_references,
@@ -807,6 +807,20 @@ async def replace_empty_chart_with_legacy_company_chart(db: AsyncSession, tenant
     existing_setup = await _get_accounting_setup(db, tenant_id)
     old_account_result = await db.execute(select(Account.id).where(Account.tenant_id == tenant_id))
     old_account_ids = set(old_account_result.scalars().all())
+    # روابط العملاء والموردين مراجع للحساب فقط؛ نفصلها ونترك سجلات الأطراف
+    # والفواتير كما هي ليعاد اختيار حساب المدينة بعد جلب الشجرة.
+    from app.models.purchases import Vendor
+    from app.models.sales import Customer
+    await db.execute(
+        update(Customer)
+        .where(Customer.tenant_id == tenant_id, Customer.ar_account_id.in_(old_account_ids))
+        .values(ar_account_id=None)
+    )
+    await db.execute(
+        update(Vendor)
+        .where(Vendor.tenant_id == tenant_id, Vendor.ap_account_id.in_(old_account_ids))
+        .values(ap_account_id=None)
+    )
     # خريطة الربط وإعداد الضريبة مراجع إعدادات فقط. تزال قبل حذف الحسابات الفارغة
     # كي لا تبقى مراجع يتيمة، ولا يمس ذلك أي فاتورة أو قيد أو عميل أو مورد.
     await db.execute(delete(AccountingAccountMapping).where(AccountingAccountMapping.tenant_id == tenant_id))

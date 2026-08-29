@@ -291,7 +291,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
               {!readiness.legacy_chart_imported && replacementAllowed && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-                  {ar ? `تم فحص ${legacyReplacement.account_count} حسابًا: لا توجد أرصدة افتتاحية أو قيود أو روابط عملاء أو موردين أو بنوك أو موازنات أو أصول أو نقاط بيع أو سندات. يمكنك استخدام زر الاستبدال لمرة واحدة.` : `The ${legacyReplacement.account_count} accounts were checked: no balances, journal entries, customer/vendor/bank/budget/asset/POS/voucher references exist. You may use the one-time replacement button.`}
+                  {ar ? `تم فحص ${legacyReplacement.account_count} حسابًا: لا توجد أرصدة افتتاحية أو قيود أو روابط بنوك أو موازنات أو أصول أو نقاط بيع أو سندات. ستُفصل روابط العملاء (${legacyReplacement.customer_account_references}) والموردين (${legacyReplacement.vendor_account_references}) تلقائيًا مع بقاء سجلاتهم وفواتيرهم. يمكنك استخدام زر الاستبدال لمرة واحدة.` : `The ${legacyReplacement.account_count} accounts were checked: no balances, journal entries, bank/budget/asset/POS/voucher references exist. Customer links (${legacyReplacement.customer_account_references}) and vendor links (${legacyReplacement.vendor_account_references}) will be detached while their records and invoices remain unchanged. You may use the one-time replacement button.`}
                 </div>
               )}
 

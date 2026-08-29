@@ -292,7 +292,7 @@ def test_legacy_chart_replacement_replaces_only_an_unreferenced_empty_chart(monk
             self.executed.append(str(statement))
             if len(self.executed) == 1:
                 return FakeResult(all_values=["old-account-1", "old-account-2"])
-            if len(self.executed) == 3:
+            if len(self.executed) == 5:
                 return FakeResult(all_values=[self.vat])
             return FakeResult()
 
@@ -323,6 +323,8 @@ def test_legacy_chart_replacement_replaces_only_an_unreferenced_empty_chart(monk
         assert len(created_accounts) == len(LEGACY_COMPANY_CHART) == 500
         assert all(account.opening_balance == 0 for account in created_accounts)
         assert all(not isinstance(record, (JournalEntry, Invoice, Customer, Vendor)) for record in db.records)
+        assert sum("UPDATE customers" in statement for statement in db.executed) == 1
+        assert sum("UPDATE vendors" in statement for statement in db.executed) == 1
         assert setup.chart_initialized_at is None
         assert setup.legacy_chart_imported_at is not None
         assert setup.auto_posting_enabled is False
