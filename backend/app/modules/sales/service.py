@@ -115,15 +115,10 @@ async def _validate_customer_ar_account(
         raise HTTPException(400, "يجب اختيار حساب نشط من شجرة الحسابات")
     account_type = getattr(account, "account_type", None)
     nature = getattr(account, "nature", None)
-    if account_type is None and not account.is_posting:
-        raise HTTPException(400, "يجب اختيار حساب عملاء رئيسي صالح من شجرة الحسابات")
+    if account_type is None and (not account.is_posting or not account.is_customer_account):
+        raise HTTPException(400, "يجب اختيار حساب رئيسي صالح من شجرة الحسابات")
     if account_type is not None and (account_type != AccountType.ASSET or nature != AccountNature.DEBIT):
         raise HTTPException(400, "يجب اختيار حساب عملاء مدين ضمن الأصول")
-    account_code = str(getattr(account, "code", ""))
-    if account_type is not None and not account.is_customer_account and not account_code.startswith("113"):
-        raise HTTPException(400, "يجب اختيار فرع العملاء من شجرة الحسابات")
-    if account.is_posting and not account.is_customer_account:
-        raise HTTPException(400, "يجب اختيار حساب عملاء صالح من شجرة الحسابات")
     return account
 
 
