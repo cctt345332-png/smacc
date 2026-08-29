@@ -428,14 +428,22 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                     <label className="form-label">{ar ? "الحساب الرئيسي للعملاء" : "Customer parent account"} {!editingCustomer && <span className="required">*</span>}</label>
                     <select className="form-input form-select" value={form.ar_account_id} onChange={e => upd("ar_account_id", e.target.value)} required={!editingCustomer}>
                       <option value="">{ar ? "اختر حساب العميل من شجرة الحسابات" : "Select the customer account from the chart"}</option>
-                      {customerAccounts.map(account => (
-                        <option key={account.id} value={account.id}>{account.code} — {account.name_ar}</option>
-                      ))}
+                      {customerAccounts.map(account => {
+                        const level = Math.max(1, Number(account.level || 1));
+                        const indent = "　".repeat(Math.max(0, level - 1));
+                        const marker = level > 1 ? "└ " : "";
+                        const name = ar ? account.name_ar : (account.name_en || account.name_ar);
+                        return (
+                          <option key={account.id} value={account.id}>
+                            {indent}{marker}{account.code} — {name}{account.is_posting ? " · حساب نهائي" : " · حساب رئيسي"}
+                          </option>
+                        );
+                      })}
                     </select>
                     <p className="form-hint">
                       {customerAccounts.length
-                        ? (ar ? "اختر الحساب التجميعي الرئيسي للعملاء من الشجرة؛ سيُنشئ النظام تحته حساباً فرعياً باسم العميل." : "Select the customer parent account; the system will create a customer sub-account beneath it.")
-                        : (ar ? "لا توجد حسابات عملاء مصنفة في شجرة الشركة الحالية. تأكد من وجود فرع العملاء ثم أعد فتح النموذج." : "No customer accounts are marked in the current company chart. Add a customer branch and reopen the form.")}
+                        ? (ar ? "تظهر الشجرة كاملة بكل مستوياتها. اختر الحساب الرئيسي أو الفرع الذي تريد إنشاء حساب العميل تحته." : "The complete chart is shown by level. Choose the parent branch under which to create the customer account.")
+                        : (ar ? "لم يتم العثور على حسابات في شجرة الشركة الحالية. تأكد من تحميل الحسابات ثم أعد فتح النموذج." : "No accounts were found in the current company chart. Load the chart and reopen the form.")}
                     </p>
                   </div>
                   <div className="form-group">

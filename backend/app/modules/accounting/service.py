@@ -32,15 +32,11 @@ async def get_accounts(db: AsyncSession, tenant_id: str):
 
 
 async def get_customer_receivable_accounts(db: AsyncSession, tenant_id: str):
-    """يعيد حسابات العملاء وفروعها الرئيسية لاختيار مكان الحساب الفرعي."""
+    """يعيد الشجرة الكاملة لاختيار موقع الحساب الفرعي للعميل."""
     result = await db.execute(
         select(Account).where(
             Account.tenant_id == tenant_id,
             Account.is_active.is_(True),
-            Account.account_type == AccountType.ASSET,
-            Account.nature == AccountNature.DEBIT,
-            Account.is_posting.is_(False),
-            or_(Account.is_customer_account.is_(True), Account.code.like("113%")),
         ).order_by(Account.code, Account.name_ar)
     )
     return result.scalars().all()
