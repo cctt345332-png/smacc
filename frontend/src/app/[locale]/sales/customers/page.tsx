@@ -434,8 +434,8 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                     </select>
                     <p className="form-hint">
                       {customerAccounts.length
-                        ? (ar ? "يجب اختيار حساب نهائي نشط من شجرة الحسابات. هذا الحساب هو حساب العميل في القيود وكشوف الحساب." : "Select an active posting account from the chart. This is the customer's account in entries and statements.")
-                        : (ar ? "تظهر الخيارات بعد جلب شجرة النظام السابق للشركة الحالية. لا يتم اختيار حساب تلقائيًا." : "Options appear after importing the legacy chart for this company. No account is selected automatically.")}
+                        ? (ar ? "اختر الحساب التجميعي الرئيسي للعملاء من الشجرة؛ سيُنشئ النظام تحته حساباً فرعياً باسم العميل." : "Select the customer parent account; the system will create a customer sub-account beneath it.")
+                        : (ar ? "لا توجد حسابات عملاء مصنفة في شجرة الشركة الحالية. تأكد من وجود فرع العملاء ثم أعد فتح النموذج." : "No customer accounts are marked in the current company chart. Add a customer branch and reopen the form.")}
                     </p>
                   </div>
                   <div className="form-group">

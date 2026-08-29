@@ -39,7 +39,8 @@ async def get_customer_receivable_accounts(db: AsyncSession, tenant_id: str):
             Account.is_active.is_(True),
             Account.account_type == AccountType.ASSET,
             Account.nature == AccountNature.DEBIT,
-            or_(Account.is_customer_account.is_(True), Account.is_posting.is_(False)),
+            Account.is_posting.is_(False),
+            or_(Account.is_customer_account.is_(True), Account.code.like("113%")),
         ).order_by(Account.code, Account.name_ar)
     )
     return result.scalars().all()
@@ -604,6 +605,7 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
             is_active=True,
             is_posting=is_posting,
             allow_direct_posting=allow_direct_posting,
+            is_customer_account=code.startswith("113"),
             opening_balance=Decimal("0"),
         )
         accounts_by_code[code] = account
