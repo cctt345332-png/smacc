@@ -25,7 +25,7 @@ const emptyForm = {
   address_postal: "", address_additional: "",
   address_country: "SA",
   phone: "", phone2: "", email: "", website: "",
-  payment_terms_days: "30", credit_limit: "0", ar_account_id: "", notes: "",
+  payment_terms_days: "30", credit_limit: "0", ar_account_id: "", opening_balance: "0", notes: "",
 };
 
 export default function CustomersPage(props: { params: Promise<{ locale: string }> }) {
@@ -98,6 +98,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
         ...form,
         payment_terms_days: parseInt(form.payment_terms_days) || 30,
         credit_limit: parseFloat(form.credit_limit) || 0,
+        opening_balance: parseFloat(form.opening_balance) || 0,
         ar_account_id: form.ar_account_id || null,
         vat_number: form.vat_number || null,
         cr_number: form.cr_number || null,
@@ -153,12 +154,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   const isIndividual = form.customer_type === "individual";
   const isGov = form.customer_type === "government";
 
-  const tabs = [
-    { key: "basic", ar: "البيانات الأساسية", en: "Basic Info" },
-    { key: "address", ar: "العنوان الوطني", en: "National Address" },
-    { key: "financial", ar: "البيانات المالية", en: "Financial" },
-    { key: "docs", ar: "المستندات", en: "Documents" },
-  ];
+  const tabs = [{ key: "basic", ar: "بيانات العميل", en: "Customer details" }];
 
   return (
     <>
@@ -273,23 +269,11 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
               <button className="btn btn-ghost btn-icon" onClick={() => setShowModal(false)}>✕</button>
             </div>
 
-            {/* Tabs */}
-            <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-              {tabs.map(tab => (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
-                  style={{ padding: "10px 16px", border: "none", background: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
-                    color: activeTab === tab.key ? "var(--primary)" : "var(--text-secondary)",
-                    borderBottom: activeTab === tab.key ? "2px solid var(--primary)" : "2px solid transparent", marginBottom: -1 }}>
-                  {ar ? tab.ar : tab.en}
-                </button>
-              ))}
-            </div>
-
             {/* Content */}
             <div style={{ padding: 24, overflowY: "auto", flex: 1 }}>
 
               {/* ── البيانات الأساسية ── */}
-              {activeTab === "basic" && (
+              {true && (
                 <>
                   <div className="grid-2">
                     <div className="form-group">
@@ -381,7 +365,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
               )}
 
               {/* ── العنوان الوطني ── */}
-              {activeTab === "address" && (
+              {true && (
                 <>
                   <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12, color: "#1E40AF" }}>
                     {ar ? "العنوان الوطني مطلوب للفواتير الضريبية وفق متطلبات زاتكا" : "National address required for ZATCA-compliant tax invoices"}
@@ -421,7 +405,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
               )}
 
               {/* ── البيانات المالية ── */}
-              {activeTab === "financial" && (
+              {true && (
                 <>
                   <div className="grid-2">
                     <div className="form-group">
@@ -434,9 +418,14 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                       <label className="form-label">{ar ? "حد الائتمان (ر.س)" : "Credit Limit (SAR)"}</label>
                       <input type="number" className="form-input" value={form.credit_limit} onChange={e => upd("credit_limit", e.target.value)} min="0" />
                     </div>
+                    <div className="form-group">
+                      <label className="form-label">{ar ? "الرصيد الافتتاحي (ر.س)" : "Opening Balance (SAR)"}</label>
+                      <input type="number" className="form-input" value={form.opening_balance} onChange={e => upd("opening_balance", e.target.value)} step="0.01" />
+                      <p className="form-hint">{ar ? "سيُسجل على حساب العميل الفرعي الجديد" : "Recorded on the new customer sub-account"}</p>
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">{ar ? "حساب العميل الرئيسي" : "Customer main account"} {!editingCustomer && <span className="required">*</span>}</label>
+                    <label className="form-label">{ar ? "الحساب الرئيسي للعملاء" : "Customer parent account"} {!editingCustomer && <span className="required">*</span>}</label>
                     <select className="form-input form-select" value={form.ar_account_id} onChange={e => upd("ar_account_id", e.target.value)} required={!editingCustomer}>
                       <option value="">{ar ? "اختر حساب العميل من شجرة الحسابات" : "Select the customer account from the chart"}</option>
                       {customerAccounts.map(account => (
@@ -457,7 +446,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
               )}
 
               {/* ── المستندات ── */}
-              {activeTab === "docs" && (
+              {false && (
                 <>
                   <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
                     {ar ? "ارفع صور أو ملفات PDF للمستندات الرسمية (حد أقصى 5MB لكل ملف)" : "Upload images or PDFs of official documents (max 5MB each)"}

@@ -17,7 +17,7 @@ from app.models.user import User
 from app.models.inventory import (
     InventoryItem, ProductVariant, SerialItem, BatchItem, StockMovement,
 )
-from app.models.accounting import Account
+from app.models.accounting import Account, AccountType, AccountNature
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
     QuotationCreate, CreditNoteCreate, RefundRequestCreate
@@ -102,34 +102,78 @@ async def get_customer(db: AsyncSession, tenant_id: str, customer_id: str):
 async def _validate_customer_ar_account(
     db: AsyncSession, tenant_id: str, ar_account_id: str | None,
     *, required: bool = False,
-) -> None:
-    """يتحقق من حساب العميل الرئيسي دون إنشاء حركة مالية."""
+) -> Account | None:
+    """يتحقق من الحساب الرئيسي الذي سيحمل حساب العميل الفرعي."""
     if ar_account_id is None:
         if required:
-            raise HTTPException(400, "يجب اختيار حساب العميل الرئيسي من شجرة الحسابات")
-        return
+            raise HTTPException(400, "يجب اختيار الحساب الرئيسي للعملاء من شجرة الحسابات")
+        return None
     account = await db.get(Account, ar_account_id)
     if not account or account.tenant_id != tenant_id:
-        raise HTTPException(400, "حساب العميل المختار غير موجود لهذه الشركة")
-    if not account.is_active or not account.is_posting or not account.is_customer_account:
-        raise HTTPException(400, "يجب اختيار حساب عميل نشط ونهائي من فروع العملاء")
+        raise HTTPException(400, "الحساب الرئيسي المختار غير موجود لهذه الشركة")
+    if not account.is_active:
+        raise HTTPException(400, "يجب اختيار حساب نشط من شجرة الحسابات")
+    account_type = getattr(account, "account_type", None)
+    nature = getattr(account, "nature", None)
+    if account_type is None and not account.is_posting:
+        raise HTTPException(400, "يجب اختيار حساب عملاء رئيسي صالح من شجرة الحسابات")
+    if account_type is not None and (account_type != AccountType.ASSET or nature != AccountNature.DEBIT):
+        raise HTTPException(400, "يجب اختيار حساب عملاء مدين ضمن الأصول")
+    if account.is_posting and not account.is_customer_account:
+        raise HTTPException(400, "يجب اختيار حساب العملاء الرئيسي أو أحد فروعه")
+    return account
+
+
+async def _next_customer_account_code(db: AsyncSession, tenant_id: str, parent: Account) -> str:
+    """ينشئ رمزاً فرعياً متسلسلاً تحت الحساب الرئيسي المختار."""
+    result = await db.execute(
+        select(Account.code).where(Account.tenant_id == tenant_id, Account.parent_id == parent.id)
+    )
+    used = {str(code) for code in result.scalars().all()}
+    suffix = 1
+    while f"{parent.code}{suffix:03d}" in used:
+        suffix += 1
+    return f"{parent.code}{suffix:03d}"
 
 
 async def create_customer(
     db: AsyncSession, tenant_id: str, data: CustomerCreate,
     rep_id: str | None = None, actor_user_id: str | None = None,
 ):
-    await _validate_customer_ar_account(db, tenant_id, data.ar_account_id, required=True)
+    parent_account = await _validate_customer_ar_account(db, tenant_id, data.ar_account_id, required=True)
+    customer_id = str(uuid.uuid4())
+    customer_number = await _next_customer_number(db, tenant_id)
+    customer_data = data.model_dump(exclude={"ar_account_id", "opening_balance"})
     customer = Customer(
-        id=str(uuid.uuid4()),
+        id=customer_id,
         tenant_id=tenant_id,
-        customer_number=await _next_customer_number(db, tenant_id),
+        customer_number=customer_number,
         rep_id=rep_id,
-        **data.model_dump(),
+        ar_account_id=None,
+        **customer_data,
     )
     db.add(customer)
+    account = Account(
+        id=str(uuid.uuid4()),
+        tenant_id=tenant_id,
+        code=await _next_customer_account_code(db, tenant_id, parent_account),
+        name_ar=data.name_ar,
+        name_en=data.name_en or data.name_ar,
+        account_type=AccountType.ASSET,
+        nature=AccountNature.DEBIT,
+        parent_id=parent_account.id,
+        level=parent_account.level + 1,
+        is_active=True,
+        is_posting=True,
+        allow_direct_posting=True,
+        is_customer_account=True,
+        opening_balance=data.opening_balance,
+        notes=f"حساب العميل {customer_number}",
+    )
+    db.add(account)
+    customer.ar_account_id = account.id
     record_audit(db, tenant_id, actor_user_id, "create", "customer", customer.id,
-                 customer_number=customer.customer_number, rep_id=rep_id)
+                 customer_number=customer.customer_number, ar_account_id=account.id, rep_id=rep_id)
     await db.commit()
     await db.refresh(customer)
     return customer

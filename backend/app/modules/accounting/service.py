@@ -9,7 +9,7 @@ from app.models.accounting import (
     Account, FiscalYear, CostCenter, Currency,
     JournalEntry, JournalEntryLine, BankAccount,
     Budget, BudgetLine, VATSetting, AccountingSetup, AccountingAccountMapping,
-    JournalEntryStatus, AccountType
+    JournalEntryStatus, AccountType, AccountNature
 )
 from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_CODES, REQUIRED_MAPPING_KEYS
 from app.modules.accounting.legacy_company_chart import (
@@ -32,13 +32,14 @@ async def get_accounts(db: AsyncSession, tenant_id: str):
 
 
 async def get_customer_receivable_accounts(db: AsyncSession, tenant_id: str):
-    """يعيد حسابات العملاء النهائية الموسومة من الشجرة المخصصة فقط."""
+    """يعيد حسابات العملاء وفروعها الرئيسية لاختيار مكان الحساب الفرعي."""
     result = await db.execute(
         select(Account).where(
             Account.tenant_id == tenant_id,
-            Account.is_customer_account.is_(True),
             Account.is_active.is_(True),
-            Account.is_posting.is_(True),
+            Account.account_type == AccountType.ASSET,
+            Account.nature == AccountNature.DEBIT,
+            or_(Account.is_customer_account.is_(True), Account.is_posting.is_(False)),
         ).order_by(Account.code, Account.name_ar)
     )
     return result.scalars().all()

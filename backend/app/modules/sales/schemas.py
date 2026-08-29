@@ -34,7 +34,9 @@ class CustomerCreate(BaseModel):
     website: Optional[str] = None
     credit_limit: Decimal = Decimal("0")
     payment_terms_days: int = 30
+    # الحساب الرئيسي الذي سيُنشأ تحته حساب العميل الفرعي
     ar_account_id: Optional[str] = None
+    opening_balance: Decimal = Decimal("0")
     notes: Optional[str] = None
     latitude: Optional[Decimal] = None
     longitude: Optional[Decimal] = None
