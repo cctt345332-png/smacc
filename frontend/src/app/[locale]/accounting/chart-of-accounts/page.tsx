@@ -127,6 +127,13 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     { count: legacyReplacement.pos_terminal_references, ar: "ربط نقطة بيع", en: "POS terminal link" },
     { count: legacyReplacement.voucher_account_references, ar: "سند خزينة", en: "treasury voucher" },
   ].filter(item => Number(item.count) > 0) : [];
+  const replacementHasOperationalBlockers = replacementBlockers.length > 0;
+  const replacementAllowed = Boolean(
+    legacyReplacement && (
+      legacyReplacement.can_replace ||
+      (Number(legacyReplacement.removable_mapping_references) > 0 && !replacementHasOperationalBlockers)
+    )
+  );
 
   const handleInitializeDefaultChart = async () => {
     if (!confirm(ar
@@ -242,10 +249,10 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </button>
               )}
               {readiness && !readiness.legacy_chart_imported && legacyReplacement && (
-                <button className="btn btn-secondary btn-sm" onClick={handleReplaceEmptyChartWithLegacy} disabled={setupBusy || !legacyReplacement.can_replace} title={!legacyReplacement.can_replace ? (ar ? "الاستبدال متوقف لأن الفحص وجد ارتباطًا محاسبيًا" : "Replacement is blocked because the safety check found an accounting reference") : undefined}>
+                <button className="btn btn-secondary btn-sm" onClick={handleReplaceEmptyChartWithLegacy} disabled={setupBusy || !replacementAllowed} title={!replacementAllowed ? (ar ? "الاستبدال متوقف لأن الفحص وجد ارتباطًا محاسبيًا" : "Replacement is blocked because the safety check found an accounting reference") : undefined}>
                   {setupBusy
                     ? (ar ? "جاري الاستبدال..." : "Replacing...")
-                    : legacyReplacement.can_replace
+                    : replacementAllowed
                       ? (ar ? "استبدال الدليل الحالي بشجرة النظام السابق" : "Replace current chart with legacy chart")
                       : (ar ? "الاستبدال متوقف — راجع سبب المنع" : "Replacement blocked — review the reason")}
                 </button>
@@ -282,13 +289,13 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </div>
               )}
 
-              {!readiness.legacy_chart_imported && legacyReplacement?.can_replace && (
+              {!readiness.legacy_chart_imported && replacementAllowed && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
                   {ar ? `تم فحص ${legacyReplacement.account_count} حسابًا: لا توجد أرصدة افتتاحية أو قيود أو روابط عملاء أو موردين أو بنوك أو موازنات أو أصول أو نقاط بيع أو سندات. يمكنك استخدام زر الاستبدال لمرة واحدة.` : `The ${legacyReplacement.account_count} accounts were checked: no balances, journal entries, customer/vendor/bank/budget/asset/POS/voucher references exist. You may use the one-time replacement button.`}
                 </div>
               )}
 
-              {!readiness.legacy_chart_imported && legacyReplacement && !legacyReplacement.can_replace && (
+              {!readiness.legacy_chart_imported && legacyReplacement && !replacementAllowed && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
                   {ar ? (
                     <>
