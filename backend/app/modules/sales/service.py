@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, case
 from fastapi import HTTPException
 
 from app.models.sales import (
@@ -14,7 +14,9 @@ from app.models.sales import (
 )
 from app.models.reps import SalesRep
 from app.models.user import User
-from app.models.inventory import ProductVariant, StockMovement
+from app.models.inventory import (
+    InventoryItem, ProductVariant, SerialItem, BatchItem, StockMovement,
+)
 from app.models.accounting import Account
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
@@ -1222,15 +1224,23 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
 
     # الربح الإجمالي ليس (المبيعات - كل مشتريات الشهر): ففاتورة الشراء قد
     # تمثل مخزوناً لم يُبع بعد. نعتمد تكلفة حركات المخزون الخارجة والمرتبطة
-    # بالفواتير المؤكدة فقط، بما يشمل التكلفة الفعلية للسيريال والدفعات.
+    # بالفواتير المؤكدة فقط، مع fallback للفواتير القديمة التي سجلت الحركة
+    # بتكلفة صفرية قبل إدخال سعر التكلفة. أولوية التكلفة: الحركة نفسها، ثم
+    # السيريال/التشغيلة/المتغير، ثم سعر المنتج الحالي.
+    movement_cost = case(
+        (StockMovement.unit_cost > 0, StockMovement.unit_cost),
+        (SerialItem.cost_price > 0, SerialItem.cost_price),
+        (BatchItem.cost_price > 0, BatchItem.cost_price),
+        (ProductVariant.cost_price > 0, ProductVariant.cost_price),
+        else_=InventoryItem.cost_price,
+    )
     cost_of_sales_r = await db.execute(
-        select(
-            func.coalesce(
-                func.sum((-StockMovement.quantity) * StockMovement.unit_cost),
-                0,
-            )
-        )
+        select(func.coalesce(func.sum((-StockMovement.quantity) * movement_cost), 0))
         .join(Invoice, Invoice.id == StockMovement.reference_id)
+        .join(InventoryItem, InventoryItem.id == StockMovement.product_id)
+        .outerjoin(SerialItem, SerialItem.id == StockMovement.serial_item_id)
+        .outerjoin(BatchItem, BatchItem.id == StockMovement.batch_item_id)
+        .outerjoin(ProductVariant, ProductVariant.id == StockMovement.variant_id)
         .where(
             StockMovement.tenant_id == tenant_id,
             StockMovement.reference_type == "invoice",
