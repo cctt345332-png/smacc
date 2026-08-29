@@ -241,9 +241,13 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   {setupBusy ? (ar ? "جاري الجلب..." : "Importing...") : (ar ? "جلب شجرة النظام السابق لهذه الشركة" : "Import legacy chart for this company")}
                 </button>
               )}
-              {readiness && !readiness.legacy_chart_imported && legacyReplacement?.can_replace && (
-                <button className="btn btn-secondary btn-sm" onClick={handleReplaceEmptyChartWithLegacy} disabled={setupBusy}>
-                  {setupBusy ? (ar ? "جاري الاستبدال..." : "Replacing...") : (ar ? "استبدال الدليل الفارغ بشجرة النظام السابق" : "Replace empty chart with legacy chart")}
+              {readiness && !readiness.legacy_chart_imported && legacyReplacement && (
+                <button className="btn btn-secondary btn-sm" onClick={handleReplaceEmptyChartWithLegacy} disabled={setupBusy || !legacyReplacement.can_replace} title={!legacyReplacement.can_replace ? (ar ? "الاستبدال متوقف لأن الفحص وجد ارتباطًا محاسبيًا" : "Replacement is blocked because the safety check found an accounting reference") : undefined}>
+                  {setupBusy
+                    ? (ar ? "جاري الاستبدال..." : "Replacing...")
+                    : legacyReplacement.can_replace
+                      ? (ar ? "استبدال الدليل الحالي بشجرة النظام السابق" : "Replace current chart with legacy chart")
+                      : (ar ? "الاستبدال متوقف — راجع سبب المنع" : "Replacement blocked — review the reason")}
                 </button>
               )}
             </div>
@@ -278,13 +282,13 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </div>
               )}
 
-              {legacyReplacement?.can_replace && !readiness.legacy_chart_imported && (
+              {!readiness.legacy_chart_imported && legacyReplacement?.can_replace && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
                   {ar ? `تم فحص ${legacyReplacement.account_count} حسابًا: لا توجد أرصدة افتتاحية أو قيود أو روابط عملاء أو موردين أو بنوك أو موازنات أو أصول أو نقاط بيع أو سندات. يمكنك استخدام زر الاستبدال لمرة واحدة.` : `The ${legacyReplacement.account_count} accounts were checked: no balances, journal entries, customer/vendor/bank/budget/asset/POS/voucher references exist. You may use the one-time replacement button.`}
                 </div>
               )}
 
-              {!readiness.legacy_chart_imported && readiness.account_count > 0 && legacyReplacement && !legacyReplacement.can_replace && (
+              {!readiness.legacy_chart_imported && legacyReplacement && !legacyReplacement.can_replace && (
                 <div className="alert alert-warning" style={{ marginBottom: 0 }}>
                   {ar ? (
                     <>
