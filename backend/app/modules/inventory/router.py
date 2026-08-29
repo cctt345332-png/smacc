@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from typing import Optional
 from decimal import Decimal
 from datetime import datetime
@@ -8,7 +9,7 @@ from app.core.database import get_db
 from app.core.tenant import get_current_user, get_tenant_id, require_role
 from app.core.plan_limits import check_plan_limit
 from app.modules.inventory import service
-from app.models.inventory import InventoryItem
+from app.models.inventory import InventoryItem, SerialItem
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -48,7 +49,42 @@ async def list_items(
     tenant_id=Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.get_items(db, tenant_id, search, category_id, tracking_type, low_stock)
+    items = await service.get_items(db, tenant_id, search, category_id, tracking_type, low_stock)
+    serial_counts: dict[str, int] = {}
+    serial_item_ids = [item.id for item in items if getattr(item.tracking_type, "value", item.tracking_type) == "serial"]
+    if serial_item_ids:
+        serial_rows = await db.execute(
+            select(SerialItem.product_id, func.count(SerialItem.id).label("count"))
+            .where(
+                SerialItem.product_id.in_(serial_item_ids),
+                SerialItem.status == "in_stock",
+            )
+            .group_by(SerialItem.product_id)
+        )
+        serial_counts = {row.product_id: int(row.count) for row in serial_rows}
+
+    return [
+        {
+            "id": item.id,
+            "name_ar": item.name_ar,
+            "name_en": item.name_en,
+            "sku": item.sku,
+            "barcode": item.barcode,
+            "tracking_type": getattr(item.tracking_type, "value", item.tracking_type),
+            "unit_type": getattr(item.unit_type, "value", item.unit_type),
+            "sale_price": float(item.sale_price or 0),
+            "cost_price": float(item.cost_price or 0),
+            "vat_rate": float(item.vat_rate or 0),
+            "quantity_on_hand": float(serial_counts.get(item.id, 0) if getattr(item.tracking_type, "value", item.tracking_type) == "serial" else item.quantity_on_hand or 0),
+            "serial_count": serial_counts.get(item.id, 0) if getattr(item.tracking_type, "value", item.tracking_type) == "serial" else None,
+            "reorder_point": float(item.reorder_point or 0),
+            "is_active": item.is_active,
+            "color": item.color,
+            "storage": item.storage,
+            "category": {"id": item.category.id, "name_ar": item.category.name_ar} if item.category else None,
+        }
+        for item in items
+    ]
 
 @router.get("/items/summary")
 async def stock_summary(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):

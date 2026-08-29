@@ -261,7 +261,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
             <tbody>
               {items.map(item => {
                 const isSerial = item.tracking_type === "serial";
-                const systemQty = isSerial ? null : Number(item.quantity_on_hand);
+                const systemQty = Number(isSerial ? (item.serial_count ?? item.quantity_on_hand ?? 0) : (item.quantity_on_hand ?? 0));
                 const countedVal = countMap[item.id];
                 const countedNum = countedVal !== undefined && countedVal !== "" ? parseFloat(countedVal) : null;
                 const diff = countedNum !== null && systemQty !== null ? countedNum - systemQty : null;
@@ -291,14 +291,16 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                         </span>
                       </td>
                       <td style={{ textAlign: "end", fontWeight: 600 }}>
-                        {isSerial
-                          ? <span style={{ color: "#059669" }}>{ar ? "عبر السيريالات" : "Via Serials"}</span>
-                          : fmt(systemQty)
-                        }
+                        {isSerial ? (
+                          <div>
+                            <strong style={{ color: "#059669" }}>{fmt(systemQty)}</strong>
+                            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{ar ? "سيريال متاح" : "serials in stock"}</div>
+                          </div>
+                        ) : fmt(systemQty)}
                       </td>
                       <td style={{ textAlign: "end" }}>
                         {isSerial ? (
-                          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>—</span>
+                          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "عدّل حالات السيريالات" : "Change serial statuses"}</span>
                         ) : (
                           <input
                             type="number"

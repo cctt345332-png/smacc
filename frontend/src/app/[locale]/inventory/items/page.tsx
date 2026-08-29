@@ -174,7 +174,10 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
           <h1 className="page-title">{ar ? "الأصناف" : "Inventory Items"}</h1>
           <p className="page-subtitle">{ar ? "إدارة المنتجات والأصناف بجميع أنواع التتبع" : "Manage products with all tracking types"}</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <Link href={`/${locale}/inventory/adjustments`} className="btn btn-primary">
+            <Icon name="check" size={16} /> {ar ? "بدء جرد المخزون" : "Start Stock Count"}
+          </Link>
           {/* زر إضافة سيريالات — يظهر فقط لنشاط الجوالات */}
           <SerialsButton locale={locale} ar={ar} />
           <button className="btn btn-secondary" onClick={exportToPDF} title={ar ? "تصدير PDF" : "Export PDF"} style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -272,7 +275,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
                       <td style={{ textAlign: "end" }}>
                         {item.tracking_type === "serial" ? (
                           <span style={{ color: "#059669", fontWeight: 600 }}>
-                            {ar ? "سيريالات" : "Serials"}
+                            {Number(item.serial_count ?? item.quantity_on_hand ?? 0).toLocaleString("en-US")} {ar ? "سيريال" : "serials"}
                           </span>
                         ) : (
                           <span style={{ fontWeight: 600, color: isLow ? "var(--danger)" : "var(--text-primary)" }}>

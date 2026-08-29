@@ -27,7 +27,7 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
     { label: ar ? "التصنيفات" : "Categories", href: `/${locale}/inventory/categories`, icon: <Icon name="box" size={24} />, color: "#6366F1", desc: ar ? "تنظيم الأصناف في تصنيفات" : "Organize items into categories" },
     { label: ar ? "المستودعات" : "Warehouses", href: `/${locale}/inventory/warehouses`, icon: <Icon name="bank" size={24} />, color: "#75617F", desc: ar ? "إدارة المستودعات والفروع" : "Manage warehouses and branches" },
     { label: ar ? "حركات المخزون" : "Stock Movements", href: `/${locale}/inventory/movements`, icon: <Icon name="trending" size={24} />, color: "#059669", desc: ar ? "سجل جميع حركات المخزون" : "All stock movement history" },
-    { label: ar ? "تسويات المخزون" : "Adjustments", href: `/${locale}/inventory/adjustments`, icon: <Icon name="edit" size={24} />, color: "#D97706", desc: ar ? "تصحيح أرصدة المخزون" : "Correct stock balances" },
+    { label: ar ? "جرد المخزون" : "Stock Count", href: `/${locale}/inventory/adjustments`, icon: <Icon name="check" size={24} />, color: "#D97706", desc: ar ? "عدّ الكميات ومراجعة السيريالات" : "Count quantities and review serials" },
   ];
 
   return (
@@ -37,9 +37,14 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
           <h1 className="page-title">{ar ? "المخزون" : "Inventory"}</h1>
           <p className="page-subtitle">{ar ? "إدارة الأصناف والمستودعات وحركات المخزون" : "Manage items, warehouses and stock movements"}</p>
         </div>
-        <Link href={`/${locale}/inventory/items/new`} className="btn btn-primary">
-          <Icon name="plus" size={16} /> {ar ? "+ صنف جديد" : "+ New Item"}
-        </Link>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <Link href={`/${locale}/inventory/adjustments`} className="btn btn-primary">
+            <Icon name="check" size={16} /> {ar ? "بدء جرد المخزون" : "Start Stock Count"}
+          </Link>
+          <Link href={`/${locale}/inventory/items/new`} className="btn btn-secondary">
+            <Icon name="plus" size={16} /> {ar ? "+ صنف جديد" : "+ New Item"}
+          </Link>
+        </div>
       </div>
 
       {summary && (
