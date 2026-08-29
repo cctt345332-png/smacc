@@ -21,6 +21,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
   const [customers, setCustomers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [customerId, setCustomerId] = useState(searchParams.get("customer_id") || "");
+  const [customerCity, setCustomerCity] = useState("");
   const [accountId, setAccountId] = useState("");
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
@@ -40,12 +41,25 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
     if (preId) { setCustomerId(preId); }
   }, [searchParams]);
 
+  const cities = [...new Set(customers.map(c => c.address_city).filter(Boolean))] as string[];
+
   const load = async () => {
-    if (!customerId) return alert(ar ? "اختر العميل" : "Select customer");
+    if (!customerId && accountId) return alert(ar ? "اختر عميلاً واحداً لتصفية حسابه، أو أزل فلتر الحساب للكشف الجماعي" : "Select one customer to filter its account, or clear the account filter for a bulk statement");
+    const selectedCustomers = customers.filter(c => (!customerId || c.id === customerId) && (!customerCity || c.address_city === customerCity));
+    if (selectedCustomers.length === 0) return alert(ar ? "لا يوجد عملاء ضمن الاختيار" : "No customers match the selection");
     setLoading(true);
     try {
-      const { data: res } = await getCustomerStatement(customerId, fromDate + "T00:00:00", toDate + "T23:59:59", accountId || undefined);
-      setData(res);
+      const responses = await Promise.all(selectedCustomers.map(c => getCustomerStatement(c.id, fromDate + "T00:00:00", toDate + "T23:59:59", customerId ? (accountId || undefined) : undefined)));
+      if (selectedCustomers.length === 1 && customerId) {
+        setData(responses[0].data);
+      } else {
+        const rows = responses.map((r: any) => ({ customer: r.data.customer, summary: r.data.summary }));
+        setData({ aggregate: true, customerCount: rows.length, city: customerCity, rows, summary: {
+          total_invoiced: rows.reduce((s, r) => s + Number(r.summary.total_invoiced || 0), 0),
+          total_paid: rows.reduce((s, r) => s + Number(r.summary.total_paid || 0), 0),
+          closing_balance: rows.reduce((s, r) => s + Number(r.summary.closing_balance || 0), 0),
+        }});
+      }
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setLoading(false); }
   };
@@ -62,22 +76,29 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
           <h1 className="page-title">{ar ? "كشف حساب العميل" : "Customer Account Statement"}</h1>
           <p className="page-subtitle">{ar ? "جميع الفواتير والمدفوعات والرصيد المستحق" : "All invoices, payments and outstanding balance"}</p>
         </div>
-        {data && <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب عميل" : "Customer Account Statement"} subtitle={`${data.customer.customer_number || ""} — ${ar ? data.customer.name_ar : data.customer.name_en || data.customer.name_ar}`} period={`${fromDate} — ${toDate}`} reportCode={`CUS-ST-${data.customer.customer_number || customerId}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(data.summary.total_invoiced)} SAR`, tone: "blue" }, { label: ar ? "إجمالي المدفوعات" : "Total paid", value: `${fmt(data.summary.total_paid)} SAR`, tone: "green" }, { label: ar ? "الرصيد المستحق" : "Closing balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }, { label: ar ? "عدد الحركات" : "Transactions", value: String(data.transactions.length), tone: "neutral" }]} tables={[{ title: ar ? "حركات الحساب" : "Account transactions", headers: [ar ? "التاريخ" : "Date", ar ? "النوع" : "Type", ar ? "المرجع" : "Reference", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: data.transactions.map((t: any) => [t.date ? new Date(t.date).toLocaleDateString("en-GB") : "—", t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "دفعة" : "Payment"), t.reference || "—", ar ? t.description_ar || "—" : t.description_en || t.description_ar || "—", t.debit > 0 ? fmt(t.debit) : "—", t.credit > 0 ? fmt(t.credit) : "—", `${fmt(Math.abs(t.balance))} ${t.balance > 0 ? (ar ? "مدين" : "Dr") : (ar ? "دائن" : "Cr")}`]), totals: [ar ? "الرصيد الختامي" : "Closing balance", "", "", "", fmt(data.summary.total_invoiced), fmt(data.summary.total_paid), `${fmt(data.summary.closing_balance)} SAR`] }]} />}
+        {data && !data.aggregate && <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب عميل" : "Customer Account Statement"} subtitle={`${data.customer.customer_number || ""} — ${ar ? data.customer.name_ar : data.customer.name_en || data.customer.name_ar}`} period={`${fromDate} — ${toDate}`} reportCode={`CUS-ST-${data.customer.customer_number || customerId}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(data.summary.total_invoiced)} SAR`, tone: "blue" }, { label: ar ? "إجمالي المدفوعات" : "Total paid", value: `${fmt(data.summary.total_paid)} SAR`, tone: "green" }, { label: ar ? "الرصيد المستحق" : "Closing balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }, { label: ar ? "عدد الحركات" : "Transactions", value: String(data.transactions.length), tone: "neutral" }]} tables={[{ title: ar ? "حركات الحساب" : "Account transactions", headers: [ar ? "التاريخ" : "Date", ar ? "النوع" : "Type", ar ? "المرجع" : "Reference", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: data.transactions.map((t: any) => [t.date ? new Date(t.date).toLocaleDateString("en-GB") : "—", t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "دفعة" : "Payment"), t.reference || "—", ar ? t.description_ar || "—" : t.description_en || t.description_ar || "—", t.debit > 0 ? fmt(t.debit) : "—", t.credit > 0 ? fmt(t.credit) : "—", `${fmt(Math.abs(t.balance))} ${t.balance > 0 ? (ar ? "مدين" : "Dr") : (ar ? "دائن" : "Cr")}`]), totals: [ar ? "الرصيد الختامي" : "Closing balance", "", "", "", fmt(data.summary.total_invoiced), fmt(data.summary.total_paid), `${fmt(data.summary.closing_balance)} SAR`] }]} />}
       </div>
 
       {/* Filter */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
-            <label className="form-label">{ar ? "العميل" : "Customer"} <span className="required">*</span></label>
+            <label className="form-label">{ar ? "العميل (اختياري)" : "Customer (optional)"}</label>
             <select className="form-input form-select" value={customerId} onChange={e => setCustomerId(e.target.value)}>
-              <option value="">{ar ? "— اختر العميل —" : "— Select Customer —"}</option>
+              <option value="">{ar ? "— كل العملاء —" : "— All customers —"}</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.customer_number} — {c.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 190 }}>
+            <label className="form-label">{ar ? "المنطقة / المدينة (اختياري)" : "Zone / City (optional)"}</label>
+            <select className="form-input form-select" value={customerCity} onChange={e => setCustomerCity(e.target.value)}>
+              <option value="">{ar ? "— كل المناطق —" : "— All zones —"}</option>
+              {cities.map(city => <option key={city} value={city}>{city}</option>)}
             </select>
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
             <label className="form-label">{ar ? "الحساب (اختياري)" : "Account (optional)"}</label>
-            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
+            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)} disabled={!customerId} title={!customerId ? (ar ? "فلتر الحساب متاح عند اختيار عميل واحد" : "Account filter is available when one customer is selected") : undefined}>
               <option value="">{ar ? "— كل حسابات العميل —" : "— All customer accounts —"}</option>
               {accounts.filter(a => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)).map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>)}
             </select>
@@ -96,7 +117,21 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
         </div>
       </div>
 
-      {data && (
+      {data?.aggregate && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header"><span className="card-title">{ar ? `كشف العملاء — ${data.city || "كل المناطق"}` : `Customer Statement — ${data.city || "All zones"}`}</span></div>
+          <div className="card-body">
+            <div className="grid-3" style={{ marginBottom: 16 }}>
+              <div><strong>{ar ? "عدد العملاء" : "Customers"}</strong><div>{data.customerCount}</div></div>
+              <div><strong>{ar ? "إجمالي الفواتير" : "Total invoiced"}</strong><div>{fmt(data.summary.total_invoiced)} SAR</div></div>
+              <div><strong>{ar ? "الرصيد المستحق" : "Closing balance"}</strong><div>{fmt(data.summary.closing_balance)} SAR</div></div>
+            </div>
+            <div className="table-wrapper"><table><thead><tr><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "المدينة" : "City"}</th><th>{ar ? "الفواتير" : "Invoiced"}</th><th>{ar ? "المدفوع" : "Paid"}</th><th>{ar ? "المستحق" : "Outstanding"}</th></tr></thead><tbody>{data.rows.map((row: any) => <tr key={row.customer.id}><td>{row.customer.customer_number} — {row.customer.name_ar}</td><td>{row.customer.address_city || "—"}</td><td>{fmt(row.summary.total_invoiced)}</td><td>{fmt(row.summary.total_paid)}</td><td>{fmt(row.summary.closing_balance)}</td></tr>)}</tbody></table></div>
+          </div>
+        </div>
+      )}
+
+      {data && !data.aggregate && (
         <>
           {/* Customer header */}
           <div className="card" style={{ marginBottom: 20 }}>
