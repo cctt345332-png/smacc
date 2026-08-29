@@ -38,6 +38,7 @@ class AccountOut(BaseModel):
     level: int
     is_active: bool
     is_posting: bool
+    allow_direct_posting: bool
     is_customer_account: bool = False
     opening_balance: Decimal
     model_config = {"from_attributes": True}

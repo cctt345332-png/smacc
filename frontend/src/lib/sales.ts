@@ -48,5 +48,5 @@ export const cancelSalesOrder = (id: string) => api.post(`/sales/orders/${id}/ca
 export const convertOrderToInvoice = (id: string) => api.post(`/sales/orders/${id}/invoice`);
 
 // Customer Statement
-export const getCustomerStatement = (customerId: string, fromDate: string, toDate: string) =>
-  api.get(`/sales/customers/${customerId}/statement`, { params: { from_date: fromDate, to_date: toDate } });
+export const getCustomerStatement = (customerId: string, fromDate: string, toDate: string, accountId?: string) =>
+  api.get(`/sales/customers/${customerId}/statement`, { params: { from_date: fromDate, to_date: toDate, ...(accountId ? { account_id: accountId } : {}) } });

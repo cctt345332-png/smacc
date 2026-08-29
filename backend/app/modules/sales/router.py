@@ -364,10 +364,11 @@ async def customer_statement(
     customer_id: str,
     from_date: datetime = Query(...),
     to_date: datetime = Query(...),
+    account_id: str | None = Query(None),
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await orders_service.get_customer_statement(db, user["tenant_id"], customer_id, from_date, to_date)
+    return await orders_service.get_customer_statement(db, user["tenant_id"], customer_id, from_date, to_date, account_id)
 
 
 # ─── Invoice PDF (HTML قابل للطباعة) ─────────────────────────────────

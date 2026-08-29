@@ -33,5 +33,5 @@ export const getDebitNote = (id: string) => api.get(`/purchases/debit-notes/${id
 export const createDebitNote = (data: any) => api.post("/purchases/debit-notes", data);
 
 // Vendor Statement
-export const getVendorStatement = (vendorId: string, fromDate: string, toDate: string) =>
-  api.get(`/purchases/vendors/${vendorId}/statement`, { params: { from_date: fromDate, to_date: toDate } });
+export const getVendorStatement = (vendorId: string, fromDate: string, toDate: string, accountId?: string) =>
+  api.get(`/purchases/vendors/${vendorId}/statement`, { params: { from_date: fromDate, to_date: toDate, ...(accountId ? { account_id: accountId } : {}) } });

@@ -236,10 +236,11 @@ async def update_operational_account_mapping(
 async def trial_balance(
     from_date: datetime = Query(...),
     to_date: datetime = Query(...),
+    account_id: str | None = Query(None),
     tenant_id=Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.get_trial_balance(db, tenant_id, from_date, to_date)
+    return await service.get_trial_balance(db, tenant_id, from_date, to_date, account_id)
 
 
 @router.get("/reports/ledger/{account_id}")

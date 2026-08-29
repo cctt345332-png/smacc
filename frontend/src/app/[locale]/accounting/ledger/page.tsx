@@ -22,7 +22,7 @@ export default function LedgerPage(props: { params: Promise<{ locale: string }> 
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => { getAccounts().then(({ data }) => setAccounts(data.filter((a: any) => a.is_posting))); }, []);
+  useEffect(() => { getAccounts().then(({ data }) => setAccounts(data.filter((a: any) => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)))); }, []);
 
   const load = async () => {
     if (!accountId) return alert(ar ? "اختر حساباً" : "Select an account");

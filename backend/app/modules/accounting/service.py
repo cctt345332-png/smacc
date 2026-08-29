@@ -196,6 +196,20 @@ async def create_journal_entry(db: AsyncSession, tenant_id: str, user_id: str, d
     if abs(total_debit - total_credit) > Decimal("0.01"):
         raise HTTPException(400, f"Entry not balanced: debit={total_debit} credit={total_credit}")
 
+    account_ids = {line.account_id for line in data.lines}
+    account_rows = await db.execute(
+        select(Account).where(Account.tenant_id == tenant_id, Account.id.in_(account_ids))
+    )
+    accounts_by_id = {account.id: account for account in account_rows.scalars().all()}
+    if len(accounts_by_id) != len(account_ids):
+        raise HTTPException(400, "يوجد حساب غير تابع للشركة الحالية")
+    invalid_accounts = [
+        account.code for account in accounts_by_id.values()
+        if not account.is_active or not account.is_posting or not account.allow_direct_posting
+    ]
+    if invalid_accounts:
+        raise HTTPException(400, f"الحسابات التالية غير قابلة للقيد: {', '.join(invalid_accounts)}")
+
     entry_number = await _next_entry_number(db, tenant_id)
     entry_date = data.entry_date.replace(tzinfo=None)
     entry = JournalEntry(
@@ -352,12 +366,14 @@ async def upsert_vat_settings(db: AsyncSession, tenant_id: str, data: VATSetting
 
 # ─── Reports ─────────────────────────────────────────────────────────
 async def get_trial_balance(db: AsyncSession, tenant_id: str,
-                             from_date: datetime, to_date: datetime):
+                             from_date: datetime, to_date: datetime,
+                             account_id: str | None = None):
     from_date = from_date.replace(tzinfo=None)
     to_date = to_date.replace(tzinfo=None)
-    accounts_r = await db.execute(
-        select(Account).where(Account.tenant_id == tenant_id, Account.is_posting == True).order_by(Account.code)
-    )
+    account_query = select(Account).where(Account.tenant_id == tenant_id, Account.is_posting == True)
+    if account_id:
+        account_query = account_query.where(Account.id == account_id)
+    accounts_r = await db.execute(account_query.order_by(Account.code))
     accounts = accounts_r.scalars().all()
 
     result = []

@@ -63,9 +63,9 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
 
   const handlePaymentTypeChange = (type: string) => {
     if (type === "cash") {
-      setForm(f => ({ ...f, payment_type: type, due_date: f.issue_date }));
+      setForm(f => ({ ...f, payment_type: type, due_date: "" }));
     } else {
-      const days = parseInt(form.credit_days) || 30;
+      const days = parseInt(form.credit_days) === 21 ? 21 : 30;
       const d = new Date(form.issue_date);
       d.setDate(d.getDate() + days);
       setForm(f => ({ ...f, payment_type: type, due_date: d.toISOString().split("T")[0] }));
@@ -73,9 +73,10 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
   };
 
   const handleCreditDaysChange = (days: string) => {
+    const normalizedDays = days === "21" ? "21" : "30";
     const d = new Date(form.issue_date);
-    d.setDate(d.getDate() + (parseInt(days) || 30));
-    setForm(f => ({ ...f, credit_days: days, due_date: d.toISOString().split("T")[0] }));
+    d.setDate(d.getDate() + parseInt(normalizedDays));
+    setForm(f => ({ ...f, credit_days: normalizedDays, due_date: d.toISOString().split("T")[0] }));
   };
 
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
@@ -116,9 +117,12 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
   }, { subtotal: 0, discount: 0, taxable: 0, vat: 0, total: 0 });
 
   const buildPayload = () => ({
-    ...form,
+      ...form,
+    invoice_payment_method: form.payment_type,
+    credit_days: form.payment_type === "credit" ? (parseInt(form.credit_days) === 21 ? 21 : 30) : null,
+    supply_date: form.payment_type === "cash" ? form.issue_date : form.supply_date,
     fiscal_year_id: form.fiscal_year_id || null,
-    due_date: form.due_date || null,
+    due_date: form.payment_type === "credit" ? (form.due_date || null) : null,
     lines: lines.map((l, i) => ({
       description_ar: l.picked.description_ar || (ar ? "صنف" : "Item"),
       quantity: l.picked.quantity || 1,
@@ -245,11 +249,14 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
               <div className="form-group" style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "12px 14px" }}>
                 <label className="form-label" style={{ color: "#92400E" }}>{ar ? "مدة الأجل (أيام)" : "Credit Period (days)"}</label>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input type="number" className="form-input" style={{ width: 100 }}
-                    value={form.credit_days} min="1" max="365"
-                    onChange={e => handleCreditDaysChange(e.target.value)} />
+                  <select className="form-input form-select" style={{ width: 100 }}
+                    value={form.credit_days === "21" ? "21" : "30"}
+                    onChange={e => handleCreditDaysChange(e.target.value)}>
+                    <option value="21">21</option>
+                    <option value="30">30</option>
+                  </select>
                   <div style={{ display: "flex", gap: 6 }}>
-                    {["15", "30", "45", "60", "90"].map(d => (
+                    {["21", "30"].map(d => (
                       <button key={d} type="button" onClick={() => handleCreditDaysChange(d)}
                         style={{
                           padding: "4px 10px", borderRadius: 6, border: "1px solid",
@@ -274,16 +281,16 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
                 <label className="form-label">{ar ? "تاريخ الإصدار" : "Issue Date"}</label>
                 <input type="date" className="form-input" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} />
               </div>
-              <div className="form-group">
+              {form.payment_type === "credit" && <div className="form-group">
                 <label className="form-label">{ar ? "تاريخ التوريد" : "Supply Date"}</label>
                 <input type="date" className="form-input" value={form.supply_date} onChange={e => setForm(f => ({ ...f, supply_date: e.target.value }))} />
-              </div>
+              </div>}
             </div>
             <div className="grid-2">
-              <div className="form-group">
+              {form.payment_type === "credit" && <div className="form-group">
                 <label className="form-label">{ar ? "تاريخ الاستحقاق" : "Due Date"}</label>
                 <input type="date" className="form-input" value={form.due_date} onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
-              </div>
+              </div>}
               <div className="form-group">
                 <label className="form-label">{ar ? "السنة المالية" : "Fiscal Year"}</label>
                 <select className="form-input form-select" value={form.fiscal_year_id} onChange={e => setForm(f => ({ ...f, fiscal_year_id: e.target.value }))}>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   getAccounts, createAccount, updateAccount, deleteAccount,
   getAccountingReadiness, getLegacyChartReplacementReadiness, initializeDefaultChart,
-  importLegacyCompanyChart, replaceEmptyChartWithLegacyCompanyChart, applyDefaultPartyMappings,
+  replaceEmptyChartWithLegacyCompanyChart, applyDefaultPartyMappings,
   getOperationalAccountMappings, updateOperationalAccountMapping,
 } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
@@ -148,19 +148,6 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } finally { setSetupBusy(false); }
   };
 
-  const handleImportLegacyCompanyChart = async () => {
-    if (!confirm(ar
-      ? "سيتم جلب شجرة النظام السابق الكاملة إلى الشركة الحالية فقط، بأرصدة صفرية. لا تتغير الفواتير أو العملاء أو الموردون أو القيود الحالية، ولا يمكن تكرار الجلب بعد نجاحه. هل تريد المتابعة؟"
-      : "This imports the complete legacy chart into this company only with zero balances. Existing transactions and parties will not change, and the import cannot be repeated. Continue?")) return;
-    setSetupBusy(true);
-    try {
-      await importLegacyCompanyChart();
-      await load();
-    } catch (e: any) {
-      alert(e?.response?.data?.detail || (ar ? "تعذر جلب شجرة النظام السابق" : "Unable to import the legacy chart"));
-    } finally { setSetupBusy(false); }
-  };
-
   const handleReplaceEmptyChartWithLegacy = async () => {
     if (!confirm(ar
       ? "سيحذف النظام دليل الحسابات الحالي الفارغ لهذه الشركة فقط ثم يجلب شجرة النظام السابق الكاملة بأرصدة صفرية. تم التحقق آليًا من عدم وجود أرصدة أو قيود أو روابط عملاء أو موردين أو مراجع محاسبية مرتبطة بالحسابات. لا يمكن التراجع بعد الحفظ. لن يعدل النظام أي فاتورة قائمة. هل تريد المتابعة؟"
@@ -234,18 +221,13 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                 </span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, maxWidth: 760 }}>
-                {ar ? "يمكنك تهيئة الشجرة الافتراضية ذات الأكواد الستة، أو جلب شجرة النظام السابق للشركة الحالية. وإذا كان فيها دليل قديم خالٍ تمامًا من الأرصدة والحركات والارتباطات، يظهر زر استبدال لمرة واحدة بعد تحقق النظام. جميع المسارات تبقي القيود التلقائية غير مفعلة ولا تعدل الفواتير أو العملاء أو الموردين أو القيود." : "You may initialize the official six-digit default chart or import the legacy chart for this company. When an existing chart is completely empty and unreferenced, the system presents a one-time replacement action after verification. All paths keep automatic posting disabled and leave transactions and parties unchanged."}
+                {ar ? "للشركات الجديدة استخدم تهيئة الشجرة الافتراضية ذات الأكواد الستة فقط. إذا كان لدى الشركة دليل قديم، يظهر زر استبدال لمرة واحدة بعد فحصه. جميع المسارات تبقي القيود التلقائية غير مفعلة ولا تعدل الفواتير أو العملاء أو الموردين أو القيود." : "For new companies, use only the official six-digit default chart. If the company has an old chart, a one-time replacement action appears after checking it. All paths keep automatic posting disabled and leave invoices, parties, and journal entries unchanged."}
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {readiness && !readiness.chart_initialized && !readiness.legacy_chart_imported && (
                 <button className="btn btn-primary btn-sm" onClick={handleInitializeDefaultChart} disabled={setupBusy || readiness.account_count > 0}>
                   {setupBusy ? (ar ? "جاري التهيئة..." : "Initializing...") : (ar ? "تهيئة الشجرة الافتراضية" : "Initialize default chart")}
-                </button>
-              )}
-              {readiness && !readiness.legacy_chart_imported && readiness.account_count === 0 && (
-                <button className="btn btn-secondary btn-sm" onClick={handleImportLegacyCompanyChart} disabled={setupBusy}>
-                  {setupBusy ? (ar ? "جاري الجلب..." : "Importing...") : (ar ? "جلب شجرة النظام السابق لهذه الشركة" : "Import legacy chart for this company")}
                 </button>
               )}
               {readiness && !readiness.legacy_chart_imported && legacyReplacement && (

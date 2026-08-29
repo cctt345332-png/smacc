@@ -75,18 +75,20 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
 
   const handlePaymentTypeChange = (type: string) => {
     if (type === "cash") {
-      setForm(f => ({ ...f, payment_type: type, due_date: f.issue_date }));
+      setForm(f => ({ ...f, payment_type: type, due_date: "" }));
     } else {
+      const days = form.credit_days === "21" ? 21 : 30;
       const d = new Date(form.issue_date);
-      d.setDate(d.getDate() + (parseInt(form.credit_days) || 30));
+      d.setDate(d.getDate() + days);
       setForm(f => ({ ...f, payment_type: type, due_date: d.toISOString().split("T")[0] }));
     }
   };
 
   const handleCreditDaysChange = (days: string) => {
+    const normalizedDays = days === "21" ? "21" : "30";
     const d = new Date(form.issue_date);
-    d.setDate(d.getDate() + (parseInt(days) || 30));
-    setForm(f => ({ ...f, credit_days: days, due_date: d.toISOString().split("T")[0] }));
+    d.setDate(d.getDate() + parseInt(normalizedDays));
+    setForm(f => ({ ...f, credit_days: normalizedDays, due_date: d.toISOString().split("T")[0] }));
   };
 
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
@@ -163,8 +165,8 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
     invoice_payment_method: form.payment_type,
     credit_days: form.payment_type === "credit" ? (parseInt(form.credit_days) || 30) : null,
     issue_date: form.issue_date,
-    supply_date: form.supply_date,
-    due_date: form.due_date || null,
+    supply_date: form.payment_type === "cash" ? form.issue_date : form.supply_date,
+    due_date: form.payment_type === "credit" ? (form.due_date || null) : null,
     notes: form.notes || null,
     lines: lines
       .filter(l => l.picked.description_ar || l.picked.inventory_item_id)
@@ -326,7 +328,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
             <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: "#92400E", display: "block", marginBottom: 6 }}>{ar ? "مدة الأجل" : "Credit Period"}</label>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {["15", "30", "45", "60", "90"].map(d => (
+                {['21', '30'].map(d => (
                   <button key={d} type="button" onClick={() => handleCreditDaysChange(d)}
                     style={{
                       padding: "4px 10px", borderRadius: 6, border: "1px solid",
@@ -352,11 +354,11 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
               <input type="date" className="form-input" value={form.issue_date}
                 onChange={e => setForm(f => ({ ...f, issue_date: e.target.value, supply_date: e.target.value }))} />
             </div>
-            <div>
+            {form.payment_type === "credit" && <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "تاريخ الاستحقاق" : "Due Date"}</label>
               <input type="date" className="form-input" value={form.due_date}
                 onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))} />
-            </div>
+            </div>}
           </div>
 
           {/* ملاحظات */}

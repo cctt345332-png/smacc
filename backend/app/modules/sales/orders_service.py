@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.models.sales_orders import SalesOrder, SalesOrderLine, SalesOrderStatus
 from app.models.sales import Customer, Invoice, InvoiceStatus, Payment
+from app.models.accounting import Account
 
 
 async def _next_order_number(db: AsyncSession, tenant_id: str) -> str:
@@ -135,7 +136,8 @@ async def convert_order_to_invoice(db: AsyncSession, tenant_id: str, user_id: st
 
 # ─── Customer Statement ──────────────────────────────────────────────
 async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: str,
-                                  from_date: datetime, to_date: datetime):
+                                  from_date: datetime, to_date: datetime,
+                                  account_id: str | None = None):
     """كشف حساب العميل الكامل"""
     from_date = from_date.replace(tzinfo=None)
     to_date = to_date.replace(tzinfo=None)
@@ -144,6 +146,12 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
     customer = await db.get(Customer, customer_id)
     if not customer or customer.tenant_id != tenant_id:
         raise HTTPException(404, "Customer not found")
+    if account_id:
+        account = await db.get(Account, account_id)
+        if not account or account.tenant_id != tenant_id or not account.is_active or not account.is_posting:
+            raise HTTPException(400, "حساب العميل غير صالح أو غير تابع للشركة")
+        if customer.ar_account_id != account_id:
+            raise HTTPException(400, "الحساب المختار غير مربوط بهذا العميل")
 
     # الفواتير
     inv_r = await db.execute(

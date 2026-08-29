@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 from app.modules.accounting.service import is_operational_auto_posting_enabled
 
+from app.models.accounting import Account
 from app.models.purchases import (
     Vendor, PurchaseOrder, PurchaseOrderLine,
     Bill, BillLine, BillPayment, DebitNote, DebitNoteLine,
@@ -247,9 +248,23 @@ async def create_bill(db: AsyncSession, tenant_id: str, user_id: str, data: dict
     if data.get("vendor_id"):
         vendor = await get_vendor(db, tenant_id, data["vendor_id"])
 
-    bill_date   = datetime.fromisoformat(data["bill_date"]).replace(tzinfo=None)
-    supply_date = datetime.fromisoformat(data["supply_date"]).replace(tzinfo=None)
-    due_date    = datetime.fromisoformat(data["due_date"]).replace(tzinfo=None) if data.get("due_date") else None
+    payment_type = data.get("payment_type") or "cash"
+    if payment_type not in ("cash", "credit"):
+        raise HTTPException(400, "طريقة الدفع يجب أن تكون نقدًا أو آجلًا")
+    if payment_type == "credit":
+        if data.get("credit_days") not in (21, 30):
+            raise HTTPException(400, "مدة الآجل المسموحة هي 21 أو 30 يومًا فقط")
+        if not data.get("due_date"):
+            raise HTTPException(400, "يجب تحديد تاريخ الاستحقاق للفاتورة الآجلة")
+
+    bill_date = datetime.fromisoformat(data["bill_date"]).replace(tzinfo=None)
+    supply_date = datetime.fromisoformat(
+        data.get("bill_date") if payment_type == "cash" else data["supply_date"]
+    ).replace(tzinfo=None)
+    due_date = (
+        datetime.fromisoformat(data["due_date"]).replace(tzinfo=None)
+        if payment_type == "credit" and data.get("due_date") else None
+    )
 
     gross_total = disc_total = taxable_total = vat_total = grand_total = Decimal("0")
     bill_id = str(uuid.uuid4())
@@ -477,26 +492,31 @@ async def _create_bill_journal(db, tenant_id, user_id, bill: Bill):
     دائن: حسابات الدائنين (المورد) — الإجمالي شامل الضريبة
     """
     from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus, Account, AccountType
-    from app.modules.accounting.service import _next_entry_number, get_vat_settings
+    from app.modules.accounting.service import _next_entry_number, get_vat_settings, get_operational_account
 
     vendor = await db.get(Vendor, bill.vendor_id)
     ap_account_id = vendor.ap_account_id if vendor else None
+    if not ap_account_id:
+        ap_account_id = await get_operational_account(db, tenant_id, "default_ap")
     if not ap_account_id:
         return None
 
     vat_settings = await get_vat_settings(db, tenant_id)
 
-    # جلب أول حساب مصروف/أصل متاح للـ tenant (مخزون أو مصروف)
-    expense_r = await db.execute(
-        select(Account).where(
-            Account.tenant_id == tenant_id,
-            Account.account_type.in_([AccountType.EXPENSE, AccountType.ASSET]),
-            Account.is_active == True,
-            Account.is_posting == True,
-        ).order_by(Account.code).limit(1)
-    )
-    expense_account = expense_r.scalar_one_or_none()
-    expense_account_id = expense_account.id if expense_account else ap_account_id  # fallback
+    # الحساب التشغيلي للمخزون من خريطة الشجرة، مع fallback للتوافق القديم.
+    expense_account_id = await get_operational_account(db, tenant_id, "inventory")
+    if not expense_account_id:
+        expense_r = await db.execute(
+            select(Account).where(
+                Account.tenant_id == tenant_id,
+                Account.account_type.in_([AccountType.EXPENSE, AccountType.ASSET]),
+                Account.is_active == True,
+                Account.is_posting == True,
+                Account.allow_direct_posting == True,
+            ).order_by(Account.code).limit(1)
+        )
+        expense_account = expense_r.scalar_one_or_none()
+        expense_account_id = expense_account.id if expense_account else ap_account_id
 
     entry_number = await _next_entry_number(db, tenant_id)
 
@@ -1254,12 +1274,19 @@ async def get_purchases_summary(db: AsyncSession, tenant_id: str):
 
 # ─── Vendor Statement ─────────────────────────────────────────────────
 async def get_vendor_statement(db: AsyncSession, tenant_id: str, vendor_id: str,
-                                from_date: datetime, to_date: datetime):
+                                from_date: datetime, to_date: datetime,
+                                account_id: str | None = None):
     """كشف حساب المورد الكامل"""
     from_date = from_date.replace(tzinfo=None)
     to_date = to_date.replace(tzinfo=None)
 
     vendor = await get_vendor(db, tenant_id, vendor_id)
+    if account_id:
+        account = await db.get(Account, account_id)
+        if not account or account.tenant_id != tenant_id or not account.is_active or not account.is_posting:
+            raise HTTPException(400, "حساب المورد غير صالح أو غير تابع للشركة")
+        if vendor.ap_account_id != account_id:
+            raise HTTPException(400, "الحساب المختار غير مربوط بهذا المورد")
 
     # الفواتير الواردة
     bill_r = await db.execute(

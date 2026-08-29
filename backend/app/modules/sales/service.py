@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from app.models.sales import (
     Customer, Invoice, InvoiceLine, Payment, Quotation, QuotationLine,
     CreditNote, CreditNoteLine, RefundRequest, RefundRequestStatus,
-    InvoiceStatus, InvoiceType, PaymentMethod
+    InvoiceStatus, InvoiceType, PaymentMethod, InvoicePaymentMethod
 )
 from app.models.reps import SalesRep
 from app.models.user import User
@@ -234,6 +234,16 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
     from sqlalchemy import select as sa_select
     tenant_r = await db.execute(sa_select(Tenant).where(Tenant.id == tenant_id))
     tenant = tenant_r.scalar_one_or_none()
+
+    if data.invoice_payment_method == InvoicePaymentMethod.CREDIT:
+        if data.credit_days not in (21, 30):
+            raise HTTPException(400, "مدة الآجل المسموحة هي 21 أو 30 يومًا فقط")
+        if not data.due_date:
+            raise HTTPException(400, "يجب تحديد تاريخ الاستحقاق للفاتورة الآجلة")
+    else:
+        # النقد والتحويل والشيك لا يحمل مدة آجل تلقائيًا.
+        data.due_date = None
+        data.credit_days = None
 
     # حساب المبالغ
     subtotal = Decimal("0")
@@ -471,28 +481,33 @@ async def _deduct_inventory_for_invoice(
 async def _create_invoice_journal(db: AsyncSession, tenant_id: str, user_id: str, invoice: Invoice) -> str | None:
     """قيد يومية تلقائي للفاتورة: مدين حسابات القبض، دائن الإيرادات + الضريبة"""
     from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus, Account, AccountType
-    from app.modules.accounting.service import _next_entry_number, get_vat_settings
+    from app.modules.accounting.service import _next_entry_number, get_vat_settings, get_operational_account
 
     vat_settings = await get_vat_settings(db, tenant_id)
 
     # نحتاج حسابات: حسابات القبض، الإيرادات، ضريبة القيمة المضافة
     customer = await db.get(Customer, invoice.customer_id)
     ar_account_id = customer.ar_account_id if customer else None
+    if not ar_account_id:
+        ar_account_id = await get_operational_account(db, tenant_id, "default_ar")
 
     if not ar_account_id:
         return None  # لا يمكن إنشاء القيد بدون حساب القبض
 
-    # جلب أول حساب إيرادات متاح للـ tenant
-    revenue_r = await db.execute(
-        select(Account).where(
-            Account.tenant_id == tenant_id,
-            Account.account_type == AccountType.REVENUE,
-            Account.is_active == True,
-            Account.is_posting == True,
-        ).order_by(Account.code).limit(1)
-    )
-    revenue_account = revenue_r.scalar_one_or_none()
-    revenue_account_id = revenue_account.id if revenue_account else None
+    # الحساب التشغيلي المحدد من خريطة الشجرة، مع fallback للتوافق القديم.
+    revenue_account_id = await get_operational_account(db, tenant_id, "sales_goods")
+    if not revenue_account_id:
+        revenue_r = await db.execute(
+            select(Account).where(
+                Account.tenant_id == tenant_id,
+                Account.account_type == AccountType.REVENUE,
+                Account.is_active == True,
+                Account.is_posting == True,
+                Account.allow_direct_posting == True,
+            ).order_by(Account.code).limit(1)
+        )
+        revenue_account = revenue_r.scalar_one_or_none()
+        revenue_account_id = revenue_account.id if revenue_account else None
 
     entry_number = await _next_entry_number(db, tenant_id)
     entry = JournalEntry(

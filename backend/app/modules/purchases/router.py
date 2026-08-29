@@ -134,10 +134,11 @@ async def vendor_statement(
     vendor_id: str,
     from_date: str,
     to_date: str,
+    account_id: str | None = None,
     tenant_id=Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
     from datetime import datetime
     fd = datetime.fromisoformat(from_date)
     td = datetime.fromisoformat(to_date)
-    return await service.get_vendor_statement(db, tenant_id, vendor_id, fd, td)
+    return await service.get_vendor_statement(db, tenant_id, vendor_id, fd, td, account_id)

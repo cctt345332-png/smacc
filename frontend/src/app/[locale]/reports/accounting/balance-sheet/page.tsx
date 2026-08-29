@@ -1,7 +1,7 @@
 "use client";
-import { useState, use } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getTrialBalance } from "@/lib/accounting";
+import { getTrialBalance, getAccounts } from "@/lib/accounting";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 export default function BalanceSheetPage(props: { params: Promise<{ locale: string }> }) {
@@ -13,14 +13,20 @@ export default function BalanceSheetPage(props: { params: Promise<{ locale: stri
 
   const ar = locale === "ar";
   const now = new Date();
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accountId, setAccountId] = useState("");
   const [asOf, setAsOf] = useState(now.toISOString().split("T")[0]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    getAccounts().then(({ data }) => setAccounts(data)).catch(() => {});
+  }, []);
+
   const load = async () => {
     setLoading(true);
     try {
-      const { data: rows } = await getTrialBalance(`${now.getFullYear()}-01-01T00:00:00`, asOf + "T23:59:59");
+      const { data: rows } = await getTrialBalance(`${now.getFullYear()}-01-01T00:00:00`, asOf + "T23:59:59", accountId || undefined);
       const group = (type: string) => rows.filter((r: any) => r.account_type === type);
       const sum = (rows: any[]) => rows.reduce((s: number, r: any) => s + Number(r.closing_debit) - Number(r.closing_credit), 0);
       const assets = group("asset"); const liabilities = group("liability"); const equity = group("equity");
@@ -67,6 +73,13 @@ export default function BalanceSheetPage(props: { params: Promise<{ locale: stri
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+          <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
+            <label className="form-label">{ar ? "الحساب (اختياري)" : "Account (optional)"}</label>
+            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
+              <option value="">{ar ? "— كل الحسابات —" : "— All accounts —"}</option>
+              {accounts.filter(a => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)).map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>)}
+            </select>
+          </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">{ar ? "بتاريخ" : "As of Date"}</label>
             <input type="date" className="form-input" value={asOf} onChange={e => setAsOf(e.target.value)} />

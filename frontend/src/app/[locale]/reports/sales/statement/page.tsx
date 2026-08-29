@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getCustomers, getCustomerStatement } from "@/lib/sales";
+import { getAccounts } from "@/lib/accounting";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -18,13 +19,20 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
   const searchParams = useSearchParams();
   const now = new Date();
   const [customers, setCustomers] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [customerId, setCustomerId] = useState(searchParams.get("customer_id") || "");
+  const [accountId, setAccountId] = useState("");
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => { getCustomers().then(({ data }) => setCustomers(data)); }, []);
+  useEffect(() => {
+    Promise.all([getCustomers(), getAccounts()]).then(([customersRes, accountsRes]) => {
+      setCustomers(customersRes.data);
+      setAccounts(accountsRes.data);
+    });
+  }, []);
 
   // تحميل تلقائي إذا كان customer_id في الـ URL
   useEffect(() => {
@@ -36,7 +44,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
     if (!customerId) return alert(ar ? "اختر العميل" : "Select customer");
     setLoading(true);
     try {
-      const { data: res } = await getCustomerStatement(customerId, fromDate + "T00:00:00", toDate + "T23:59:59");
+      const { data: res } = await getCustomerStatement(customerId, fromDate + "T00:00:00", toDate + "T23:59:59", accountId || undefined);
       setData(res);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setLoading(false); }
@@ -65,6 +73,13 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
             <select className="form-input form-select" value={customerId} onChange={e => setCustomerId(e.target.value)}>
               <option value="">{ar ? "— اختر العميل —" : "— Select Customer —"}</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.customer_number} — {c.name_ar}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
+            <label className="form-label">{ar ? "الحساب (اختياري)" : "Account (optional)"}</label>
+            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
+              <option value="">{ar ? "— كل حسابات العميل —" : "— All customer accounts —"}</option>
+              {accounts.filter(a => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)).map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>)}
             </select>
           </div>
           <div className="form-group" style={{ margin: 0 }}>

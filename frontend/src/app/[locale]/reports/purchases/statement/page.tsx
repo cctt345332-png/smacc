@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getVendors, getVendorStatement } from "@/lib/purchases";
+import { getAccounts } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
@@ -19,14 +20,19 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
   const searchParams = useSearchParams();
   const now = new Date();
   const [vendors, setVendors] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [vendorId, setVendorId] = useState(searchParams.get("vendor_id") || "");
+  const [accountId, setAccountId] = useState("");
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    getVendors().then(r => setVendors(r.data)).catch(() => {});
+    Promise.all([getVendors(), getAccounts()]).then(([vendorsRes, accountsRes]) => {
+      setVendors(vendorsRes.data);
+      setAccounts(accountsRes.data);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -38,7 +44,7 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
     if (!vendorId) return alert(ar ? "اختر المورد" : "Select vendor");
     setLoading(true);
     try {
-      const { data: res } = await getVendorStatement(vendorId, fromDate + "T00:00:00", toDate + "T23:59:59");
+      const { data: res } = await getVendorStatement(vendorId, fromDate + "T00:00:00", toDate + "T23:59:59", accountId || undefined);
       setData(res);
     } catch (e: any) {
       alert(e?.response?.data?.detail || "Error");
@@ -72,6 +78,13 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
               {vendors.map(v => (
                 <option key={v.id} value={v.id}>{v.vendor_number} — {v.name_ar}</option>
               ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
+            <label className="form-label">{ar ? "الحساب (اختياري)" : "Account (optional)"}</label>
+            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
+              <option value="">{ar ? "— كل حسابات المورد —" : "— All vendor accounts —"}</option>
+              {accounts.filter(a => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)).map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>)}
             </select>
           </div>
           <div className="form-group" style={{ margin: 0 }}>
