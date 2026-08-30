@@ -44,10 +44,71 @@ from app.modules.accounting.schemas import (
 
 # ─── Accounts ────────────────────────────────────────────────────────
 async def get_accounts(db: AsyncSession, tenant_id: str):
+    """الحسابات مع الرصيد الحالي المحسوب من القيود المرحّلة."""
     r = await db.execute(
         select(Account).where(Account.tenant_id == tenant_id).order_by(Account.code)
     )
-    return r.scalars().all()
+    accounts = r.scalars().all()
+    if not accounts:
+        return []
+
+    account_ids = [account.id for account in accounts]
+    lines_result = await db.execute(
+        select(
+            JournalEntryLine.account_id,
+            func.coalesce(func.sum(JournalEntryLine.debit), 0).label("debit"),
+            func.coalesce(func.sum(JournalEntryLine.credit), 0).label("credit"),
+        )
+        .join(JournalEntry, JournalEntry.id == JournalEntryLine.entry_id)
+        .where(
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.status == JournalEntryStatus.POSTED,
+            JournalEntryLine.account_id.in_(account_ids),
+        )
+        .group_by(JournalEntryLine.account_id)
+    )
+    movement_by_account = {
+        account_id: Decimal(str(debit or 0)) - Decimal(str(credit or 0))
+        for account_id, debit, credit in lines_result.all()
+    }
+
+    # الرصيد الموقّع: موجب للمدين في الحسابات المدينة، وموجب للدائن في الحسابات الدائنة.
+    balance_by_id = {
+        account.id: (Decimal(str(account.opening_balance or 0)) + movement_by_account.get(account.id, Decimal("0")))
+        if account.nature == AccountNature.DEBIT
+        else (Decimal(str(account.opening_balance or 0)) - movement_by_account.get(account.id, Decimal("0")))
+        for account in accounts
+    }
+
+    # الحسابات التجميعية تعرض مجموع أرصدة فروعها مع رصيدها المباشر.
+    children_by_parent: dict[str, list[str]] = {}
+    for account in accounts:
+        if account.parent_id:
+            children_by_parent.setdefault(account.parent_id, []).append(account.id)
+    by_level = sorted(accounts, key=lambda account: account.level, reverse=True)
+    for account in by_level:
+        if account.parent_id in balance_by_id:
+            balance_by_id[account.parent_id] += balance_by_id[account.id]
+
+    return [
+        {
+            "id": account.id,
+            "code": account.code,
+            "name_ar": account.name_ar,
+            "name_en": account.name_en,
+            "account_type": account.account_type,
+            "nature": account.nature,
+            "parent_id": account.parent_id,
+            "level": account.level,
+            "is_active": account.is_active,
+            "is_posting": account.is_posting,
+            "allow_direct_posting": account.allow_direct_posting,
+            "is_customer_account": account.is_customer_account,
+            "opening_balance": account.opening_balance,
+            "current_balance": balance_by_id[account.id],
+        }
+        for account in accounts
+    ]
 
 
 async def get_customer_receivable_accounts(db: AsyncSession, tenant_id: str):

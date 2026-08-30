@@ -41,6 +41,8 @@ class AccountOut(BaseModel):
     allow_direct_posting: bool
     is_customer_account: bool = False
     opening_balance: Decimal
+    # الرصيد الحالي المحسوب من القيود المرحّلة، ويشمل أرصدة الفروع للحسابات التجميعية.
+    current_balance: Decimal = Decimal("0")
     model_config = {"from_attributes": True}
 
 

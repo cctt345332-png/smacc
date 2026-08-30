@@ -164,7 +164,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
           <p className="page-subtitle">{ar ? "إدارة الهيكل المحاسبي للشركة" : "Manage your company's accounting structure"}</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <StructuredReportPrintButton locale={locale} title={ar ? "دليل الحسابات" : "Chart of Accounts"} subtitle={ar ? "الهيكل المحاسبي للشركة" : "Company account structure"} period={ar ? "كما في تاريخ الطباعة" : "As of print date"} orientation="landscape" reportCode={`COA-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الحسابات" : "Total accounts", value: String(filtered.length), tone: "green" }, ...TYPES.map(t => ({ label: ar ? t.ar : t.en, value: String(accounts.filter(a => a.account_type === t.value).length), tone: "neutral" as const }))]} tables={[{ headers: [ar ? "الكود" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "النوع" : "Type", ar ? "الطبيعة" : "Nature", ar ? "افتتاحي" : "Opening", ar ? "قابل للترحيل" : "Posting"], rows: filtered.map(a => [String(a.code), String(ar ? a.name_ar : a.name_en || a.name_ar), String(ar ? typeInfo(a.account_type)?.ar : typeInfo(a.account_type)?.en || a.account_type), a.nature === "debit" ? (ar ? "مدين" : "Debit") : (ar ? "دائن" : "Credit"), Number(a.opening_balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 }), a.is_posting ? (ar ? "نعم" : "Yes") : (ar ? "لا" : "No")]) }]} />
+          <StructuredReportPrintButton locale={locale} title={ar ? "دليل الحسابات" : "Chart of Accounts"} subtitle={ar ? "الهيكل المحاسبي للشركة" : "Company account structure"} period={ar ? "كما في تاريخ الطباعة" : "As of print date"} orientation="landscape" reportCode={`COA-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الحسابات" : "Total accounts", value: String(filtered.length), tone: "green" }, ...TYPES.map(t => ({ label: ar ? t.ar : t.en, value: String(accounts.filter(a => a.account_type === t.value).length), tone: "neutral" as const }))]} tables={[{ headers: [ar ? "الكود" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "النوع" : "Type", ar ? "الطبيعة" : "Nature", ar ? "الرصيد الحالي" : "Current balance", ar ? "قابل للترحيل" : "Posting"], rows: filtered.map(a => [String(a.code), String(ar ? a.name_ar : a.name_en || a.name_ar), String(ar ? typeInfo(a.account_type)?.ar : typeInfo(a.account_type)?.en || a.account_type), a.nature === "debit" ? (ar ? "مدين" : "Debit") : (ar ? "دائن" : "Credit"), Number(a.current_balance ?? a.opening_balance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 }), a.is_posting ? (ar ? "نعم" : "Yes") : (ar ? "لا" : "No")]) }]} />
           <button className="btn btn-primary btn-sm" onClick={openNew}>+ {ar ? "حساب جديد" : "New Account"}</button>
         </div>
       </div>
@@ -321,7 +321,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   <th>{ar ? "النوع" : "Type"}</th>
                   <th>{ar ? "الطبيعة" : "Nature"}</th>
                   <th>{ar ? "المستوى" : "Level"}</th>
-                  <th style={{ textAlign: "end" }}>{ar ? "الرصيد الافتتاحي" : "Opening Balance"}</th>
+                  <th style={{ textAlign: "end" }}>{ar ? "الرصيد الحالي" : "Current Balance"}</th>
                   <th>{ar ? "الحالة" : "Status"}</th>
                   <th>{ar ? "الإجراءات" : "Actions"}</th>
                 </tr>
@@ -342,7 +342,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                       </td>
                       <td style={{ color: "var(--text-secondary)" }}>{acc.level}</td>
                       <td style={{ textAlign: "end", fontWeight: 600 }}>
-                        {Number(acc.opening_balance).toLocaleString("en-US", { minimumFractionDigits: 2 })} {ar ? "ر.س" : "SAR"}
+                        {Number(acc.current_balance ?? acc.opening_balance ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })} {ar ? "ر.س" : "SAR"}
                       </td>
                       <td>
                         <span className={`badge ${acc.is_active ? "badge-success" : "badge-gray"}`}>
