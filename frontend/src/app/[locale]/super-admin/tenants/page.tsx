@@ -63,6 +63,12 @@ export default function TenantsPage() {
   const [resetConfirmation, setResetConfirmation] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState("");
+  const [fullDeleteTenant, setFullDeleteTenant] = useState<Tenant | null>(null);
+  const [fullDeletePreview, setFullDeletePreview] = useState<any>(null);
+  const [fullDeleteConfirmation, setFullDeleteConfirmation] = useState("");
+  const [fullDeleteCompanyName, setFullDeleteCompanyName] = useState("");
+  const [fullDeleteBusy, setFullDeleteBusy] = useState(false);
+  const [fullDeleteError, setFullDeleteError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +139,41 @@ export default function TenantsPage() {
     } catch (e: any) {
       setResetError(e?.response?.data?.detail || (ar ? "تعذر تنفيذ التصفير" : "Could not execute reset"));
     } finally { setResetBusy(false); }
+  }
+
+  async function openFullDelete(t: Tenant) {
+    setFullDeleteTenant(t);
+    setFullDeleteCompanyName("");
+    setFullDeleteConfirmation("");
+    setFullDeletePreview(null);
+    setFullDeleteError("");
+    setFullDeleteBusy(true);
+    try {
+      const r = await adminApi.get(`/admin/tenants/${t.id}/delete-preview`);
+      setFullDeletePreview(r.data);
+    } catch (e: any) {
+      setFullDeleteError(e?.response?.data?.detail || (ar ? "تعذر معاينة الحذف الكلي" : "Could not preview full deletion"));
+    } finally { setFullDeleteBusy(false); }
+  }
+
+  async function executeFullDelete() {
+    if (!fullDeleteTenant || !fullDeletePreview) return;
+    if (fullDeleteCompanyName.trim() !== fullDeleteTenant.name.trim()) return;
+    if (fullDeleteConfirmation !== `DELETE COMPANY ${fullDeleteTenant.id}`) return;
+    setFullDeleteBusy(true);
+    setFullDeleteError("");
+    try {
+      await adminApi.delete(`/admin/tenants/${fullDeleteTenant.id}/full`, {
+        data: { company_name: fullDeleteCompanyName, confirmation: fullDeleteConfirmation },
+      });
+      const deletedId = fullDeleteTenant.id;
+      setFullDeleteTenant(null);
+      setFullDeletePreview(null);
+      alert(ar ? `تم حذف الشركة وجميع بياناتها نهائياً: ${deletedId}` : `Company and all data permanently deleted: ${deletedId}`);
+      load();
+    } catch (e: any) {
+      setFullDeleteError(e?.response?.data?.detail || (ar ? "تعذر تنفيذ الحذف الكلي" : "Could not execute full deletion"));
+    } finally { setFullDeleteBusy(false); }
   }
 
   function openEdit(t: Tenant) {
@@ -251,6 +292,11 @@ export default function TenantsPage() {
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => openEdit(t)} className="btn btn-secondary btn-sm">
                           <IcEdit /> {ar ? "تعديل" : "Edit"}
+                        </button>
+                        <button onClick={() => openFullDelete(t)}
+                          className="btn btn-sm"
+                          style={{ background: "#7F1D1D", color: "white", border: "none" }}>
+                          {ar ? "حذف كلي" : "Full Delete"}
                         </button>
                         <button onClick={() => handleToggle(t)}
                           className="btn btn-sm"
@@ -440,6 +486,46 @@ export default function TenantsPage() {
                 </button>
                 <button onClick={handleSave} disabled={saving} className="btn btn-primary">
                   {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ التغييرات" : "Save Changes")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full company delete modal */}
+      {fullDeleteTenant && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(40,0,0,0.72)", zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div className="card" style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", border: "3px solid #991B1B", borderRadius: 4 }}>
+            <div className="card-header" style={{ background: "#7F1D1D", color: "white" }}>
+              <span className="card-title" style={{ color: "white" }}>{ar ? "حذف كلي للشركة" : "Full Company Delete"}</span>
+              <button onClick={() => setFullDeleteTenant(null)} className="btn btn-ghost btn-icon" style={{ color: "white" }}><IcClose /></button>
+            </div>
+            <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", padding: 12, color: "#7F1D1D", fontWeight: 700 }}>
+                {ar ? "تحذير نهائي: سيحذف هذا الإجراء الشركة وجميع مستخدميها وفواتيرها ومشترياتها ومخزونها وسيريالاتها وحساباتها وبياناتها التشغيلية. لا يمكن التراجع عنه، ولا يؤثر على الشركات الأخرى." : "FINAL WARNING: This permanently deletes the company, users, invoices, purchases, inventory, serials, accounts and operational data. It cannot be undone and does not affect other companies."}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", direction: "ltr", textAlign: "left" }}>
+                <div><strong>ID:</strong> {fullDeleteTenant.id}</div>
+                <div><strong>{ar ? "اسم الشركة" : "Company"}:</strong> {fullDeleteTenant.name}</div>
+                {fullDeleteBusy && <div style={{ marginTop: 8 }}>{ar ? "جاري فحص السجلات..." : "Checking records..."}</div>}
+                {fullDeletePreview && <div style={{ marginTop: 8 }}><strong>{ar ? "السجلات التي ستُحذف" : "Records to delete"}:</strong> {fullDeletePreview.total_records}</div>}
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">{ar ? `اكتب اسم الشركة حرفياً: ${fullDeleteTenant.name}` : `Type the exact company name: ${fullDeleteTenant.name}`}</label>
+                <input value={fullDeleteCompanyName} onChange={e => setFullDeleteCompanyName(e.target.value)} className="form-input" autoComplete="off" />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">{ar ? `اكتب رمز التأكيد: DELETE COMPANY ${fullDeleteTenant.id}` : `Type confirmation: DELETE COMPANY ${fullDeleteTenant.id}`}</label>
+                <input value={fullDeleteConfirmation} onChange={e => setFullDeleteConfirmation(e.target.value)} className="form-input" style={{ direction: "ltr", textAlign: "left", fontFamily: "monospace" }} autoComplete="off" />
+              </div>
+              {fullDeleteError && <div style={{ color: "#B91C1C", fontSize: 12 }}>{fullDeleteError}</div>}
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 8, borderTop: "1px solid #FCA5A5" }}>
+                <button onClick={() => setFullDeleteTenant(null)} className="btn btn-secondary">{ar ? "إلغاء" : "Cancel"}</button>
+                <button onClick={executeFullDelete}
+                  disabled={fullDeleteBusy || !fullDeletePreview || fullDeleteCompanyName.trim() !== fullDeleteTenant.name.trim() || fullDeleteConfirmation !== `DELETE COMPANY ${fullDeleteTenant.id}`}
+                  className="btn btn-sm" style={{ background: "#991B1B", color: "white", border: "none" }}>
+                  {fullDeleteBusy ? (ar ? "جاري الحذف..." : "Deleting...") : (ar ? "حذف نهائي لا يمكن التراجع عنه" : "Permanently Delete")}
                 </button>
               </div>
             </div>

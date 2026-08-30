@@ -18,7 +18,10 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.system_config import SystemConfig
 from app.core.plan_catalog import default_plan_catalog
-from app.modules.admin.reset_service import SECTION_LABELS, preview_reset, execute_reset
+from app.modules.admin.reset_service import (
+    SECTION_LABELS, preview_reset, execute_reset,
+    preview_full_delete, execute_full_delete,
+)
 
 router = APIRouter(prefix="/admin", tags=["super-admin"])
 
@@ -103,6 +106,41 @@ class LandingConfigSchema(BaseModel):
 class TenantResetRequest(BaseModel):
     sections: List[str]
     confirmation: str
+
+
+class TenantFullDeleteRequest(BaseModel):
+    company_name: str
+    confirmation: str
+
+
+@router.get("/tenants/{tenant_id}/delete-preview")
+async def tenant_full_delete_preview(
+    tenant_id: str,
+    _=Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """معاينة الحذف الكلي فقط؛ لا تعدل أي بيانات."""
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="الشركة غير موجودة")
+    return {"company_name": tenant.name, **await preview_full_delete(db, tenant_id)}
+
+
+@router.delete("/tenants/{tenant_id}/full")
+async def tenant_full_delete(
+    tenant_id: str,
+    data: TenantFullDeleteRequest,
+    user=Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """حذف كلي نهائي بعد مطابقة اسم الشركة ورمز الحذف."""
+    try:
+        return await execute_full_delete(
+            db, tenant_id=tenant_id, actor_user_id=user.get("id"),
+            company_name=data.company_name, confirmation=data.confirmation,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/tenants/{tenant_id}/reset-preview")
