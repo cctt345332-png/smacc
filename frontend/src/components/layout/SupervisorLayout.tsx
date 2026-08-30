@@ -19,17 +19,16 @@ export default function SupervisorLayout({ children, locale }: { children: React
   const pathname = usePathname();
   const { user, token, logout, _hasHydrated } = useAuthStore();
   const [unread, setUnread] = useState(0);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (!mounted) return;
-    if (!token) router.replace(`/${locale}/login`);
-  }, [mounted, token]);
+    if (!_hasHydrated) return;
+    if (!token && !window.location.pathname.endsWith("/login")) {
+      router.replace(`/${locale}/login`);
+    }
+  }, [_hasHydrated, token, locale, router]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!_hasHydrated || !token) return;
     getUnreadCount().then(r => setUnread(r.data.count)).catch(() => {});
     const id = setInterval(() => getUnreadCount().then(r => setUnread(r.data.count)).catch(() => {}), 60_000);
     return () => clearInterval(id);
@@ -50,7 +49,7 @@ export default function SupervisorLayout({ children, locale }: { children: React
     ? ((user as any).fullName || "S").split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()
     : "S";
 
-  if (!mounted) return <div style={{ minHeight: "100vh", background: "var(--bg)" }} />;
+  if (!_hasHydrated) return <div style={{ minHeight: "100vh", background: "var(--bg)" }} />;
   if (!token) return null;
 
   return (
