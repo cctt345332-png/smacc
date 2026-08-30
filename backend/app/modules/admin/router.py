@@ -24,6 +24,7 @@ from app.modules.admin.reset_service import (
     SECTION_LABELS, preview_reset, execute_reset,
     preview_full_delete, execute_full_delete,
 )
+from app.modules.sales.service import repair_legacy_customer_opening_balances
 
 router = APIRouter(prefix="/admin", tags=["super-admin"])
 logger = logging.getLogger(__name__)
@@ -114,6 +115,26 @@ class TenantResetRequest(BaseModel):
 class TenantFullDeleteRequest(BaseModel):
     company_name: str
     confirmation: str
+
+
+@router.post("/tenants/{tenant_id}/repair-customer-opening-balances")
+async def repair_customer_opening_balances(
+    tenant_id: str,
+    user=Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """إصلاح أرصدة حسابات العملاء القديمة التي لم تُرحّل إلى قيود."""
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="الشركة غير موجودة")
+    try:
+        return await repair_legacy_customer_opening_balances(
+            db, tenant_id=tenant_id, actor_user_id=user.get("id"),
+        )
+    except SQLAlchemyError:
+        await db.rollback()
+        logger.exception("Customer opening balance repair failed for tenant_id=%s", tenant_id)
+        raise HTTPException(status_code=500, detail="تعذر إصلاح الأرصدة الافتتاحية")
 
 
 @router.get("/tenants/{tenant_id}/delete-preview")

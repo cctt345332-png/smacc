@@ -140,6 +140,65 @@ async def preview_customer_account_import(db: AsyncSession, tenant_id: str) -> d
             "already_linked": sum(1 for item in items if not item["will_create"]), "items": items}
 
 
+async def repair_legacy_customer_opening_balances(
+    db: AsyncSession, tenant_id: str, actor_user_id: str | None = None,
+) -> dict:
+    """ترحيل أرصدة حسابات العملاء القديمة إلى قيود افتتاحية بشكل idempotent."""
+    accounts = (await db.execute(
+        select(Account).where(
+            Account.tenant_id == tenant_id,
+            Account.is_customer_account.is_(True),
+            Account.opening_balance != 0,
+        ).order_by(Account.code)
+    )).scalars().all()
+    customers = (await db.execute(
+        select(Customer).where(Customer.tenant_id == tenant_id)
+    )).scalars().all()
+    customer_by_account = {customer.ar_account_id: customer for customer in customers if customer.ar_account_id}
+
+    repaired = 0
+    skipped = 0
+    missing_customer = 0
+    for account in accounts:
+        customer = customer_by_account.get(account.id)
+        if not customer:
+            missing_customer += 1
+            continue
+
+        existing_entry = (await db.execute(
+            select(JournalEntry.id)
+            .join(JournalEntryLine, JournalEntryLine.entry_id == JournalEntry.id)
+            .where(
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.source == "customer_opening_balance",
+                JournalEntry.reference == customer.customer_number,
+                JournalEntryLine.account_id == account.id,
+            ).limit(1)
+        )).scalar_one_or_none()
+        if existing_entry:
+            # القيد موجود؛ نصفر الحقل القديم فقط حتى لا يظهر الرصيد مرتين.
+            account.opening_balance = Decimal("0")
+            skipped += 1
+            continue
+
+        amount = Decimal(str(account.opening_balance or 0)).quantize(Decimal("0.01"))
+        if amount == 0:
+            continue
+        await _create_customer_opening_journal(
+            db, tenant_id, actor_user_id or "system", customer, account, amount,
+        )
+        account.opening_balance = Decimal("0")
+        repaired += 1
+
+    await db.commit()
+    return {
+        "repaired": repaired,
+        "already_journaled": skipped,
+        "missing_customer": missing_customer,
+        "scanned": len(accounts),
+    }
+
+
 async def import_customers_from_chart(db: AsyncSession, tenant_id: str, actor_user_id: str) -> dict:
     """ينشئ سجلات العملاء من الحسابات النهائية مرة واحدة، دون تكرار."""
     preview = await preview_customer_account_import(db, tenant_id)
