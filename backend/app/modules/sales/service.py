@@ -177,7 +177,13 @@ async def _create_customer_opening_journal(
     if not journal_user_id:
         raise HTTPException(400, "لا يوجد مستخدم صالح لتسجيل قيد الرصيد الافتتاحي")
 
-    offset_account_id = await get_operational_account(db, tenant_id, "capital")
+    try:
+        offset_account = await get_operational_account(db, tenant_id, "capital")
+    except HTTPException:
+        # يسمح للشركة الجديدة باستخدام أول حساب حقوق ملكية قابل للقيد
+        # إذا لم تتم تهيئة ربط حساب رأس المال بعد.
+        offset_account = None
+    offset_account_id = offset_account.id if offset_account else None
     if not offset_account_id:
         offset_result = await db.execute(
             select(Account).where(
