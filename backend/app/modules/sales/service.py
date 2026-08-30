@@ -384,7 +384,8 @@ async def update_customer(
     changed_fields = list(updates.keys())
     for k, v in updates.items():
         setattr(c, k, v)
-    if opening_balance_requested:
+    # الواجهة القديمة ترسل صفراً افتراضياً عند تعديل بيانات أخرى؛ لا نعتبره طلباً لمسح قيد قائم.
+    if opening_balance_requested and opening_balance != 0:
         if not c.ar_account_id:
             raise HTTPException(400, "لا يوجد حساب مرتبط بهذا العميل لإنشاء قيد الرصيد الافتتاحي")
         customer_account = await db.get(Account, c.ar_account_id)
