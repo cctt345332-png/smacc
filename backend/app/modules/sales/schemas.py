@@ -65,6 +65,8 @@ class CustomerUpdate(BaseModel):
     credit_limit: Optional[Decimal] = None
     payment_terms_days: Optional[int] = None
     ar_account_id: Optional[str] = None
+    # عند إرساله في التعديل يُحدّث قيد الرصيد الافتتاحي، ولا يُحفظ كسجل مستقل على العميل.
+    opening_balance: Optional[Decimal] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
 

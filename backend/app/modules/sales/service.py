@@ -17,7 +17,7 @@ from app.models.user import User
 from app.models.inventory import (
     InventoryItem, ProductVariant, SerialItem, BatchItem, StockMovement,
 )
-from app.models.accounting import Account, AccountType, AccountNature
+from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
     QuotationCreate, CreditNoteCreate, RefundRequestCreate
@@ -372,7 +372,11 @@ async def update_customer(
     actor_user_id: str | None = None,
 ):
     c = await get_customer(db, tenant_id, customer_id)
+    opening_balance_requested = "opening_balance" in data.model_fields_set
+    opening_balance = Decimal(str(data.opening_balance or 0)).quantize(Decimal("0.01")) if opening_balance_requested else None
     updates = data.model_dump(exclude_none=True)
+    # الرصيد الافتتاحي ليس حقلاً يُخزن على العميل؛ بل يُترجم إلى قيد محاسبي.
+    updates.pop("opening_balance", None)
     # يسمح الحقل الاختياري بإزالة الحساب صراحة، ولا يغير الحقول الأخرى عند إرسالها فارغة.
     if "ar_account_id" in data.model_fields_set:
         await _validate_customer_ar_account(db, tenant_id, data.ar_account_id)
@@ -380,6 +384,36 @@ async def update_customer(
     changed_fields = list(updates.keys())
     for k, v in updates.items():
         setattr(c, k, v)
+    if opening_balance_requested:
+        if not c.ar_account_id:
+            raise HTTPException(400, "لا يوجد حساب مرتبط بهذا العميل لإنشاء قيد الرصيد الافتتاحي")
+        customer_account = await db.get(Account, c.ar_account_id)
+        if not customer_account or customer_account.tenant_id != tenant_id:
+            raise HTTPException(400, "حساب العميل غير صالح لإنشاء قيد الرصيد الافتتاحي")
+
+        # احذف أي قيد افتتاحي سابق لهذا العميل قبل إعادة بنائه بالقيمة الجديدة.
+        old_entry_ids = (await db.execute(
+            select(JournalEntry.id)
+            .join(JournalEntryLine, JournalEntryLine.entry_id == JournalEntry.id)
+            .where(
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.source == "customer_opening_balance",
+                JournalEntry.reference == c.customer_number,
+                JournalEntryLine.account_id == customer_account.id,
+            )
+            .distinct()
+        )).scalars().all()
+        if old_entry_ids:
+            await db.execute(delete(JournalEntryLine).where(JournalEntryLine.entry_id.in_(old_entry_ids)))
+            await db.execute(delete(JournalEntry).where(JournalEntry.id.in_(old_entry_ids)))
+
+        if opening_balance:
+            await db.flush()
+            await _create_customer_opening_journal(
+                db, tenant_id, actor_user_id or "system", c, customer_account, opening_balance,
+            )
+        changed_fields.append("opening_balance")
+
     record_audit(db, tenant_id, actor_user_id, "update", "customer", c.id,
                  changed_fields=changed_fields)
     await db.commit()
