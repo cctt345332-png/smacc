@@ -3,8 +3,8 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import {
   getAccounts, createAccount, updateAccount, deleteAccount,
-  getAccountingReadiness, getLegacyChartReplacementReadiness, initializeDefaultChart,
-  replaceEmptyChartWithLegacyCompanyChart, applyDefaultPartyMappings,
+  getAccountingReadiness, initializeDefaultChart,
+  applyDefaultPartyMappings,
   getOperationalAccountMappings, updateOperationalAccountMapping,
 } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
@@ -55,7 +55,6 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   const [saving, setSaving] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
   const [readiness, setReadiness] = useState<any>(null);
-  const [legacyReplacement, setLegacyReplacement] = useState<any>(null);
   const [mappings, setMappings] = useState<any[]>([]);
   const [form, setForm] = useState({
     code: "", name_ar: "", name_en: "", account_type: "asset",
@@ -65,13 +64,11 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
   const load = async () => {
     setLoading(true);
-    const [accountsResult, readinessResult, replacementResult, mappingsResult] = await Promise.allSettled([
-      getAccounts(), getAccountingReadiness(), getLegacyChartReplacementReadiness(), getOperationalAccountMappings(),
+    const [accountsResult, readinessResult, mappingsResult] = await Promise.allSettled([
+      getAccounts(), getAccountingReadiness(), getOperationalAccountMappings(),
     ]);
     if (accountsResult.status === "fulfilled") setAccounts(accountsResult.value.data);
     if (readinessResult.status === "fulfilled") setReadiness(readinessResult.value.data);
-    if (replacementResult.status === "fulfilled") setLegacyReplacement(replacementResult.value.data);
-    else setLegacyReplacement(null);
     if (mappingsResult.status === "fulfilled") setMappings(mappingsResult.value.data);
     setLoading(false);
   };
@@ -116,25 +113,6 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   });
 
   const typeInfo = (type: string) => TYPES.find(t => t.value === type);
-  const replacementBlockers = legacyReplacement ? [
-    { count: legacyReplacement.accounts_with_opening_balance, ar: "حساب له رصيد افتتاحي", en: "account balance" },
-    { count: legacyReplacement.journal_line_references, ar: "سطر قيد محاسبي", en: "journal line" },
-    { count: legacyReplacement.customer_account_references, ar: "ربط عميل", en: "customer link" },
-    { count: legacyReplacement.vendor_account_references, ar: "ربط مورد", en: "vendor link" },
-    { count: legacyReplacement.bank_account_references, ar: "ربط بنك أو صندوق", en: "bank/cash link" },
-    { count: legacyReplacement.budget_line_references, ar: "سطر موازنة", en: "budget line" },
-    { count: legacyReplacement.asset_category_references, ar: "ربط فئة أصل", en: "asset category link" },
-    { count: legacyReplacement.pos_terminal_references, ar: "ربط نقطة بيع", en: "POS terminal link" },
-    { count: legacyReplacement.voucher_account_references, ar: "سند خزينة", en: "treasury voucher" },
-  ].filter(item => Number(item.count) > 0) : [];
-  const replacementHasOperationalBlockers = replacementBlockers.length > 0;
-  const replacementAllowed = Boolean(
-    legacyReplacement && (
-      legacyReplacement.can_replace ||
-      (Number(legacyReplacement.removable_mapping_references) > 0 && !replacementHasOperationalBlockers)
-    )
-  );
-
   const handleInitializeDefaultChart = async () => {
     if (!confirm(ar
       ? "سيتم إنشاء الشجرة الرسمية ذات الأكواد الستة بأرصدة صفرية فقط. لن تتغير أو يعاد ترقيم أي فاتورة أو عميل أو مورد أو قيد سابق. هل تريد المتابعة؟"
@@ -145,19 +123,6 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
       await load();
     } catch (e: any) {
       alert(e?.response?.data?.detail || (ar ? "تعذر تهيئة الشجرة" : "Unable to initialize the chart"));
-    } finally { setSetupBusy(false); }
-  };
-
-  const handleReplaceEmptyChartWithLegacy = async () => {
-    if (!confirm(ar
-      ? "سيحذف النظام دليل الحسابات الحالي الفارغ لهذه الشركة فقط ثم يجلب شجرة النظام السابق الكاملة بأرصدة صفرية. تم التحقق آليًا من عدم وجود أرصدة أو قيود أو روابط عملاء أو موردين أو مراجع محاسبية مرتبطة بالحسابات. لا يمكن التراجع بعد الحفظ. لن يعدل النظام أي فاتورة قائمة. هل تريد المتابعة؟"
-      : "The current empty chart for this company only will be deleted and replaced with the complete legacy chart at zero balances. The system verified that no balances, journal entries, customer/vendor links, or accounting references use these accounts. This cannot be undone, and no existing invoice will be changed. Continue?")) return;
-    setSetupBusy(true);
-    try {
-      await replaceEmptyChartWithLegacyCompanyChart();
-      await load();
-    } catch (e: any) {
-      alert(e?.response?.data?.detail || (ar ? "تعذر استبدال الدليل الفارغ" : "Unable to replace the empty chart"));
     } finally { setSetupBusy(false); }
   };
 
@@ -214,31 +179,18 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                 <Icon name="journal" size={18} />
                 <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{ar ? "تهيئة شجرة الحسابات والربط" : "Chart setup and mapping"}</h2>
-                {readiness && <span className={`badge ${(readiness.chart_initialized || readiness.legacy_chart_imported) ? "badge-success" : "badge-warning"}`}>
-                  {readiness.legacy_chart_imported
-                    ? (ar ? "تم جلب الشجرة المخصصة" : "Custom chart imported")
-                    : readiness.chart_initialized
-                      ? (ar ? "الشجرة مهيأة" : "Chart ready")
-                      : (ar ? "غير مهيأة" : "Not initialized")}
+                {readiness && <span className={`badge ${readiness.chart_initialized ? "badge-success" : "badge-warning"}`}>
+                  {readiness.chart_initialized ? (ar ? "الشجرة مهيأة" : "Chart ready") : (ar ? "غير مهيأة" : "Not initialized")}
                 </span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, maxWidth: 760 }}>
-                {ar ? "للشركات الجديدة استخدم تهيئة الشجرة الافتراضية ذات الأكواد الستة فقط. إذا كان لدى الشركة دليل قديم، يظهر زر استبدال لمرة واحدة بعد فحصه. جميع المسارات تبقي القيود التلقائية غير مفعلة ولا تعدل الفواتير أو العملاء أو الموردين أو القيود." : "For new companies, use only the official six-digit default chart. If the company has an old chart, a one-time replacement action appears after checking it. All paths keep automatic posting disabled and leave invoices, parties, and journal entries unchanged."}
+                {ar ? "للشركات التي لا تملك حسابات، يمكنك إنشاء الشجرة الافتراضية بأرصدة صفرية. لا تتغير الفواتير أو العملاء أو الموردون أو القيود السابقة." : "For companies without accounts, create the default zero-balance chart. Existing invoices, parties, and journal entries remain unchanged."}
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {readiness && !readiness.chart_initialized && !readiness.legacy_chart_imported && (
+              {readiness && !readiness.chart_initialized && readiness.account_count === 0 && (
                 <button className="btn btn-primary btn-sm" onClick={handleInitializeDefaultChart} disabled={setupBusy || readiness.account_count > 0}>
                   {setupBusy ? (ar ? "جاري التهيئة..." : "Initializing...") : (ar ? "تهيئة الشجرة الافتراضية" : "Initialize default chart")}
-                </button>
-              )}
-              {readiness && !readiness.legacy_chart_imported && legacyReplacement && (
-                <button className="btn btn-secondary btn-sm" onClick={handleReplaceEmptyChartWithLegacy} disabled={setupBusy || !replacementAllowed} title={!replacementAllowed ? (ar ? "الاستبدال متوقف لأن الفحص وجد ارتباطًا محاسبيًا" : "Replacement is blocked because the safety check found an accounting reference") : undefined}>
-                  {setupBusy
-                    ? (ar ? "جاري الاستبدال..." : "Replacing...")
-                    : replacementAllowed
-                      ? (ar ? "استبدال الدليل الحالي بشجرة النظام السابق" : "Replace current chart with legacy chart")
-                      : (ar ? "الاستبدال متوقف — راجع سبب المنع" : "Replacement blocked — review the reason")}
                 </button>
               )}
             </div>
@@ -266,38 +218,6 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   </strong>
                 </div>
               </div>
-
-              {readiness.legacy_chart_imported && (
-                <div className="alert alert-success" style={{ marginBottom: 0 }}>
-                  {ar ? "تم جلب شجرة النظام السابق لهذه الشركة بأرصدة صفرية. اختفى زر الجلب ولن يعيد النظام الجلب فوق الشجرة الحالية. لم تتغير الفواتير أو العملاء أو الموردون أو القيود." : "The legacy chart was imported for this company with zero balances. The import button is now hidden and no transactions or parties were changed."}
-                </div>
-              )}
-
-              {!readiness.legacy_chart_imported && replacementAllowed && (
-                <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-                  {ar ? `تم فحص ${legacyReplacement.account_count} حسابًا: لا توجد أرصدة افتتاحية أو قيود أو روابط بنوك أو موازنات أو أصول أو نقاط بيع أو سندات. ستُفصل روابط العملاء (${legacyReplacement.customer_account_references}) والموردين (${legacyReplacement.vendor_account_references}) تلقائيًا مع بقاء سجلاتهم وفواتيرهم. يمكنك استخدام زر الاستبدال لمرة واحدة.` : `The ${legacyReplacement.account_count} accounts were checked: no balances, journal entries, bank/budget/asset/POS/voucher references exist. Customer links (${legacyReplacement.customer_account_references}) and vendor links (${legacyReplacement.vendor_account_references}) will be detached while their records and invoices remain unchanged. You may use the one-time replacement button.`}
-                </div>
-              )}
-
-              {!readiness.legacy_chart_imported && legacyReplacement && !replacementAllowed && (
-                <div className="alert alert-warning" style={{ marginBottom: 0 }}>
-                  {ar ? (
-                    <>
-                      <strong>تم منع الاستبدال لحماية البيانات.</strong>{" "}
-                      سبب المنع: {replacementBlockers.length
-                        ? replacementBlockers.map(item => `${item.count} ${item.ar}`).join("، ")
-                        : "الدليل غير مؤهل للاستبدال حاليًا"}. لن يحذف النظام أي حساب.
-                    </>
-                  ) : (
-                    <>
-                      <strong>Replacement was blocked to protect data.</strong>{" "}
-                      Reason: {replacementBlockers.length
-                        ? replacementBlockers.map(item => `${item.count} ${item.en}`).join(", ")
-                        : "the chart is not eligible for replacement"}. No account will be deleted.
-                    </>
-                  )}
-                </div>
-              )}
 
               {readiness.chart_initialized && (
                 <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 14 }}>
