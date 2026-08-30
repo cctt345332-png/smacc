@@ -1442,10 +1442,32 @@ async def get_sales_summary(db: AsyncSession, tenant_id: str, rep_id: str | None
     invoices_r = await db.execute(q)
     invoices = invoices_r.scalars().all()
 
-    total_invoiced   = sum(i.total for i in invoices)
-    total_paid       = sum(i.paid_amount for i in invoices)
-    total_outstanding = total_invoiced - total_paid
-    overdue_count    = sum(1 for i in invoices if i.status == InvoiceStatus.OVERDUE)
+    total_invoiced = sum(i.total for i in invoices)
+    total_paid = sum(i.paid_amount for i in invoices)
+
+    # ذمم العملاء تشمل أرصدة النقل الافتتاحية المثبتة في القيود، لا الفواتير فقط.
+    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
+    customer_account_ids = (await db.execute(
+        select(Customer.ar_account_id).where(
+            Customer.tenant_id == tenant_id,
+            Customer.ar_account_id.is_not(None),
+            *( [Customer.rep_id == rep_id] if rep_id else [] ),
+        )
+    )).scalars().all()
+    opening_total = Decimal("0")
+    if customer_account_ids:
+        opening_total = Decimal(str((await db.execute(
+            select(func.coalesce(func.sum(JournalEntryLine.debit - JournalEntryLine.credit), 0))
+            .join(JournalEntry, JournalEntry.id == JournalEntryLine.entry_id)
+            .where(
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.status == JournalEntryStatus.POSTED,
+                JournalEntry.source == "customer_opening_balance",
+                JournalEntryLine.account_id.in_(customer_account_ids),
+            )
+        )).scalar() or 0))
+    total_outstanding = total_invoiced - total_paid + opening_total
+    overdue_count = sum(1 for i in invoices if i.status == InvoiceStatus.OVERDUE)
 
     # عدد الفواتير المعلّقة للمراجعة (submitted) — لا تُحسب ضمن الإيرادات
     pending_q = select(func.count(Invoice.id)).where(
@@ -1460,6 +1482,7 @@ async def get_sales_summary(db: AsyncSession, tenant_id: str, rep_id: str | None
         "total_invoiced":    float(total_invoiced),
         "total_paid":        float(total_paid),
         "total_outstanding": float(total_outstanding),
+        "opening_balance":   float(opening_total),
         "overdue_count":     overdue_count,
         "draft_count":       int(pending_count),   # يُستخدم لعرض عدد المعلّقة
         "invoice_count":     len(invoices),
