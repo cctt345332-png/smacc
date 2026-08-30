@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 type Account = {
   id: string;
@@ -32,64 +32,89 @@ export default function SearchableAccountSelect({
   className = "form-input",
   style,
 }: Props) {
-  const listId = useId();
   const ar = locale === "ar";
+  const containerRef = useRef<HTMLDivElement>(null);
   const available = useMemo(
     () => accounts.filter((a) => a.is_active !== false && (allowGroups || a.allow_direct_posting !== false)),
     [accounts, allowGroups],
   );
-
   const selected = available.find((a) => a.id === value);
   const selectedLabel = selected ? accountLabel(selected, locale) : "";
   const [text, setText] = useState(selectedLabel);
+  const [open, setOpen] = useState(false);
 
-  // Sync the visible text when the selected account changes outside this input.
   useEffect(() => {
     setText(selectedLabel);
   }, [selectedLabel]);
 
-  const findExact = (rawText: string) => {
-    const normalized = rawText.trim().toLocaleLowerCase();
-    if (!normalized) return undefined;
+  useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, []);
 
-    return available.find((account) => {
-      const name = (ar ? account.name_ar : account.name_en) || account.name_ar || account.name_en || "";
-      const code = (account.code || "").toLocaleLowerCase();
-      const localizedName = name.toLocaleLowerCase();
-      const label = `${code} - ${localizedName}`;
-      return label === normalized || code === normalized || localizedName === normalized;
+  const normalizedQuery = text.trim().toLocaleLowerCase();
+  const filtered = useMemo(() => {
+    if (!normalizedQuery) return available;
+    return available.filter((account) => {
+      const name = ((ar ? account.name_ar : account.name_en) || account.name_ar || account.name_en || "").toLocaleLowerCase();
+      return `${account.code || ""} ${name}`.includes(normalizedQuery);
     });
+  }, [available, normalizedQuery, ar]);
+
+  const choose = (account: Account) => {
+    onChange(account.id);
+    setText(accountLabel(account, locale));
+    setOpen(false);
   };
 
   return (
-    <input
-      className={className}
-      style={style}
-      list={listId}
-      value={text}
-      placeholder={placeholder || (ar ? "اكتب كود أو اسم الحساب..." : "Type account code or name...")}
-      autoComplete="off"
-      onChange={(event) => {
-        const nextText = event.target.value;
-        // Keep the user's text visible while typing. Do not clear the parent value
-        // on every non-exact keystroke; that was causing the old field to reset.
-        setText(nextText);
-        const exact = findExact(nextText);
-        onChange(exact?.id || "");
-      }}
-      onBlur={() => {
-        const match = findExact(text);
-        if (match) {
-          onChange(match.id);
-          setText(accountLabel(match, locale));
-        } else if (text.trim()) {
-          // Restore the current selection when the user leaves an unmatched search.
-          setText(selectedLabel);
-        } else {
-          onChange("");
-        }
-      }}
-    />
+    <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
+      <input
+        className={className}
+        style={style}
+        value={text}
+        placeholder={placeholder || (ar ? "اكتب كود أو اسم الحساب..." : "Type account code or name...")}
+        autoComplete="off"
+        onFocus={() => setOpen(true)}
+        onChange={(event) => {
+          const nextText = event.target.value;
+          setText(nextText);
+          setOpen(true);
+          const exact = available.find((account) => accountLabel(account, locale).toLocaleLowerCase() === nextText.trim().toLocaleLowerCase() || account.code?.toLocaleLowerCase() === nextText.trim().toLocaleLowerCase());
+          onChange(exact?.id || "");
+        }}
+        onBlur={() => {
+          window.setTimeout(() => {
+            const exact = available.find((account) => accountLabel(account, locale).toLocaleLowerCase() === text.trim().toLocaleLowerCase() || account.code?.toLocaleLowerCase() === text.trim().toLocaleLowerCase());
+            if (exact) choose(exact);
+            else if (text.trim()) setText(selectedLabel);
+            else onChange("");
+          }, 150);
+        }}
+      />
+      {open && (
+        <div style={{ position: "absolute", zIndex: 80, insetInline: 0, top: "calc(100% + 4px)", maxHeight: 280, overflowY: "auto", background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 10px 24px rgba(15,23,42,.14)" }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "لا توجد حسابات مطابقة" : "No matching accounts"}</div>
+          ) : filtered.map((account) => (
+            <button
+              key={account.id}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => choose(account)}
+              style={{ display: "block", width: "100%", border: 0, background: account.id === value ? "#F3E8FF" : "#fff", padding: "9px 12px", textAlign: ar ? "right" : "left", cursor: "pointer", fontSize: 12 }}
+            >
+              <strong>{account.code || "—"}</strong>
+              <span style={{ marginInlineStart: 8 }}>{ar ? account.name_ar || account.name_en : account.name_en || account.name_ar}</span>
+              {allowGroups && <span style={{ marginInlineStart: 8, color: "var(--text-secondary)" }}>{account.allow_direct_posting === false ? (ar ? "(رئيسي)" : "(Group)") : (ar ? "(نهائي)" : "(Posting)")}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
