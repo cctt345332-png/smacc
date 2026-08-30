@@ -30,11 +30,25 @@ async def _column_exists(db: AsyncSession, table: str, column: str) -> bool:
 
 
 async def _detach_account_references(db: AsyncSession, tenant_id: str) -> None:
-    """يفك مراجع الحسابات قبل حذف الشجرة، مع دعم اختلاف migrations بين البيئات."""
+    """يفك جميع مراجع الحسابات قبل حذف الشجرة، مع دعم اختلاف migrations."""
     references = (
         ("customers", "ar_account_id"),
         ("vendors", "ap_account_id"),
         ("sales_reps", "customer_account_id"),
+        ("bank_accounts", "gl_account_id"),
+        ("vouchers", "bank_account_id"),
+        ("vouchers", "to_bank_account_id"),
+        ("pos_terminals", "bank_account_id"),
+        ("asset_categories", "asset_account_id"),
+        ("assets", "asset_account_id"),
+        ("pos_terminals", "cash_account_id"),
+        ("pos_terminals", "sales_account_id"),
+        ("pos_terminals", "vat_account_id"),
+        ("vouchers", "debit_account_id"),
+        ("vouchers", "credit_account_id"),
+        ("vouchers", "vat_account_id"),
+        ("vat_settings", "vat_account_id"),
+        ("vat_settings", "vat_receivable_account_id"),
         ("accounts", "parent_id"),
     )
     for table, column in references:
@@ -63,10 +77,10 @@ SECTION_TABLES: dict[str, list[tuple[str, str]]] = {
         ("credit_note_lines", "credit_note_id IN (SELECT id FROM credit_notes WHERE tenant_id=:tenant_id)"),
         ("credit_notes", "tenant_id=:tenant_id"),
         ("refund_requests", "tenant_id=:tenant_id"),
-        ("quotation_lines", "quotation_id IN (SELECT id FROM quotations WHERE tenant_id=:tenant_id)"),
-        ("quotations", "tenant_id=:tenant_id"),
         ("sales_order_lines", "order_id IN (SELECT id FROM sales_orders WHERE tenant_id=:tenant_id)"),
         ("sales_orders", "tenant_id=:tenant_id"),
+        ("quotation_lines", "quotation_id IN (SELECT id FROM quotations WHERE tenant_id=:tenant_id)"),
+        ("quotations", "tenant_id=:tenant_id"),
         ("invoices", "tenant_id=:tenant_id"),
     ],
     "purchases": [
