@@ -19,6 +19,32 @@ async def _table_exists(db: AsyncSession, table: str) -> bool:
     return result.scalar() is not None
 
 
+async def _column_exists(db: AsyncSession, table: str, column: str) -> bool:
+    result = await db.execute(text("""
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = :table_name
+          AND column_name = :column_name
+    """), {"table_name": table, "column_name": column})
+    return result.scalar() is not None
+
+
+async def _detach_account_references(db: AsyncSession, tenant_id: str) -> None:
+    """يفك مراجع الحسابات قبل حذف الشجرة، مع دعم اختلاف migrations بين البيئات."""
+    references = (
+        ("customers", "ar_account_id"),
+        ("vendors", "ap_account_id"),
+        ("sales_reps", "customer_account_id"),
+        ("accounts", "parent_id"),
+    )
+    for table, column in references:
+        if await _table_exists(db, table) and await _column_exists(db, table, column):
+            await db.execute(
+                text(f"UPDATE {table} SET {column}=NULL WHERE tenant_id=:tenant_id"),
+                {"tenant_id": tenant_id},
+            )
+
+
 SECTION_LABELS = {
     "sales": "مستندات المبيعات",
     "purchases": "مستندات المشتريات",
@@ -44,13 +70,13 @@ SECTION_TABLES: dict[str, list[tuple[str, str]]] = {
         ("invoices", "tenant_id=:tenant_id"),
     ],
     "purchases": [
+        ("debit_note_lines", "debit_note_id IN (SELECT id FROM debit_notes WHERE tenant_id=:tenant_id)"),
+        ("debit_notes", "tenant_id=:tenant_id"),
         ("bill_lines", "bill_id IN (SELECT id FROM bills WHERE tenant_id=:tenant_id)"),
         ("bill_payments", "tenant_id=:tenant_id"),
         ("bills", "tenant_id=:tenant_id"),
         ("purchase_order_lines", "order_id IN (SELECT id FROM purchase_orders WHERE tenant_id=:tenant_id)"),
         ("purchase_orders", "tenant_id=:tenant_id"),
-        ("debit_note_lines", "debit_note_id IN (SELECT id FROM debit_notes WHERE tenant_id=:tenant_id)"),
-        ("debit_notes", "tenant_id=:tenant_id"),
     ],
     "pos": [
         ("pos_transaction_lines", "transaction_id IN (SELECT id FROM pos_transactions WHERE tenant_id=:tenant_id)"),
@@ -91,7 +117,7 @@ def _validate_sections(sections: list[str]) -> list[str]:
 
 
 async def preview_reset(db: AsyncSession, tenant_id: str, sections: list[str]) -> dict[str, Any]:
-    sections = _validate_sections(sections)
+    sections = _expand_reset_sections(_validate_sections(sections))
     counts: dict[str, dict[str, int]] = {}
     total = 0
     for section in sections:
@@ -118,13 +144,16 @@ async def preview_reset(db: AsyncSession, tenant_id: str, sections: list[str]) -
 RESET_ORDER = ["sales", "purchases", "pos", "treasury", "inventory", "customers", "vendors", "accounting"]
 
 
-async def _validate_dependencies(db: AsyncSession, sections: list[str]) -> None:
-    if "customers" in sections and "sales" not in sections:
-        raise ValueError("لتصفير العملاء يجب اختيار قسم مستندات المبيعات أولاً")
-    if "vendors" in sections and "purchases" not in sections:
-        raise ValueError("لتصفير الموردين يجب اختيار قسم مستندات المشتريات أولاً")
-    if "accounting" in sections and ("sales" not in sections or "purchases" not in sections):
-        raise ValueError("لتصفير القيود والشجرة يجب اختيار المبيعات والمشتريات معها أولاً")
+def _expand_reset_sections(sections: list[str]) -> list[str]:
+    """يضيف التبعيات تلقائياً بدلاً من إيقاف العملية بسبب قيود اختيار الأقسام."""
+    expanded = set(sections)
+    if "customers" in expanded:
+        expanded.add("sales")
+    if "vendors" in expanded:
+        expanded.add("purchases")
+    # لا نضيف قسم accounting تلقائياً؛ فهو يتضمن شجرة الحسابات نفسها.
+    # حذف المستندات لا يحتاج حذف الحسابات، بينما حذف الشجرة يبقى اختياراً مستقلاً.
+    return sorted(expanded, key=lambda section: RESET_ORDER.index(section))
 
 
 async def execute_reset(
@@ -140,8 +169,9 @@ async def execute_reset(
     expected = f"RESET {tenant_id}"
     if confirmation != expected:
         raise ValueError("رمز التأكيد غير صحيح")
-    await _validate_dependencies(db, sections)
-    sections = sorted(sections, key=lambda section: RESET_ORDER.index(section))
+    sections = _expand_reset_sections(sections)
+    if "accounting" in sections:
+        await _detach_account_references(db, tenant_id)
     preview = await preview_reset(db, tenant_id, sections)
     deleted: dict[str, dict[str, int]] = {}
     for section in sections:
@@ -150,9 +180,7 @@ async def execute_reset(
             if not await _table_exists(db, table):
                 continue
             if table == "accounts":
-                for related_table, column in (("customers", "ar_account_id"), ("vendors", "ap_account_id"), ("accounts", "parent_id")):
-                    if await _table_exists(db, related_table):
-                        await db.execute(text(f"UPDATE {related_table} SET {column}=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
+                await _detach_account_references(db, tenant_id)
             result = await db.execute(text(f"DELETE FROM {table} WHERE {where}"), {"tenant_id": tenant_id})
             deleted[section][table] = int(result.rowcount or 0)
 
