@@ -31,6 +31,16 @@ const ACT_AR: Record<string, string> = {
 };
 
 const LIMIT = 20;
+const RESET_OPTIONS = [
+  { key: "sales", ar: "فواتير ومستندات المبيعات", en: "Sales documents" },
+  { key: "purchases", ar: "فواتير ومستندات المشتريات", en: "Purchase documents" },
+  { key: "pos", ar: "عمليات نقاط البيع", en: "POS transactions" },
+  { key: "treasury", ar: "السندات والخزينة", en: "Treasury vouchers" },
+  { key: "accounting", ar: "القيود والشجرة المحاسبية", en: "Accounting entries and chart" },
+  { key: "inventory", ar: "حركات المخزون والسيريالات", en: "Stock movements and serials" },
+  { key: "customers", ar: "العملاء", en: "Customers" },
+  { key: "vendors", ar: "الموردون", en: "Vendors" },
+] as const;
 
 export default function TenantsPage() {
   const params = useParams();
@@ -48,6 +58,11 @@ export default function TenantsPage() {
   const [editData, setEditData] = useState<Partial<Tenant & { plan_expires_at: string }>>({});
   const [saving, setSaving] = useState(false);
   const [extendDays, setExtendDays] = useState(30);
+  const [resetSections, setResetSections] = useState<string[]>([]);
+  const [resetPreview, setResetPreview] = useState<any>(null);
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,9 +101,52 @@ export default function TenantsPage() {
     load();
   }
 
+  async function previewTenantReset() {
+    if (!selected || resetSections.length === 0) return;
+    setResetBusy(true);
+    setResetError("");
+    try {
+      const r = await adminApi.get(`/admin/tenants/${selected.id}/reset-preview`, {
+        params: { sections: resetSections.join(",") },
+      });
+      setResetPreview(r.data);
+      setResetConfirmation("");
+    } catch (e: any) {
+      setResetError(e?.response?.data?.detail || (ar ? "تعذر معاينة التصفير" : "Could not preview reset"));
+    } finally { setResetBusy(false); }
+  }
+
+  async function executeTenantReset() {
+    if (!selected || !resetPreview || resetConfirmation !== `RESET ${selected.id}`) return;
+    setResetBusy(true);
+    setResetError("");
+    try {
+      await adminApi.post(`/admin/tenants/${selected.id}/reset`, {
+        sections: resetSections,
+        confirmation: resetConfirmation,
+      });
+      setResetSections([]);
+      setResetPreview(null);
+      setResetConfirmation("");
+      alert(ar ? "تم تصفير الأقسام المحددة بنجاح مع إبقاء تعريفات المنتجات." : "Selected sections were reset; product definitions were preserved.");
+      load();
+    } catch (e: any) {
+      setResetError(e?.response?.data?.detail || (ar ? "تعذر تنفيذ التصفير" : "Could not execute reset"));
+    } finally { setResetBusy(false); }
+  }
+
   function openEdit(t: Tenant) {
     setSelected(t);
+    setResetSections([]);
+    setResetPreview(null);
+    setResetConfirmation("");
+    setResetError("");
     setEditData({
+      name: t.name,
+      email: t.email,
+      phone: t.phone,
+      vat_number: t.vat_number || "",
+      cr_number: t.cr_number || "",
       plan: t.plan,
       business_type: t.business_type,
       is_active: t.is_active,
@@ -234,6 +292,30 @@ export default function TenantsPage() {
             </div>
             <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
+              {/* Company identity */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">{ar ? "اسم الشركة" : "Company name"}</label>
+                  <input value={editData.name || ""} onChange={e => setEditData(d => ({ ...d, name: e.target.value }))} className="form-input" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">{ar ? "البريد الإلكتروني" : "Email"}</label>
+                  <input type="email" value={editData.email || ""} onChange={e => setEditData(d => ({ ...d, email: e.target.value }))} className="form-input" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">{ar ? "الهاتف" : "Phone"}</label>
+                  <input value={editData.phone || ""} onChange={e => setEditData(d => ({ ...d, phone: e.target.value }))} className="form-input" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">{ar ? "الرقم الضريبي" : "VAT number"}</label>
+                  <input value={editData.vat_number || ""} onChange={e => setEditData(d => ({ ...d, vat_number: e.target.value }))} className="form-input" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">{ar ? "السجل التجاري" : "CR number"}</label>
+                  <input value={editData.cr_number || ""} onChange={e => setEditData(d => ({ ...d, cr_number: e.target.value }))} className="form-input" />
+                </div>
+              </div>
+
               {/* Plan */}
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">{ar ? "الباقة" : "Plan"}</label>
@@ -302,6 +384,42 @@ export default function TenantsPage() {
                   rows={3} className="form-input"
                   placeholder={ar ? "ملاحظات داخلية..." : "Internal notes..."}
                   style={{ resize: "vertical" }} />
+              </div>
+
+              {/* Selective reset */}
+              <div style={{ border: "1px solid #F59E0B", background: "#FFFBEB", borderRadius: 10, padding: 14 }}>
+                <div style={{ fontWeight: 700, color: "#92400E", marginBottom: 6 }}>
+                  {ar ? "تصفير انتقائي لبيانات الشركة" : "Selective company reset"}
+                </div>
+                <div style={{ fontSize: 12, color: "#92400E", marginBottom: 10 }}>
+                  {ar ? "اختر الأقسام فقط. تعريفات المنتجات تبقى محفوظة، والتنفيذ يحتاج معاينة ورمز تأكيد." : "Choose sections only. Product definitions are preserved; preview and confirmation are required."}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  {RESET_OPTIONS.map(option => (
+                    <label key={option.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#78350F" }}>
+                      <input type="checkbox" checked={resetSections.includes(option.key)} onChange={e => {
+                        setResetSections(current => e.target.checked ? [...current, option.key] : current.filter(key => key !== option.key));
+                        setResetPreview(null);
+                        setResetConfirmation("");
+                      }} />
+                      {ar ? option.ar : option.en}
+                    </label>
+                  ))}
+                </div>
+                <button type="button" onClick={previewTenantReset} disabled={resetBusy || resetSections.length === 0} className="btn btn-secondary btn-sm" style={{ marginTop: 10 }}>
+                  {resetBusy ? (ar ? "جاري الفحص..." : "Checking...") : (ar ? "معاينة عدد السجلات" : "Preview record counts")}
+                </button>
+                {resetPreview && (
+                  <div style={{ marginTop: 10, padding: 10, background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 8, fontSize: 12 }}>
+                    <div style={{ fontWeight: 700, color: "#9A3412" }}>{ar ? `سيتم حذف ${resetPreview.total_records} سجل` : `${resetPreview.total_records} records will be deleted`}</div>
+                    <div style={{ color: "#9A3412", marginTop: 4 }}>{ar ? "تعريفات المنتجات ستبقى محفوظة." : "Product definitions will be preserved."}</div>
+                    <input value={resetConfirmation} onChange={e => setResetConfirmation(e.target.value)} className="form-input" style={{ marginTop: 8 }} placeholder={`RESET ${selected.id}`} />
+                    <button type="button" onClick={executeTenantReset} disabled={resetBusy || resetConfirmation !== `RESET ${selected.id}`} className="btn btn-sm" style={{ marginTop: 8, background: "#B91C1C", color: "white", border: "none" }}>
+                      {resetBusy ? (ar ? "جاري التنفيذ..." : "Executing...") : (ar ? "تنفيذ التصفير النهائي" : "Execute permanent reset")}
+                    </button>
+                  </div>
+                )}
+                {resetError && <div style={{ color: "#B91C1C", fontSize: 12, marginTop: 8 }}>{resetError}</div>}
               </div>
 
               {/* Buttons */}

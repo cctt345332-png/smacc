@@ -18,6 +18,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.system_config import SystemConfig
 from app.core.plan_catalog import default_plan_catalog
+from app.modules.admin.reset_service import SECTION_LABELS, preview_reset, execute_reset
 
 router = APIRouter(prefix="/admin", tags=["super-admin"])
 
@@ -97,6 +98,46 @@ class LandingConfigSchema(BaseModel):
     show_activities: bool = True
     show_features: bool = True
     show_pricing: bool = True
+
+
+class TenantResetRequest(BaseModel):
+    sections: List[str]
+    confirmation: str
+
+
+@router.get("/tenants/{tenant_id}/reset-preview")
+async def tenant_reset_preview(
+    tenant_id: str,
+    sections: str,
+    _=Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """معاينة عدد السجلات قبل التصفير؛ لا تعدل أي بيانات."""
+    selected = [item.strip() for item in sections.split(",") if item.strip()]
+    try:
+        return await preview_reset(db, tenant_id, selected)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/tenants/{tenant_id}/reset")
+async def tenant_reset(
+    tenant_id: str,
+    data: TenantResetRequest,
+    user=Depends(require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """تصفير انتقائي بعد اختيار الأقسام وإدخال RESET <tenant_id>."""
+    try:
+        return await execute_reset(
+            db,
+            tenant_id=tenant_id,
+            actor_user_id=user.get("id"),
+            sections=data.sections,
+            confirmation=data.confirmation,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ══════════════════════════════════════════════════════════════════════
