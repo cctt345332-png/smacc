@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getCustomer, getInvoices } from "@/lib/sales";
+import { getCustomer, getInvoices, getCustomerStatement } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -31,20 +31,31 @@ export default function CustomerDetailPage(props: { params: Promise<{ locale: st
   const ar = locale === "ar";
   const [customer, setCustomer] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [statement, setStatement] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getCustomer(id), getInvoices({ customer_id: id })])
-      .then(([c, inv]) => { setCustomer(c.data); setInvoices(inv.data); })
+    const today = new Date();
+    Promise.all([
+      getCustomer(id),
+      getInvoices({ customer_id: id }),
+      getCustomerStatement(id, "2000-01-01T00:00:00", today.toISOString()),
+    ])
+      .then(([c, inv, statementResponse]) => {
+        setCustomer(c.data);
+        setInvoices(inv.data);
+        setStatement(statementResponse.data);
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
   if (loading) return <div className="empty-state"><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>;
   if (!customer) return <div className="empty-state"><div className="empty-state-title">{ar ? "العميل غير موجود" : "Customer not found"}</div></div>;
 
-  const totalInvoiced = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
-  const totalPaid = invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
-  const outstanding = totalInvoiced - totalPaid;
+  const totalInvoiced = statement?.summary ? Number(statement.summary.total_invoiced || 0) : invoices.reduce((s, i) => s + Number(i.total || 0), 0);
+  const totalPaid = statement?.summary ? Number(statement.summary.total_paid || 0) : invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
+  const openingBalance = Number(statement?.summary?.opening_balance || 0);
+  const outstanding = statement?.summary ? Number(statement.summary.closing_balance || 0) : totalInvoiced - totalPaid;
   const typeInfo = TYPE_MAP[customer.customer_type] || { ar: customer.customer_type, badge: "badge-gray" };
 
   return (
@@ -104,6 +115,7 @@ export default function CustomerDetailPage(props: { params: Promise<{ locale: st
               { label: ar ? "الحي" : "District", value: customer.address_district || "—" },
               { label: ar ? "شروط الدفع" : "Payment Terms", value: `${customer.payment_terms_days} ${ar ? "يوم" : "days"}` },
               { label: ar ? "حد الائتمان" : "Credit Limit", value: `${fmt(customer.credit_limit)} SAR` },
+              { label: ar ? "الرصيد الافتتاحي" : "Opening Balance", value: `${fmt(openingBalance)} SAR` },
             ].map(row => (
               <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #F1F5F9", fontSize: 13 }}>
                 <span style={{ color: "var(--text-secondary)" }}>{row.label}</span>
