@@ -413,6 +413,17 @@ export default function TenantsPage() {
                   <div style={{ marginTop: 10, padding: 10, background: "#FFF7ED", border: "1px solid #FDBA74", borderRadius: 8, fontSize: 12 }}>
                     <div style={{ fontWeight: 700, color: "#9A3412" }}>{ar ? `سيتم حذف ${resetPreview.total_records} سجل` : `${resetPreview.total_records} records will be deleted`}</div>
                     <div style={{ color: "#9A3412", marginTop: 4 }}>{ar ? "تعريفات المنتجات ستبقى محفوظة." : "Product definitions will be preserved."}</div>
+                    <div style={{ marginTop: 10, padding: "8px 10px", background: "#FEF3C7", border: "1px dashed #D97706", borderRadius: 6, color: "#78350F" }}>
+                      <div style={{ fontWeight: 700 }}>{ar ? "رمز التأكيد لهذه الشركة:" : "Confirmation code for this company:"}</div>
+                      <code style={{ display: "block", direction: "ltr", userSelect: "all", marginTop: 4, fontSize: 11 }}>RESET {selected.id}</code>
+                      <button type="button" onClick={() => {
+                        const code = `RESET ${selected.id}`;
+                        setResetConfirmation(code);
+                        navigator.clipboard?.writeText(code);
+                      }} className="btn btn-secondary btn-sm" style={{ marginTop: 6 }}>
+                        {ar ? "نسخ وتعبئة الرمز" : "Copy and fill code"}
+                      </button>
+                    </div>
                     <input value={resetConfirmation} onChange={e => setResetConfirmation(e.target.value)} className="form-input" style={{ marginTop: 8 }} placeholder={`RESET ${selected.id}`} />
                     <button type="button" onClick={executeTenantReset} disabled={resetBusy || resetConfirmation !== `RESET ${selected.id}`} className="btn btn-sm" style={{ marginTop: 8, background: "#B91C1C", color: "white", border: "none" }}>
                       {resetBusy ? (ar ? "جاري التنفيذ..." : "Executing...") : (ar ? "تنفيذ التصفير النهائي" : "Execute permanent reset")}
