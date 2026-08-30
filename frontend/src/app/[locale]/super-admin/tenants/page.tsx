@@ -141,6 +141,23 @@ export default function TenantsPage() {
     } finally { setResetBusy(false); }
   }
 
+  async function repairCustomerOpeningBalances() {
+    if (!selected) return;
+    const confirmed = window.confirm(ar
+      ? "سيبحث النظام عن أرصدة حسابات العملاء القديمة التي لم تُرحّل، وينشئ القيود الناقصة مرة واحدة. هل تريد المتابعة؟"
+      : "The system will find legacy customer account balances without journals and create missing journals once. Continue?");
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      const { data } = await adminApi.post(`/admin/tenants/${selected.id}/repair-customer-opening-balances`);
+      alert(ar
+        ? `تمت المعالجة: ${data.repaired} قيد جديد، ${data.already_journaled} موجود مسبقاً، ${data.missing_customer} حساب بلا عميل مرتبط.`
+        : `Processed: ${data.repaired} new journals, ${data.already_journaled} already journaled, ${data.missing_customer} accounts without a linked customer.`);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر إصلاح الأرصدة الافتتاحية" : "Could not repair opening balances"));
+    } finally { setSaving(false); }
+  }
+
   async function openFullDelete(t: Tenant) {
     setFullDeleteTenant(t);
     setFullDeleteCompanyName("");
@@ -479,6 +496,14 @@ export default function TenantsPage() {
                 {resetError && <div style={{ color: "#B91C1C", fontSize: 12, marginTop: 8 }}>{resetError}</div>}
               </div>
 
+              <div style={{ marginTop: 14, padding: 10, background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: "#166534", marginBottom: 8 }}>
+                  {ar ? "إصلاح الأرصدة القديمة التي حُفظت دون قيد:" : "Repair legacy balances saved without a journal:"}
+                </div>
+                <button type="button" onClick={repairCustomerOpeningBalances} disabled={saving} className="btn btn-secondary btn-sm">
+                  {saving ? (ar ? "جاري المعالجة..." : "Processing...") : (ar ? "إصلاح قيود أرصدة العملاء" : "Repair customer balance journals")}
+                </button>
+              </div>
               {/* Buttons */}
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingTop: 8, borderTop: "1px solid var(--border)" }}>
                 <button onClick={() => setSelected(null)} className="btn btn-secondary">
