@@ -12,11 +12,29 @@ from app.models.accounting import (
     JournalEntryStatus, AccountType, AccountNature
 )
 from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_CODES, REQUIRED_MAPPING_KEYS
+from app.modules.accounting.short_default_chart import SHORT_DEFAULT_CHART
 from app.modules.accounting.legacy_company_chart import (
     LEGACY_COMPANY_CHART,
     LEGACY_CUSTOMER_ACCOUNT_SOURCE_KEYS,
     LEGACY_DEFAULT_MAPPING_SOURCE_KEYS,
 )
+SHORT_DEFAULT_MAPPING_CODES = {
+    "default_cash": "01111", "default_bank": "01123", "default_card": "01121",
+    "default_wallet": "01122", "default_ar": "01131", "default_ap": "0211",
+    "inventory_goods": "01141", "inventory_devices": "01142", "inventory_accessories": "01144",
+    "inventory_spare_parts": "01143", "inventory_in_transit": "01145", "inventory_damaged": "01146",
+    "vat_input": "01151", "vat_output": "02141", "vat_settlement": "02142",
+    "employee_advances": "01171", "rep_collections": "01172", "capital": "0311",
+    "sales_goods": "04111", "sales_services": "04121", "sales_accessories": "04113",
+    "sales_spare_parts": "04114", "sales_returns": "042", "sales_discounts": "043",
+    "cogs_goods": "0511", "cogs_devices": "0512", "cogs_accessories": "0513",
+    "cogs_spare_parts": "0514", "inventory_adjustment_loss": "0515",
+    "payroll_expense": "0521", "rent_expense": "0531", "utilities_expense": "0532",
+    "maintenance_expense": "0536", "sales_commission_expense": "0543",
+    "shipping_expense": "0545", "other_expense": "0584",
+}
+
+
 from app.modules.accounting.schemas import (
     AccountCreate, AccountUpdate, FiscalYearCreate, CostCenterCreate,
     CurrencyCreate, JournalEntryCreate, BankAccountCreate,
@@ -587,12 +605,12 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
             "توجد حسابات حالية لهذه الشركة؛ لن ينشئ النظام شجرة تلقائية فوقها. استخدم مطابقة الحسابات اليدوية أولًا.",
         )
 
-    accounts_by_source_key = await _add_legacy_company_chart_records(db, tenant_id)
-    # حسابات عامة قابلة للقيد للتوافق مع خريطة التشغيل، بينما العملاء الجدد
-    # يختارون فرع المدينة أو حساب المندوب ولا يُسندون إلى هذا الحساب تلقائياً.
+    accounts_by_source_key = await _add_short_company_chart_records(db, tenant_id)
+    # حسابات عامة قابلة للقيد للتوافق مع خريطة التشغيل؛ العملاء المستوردون
+    # يظلون تحت فروع المدن والمندوبين الموجودة في الشجرة.
     synthetic_accounts = {
-        "legacy_default_customer": ("121999", "عملاء عامون", AccountType.ASSET, AccountNature.DEBIT, "legacy_093", 5),
-        "legacy_default_vendor": ("22199", "موردون عامون", AccountType.LIABILITY, AccountNature.CREDIT, "legacy_447", 4),
+        "default_customer": ("01131999", "عملاء عامون", AccountType.ASSET, AccountNature.DEBIT, "01131", 5),
+        "default_vendor": ("02111999", "موردون عامون", AccountType.LIABILITY, AccountNature.CREDIT, "0211", 4),
     }
     for source_key, (code, name_ar, account_type, nature, parent_source_key, level) in synthetic_accounts.items():
         account = Account(
@@ -618,24 +636,42 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
     if not existing_setup:
         db.add(setup)
 
-    for mapping_key, source_key in LEGACY_DEFAULT_MAPPING_SOURCE_KEYS.items():
-        db.add(AccountingAccountMapping(
-            id=str(uuid.uuid4()), tenant_id=tenant_id,
-            mapping_key=mapping_key, account_id=accounts_by_source_key[source_key].id,
-            updated_at=datetime.utcnow(),
-        ))
+    for mapping_key, code in SHORT_DEFAULT_MAPPING_CODES.items():
+        account = next((item for item in accounts_by_source_key.values() if item.code == code), None)
+        if account:
+            db.add(AccountingAccountMapping(
+                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                mapping_key=mapping_key, account_id=account.id,
+                updated_at=datetime.utcnow(),
+            ))
 
     # تهيئة إعداد الضريبة المرجعي فقط. لا يغير مبالغ أو حالات فواتير سابقة.
     vat = await get_vat_settings(db, tenant_id)
     if not vat:
         vat = VATSetting(id=str(uuid.uuid4()), tenant_id=tenant_id)
         db.add(vat)
-    vat.vat_account_id = accounts_by_source_key[LEGACY_DEFAULT_MAPPING_SOURCE_KEYS["vat_output"]].id
-    vat.vat_receivable_account_id = accounts_by_source_key[LEGACY_DEFAULT_MAPPING_SOURCE_KEYS["vat_input"]].id
+    vat.vat_account_id = next(item.id for item in accounts_by_source_key.values() if item.code == SHORT_DEFAULT_MAPPING_CODES["vat_output"])
+    vat.vat_receivable_account_id = next(item.id for item in accounts_by_source_key.values() if item.code == SHORT_DEFAULT_MAPPING_CODES["vat_input"])
     vat.updated_at = datetime.utcnow()
 
     await db.commit()
     return await get_accounting_readiness(db, tenant_id)
+
+
+async def _add_short_company_chart_records(db: AsyncSession, tenant_id: str) -> dict[str, Account]:
+    accounts_by_code: dict[str, Account] = {}
+    for code, name_ar, name_en, account_type, nature, parent_code, is_posting, allow_direct in SHORT_DEFAULT_CHART:
+        account = Account(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, code=code, name_ar=name_ar, name_en=name_en,
+            account_type=account_type, nature=nature,
+            parent_id=accounts_by_code[parent_code].id if parent_code else None,
+            level=len(code), is_active=True, is_posting=is_posting, allow_direct_posting=allow_direct,
+            is_customer_account=code.startswith("01131") and is_posting,
+            opening_balance=Decimal("0"), notes="الشجرة الافتراضية القصيرة 261 حساباً",
+        )
+        db.add(account)
+        accounts_by_code[code] = account
+    return accounts_by_code
 
 
 async def _add_legacy_company_chart_records(db: AsyncSession, tenant_id: str) -> dict[str, Account]:
