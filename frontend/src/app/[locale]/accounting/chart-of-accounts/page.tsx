@@ -204,7 +204,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
         </div>
       </div>
 
-      {false && (
+      {(
         <>
       {/* Default chart and safe mapping setup */}
       <div className="card" style={{ marginBottom: 16, borderInlineStart: "4px solid var(--primary)" }}>
