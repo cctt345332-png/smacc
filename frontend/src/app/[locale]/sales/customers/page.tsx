@@ -45,6 +45,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [chartImporting, setChartImporting] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [activeTab, setActiveTab] = useState<"basic" | "address" | "financial" | "docs">("basic");
@@ -79,9 +80,10 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   }, []);
 
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
-  const openNew = () => { setEditingCustomer(null); setForm({ ...emptyForm }); setDocs({}); setActiveTab("basic"); setShowModal(true); };
+  const openNew = () => { setEditingCustomer(null); setSaveError(""); setForm({ ...emptyForm }); setDocs({}); setActiveTab("basic"); setShowModal(true); };
   const openEdit = (customer: any) => {
     setEditingCustomer(customer);
+    setSaveError("");
     setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(emptyForm).map(([key, value]) => [key, customer[key] == null ? value : String(customer[key])])) });
     setDocs({}); setActiveTab("basic"); setShowModal(true);
   };
@@ -115,6 +117,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
     if (!form.name_ar) return alert(ar ? "الاسم بالعربي مطلوب" : "Arabic name is required");
     if (!editingCustomer && !form.ar_account_id) return alert(ar ? "يجب اختيار حساب العميل الرئيسي من شجرة الحسابات" : "Select the customer's main account from the chart of accounts");
     setSaving(true);
+    setSaveError("");
     try {
       const payload = {
         ...form,
@@ -150,7 +153,11 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
       setDocs({});
       setActiveTab("basic");
       load();
-    } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+    } catch (e: any) {
+      const message = e?.response?.data?.detail || (ar ? "تعذر حفظ العميل والرصيد الافتتاحي" : "Could not save the customer and opening balance");
+      setSaveError(String(message));
+      alert(String(message));
+    }
     finally { setSaving(false); }
   };
 
@@ -513,6 +520,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                   <div key={tab.key} style={{ width: 8, height: 8, borderRadius: "50%", background: activeTab === tab.key ? "var(--primary)" : "var(--border)" }} />
                 ))}
               </div>
+              {saveError && <div style={{ marginTop: 12, padding: "10px 12px", color: "#991B1B", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, fontSize: 12 }}>{saveError}</div>}
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn btn-secondary" onClick={() => setShowModal(false)}>{ar ? "إلغاء" : "Cancel"}</button>
                 <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
