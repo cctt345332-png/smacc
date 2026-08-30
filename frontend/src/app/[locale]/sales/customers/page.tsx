@@ -44,6 +44,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [chartImporting, setChartImporting] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
   const [activeTab, setActiveTab] = useState<"basic" | "address" | "financial" | "docs">("basic");
   const [docs, setDocs] = useState<Record<string, string>>({});
@@ -83,6 +84,26 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
     setForm({ ...emptyForm, ...Object.fromEntries(Object.entries(emptyForm).map(([key, value]) => [key, customer[key] == null ? value : String(customer[key])])) });
     setDocs({}); setActiveTab("basic"); setShowModal(true);
   };
+  const handleChartImport = async () => {
+    setChartImporting(true);
+    try {
+      const { data: preview } = await api.get("/sales/customers/chart-import/preview");
+      if (!preview.total_accounts) {
+        alert(ar ? "لا توجد حسابات عملاء نهائية في الشجرة للاستيراد" : "No final customer accounts found in the chart");
+        return;
+      }
+      const confirmed = window.confirm(ar
+        ? `سيتم إنشاء ${preview.to_create} عميل من الشجرة وربطهم بحساباتهم. الموجود مسبقاً: ${preview.already_linked}. هل تريد المتابعة؟`
+        : `This will create ${preview.to_create} customers from the chart and link their accounts. Already linked: ${preview.already_linked}. Continue?`);
+      if (!confirmed) return;
+      const { data: result } = await api.post("/sales/customers/chart-import");
+      alert(ar ? `تم استيراد ${result.created} عميل وتجاوز ${result.skipped} سجل` : `Imported ${result.created} customers; skipped ${result.skipped}`);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر استيراد العملاء من الشجرة" : "Could not import customers from chart"));
+    } finally { setChartImporting(false); }
+  };
+
   const handleDelete = async (customer: any) => {
     if (!window.confirm(ar ? `حذف العميل «${customer.name_ar}»؟ لا يمكن التراجع.` : `Delete ${customer.name_ar}? This cannot be undone.`)) return;
     try { await deleteCustomer(customer.id); await load(); }
@@ -168,9 +189,14 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
           <h1 className="page-title">{ar ? "العملاء" : "Customers"}</h1>
           <p className="page-subtitle">{ar ? "إدارة قاعدة بيانات العملاء" : "Manage customer database"}</p>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>
-          <Icon name="plus" size={16} /> {ar ? "+ عميل جديد" : "+ New Customer"}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-secondary" onClick={handleChartImport} disabled={chartImporting}>
+            {chartImporting ? (ar ? "جاري الاستيراد..." : "Importing...") : (ar ? "استيراد العملاء من الشجرة" : "Import customers from chart")}
+          </button>
+          <button className="btn btn-primary" onClick={openNew}>
+            <Icon name="plus" size={16} /> {ar ? "+ عميل جديد" : "+ New Customer"}
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

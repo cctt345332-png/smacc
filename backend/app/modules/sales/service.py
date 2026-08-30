@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete, case
+from sqlalchemy import select, func, delete, case, or_
 from fastapi import HTTPException
 
 from app.models.sales import (
@@ -90,6 +90,92 @@ async def get_customers(db: AsyncSession, tenant_id: str, search: str | None = N
     q = q.order_by(Customer.customer_number)
     r = await db.execute(q)
     return r.scalars().all()
+
+
+def _normalize_match_text(value: str | None) -> str:
+    return " ".join((value or "").replace("ـ", "").split()).strip().lower()
+
+
+async def preview_customer_account_import(db: AsyncSession, tenant_id: str) -> dict:
+    """يعرض الحسابات النهائية تحت فرع العملاء التي يمكن تحويلها إلى سجلات عملاء."""
+    accounts = (await db.execute(select(Account).where(Account.tenant_id == tenant_id).order_by(Account.code))).scalars().all()
+    account_by_id = {account.id: account for account in accounts}
+    customer_accounts = [account for account in accounts if account.is_customer_account]
+    reps = (await db.execute(
+        select(SalesRep, User).join(User, User.id == SalesRep.user_id).where(SalesRep.tenant_id == tenant_id)
+    )).all()
+    existing = (await db.execute(select(Customer).where(Customer.tenant_id == tenant_id))).scalars().all()
+    by_account = {customer.ar_account_id: customer for customer in existing if customer.ar_account_id}
+    by_name = {_normalize_match_text(customer.name_ar): customer for customer in existing}
+    items = []
+    for account in customer_accounts:
+        ancestors = []
+        parent = account_by_id.get(account.parent_id)
+        while parent:
+            ancestors.append(parent)
+            parent = account_by_id.get(parent.parent_id)
+        ancestor_names = [item.name_ar for item in reversed(ancestors)]
+        rep_branch = next((name for name in ancestor_names if "مندوب" in name), None)
+        city = None
+        if rep_branch and "/" in rep_branch:
+            city = rep_branch.rsplit("/", 1)[1].strip()
+        matched_rep = None
+        if rep_branch:
+            rep_token = _normalize_match_text(rep_branch.split("-", 1)[-1].split("/", 1)[0])
+            for rep, user in reps:
+                candidates = {_normalize_match_text(user.full_name), _normalize_match_text(rep.rep_code)}
+                if rep_token and any(rep_token in candidate or candidate in rep_token for candidate in candidates if candidate):
+                    matched_rep = rep
+                    break
+        existing_customer = by_account.get(account.id) or by_name.get(_normalize_match_text(account.name_ar))
+        items.append({
+            "account_id": account.id, "account_code": account.code, "name_ar": account.name_ar,
+            "city": city, "rep_id": matched_rep.id if matched_rep else None,
+            "rep_name": matched_rep.rep_code if matched_rep else None,
+            "existing_customer_id": existing_customer.id if existing_customer else None,
+            "will_create": existing_customer is None,
+            "opening_balance": str(account.opening_balance or 0),
+        })
+    return {"total_accounts": len(items), "to_create": sum(1 for item in items if item["will_create"]),
+            "already_linked": sum(1 for item in items if not item["will_create"]), "items": items}
+
+
+async def import_customers_from_chart(db: AsyncSession, tenant_id: str, actor_user_id: str) -> dict:
+    """ينشئ سجلات العملاء من الحسابات النهائية مرة واحدة، دون تكرار."""
+    preview = await preview_customer_account_import(db, tenant_id)
+    created = []
+    next_number = (await db.execute(select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id))).scalar() or 0
+    accounts = (await db.execute(select(Account).where(Account.tenant_id == tenant_id))).scalars().all()
+    account_by_id = {account.id: account for account in accounts}
+    reps = (await db.execute(
+        select(SalesRep, User).join(User, User.id == SalesRep.user_id).where(SalesRep.tenant_id == tenant_id)
+    )).all()
+    existing = (await db.execute(select(Customer).where(Customer.tenant_id == tenant_id))).scalars().all()
+    existing_accounts = {customer.ar_account_id for customer in existing if customer.ar_account_id}
+    existing_names = {_normalize_match_text(customer.name_ar) for customer in existing}
+    for item in preview["items"]:
+        if not item["will_create"] or item["account_id"] in existing_accounts or _normalize_match_text(item["name_ar"]) in existing_names:
+            continue
+        account = account_by_id[item["account_id"]]
+        rep_id = item["rep_id"]
+        next_number += 1
+        customer = Customer(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, customer_number=f"CUS-{next_number:05d}",
+            customer_type="company", name_ar=account.name_ar, name_en=account.name_ar,
+            address_city=item["city"], rep_id=rep_id, ar_account_id=account.id,
+            credit_limit=Decimal("0"), payment_terms_days=30, currency_code="SAR", is_active=True,
+            notes="مستورد تلقائياً من شجرة الحسابات الافتراضية",
+        )
+        db.add(customer)
+        await db.flush()
+        if account.opening_balance and Decimal(str(account.opening_balance)) != 0:
+            await _create_customer_opening_journal(db, tenant_id, actor_user_id, customer, account, Decimal(str(account.opening_balance)))
+            account.opening_balance = Decimal("0")
+        existing_accounts.add(account.id)
+        existing_names.add(_normalize_match_text(account.name_ar))
+        created.append({"customer_id": customer.id, "account_id": account.id, "name_ar": account.name_ar})
+    await db.commit()
+    return {"created": len(created), "skipped": preview["total_accounts"] - len(created), "items": created}
 
 
 async def get_customer(db: AsyncSession, tenant_id: str, customer_id: str):

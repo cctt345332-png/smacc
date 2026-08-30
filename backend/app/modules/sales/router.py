@@ -34,6 +34,22 @@ async def list_customers(
     return await service.get_customers(db, user["tenant_id"], search, rep_id)
 
 
+@router.get("/customers/chart-import/preview")
+async def preview_customer_chart_import(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.preview_customer_account_import(db, user["tenant_id"])
+
+
+@router.post("/customers/chart-import")
+async def import_customer_chart_accounts(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.import_customers_from_chart(db, user["tenant_id"], user["user_id"])
+
+
 @router.get("/customers/ar-accounts", response_model=list[AccountOut])
 async def list_customer_receivable_accounts(
     user=Depends(require_role(["manager", "accountant"])),
