@@ -37,6 +37,9 @@ class SalesRep(Base):
     vehicle_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     vehicle_color: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # الحساب الأب الذي تُنشأ تحته حسابات عملاء هذا المندوب
+    customer_account_id: Mapped[str | None] = mapped_column(String, ForeignKey("accounts.id"), nullable=True, index=True)
+
     # الأهداف والعمولة
     target_monthly: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     commission_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))

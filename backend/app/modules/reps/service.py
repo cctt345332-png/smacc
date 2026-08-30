@@ -15,12 +15,49 @@ from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, RepLocation,
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Invoice, Payment
+from app.models.accounting import Account, AccountType, AccountNature
 from app.models.notifications import Notification, NotificationSeverity, NotificationType
 
 
 # ─── إنشاء مندوب ─────────────────────────────────────────────────────
+async def _validate_rep_account_parent(db: AsyncSession, tenant_id: str, account_id: str | None):
+    if not account_id:
+        return None
+    account = await db.get(Account, account_id)
+    if not account or account.tenant_id != tenant_id or not account.is_active:
+        raise HTTPException(400, "فرع حساب المندوب غير صالح أو غير تابع للشركة")
+    if account.account_type != AccountType.ASSET or account.nature != AccountNature.DEBIT:
+        raise HTTPException(400, "يجب اختيار فرع مدينة ضمن حسابات العملاء والأصول المدينة")
+    # التحقق من أن الفرع داخل مجموعة العملاء، حتى لا يُربط المندوب بحساب مخزون أو نقد بالخطأ.
+    current = account
+    is_customer_branch = False
+    for _ in range(30):
+        if current.is_customer_account or str(current.code).startswith("113") or "عملاء" in (current.name_ar or "") or "customer" in (current.name_en or "").lower():
+            is_customer_branch = True
+            break
+        if not current.parent_id:
+            break
+        current = await db.get(Account, current.parent_id)
+        if not current:
+            break
+    if not is_customer_branch:
+        raise HTTPException(400, "يجب اختيار فرع مدينة تحت حساب العملاء")
+    return account
+
+
+async def _next_rep_account_code(db: AsyncSession, tenant_id: str, parent: Account) -> str:
+    result = await db.execute(select(Account.code).where(
+        Account.tenant_id == tenant_id, Account.parent_id == parent.id
+    ))
+    used = {str(code) for code in result.scalars().all()}
+    suffix = 1
+    while f"{parent.code}{suffix:03d}" in used:
+        suffix += 1
+    return f"{parent.code}{suffix:03d}"
+
 
 async def create_rep(db: AsyncSession, tenant_id: str, data: dict) -> dict:
+
     """
     إنشاء مندوب جديد:
     1. إنشاء مستخدم بدور sales_rep
@@ -69,6 +106,12 @@ async def create_rep(db: AsyncSession, tenant_id: str, data: dict) -> dict:
     db.add(warehouse)
 
     # إنشاء سجل المندوب
+    customer_account_parent_id = data.get("customer_account_parent_id")
+    if not customer_account_parent_id:
+        raise HTTPException(400, "يجب اختيار فرع المدينة تحت حساب العملاء للمندوب")
+    parent_account = await _validate_rep_account_parent(
+        db, tenant_id, customer_account_parent_id
+    )
     rep_id = str(uuid.uuid4())
     rep = SalesRep(
         id=rep_id,
@@ -76,6 +119,7 @@ async def create_rep(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         user_id=user_id,
         warehouse_id=wh_id,
         rep_code=rep_code,
+        customer_account_id=None,
         phone=data.get("phone"),
         zone=data.get("zone"),
         notes=data.get("notes"),
@@ -94,6 +138,20 @@ async def create_rep(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         created_at=datetime.utcnow(),
     )
     db.add(rep)
+    if parent_account:
+        rep_account = Account(
+            id=str(uuid.uuid4()), tenant_id=tenant_id,
+            code=await _next_rep_account_code(db, tenant_id, parent_account),
+            name_ar=f"عملاء المندوب — {data['full_name']}",
+            name_en=f"Rep Customers — {data['full_name']}",
+            account_type=AccountType.ASSET, nature=AccountNature.DEBIT,
+            parent_id=parent_account.id, level=parent_account.level + 1,
+            is_active=True, is_posting=False, allow_direct_posting=False,
+            is_customer_account=True, opening_balance=Decimal("0"),
+            notes=f"حساب عملاء المندوب {rep_code}",
+        )
+        db.add(rep_account)
+        rep.customer_account_id = rep_account.id
     await db.commit()
 
     return {
@@ -101,6 +159,7 @@ async def create_rep(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         "rep_code": rep_code,
         "user_id": user_id,
         "warehouse_id": wh_id,
+        "customer_account_id": rep.customer_account_id,
         "full_name": data["full_name"],
         "email": data["email"],
         "phone": data.get("phone"),
@@ -128,11 +187,14 @@ async def get_reps(db: AsyncSession, tenant_id: str) -> list:
     rows = r.all()
     result = []
     for rep, user, wh in rows:
+        rep_account = await db.get(Account, rep.customer_account_id) if rep.customer_account_id else None
         result.append({
             "id": rep.id,
             "rep_code": rep.rep_code,
             "user_id": rep.user_id,
             "warehouse_id": rep.warehouse_id,
+            "customer_account_id": rep.customer_account_id,
+            "customer_account_parent_id": rep_account.parent_id if rep_account else None,
             "warehouse_name": wh.name_ar if wh else None,
             "full_name": user.full_name,
             "email": user.email,
@@ -164,11 +226,14 @@ async def get_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
     if not row:
         raise HTTPException(404, "المندوب غير موجود")
     rep, user, wh = row
+    rep_account = await db.get(Account, rep.customer_account_id) if rep.customer_account_id else None
     return {
         "id": rep.id,
         "rep_code": rep.rep_code,
         "user_id": rep.user_id,
         "warehouse_id": rep.warehouse_id,
+        "customer_account_id": rep.customer_account_id,
+        "customer_account_parent_id": rep_account.parent_id if rep_account else None,
         "warehouse_name": wh.name_ar if wh else None,
         "full_name": user.full_name,
         "email": user.email,
@@ -220,6 +285,34 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
             wh_r = await db.execute(select(Warehouse).where(Warehouse.id == rep.warehouse_id))
             wh = wh_r.scalar_one_or_none()
             if wh: wh.name_ar = f"مستودع المندوب — {data['full_name']}"
+    if "customer_account_parent_id" in data:
+        parent_account = await _validate_rep_account_parent(
+            db, tenant_id, data.get("customer_account_parent_id")
+        )
+        if parent_account:
+            if rep.customer_account_id:
+                rep_account = await db.get(Account, rep.customer_account_id)
+                if rep_account and rep_account.tenant_id == tenant_id:
+                    rep_account.parent_id = parent_account.id
+                    rep_account.level = parent_account.level + 1
+            else:
+                rep_account = Account(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    code=await _next_rep_account_code(db, tenant_id, parent_account),
+                    name_ar=f"عملاء المندوب — {data.get('full_name') or rep.rep_code}",
+                    name_en=f"Rep Customers — {data.get('full_name') or rep.rep_code}",
+                    account_type=AccountType.ASSET, nature=AccountNature.DEBIT,
+                    parent_id=parent_account.id, level=parent_account.level + 1,
+                    is_active=True, is_posting=False, allow_direct_posting=False,
+                    is_customer_account=True, opening_balance=Decimal("0"),
+                    notes=f"حساب عملاء المندوب {rep.rep_code}",
+                )
+                db.add(rep_account)
+                rep.customer_account_id = rep_account.id
+        else:
+            if rep.customer_account_id:
+                raise HTTPException(400, "لا يمكن إزالة حساب المندوب؛ اختر فرع مدينة آخر بدلاً من ذلك")
+
     # حقول جديدة
     for field in ["id_number", "id_expiry", "license_expiry",
                   "vehicle_plate", "vehicle_type", "vehicle_color",

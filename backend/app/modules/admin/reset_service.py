@@ -14,6 +14,11 @@ from app.core.audit import record_audit
 logger = logging.getLogger(__name__)
 
 
+async def _table_exists(db: AsyncSession, table: str) -> bool:
+    result = await db.execute(text("SELECT to_regclass(:table_name)"), {"table_name": table})
+    return result.scalar() is not None
+
+
 SECTION_LABELS = {
     "sales": "مستندات المبيعات",
     "purchases": "مستندات المشتريات",
@@ -92,6 +97,8 @@ async def preview_reset(db: AsyncSession, tenant_id: str, sections: list[str]) -
     for section in sections:
         section_counts: dict[str, int] = {}
         for table, where in SECTION_TABLES[section]:
+            if not await _table_exists(db, table):
+                continue
             result = await db.execute(text(f"SELECT COUNT(*) FROM {table} WHERE {where}"), {"tenant_id": tenant_id})
             count = int(result.scalar() or 0)
             section_counts[table] = count
@@ -140,14 +147,16 @@ async def execute_reset(
     for section in sections:
         deleted[section] = {}
         for table, where in SECTION_TABLES[section]:
+            if not await _table_exists(db, table):
+                continue
             if table == "accounts":
-                await db.execute(text("UPDATE customers SET ar_account_id=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
-                await db.execute(text("UPDATE vendors SET ap_account_id=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
-                await db.execute(text("UPDATE accounts SET parent_id=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
+                for related_table, column in (("customers", "ar_account_id"), ("vendors", "ap_account_id"), ("accounts", "parent_id")):
+                    if await _table_exists(db, related_table):
+                        await db.execute(text(f"UPDATE {related_table} SET {column}=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
             result = await db.execute(text(f"DELETE FROM {table} WHERE {where}"), {"tenant_id": tenant_id})
             deleted[section][table] = int(result.rowcount or 0)
 
-    if "inventory" in sections:
+    if "inventory" in sections and await _table_exists(db, "inventory_items"):
         await db.execute(text("UPDATE inventory_items SET quantity_on_hand=0, quantity_reserved=0 WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
 
     record_audit(
@@ -230,8 +239,6 @@ FULL_DELETE_PLAN: list[tuple[str, str]] = [
     ("alert_settings", "tenant_id=:tenant_id"),
     ("ai_usage", "tenant_id=:tenant_id"),
     ("ai_tenant_settings", "tenant_id=:tenant_id"),
-    ("ai_system_config", "tenant_id=:tenant_id"),
-    ("system_configs", "tenant_id=:tenant_id"),
     ("accounts", "tenant_id=:tenant_id"),
     ("users", "tenant_id=:tenant_id"),
 ]
@@ -241,6 +248,8 @@ async def preview_full_delete(db: AsyncSession, tenant_id: str) -> dict[str, Any
     counts: dict[str, int] = {}
     total = 0
     for table, where in FULL_DELETE_PLAN:
+        if not await _table_exists(db, table):
+            continue
         result = await db.execute(text(f"SELECT COUNT(*) FROM {table} WHERE {where}"), {"tenant_id": tenant_id})
         count = int(result.scalar() or 0)
         if count:
@@ -265,12 +274,13 @@ async def execute_full_delete(
     preview = await preview_full_delete(db, tenant_id)
     deleted: dict[str, int] = {}
     # فك العلاقات الذاتية والمراجع قبل حذف الجداول الأصلية.
-    await db.execute(text("UPDATE customers SET ar_account_id=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
-    await db.execute(text("UPDATE vendors SET ap_account_id=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
-    await db.execute(text("UPDATE accounts SET parent_id=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
-    await db.execute(text("UPDATE product_categories SET parent_id=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
+    for table, column in (("customers", "ar_account_id"), ("vendors", "ap_account_id"), ("accounts", "parent_id"), ("product_categories", "parent_id")):
+        if await _table_exists(db, table):
+            await db.execute(text(f"UPDATE {table} SET {column}=NULL WHERE tenant_id=:tenant_id"), {"tenant_id": tenant_id})
 
     for table, where in FULL_DELETE_PLAN:
+        if not await _table_exists(db, table):
+            continue
         result = await db.execute(text(f"DELETE FROM {table} WHERE {where}"), {"tenant_id": tenant_id})
         deleted[table] = int(result.rowcount or 0)
 

@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getReps, createRep, updateRep, getRepSummary, getRepImpersonationToken } from "@/lib/reps";
+import { getAccounts } from "@/lib/accounting";
 import { useAuthStore } from "@/store/authStore";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -11,8 +12,8 @@ const fmtNum = (n: any) => Number(n || 0).toLocaleString("en-US");
 const EMPTY_FORM = {
   // بيانات الحساب
   full_name: "", email: "", password: "",
-  // بيانات التواصل
-  phone: "", zone: "", notes: "",
+  // بيانات التواصل والحساب
+  phone: "", zone: "", notes: "", customer_account_parent_id: "",
   // بيانات الهوية
   id_number: "", id_expiry: "", license_expiry: "",
   // بيانات السيارة
@@ -42,12 +43,14 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  const [accounts, setAccounts] = useState<any[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await getReps();
+      const [res, accountsRes] = await Promise.all([getReps(), getAccounts()]);
       const list = Array.isArray(res.data) ? res.data : [];
+      setAccounts(Array.isArray(accountsRes.data) ? accountsRes.data : []);
       setReps(list);
       const sumResults = await Promise.allSettled(list.map((r: any) => getRepSummary(r.id)));
       const map: Record<string, any> = {};
@@ -90,6 +93,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
       full_name: rep.full_name || "", email: rep.email || "", password: "",
       phone: rep.phone || "", zone: rep.zone || "", notes: rep.notes || "",
       id_number: rep.id_number || "", id_expiry: rep.id_expiry || "", license_expiry: rep.license_expiry || "",
+      customer_account_parent_id: rep.customer_account_parent_id || "",
       vehicle_plate: rep.vehicle_plate || "", vehicle_type: rep.vehicle_type || "", vehicle_color: rep.vehicle_color || "",
       target_monthly: rep.target_monthly || "", commission_pct: rep.commission_pct || "",
     });
@@ -101,12 +105,15 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
   const handleSave = async () => {
     if (!form.full_name || !form.email || (!editRep && !form.password))
       return setError(ar ? "الاسم والبريد وكلمة المرور مطلوبة" : "Name, email and password required");
+    if (!editRep && !form.customer_account_parent_id)
+      return setError(ar ? "يجب اختيار فرع المدينة تحت حساب العملاء" : "Choose the city branch under Customers");
     setSaving(true); setError("");
     try {
       const payload: any = {
         full_name: form.full_name, email: form.email,
         phone: form.phone || undefined, zone: form.zone || undefined, notes: form.notes || undefined,
         id_number: form.id_number || undefined, id_expiry: form.id_expiry || undefined,
+        customer_account_parent_id: form.customer_account_parent_id || undefined,
         license_expiry: form.license_expiry || undefined,
         vehicle_plate: form.vehicle_plate || undefined, vehicle_type: form.vehicle_type || undefined,
         vehicle_color: form.vehicle_color || undefined,
@@ -371,6 +378,21 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                 </div>
               </div>
 
+              {/* الحساب المحاسبي للمندوب */}
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                {ar ? "ربط الحسابات والعملاء" : "Accounting & customer assignment"}
+              </div>
+              <div className="form-group" style={{ marginBottom: 20 }}>
+                <label className="form-label">{ar ? "فرع المدينة تحت حساب العملاء *" : "City branch under Customers *"}</label>
+                <select className="form-input form-select" required={!editRep} value={form.customer_account_parent_id} onChange={e => setForm(p => ({ ...p, customer_account_parent_id: e.target.value }))}>
+                  <option value="">{ar ? "— اختر فرع المدينة —" : "— Select city branch —"}</option>
+                  {accounts.filter(a => a.is_active && a.account_type === "asset" && a.nature === "debit").map(a => {
+                    const indent = "　".repeat(Math.max(0, Number(a.level || 1) - 1));
+                    return <option key={a.id} value={a.id}>{indent}{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>;
+                  })}
+                </select>
+                <p className="form-hint">{ar ? "اختر فرع المدينة داخل حساب العملاء. سيُنشأ حساب للمندوب تحته، ثم تُنشأ حسابات عملائه تحت حساب المندوب." : "Choose the city branch inside Customers. A rep account will be created below it, and the rep's customers below that account."}</p>
+              </div>
               {/* بيانات الهوية */}
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 {ar ? "بيانات الهوية" : "Identity"}

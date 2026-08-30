@@ -19,6 +19,7 @@ export const createRep = (data: {
   vehicle_color?: string;
   target_monthly?: number;
   commission_pct?: number;
+  customer_account_parent_id?: string;
 }) => api.post("/reps", data);
 
 export const updateRep = (repId: string, data: object) =>

@@ -10,6 +10,8 @@ from typing import Optional, List, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import SQLAlchemyError
+import logging
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -24,6 +26,7 @@ from app.modules.admin.reset_service import (
 )
 
 router = APIRouter(prefix="/admin", tags=["super-admin"])
+logger = logging.getLogger(__name__)
 
 
 # ─── Guard: super_admin فقط ───────────────────────────────────────────
@@ -141,6 +144,10 @@ async def tenant_full_delete(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except SQLAlchemyError:
+        await db.rollback()
+        logger.exception("Full company delete failed for tenant_id=%s", tenant_id)
+        raise HTTPException(status_code=500, detail="تعذر حذف الشركة بسبب ارتباطات بيانات. راجع سجل الخادم.")
 
 
 @router.get("/tenants/{tenant_id}/reset-preview")
@@ -176,6 +183,10 @@ async def tenant_reset(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except SQLAlchemyError:
+        await db.rollback()
+        logger.exception("Company reset failed for tenant_id=%s", tenant_id)
+        raise HTTPException(status_code=500, detail="تعذر تصفير الشركة بسبب ارتباطات بيانات. راجع سجل الخادم.")
 
 
 # ══════════════════════════════════════════════════════════════════════

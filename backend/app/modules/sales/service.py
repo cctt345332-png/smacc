@@ -223,7 +223,15 @@ async def create_customer(
     db: AsyncSession, tenant_id: str, data: CustomerCreate,
     rep_id: str | None = None, actor_user_id: str | None = None,
 ):
-    parent_account = await _validate_customer_ar_account(db, tenant_id, data.ar_account_id, required=True)
+    selected_parent_account_id = data.ar_account_id
+    if not selected_parent_account_id and rep_id:
+        rep = await db.get(SalesRep, rep_id)
+        if not rep or rep.tenant_id != tenant_id:
+            raise HTTPException(400, "المندوب غير تابع لهذه الشركة")
+        selected_parent_account_id = rep.customer_account_id
+        if not selected_parent_account_id:
+            raise HTTPException(400, "لم يتم ربط حساب لهذا المندوب. اطلب من المدير تحديد المدينة والحساب أولاً")
+    parent_account = await _validate_customer_ar_account(db, tenant_id, selected_parent_account_id, required=True)
     customer_id = str(uuid.uuid4())
     customer_number = await _next_customer_number(db, tenant_id)
     customer_data = data.model_dump(exclude={"ar_account_id", "opening_balance"})
