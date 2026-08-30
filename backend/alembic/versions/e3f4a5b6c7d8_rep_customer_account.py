@@ -1,13 +1,13 @@
 """Add customer account branch to sales reps.
 
-Revision ID: a3b4c5d6e7f8
-Revises: z2a3b4c5d6e7
+Revision ID: e3f4a5b6c7d8
+Revises: d2e3f4a5b6c7
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "a3b4c5d6e7f8"
-down_revision = "z2a3b4c5d6e7"
+revision = "e3f4a5b6c7d8"
+down_revision = "d2e3f4a5b6c7"
 branch_labels = None
 depends_on = None
 
