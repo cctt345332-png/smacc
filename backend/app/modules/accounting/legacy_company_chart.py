@@ -821,3 +821,42 @@ LEGACY_CUSTOMER_ACCOUNT_SOURCE_KEYS: frozenset[str] = frozenset({
     'legacy_433',
     'legacy_434',
 })
+
+
+# حسابات الربط التشغيلية للشجرة القصيرة. جميعها حسابات نهائية قابلة للقيد،
+# باستثناء فروع العملاء/الموردين التي يبقى الاختيار التفصيلي فيها للمستخدم.
+LEGACY_DEFAULT_MAPPING_SOURCE_KEYS: dict[str, str] = {
+    "default_cash": "legacy_005",
+    "default_bank": "legacy_009",
+    "default_card": "legacy_016",
+    "default_wallet": "legacy_016",
+    "default_ar": "legacy_default_customer",
+    "inventory": "legacy_209",
+    "vat_input": "legacy_218",
+    "employee_advances": "legacy_215",
+    "rep_collections": "legacy_019",
+    "default_ap": "legacy_default_vendor",
+    "vat_output": "legacy_454",
+    "payroll_payable": "legacy_451",
+    "accrued_expenses": "legacy_451",
+    "capital": "legacy_444",
+    "sales_goods": "legacy_465",
+    "sales_services": "legacy_465",
+    "sales_returns": "legacy_466",
+    "sales_discounts": "legacy_467",
+    "other_income": "legacy_489",
+    "cogs_goods": "legacy_457",
+    "cost_services": "legacy_457",
+    "payroll_expense": "legacy_470",
+    "operating_expenses": "legacy_475",
+    "inventory_adjustment_gain": "legacy_489",
+    "inventory_adjustment_loss": "legacy_484",
+}
+
+LEGACY_DEFAULT_PARTY_SOURCE_KEYS = frozenset({
+    "legacy_default_customer", "legacy_default_vendor",
+})
+
+
+def legacy_source_is_customer_account(source_key: str) -> bool:
+    return source_key in LEGACY_CUSTOMER_ACCOUNT_SOURCE_KEYS or source_key == "legacy_default_customer"

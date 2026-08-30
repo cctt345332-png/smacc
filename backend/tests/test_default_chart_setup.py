@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from app.modules.accounting import service
 from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_CODES, REQUIRED_MAPPING_KEYS
-from app.modules.accounting.legacy_company_chart import LEGACY_COMPANY_CHART
+from app.modules.accounting.legacy_company_chart import LEGACY_COMPANY_CHART, LEGACY_DEFAULT_MAPPING_SOURCE_KEYS
 from app.models.accounting import (
     Account,
     AccountingAccountMapping,
@@ -153,10 +153,11 @@ def test_chart_initialization_creates_zero_balance_accounts_and_mappings(monkeyp
         vat = next(record for record in db.records if isinstance(record, VATSetting))
 
         assert result["chart_initialized"] is True
-        assert len(created_accounts) == len(DEFAULT_CHART)
-        assert len(created_mappings) == len(DEFAULT_MAPPING_CODES)
+        assert len(created_accounts) == len(LEGACY_COMPANY_CHART) + 2
+        assert len(created_mappings) == len(LEGACY_DEFAULT_MAPPING_SOURCE_KEYS)
         assert all(account.opening_balance == 0 for account in created_accounts)
-        assert {account.code for account in created_accounts} == {row[0] for row in DEFAULT_CHART}
+        expected_codes = {row[1] for row in LEGACY_COMPANY_CHART} | {"121999", "22199"}
+        assert {account.code for account in created_accounts} == expected_codes
         operational_models = (JournalEntry, Invoice, Customer, Vendor)
         assert all(not isinstance(record, operational_models) for record in db.records)
         assert {mapping.mapping_key for mapping in created_mappings} == set(DEFAULT_MAPPING_CODES)

@@ -15,6 +15,7 @@ from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_
 from app.modules.accounting.legacy_company_chart import (
     LEGACY_COMPANY_CHART,
     LEGACY_CUSTOMER_ACCOUNT_SOURCE_KEYS,
+    LEGACY_DEFAULT_MAPPING_SOURCE_KEYS,
 )
 from app.modules.accounting.schemas import (
     AccountCreate, AccountUpdate, FiscalYearCreate, CostCenterCreate,
@@ -586,25 +587,23 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
             "توجد حسابات حالية لهذه الشركة؛ لن ينشئ النظام شجرة تلقائية فوقها. استخدم مطابقة الحسابات اليدوية أولًا.",
         )
 
-    accounts_by_code: dict[str, Account] = {}
-    for code, name_ar, name_en, account_type, nature, parent_code, is_posting, allow_direct_posting in DEFAULT_CHART:
+    accounts_by_source_key = await _add_legacy_company_chart_records(db, tenant_id)
+    # حسابات عامة قابلة للقيد للتوافق مع خريطة التشغيل، بينما العملاء الجدد
+    # يختارون فرع المدينة أو حساب المندوب ولا يُسندون إلى هذا الحساب تلقائياً.
+    synthetic_accounts = {
+        "legacy_default_customer": ("121999", "عملاء عامون", AccountType.ASSET, AccountNature.DEBIT, "legacy_093", 5),
+        "legacy_default_vendor": ("22199", "موردون عامون", AccountType.LIABILITY, AccountNature.CREDIT, "legacy_447", 4),
+    }
+    for source_key, (code, name_ar, account_type, nature, parent_source_key, level) in synthetic_accounts.items():
         account = Account(
-            id=str(uuid.uuid4()),
-            tenant_id=tenant_id,
-            code=code,
-            name_ar=name_ar,
-            name_en=name_en,
-            account_type=account_type,
-            nature=nature,
-            parent_id=accounts_by_code[parent_code].id if parent_code else None,
-            level=1 if parent_code is None else accounts_by_code[parent_code].level + 1,
-            is_active=True,
-            is_posting=is_posting,
-            allow_direct_posting=allow_direct_posting,
-            is_customer_account=code.startswith("113"),
-            opening_balance=Decimal("0"),
+            id=str(uuid.uuid4()), tenant_id=tenant_id, code=code,
+            name_ar=name_ar, name_en=name_ar, account_type=account_type,
+            nature=nature, parent_id=accounts_by_source_key[parent_source_key].id,
+            level=level, is_active=True, is_posting=True,
+            allow_direct_posting=True, is_customer_account=source_key == "legacy_default_customer",
+            opening_balance=Decimal("0"), notes="حساب تشغيل عام للشجرة الافتراضية",
         )
-        accounts_by_code[code] = account
+        accounts_by_source_key[source_key] = account
         db.add(account)
 
     setup = existing_setup or AccountingSetup(
@@ -619,12 +618,10 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
     if not existing_setup:
         db.add(setup)
 
-    for mapping_key, account_code in DEFAULT_MAPPING_CODES.items():
+    for mapping_key, source_key in LEGACY_DEFAULT_MAPPING_SOURCE_KEYS.items():
         db.add(AccountingAccountMapping(
-            id=str(uuid.uuid4()),
-            tenant_id=tenant_id,
-            mapping_key=mapping_key,
-            account_id=accounts_by_code[account_code].id,
+            id=str(uuid.uuid4()), tenant_id=tenant_id,
+            mapping_key=mapping_key, account_id=accounts_by_source_key[source_key].id,
             updated_at=datetime.utcnow(),
         ))
 
@@ -633,15 +630,15 @@ async def initialize_default_chart(db: AsyncSession, tenant_id: str, user_id: st
     if not vat:
         vat = VATSetting(id=str(uuid.uuid4()), tenant_id=tenant_id)
         db.add(vat)
-    vat.vat_account_id = accounts_by_code[DEFAULT_MAPPING_CODES["vat_output"]].id
-    vat.vat_receivable_account_id = accounts_by_code[DEFAULT_MAPPING_CODES["vat_input"]].id
+    vat.vat_account_id = accounts_by_source_key[LEGACY_DEFAULT_MAPPING_SOURCE_KEYS["vat_output"]].id
+    vat.vat_receivable_account_id = accounts_by_source_key[LEGACY_DEFAULT_MAPPING_SOURCE_KEYS["vat_input"]].id
     vat.updated_at = datetime.utcnow()
 
     await db.commit()
     return await get_accounting_readiness(db, tenant_id)
 
 
-async def _add_legacy_company_chart_records(db: AsyncSession, tenant_id: str) -> None:
+async def _add_legacy_company_chart_records(db: AsyncSession, tenant_id: str) -> dict[str, Account]:
     """يبني حسابات الشجرة المخصصة في الذاكرة قبل حفظ المعاملة."""
     accounts_by_source_key: dict[str, Account] = {}
     for source_key, code, name_ar, account_type, nature, parent_source_key, level, is_posting, allow_direct_posting in LEGACY_COMPANY_CHART:
@@ -666,6 +663,7 @@ async def _add_legacy_company_chart_records(db: AsyncSession, tenant_id: str) ->
         )
         accounts_by_source_key[source_key] = account
         db.add(account)
+    return accounts_by_source_key
 
 
 async def _mark_legacy_chart_imported(
