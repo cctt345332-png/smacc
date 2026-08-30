@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getAccounts, getFiscalYears, getCostCenters, createJournalEntry } from "@/lib/accounting";
+import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 
 interface Line { account_id: string; cost_center_id: string; description: string; debit: string; credit: string; }
 
@@ -163,12 +164,13 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
               {lines.map((line, i) => (
                 <tr key={i} style={{ borderBottom: "1px solid #F1F5F9" }}>
                   <td style={{ padding: "8px 12px" }}>
-                    <select className="form-input form-select" style={{ fontSize: 12 }} value={line.account_id} onChange={e => updateLine(i, "account_id", e.target.value)}>
-                      <option value="">{ar ? "اختر حساب..." : "Select account..."}</option>
-                      {accounts.filter(a => a.allow_direct_posting).map(a => (
-                        <option key={a.id} value={a.id}>{a.code} - {ar ? a.name_ar : a.name_en}</option>
-                      ))}
-                    </select>
+                    <SearchableAccountSelect
+                      accounts={accounts}
+                      value={line.account_id}
+                      onChange={(accountId) => updateLine(i, "account_id", accountId)}
+                      locale={locale}
+                      style={{ fontSize: 12 }}
+                    />
                   </td>
                   <td style={{ padding: "8px 12px" }}>
                     <select className="form-input form-select" style={{ fontSize: 12 }} value={line.cost_center_id} onChange={e => updateLine(i, "cost_center_id", e.target.value)}>

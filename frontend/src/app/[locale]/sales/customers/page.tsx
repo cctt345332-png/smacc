@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getCustomerReceivableAccounts } from "@/lib/sales";
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
+import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 
 const CUSTOMER_TYPES = [
   { value: "company",    ar: "شركة",   en: "Company",    badge: "badge-info" },
@@ -452,20 +453,14 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                   </div>
                   <div className="form-group">
                     <label className="form-label">{ar ? "الحساب الرئيسي للعملاء" : "Customer parent account"} {!editingCustomer && <span className="required">*</span>}</label>
-                    <select className="form-input form-select" value={form.ar_account_id} onChange={e => upd("ar_account_id", e.target.value)} required={!editingCustomer}>
-                      <option value="">{ar ? "اختر حساب العميل من شجرة الحسابات" : "Select the customer account from the chart"}</option>
-                      {customerAccounts.map(account => {
-                        const level = Math.max(1, Number(account.level || 1));
-                        const indent = "　".repeat(Math.max(0, level - 1));
-                        const marker = level > 1 ? "└ " : "";
-                        const name = ar ? account.name_ar : (account.name_en || account.name_ar);
-                        return (
-                          <option key={account.id} value={account.id}>
-                            {indent}{marker}{account.code} — {name}{account.is_posting ? " · حساب نهائي" : " · حساب رئيسي"}
-                          </option>
-                        );
-                      })}
-                    </select>
+                    <SearchableAccountSelect
+                      accounts={customerAccounts}
+                      value={form.ar_account_id}
+                      onChange={(accountId) => upd("ar_account_id", accountId)}
+                      locale={locale}
+                      allowGroups
+                      placeholder={ar ? "اكتب كود أو اسم فرع العملاء..." : "Type customer branch code or name..."}
+                    />
                     <p className="form-hint">
                       {customerAccounts.length
                         ? (ar ? "تظهر الشجرة كاملة بكل مستوياتها. اختر الحساب الرئيسي أو الفرع الذي تريد إنشاء حساب العميل تحته." : "The complete chart is shown by level. Choose the parent branch under which to create the customer account.")

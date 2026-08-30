@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getCustomers, getCustomerStatement } from "@/lib/sales";
 import { getAccounts } from "@/lib/accounting";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -113,14 +114,14 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
             <label className="form-label">{ar ? "فرع الحساب (اختياري)" : "Account branch (optional)"}</label>
-            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
-              <option value="">{ar ? "— كل حسابات العملاء —" : "— All customer accounts —"}</option>
-              {accounts.filter(a => a.is_active).map(a => {
-                const indent = "　".repeat(Math.max(0, Number(a.level || 1) - 1));
-                return <option key={a.id} value={a.id}>{indent}{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>;
-              })}
-
-            </select>
+            <SearchableAccountSelect
+              accounts={accounts}
+              value={accountId}
+              onChange={setAccountId}
+              locale={locale}
+              allowGroups
+              placeholder={ar ? "كل الحسابات — اكتب الكود أو الاسم" : "All accounts — type code or name"}
+            />
           </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">{ar ? "من" : "From"}</label>
