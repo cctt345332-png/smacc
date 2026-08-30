@@ -134,6 +134,91 @@ async def _next_customer_account_code(db: AsyncSession, tenant_id: str, parent: 
     return f"{parent.code}{suffix:03d}"
 
 
+async def _create_customer_opening_journal(
+    db: AsyncSession, tenant_id: str, user_id: str, customer: Customer,
+    customer_account: Account, opening_balance: Decimal,
+) -> str | None:
+    """ينشئ قيداً افتتاحياً مرحلاً للرصيد المنقول من النظام السابق."""
+    amount = Decimal(str(opening_balance or 0)).quantize(Decimal("0.01"))
+    if amount == 0:
+        return None
+    from app.models.accounting import (
+        FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine,
+        JournalEntryStatus,
+    )
+    from app.modules.accounting.service import _next_entry_number, get_operational_account
+
+    entry_date = datetime.utcnow()
+    fiscal_result = await db.execute(
+        select(FiscalYear).where(
+            FiscalYear.tenant_id == tenant_id,
+            FiscalYear.start_date <= entry_date,
+            FiscalYear.end_date >= entry_date,
+            FiscalYear.status == FiscalYearStatus.OPEN,
+        ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()).limit(1)
+    )
+    fiscal_year = fiscal_result.scalar_one_or_none()
+    if not fiscal_year:
+        # إنشاء سنة مالية مفتوحة تلقائياً إذا لم تكن الشركة أعدتها بعد.
+        fiscal_year = FiscalYear(
+            id=str(uuid.uuid4()), tenant_id=tenant_id,
+            name=f"السنة المالية {entry_date.year}",
+            start_date=datetime(entry_date.year, 1, 1),
+            end_date=datetime(entry_date.year, 12, 31, 23, 59, 59),
+            status=FiscalYearStatus.OPEN, is_default=True,
+        )
+        db.add(fiscal_year)
+        await db.flush()
+
+    journal_user_id = user_id
+    if not journal_user_id or journal_user_id == "system":
+        user_result = await db.execute(select(User.id).where(User.tenant_id == tenant_id).order_by(User.created_at).limit(1))
+        journal_user_id = user_result.scalar_one_or_none()
+    if not journal_user_id:
+        raise HTTPException(400, "لا يوجد مستخدم صالح لتسجيل قيد الرصيد الافتتاحي")
+
+    offset_account_id = await get_operational_account(db, tenant_id, "capital")
+    if not offset_account_id:
+        offset_result = await db.execute(
+            select(Account).where(
+                Account.tenant_id == tenant_id,
+                Account.account_type == AccountType.EQUITY,
+                Account.is_active.is_(True),
+                Account.is_posting.is_(True),
+                Account.allow_direct_posting.is_(True),
+            ).order_by(Account.code).limit(1)
+        )
+        offset_account = offset_result.scalar_one_or_none()
+        offset_account_id = offset_account.id if offset_account else None
+    if not offset_account_id:
+        raise HTTPException(400, "لا يوجد حساب مقابل صالح لقيد الرصيد الافتتاحي")
+
+    debit_account_id = customer_account.id if amount > 0 else offset_account_id
+    credit_account_id = offset_account_id if amount > 0 else customer_account.id
+    value = abs(amount)
+    entry_number = await _next_entry_number(db, tenant_id)
+    entry = JournalEntry(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, entry_number=entry_number,
+        entry_date=entry_date, fiscal_year_id=fiscal_year.id,
+        description_ar=f"رصيد افتتاحي للعميل: {customer.name_ar}",
+        description_en=f"Opening balance - customer: {customer.name_en or customer.name_ar}",
+        status=JournalEntryStatus.POSTED, source="customer_opening_balance",
+        reference=customer.customer_number, total_debit=value, total_credit=value,
+        created_by=journal_user_id, posted_by=journal_user_id, posted_at=entry_date,
+    )
+    db.add(entry)
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=debit_account_id,
+        description=f"رصيد افتتاحي {customer.customer_number}", debit=value, credit=Decimal("0"), line_order=0,
+    ))
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=credit_account_id,
+        description=f"مقابل رصيد افتتاحي {customer.customer_number}", debit=Decimal("0"), credit=value, line_order=1,
+    ))
+    await db.flush()
+    return entry.id
+
+
 async def create_customer(
     db: AsyncSession, tenant_id: str, data: CustomerCreate,
     rep_id: str | None = None, actor_user_id: str | None = None,
@@ -165,11 +250,16 @@ async def create_customer(
         is_posting=True,
         allow_direct_posting=True,
         is_customer_account=True,
-        opening_balance=data.opening_balance,
+        # الرصيد سيظهر من خلال قيد اليومية الافتتاحي، وليس كرصد مباشر مكرر على الحساب.
+        opening_balance=Decimal("0"),
         notes=f"حساب العميل {customer_number}",
     )
     db.add(account)
     customer.ar_account_id = account.id
+    if data.opening_balance:
+        await _create_customer_opening_journal(
+            db, tenant_id, actor_user_id or "system", customer, account, data.opening_balance,
+        )
     record_audit(db, tenant_id, actor_user_id, "create", "customer", customer.id,
                  customer_number=customer.customer_number, ar_account_id=account.id, rep_id=rep_id)
     await db.commit()

@@ -44,17 +44,32 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
   const cities = [...new Set(customers.map(c => c.address_city).filter(Boolean))] as string[];
 
   const load = async () => {
-    if (!customerId && accountId) return alert(ar ? "اختر عميلاً واحداً لتصفية حسابه، أو أزل فلتر الحساب للكشف الجماعي" : "Select one customer to filter its account, or clear the account filter for a bulk statement");
-    const selectedCustomers = customers.filter(c => (!customerId || c.id === customerId) && (!customerCity || c.address_city === customerCity));
+    const accountScope = new Set<string>();
+    if (accountId) {
+      accountScope.add(accountId);
+      const pending = [accountId];
+      while (pending.length) {
+        const current = pending.pop()!;
+        accounts.filter(a => a.parent_id === current).forEach(child => {
+          if (!accountScope.has(child.id)) { accountScope.add(child.id); pending.push(child.id); }
+        });
+      }
+    }
+    const selectedCustomers = customers.filter(c =>
+      (!customerId || c.id === customerId) &&
+      (!customerCity || c.address_city === customerCity) &&
+      (!accountId || accountScope.has(c.ar_account_id))
+    );
     if (selectedCustomers.length === 0) return alert(ar ? "لا يوجد عملاء ضمن الاختيار" : "No customers match the selection");
     setLoading(true);
     try {
-      const responses = await Promise.all(selectedCustomers.map(c => getCustomerStatement(c.id, fromDate + "T00:00:00", toDate + "T23:59:59", customerId ? (accountId || undefined) : undefined)));
+      const responses = await Promise.all(selectedCustomers.map(c => getCustomerStatement(c.id, fromDate + "T00:00:00", toDate + "T23:59:59", accountId || undefined)));
       if (selectedCustomers.length === 1 && customerId) {
         setData(responses[0].data);
       } else {
         const rows = responses.map((r: any) => ({ customer: r.data.customer, summary: r.data.summary }));
         setData({ aggregate: true, customerCount: rows.length, city: customerCity, rows, summary: {
+          opening_balance: rows.reduce((s, r) => s + Number(r.summary.opening_balance || 0), 0),
           total_invoiced: rows.reduce((s, r) => s + Number(r.summary.total_invoiced || 0), 0),
           total_paid: rows.reduce((s, r) => s + Number(r.summary.total_paid || 0), 0),
           closing_balance: rows.reduce((s, r) => s + Number(r.summary.closing_balance || 0), 0),
@@ -76,7 +91,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
           <h1 className="page-title">{ar ? "كشف حساب العميل" : "Customer Account Statement"}</h1>
           <p className="page-subtitle">{ar ? "جميع الفواتير والمدفوعات والرصيد المستحق" : "All invoices, payments and outstanding balance"}</p>
         </div>
-        {data && !data.aggregate && <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب عميل" : "Customer Account Statement"} subtitle={`${data.customer.customer_number || ""} — ${ar ? data.customer.name_ar : data.customer.name_en || data.customer.name_ar}`} period={`${fromDate} — ${toDate}`} reportCode={`CUS-ST-${data.customer.customer_number || customerId}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(data.summary.total_invoiced)} SAR`, tone: "blue" }, { label: ar ? "إجمالي المدفوعات" : "Total paid", value: `${fmt(data.summary.total_paid)} SAR`, tone: "green" }, { label: ar ? "الرصيد المستحق" : "Closing balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }, { label: ar ? "عدد الحركات" : "Transactions", value: String(data.transactions.length), tone: "neutral" }]} tables={[{ title: ar ? "حركات الحساب" : "Account transactions", headers: [ar ? "التاريخ" : "Date", ar ? "النوع" : "Type", ar ? "المرجع" : "Reference", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: data.transactions.map((t: any) => [t.date ? new Date(t.date).toLocaleDateString("en-GB") : "—", t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "دفعة" : "Payment"), t.reference || "—", ar ? t.description_ar || "—" : t.description_en || t.description_ar || "—", t.debit > 0 ? fmt(t.debit) : "—", t.credit > 0 ? fmt(t.credit) : "—", `${fmt(Math.abs(t.balance))} ${t.balance > 0 ? (ar ? "مدين" : "Dr") : (ar ? "دائن" : "Cr")}`]), totals: [ar ? "الرصيد الختامي" : "Closing balance", "", "", "", fmt(data.summary.total_invoiced), fmt(data.summary.total_paid), `${fmt(data.summary.closing_balance)} SAR`] }]} />}
+        {data && !data.aggregate && <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب عميل" : "Customer Account Statement"} subtitle={`${data.customer.customer_number || ""} — ${ar ? data.customer.name_ar : data.customer.name_en || data.customer.name_ar}`} period={`${fromDate} — ${toDate}`} reportCode={`CUS-ST-${data.customer.customer_number || customerId}`} orientation="landscape" metrics={[{ label: ar ? "الرصيد الافتتاحي" : "Opening balance", value: `${fmt(data.summary.opening_balance)} SAR`, tone: "neutral" }, { label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(data.summary.total_invoiced)} SAR`, tone: "blue" }, { label: ar ? "إجمالي المدفوعات" : "Total paid", value: `${fmt(data.summary.total_paid)} SAR`, tone: "green" }, { label: ar ? "الرصيد المستحق" : "Closing balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }]} tables={[{ title: ar ? "حركات الحساب" : "Account transactions", headers: [ar ? "التاريخ" : "Date", ar ? "النوع" : "Type", ar ? "المرجع" : "Reference", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: data.transactions.map((t: any) => [t.date ? new Date(t.date).toLocaleDateString("en-GB") : "—", t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : t.type === "opening_balance" ? (ar ? "رصيد افتتاحي" : "Opening balance") : (ar ? "دفعة" : "Payment"), t.reference || "—", ar ? t.description_ar || "—" : t.description_en || t.description_ar || "—", t.debit > 0 ? fmt(t.debit) : "—", t.credit > 0 ? fmt(t.credit) : "—", `${fmt(Math.abs(t.balance))} ${t.balance > 0 ? (ar ? "مدين" : "Dr") : (ar ? "دائن" : "Cr")}`]), totals: [ar ? "الرصيد الختامي" : "Closing balance", "", "", "", fmt(data.summary.total_invoiced), fmt(data.summary.total_paid), `${fmt(data.summary.closing_balance)} SAR`] }]} />}
       </div>
 
       {/* Filter */}
@@ -97,10 +112,14 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
             </select>
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
-            <label className="form-label">{ar ? "الحساب (اختياري)" : "Account (optional)"}</label>
-            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)} disabled={!customerId} title={!customerId ? (ar ? "فلتر الحساب متاح عند اختيار عميل واحد" : "Account filter is available when one customer is selected") : undefined}>
-              <option value="">{ar ? "— كل حسابات العميل —" : "— All customer accounts —"}</option>
-              {accounts.filter(a => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)).map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>)}
+            <label className="form-label">{ar ? "فرع الحساب (اختياري)" : "Account branch (optional)"}</label>
+            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
+              <option value="">{ar ? "— كل حسابات العملاء —" : "— All customer accounts —"}</option>
+              {accounts.filter(a => a.is_active).map(a => {
+                const indent = "　".repeat(Math.max(0, Number(a.level || 1) - 1));
+                return <option key={a.id} value={a.id}>{indent}{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>;
+              })}
+
             </select>
           </div>
           <div className="form-group" style={{ margin: 0 }}>
@@ -119,14 +138,18 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
 
       {data?.aggregate && (
         <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header"><span className="card-title">{ar ? `كشف العملاء — ${data.city || "كل المناطق"}` : `Customer Statement — ${data.city || "All zones"}`}</span></div>
+          <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <span className="card-title">{ar ? `كشف العملاء — ${data.city || "كل المناطق"}` : `Customer Statement — ${data.city || "All zones"}`}</span>
+            <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب العملاء" : "Customer Account Statement"} subtitle={ar ? `الحساب: ${accountId ? (accounts.find(a => a.id === accountId)?.name_ar || accountId) : "كل الحسابات"}` : `Account: ${accountId ? (accounts.find(a => a.id === accountId)?.name_en || accounts.find(a => a.id === accountId)?.name_ar || accountId) : "All accounts"}`} period={`${fromDate} — ${toDate}`} reportCode={`CUS-ST-ALL-${fromDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "عدد العملاء" : "Customers", value: String(data.customerCount), tone: "neutral" }, { label: ar ? "الرصيد الافتتاحي" : "Opening balance", value: `${fmt(data.summary.opening_balance)} SAR`, tone: "neutral" }, { label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(data.summary.total_invoiced)} SAR`, tone: "blue" }, { label: ar ? "الرصيد المستحق" : "Closing balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }]} tables={[{ title: ar ? "أرصدة العملاء" : "Customer balances", headers: [ar ? "العميل" : "Customer", ar ? "المدينة" : "City", ar ? "الرصيد الافتتاحي" : "Opening", ar ? "الفواتير" : "Invoiced", ar ? "المدفوع" : "Paid", ar ? "المستحق" : "Outstanding"], rows: data.rows.map((row: any) => [row.customer.customer_number, row.customer.address_city || "—", fmt(row.summary.opening_balance), fmt(row.summary.total_invoiced), fmt(row.summary.total_paid), fmt(row.summary.closing_balance)]), totals: [ar ? "الإجمالي" : "Total", "", fmt(data.summary.opening_balance), fmt(data.summary.total_invoiced), fmt(data.summary.total_paid), fmt(data.summary.closing_balance)] }]} />
+          </div>
           <div className="card-body">
             <div className="grid-3" style={{ marginBottom: 16 }}>
               <div><strong>{ar ? "عدد العملاء" : "Customers"}</strong><div>{data.customerCount}</div></div>
+              <div><strong>{ar ? "الرصيد الافتتاحي" : "Opening balance"}</strong><div>{fmt(data.summary.opening_balance)} SAR</div></div>
               <div><strong>{ar ? "إجمالي الفواتير" : "Total invoiced"}</strong><div>{fmt(data.summary.total_invoiced)} SAR</div></div>
               <div><strong>{ar ? "الرصيد المستحق" : "Closing balance"}</strong><div>{fmt(data.summary.closing_balance)} SAR</div></div>
             </div>
-            <div className="table-wrapper"><table><thead><tr><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "المدينة" : "City"}</th><th>{ar ? "الفواتير" : "Invoiced"}</th><th>{ar ? "المدفوع" : "Paid"}</th><th>{ar ? "المستحق" : "Outstanding"}</th></tr></thead><tbody>{data.rows.map((row: any) => <tr key={row.customer.id}><td>{row.customer.customer_number} — {row.customer.name_ar}</td><td>{row.customer.address_city || "—"}</td><td>{fmt(row.summary.total_invoiced)}</td><td>{fmt(row.summary.total_paid)}</td><td>{fmt(row.summary.closing_balance)}</td></tr>)}</tbody></table></div>
+            <div className="table-wrapper"><table><thead><tr><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "المدينة" : "City"}</th><th>{ar ? "الرصيد الافتتاحي" : "Opening"}</th><th>{ar ? "الفواتير" : "Invoiced"}</th><th>{ar ? "المدفوع" : "Paid"}</th><th>{ar ? "المستحق" : "Outstanding"}</th></tr></thead><tbody>{data.rows.map((row: any) => <tr key={row.customer.id}><td>{row.customer.customer_number} — {row.customer.name_ar}</td><td>{row.customer.address_city || "—"}</td><td>{fmt(row.summary.opening_balance)}</td><td>{fmt(row.summary.total_invoiced)}</td><td>{fmt(row.summary.total_paid)}</td><td>{fmt(row.summary.closing_balance)}</td></tr>)}</tbody></table></div>
           </div>
         </div>
       )}
@@ -153,6 +176,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
           {/* Summary */}
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
+              { label: ar ? "الرصيد الافتتاحي" : "Opening Balance", value: data.summary.opening_balance, color: "#64748B" },
               { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: data.summary.total_invoiced, color: "#5A187E" },
               { label: ar ? "إجمالي المدفوعات" : "Total Paid", value: data.summary.total_paid, color: "#059669" },
               { label: ar ? "الرصيد المستحق" : "Closing Balance", value: data.summary.closing_balance, color: data.summary.closing_balance > 0 ? "#DC2626" : "#059669" },
@@ -191,8 +215,8 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                       <tr key={i} style={{ background: t.type === "payment" ? "#F0FDF4" : "transparent" }}>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(t.date).toLocaleDateString("en-SA")}</td>
                         <td>
-                          <span className={`badge ${t.type === "invoice" ? "badge-info" : "badge-success"}`}>
-                            {t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : (ar ? "دفعة" : "Payment")}
+                          <span className={`badge ${t.type === "invoice" ? "badge-info" : t.type === "opening_balance" ? "badge-warning" : "badge-success"}`}>
+                            {t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : t.type === "opening_balance" ? (ar ? "رصيد افتتاحي" : "Opening balance") : (ar ? "دفعة" : "Payment")}
                           </span>
                         </td>
                         <td style={{ fontWeight: 600, color: "var(--primary)", fontSize: 12 }}>{t.reference}</td>

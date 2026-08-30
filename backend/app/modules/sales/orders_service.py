@@ -138,99 +138,131 @@ async def convert_order_to_invoice(db: AsyncSession, tenant_id: str, user_id: st
 async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: str,
                                   from_date: datetime, to_date: datetime,
                                   account_id: str | None = None):
-    """كشف حساب العميل الكامل"""
+    """كشف حساب العميل مع الرصيد الافتتاحي والرصيد السابق للفترة."""
     from_date = from_date.replace(tzinfo=None)
     to_date = to_date.replace(tzinfo=None)
-
-    # التحقق من العميل
     customer = await db.get(Customer, customer_id)
     if not customer or customer.tenant_id != tenant_id:
         raise HTTPException(404, "Customer not found")
+
     if account_id:
         account = await db.get(Account, account_id)
-        if not account or account.tenant_id != tenant_id or not account.is_active or not account.is_posting:
-            raise HTTPException(400, "حساب العميل غير صالح أو غير تابع للشركة")
-        if customer.ar_account_id != account_id:
-            raise HTTPException(400, "الحساب المختار غير مربوط بهذا العميل")
+        if not account or account.tenant_id != tenant_id or not account.is_active:
+            raise HTTPException(400, "الحساب المختار غير صالح أو غير تابع للشركة")
+        # الحساب المختار قد يكون فرعاً تجميعياً مثل «عملاء جدة»؛ نسمح بالحساب نفسه وبكل فروعه.
+        account_rows = await db.execute(select(Account.id, Account.parent_id).where(Account.tenant_id == tenant_id))
+        children: dict[str | None, list[str]] = {}
+        for child_id, parent_id in account_rows.all():
+            children.setdefault(parent_id, []).append(child_id)
+        account_scope = {account_id}
+        pending = [account_id]
+        while pending:
+            current = pending.pop()
+            for child_id in children.get(current, []):
+                if child_id not in account_scope:
+                    account_scope.add(child_id)
+                    pending.append(child_id)
+        if customer.ar_account_id not in account_scope:
+            raise HTTPException(400, "الحساب المختار ليس حساب العميل أو أحد فروعه")
 
-    # الفواتير
-    inv_r = await db.execute(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id,
-            Invoice.customer_id == customer_id,
-            Invoice.issue_date >= from_date,
-            Invoice.issue_date <= to_date,
-            Invoice.status.in_([
-                InvoiceStatus.CONFIRMED,
-                InvoiceStatus.PAID,
-                InvoiceStatus.PARTIAL,
-                InvoiceStatus.OVERDUE,
-            ]),
-        ).order_by(Invoice.issue_date)
-    )
+    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
+
+    opening_balance = Decimal("0")
+    if customer.ar_account_id:
+        account_result = await db.execute(
+            select(Account.opening_balance).where(
+                Account.id == customer.ar_account_id,
+                Account.tenant_id == tenant_id,
+            )
+        )
+        opening_balance = Decimal(str(account_result.scalar() or 0))
+
+    # قيود الرصيد الافتتاحي المنشأة عند إضافة العميل.
+    opening_entries_result = await db.execute(
+        select(JournalEntry, JournalEntryLine).join(
+            JournalEntryLine, JournalEntryLine.entry_id == JournalEntry.id
+        ).where(
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.status == JournalEntryStatus.POSTED,
+            JournalEntry.source == "customer_opening_balance",
+            JournalEntryLine.account_id == customer.ar_account_id,
+        ).order_by(JournalEntry.entry_date, JournalEntry.entry_number)
+    ) if customer.ar_account_id else None
+    opening_entries = opening_entries_result.all() if opening_entries_result else []
+
+    # نجلب الحركات حتى نهاية الفترة، ونضع ما قبل بدايتها في الرصيد السابق.
+    financial_statuses = [InvoiceStatus.CONFIRMED, InvoiceStatus.PAID, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE]
+    inv_r = await db.execute(select(Invoice).where(
+        Invoice.tenant_id == tenant_id, Invoice.customer_id == customer_id,
+        Invoice.issue_date <= to_date, Invoice.status.in_(financial_statuses),
+    ).order_by(Invoice.issue_date, Invoice.invoice_number))
     invoices = inv_r.scalars().all()
-
-    # المدفوعات
-    pay_r = await db.execute(
-        select(Payment).where(
-            Payment.tenant_id == tenant_id,
-            Payment.customer_id == customer_id,
-            Payment.payment_date >= from_date,
-            Payment.payment_date <= to_date,
-        ).order_by(Payment.payment_date)
-    )
+    pay_r = await db.execute(select(Payment).where(
+        Payment.tenant_id == tenant_id, Payment.customer_id == customer_id,
+        Payment.payment_date <= to_date,
+    ).order_by(Payment.payment_date, Payment.payment_number))
     payments = pay_r.scalars().all()
 
-    # بناء الحركات مرتبة بالتاريخ
+    prior_balance = opening_balance
     transactions = []
-    for inv in invoices:
-        transactions.append({
-            "date": inv.issue_date,
-            "type": "invoice",
-            "reference": inv.invoice_number,
-            "description_ar": f"فاتورة مبيعات - {inv.buyer_name_ar}",
-            "description_en": f"Sales Invoice - {inv.buyer_name_ar}",
-            "debit": float(inv.total),
-            "credit": 0,
-        })
-    for pay in payments:
-        transactions.append({
-            "date": pay.payment_date,
-            "type": "payment",
-            "reference": pay.payment_number,
-            "description_ar": f"سند قبض - {pay.payment_method}",
-            "description_en": f"Payment Receipt - {pay.payment_method}",
-            "debit": 0,
-            "credit": float(pay.amount),
-        })
+    for entry, line in opening_entries:
+        amount = Decimal(str(line.debit or 0)) - Decimal(str(line.credit or 0))
+        if entry.entry_date < from_date:
+            prior_balance += amount
+        elif entry.entry_date <= to_date:
+            transactions.append({
+                "date": entry.entry_date, "type": "opening_balance", "reference": entry.entry_number,
+                "description_ar": entry.description_ar, "description_en": entry.description_en or entry.description_ar,
+                "debit": float(line.debit or 0), "credit": float(line.credit or 0),
+            })
 
-    # ترتيب بالتاريخ وحساب الرصيد
-    transactions.sort(key=lambda x: x["date"])
-    balance = 0.0
+    for inv in invoices:
+        amount = Decimal(str(inv.total or 0))
+        if inv.issue_date < from_date:
+            prior_balance += amount
+        else:
+            transactions.append({
+                "date": inv.issue_date, "type": "invoice", "reference": inv.invoice_number,
+                "description_ar": f"فاتورة مبيعات - {inv.buyer_name_ar}", "description_en": f"Sales Invoice - {inv.buyer_name_ar}",
+                "debit": float(amount), "credit": 0,
+            })
+    for pay in payments:
+        amount = Decimal(str(pay.amount or 0))
+        if pay.payment_date < from_date:
+            prior_balance -= amount
+        else:
+            transactions.append({
+                "date": pay.payment_date, "type": "payment", "reference": pay.payment_number,
+                "description_ar": f"سند قبض - {pay.payment_method}", "description_en": f"Payment Receipt - {pay.payment_method}",
+                "debit": 0, "credit": float(amount),
+            })
+
+    transactions.sort(key=lambda x: (x["date"], x["reference"] or ""))
+    balance = float(prior_balance)
     for t in transactions:
         balance += t["debit"] - t["credit"]
         t["balance"] = round(balance, 2)
         t["date"] = t["date"].isoformat()
 
-    total_invoiced = sum(float(i.total) for i in invoices)
-    total_paid = sum(float(p.amount) for p in payments)
+    total_invoiced = sum(float(i.total or 0) for i in invoices if i.issue_date >= from_date)
+    total_paid = sum(float(p.amount or 0) for p in payments if p.payment_date >= from_date)
+    period_opening = round(float(prior_balance), 2)
+    closing_balance = round(period_opening + total_invoiced - total_paid + sum(t["debit"] - t["credit"] for t in transactions if t["type"] == "opening_balance"), 2)
+    # opening_balance journal rows inside the period are already included in transactions/closing.
 
     return {
         "customer": {
-            "id": customer.id,
-            "customer_number": customer.customer_number,
-            "name_ar": customer.name_ar,
-            "name_en": customer.name_en,
-            "vat_number": customer.vat_number,
-            "phone": customer.phone,
+            "id": customer.id, "customer_number": customer.customer_number,
+            "name_ar": customer.name_ar, "name_en": customer.name_en,
+            "vat_number": customer.vat_number, "phone": customer.phone,
             "address_city": customer.address_city,
         },
-        "from_date": from_date.isoformat(),
-        "to_date": to_date.isoformat(),
+        "from_date": from_date.isoformat(), "to_date": to_date.isoformat(),
         "transactions": transactions,
         "summary": {
+            "opening_balance": period_opening,
             "total_invoiced": round(total_invoiced, 2),
             "total_paid": round(total_paid, 2),
-            "closing_balance": round(total_invoiced - total_paid, 2),
-        }
+            "closing_balance": closing_balance,
+        },
     }
