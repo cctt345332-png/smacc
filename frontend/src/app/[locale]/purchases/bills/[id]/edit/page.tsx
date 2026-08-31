@@ -130,7 +130,7 @@ export default function EditBillPage(props: { params: Promise<{ locale: string; 
         quantity: l.picked.quantity || 1, unit_price: l.picked.unit_price || 0,
         discount_pct: parseFloat(l.discount_pct) || 0,
         vat_rate: l.vat_rate === "" ? 15 : (isNaN(parseFloat(l.vat_rate)) ? 15 : parseFloat(l.vat_rate)),
-        vat_category: "S", line_order: i,
+        vat_category: parseFloat(l.vat_rate) === 0 ? "Z" : "S", line_order: i,
         inventory_item_id: l.picked.inventory_item_id || null,
         serial_item_id: l.picked.serial_item_id || null,
         new_serial_numbers: l.picked.new_serials?.map(s => ({ serial_number: s.serial_number, condition: s.condition, sale_price: s.sale_price ?? null })) || null,
@@ -319,7 +319,10 @@ export default function EditBillPage(props: { params: Promise<{ locale: string; 
                         <input type="number" className="form-input" style={{ width: 70 }} value={line.discount_pct} min="0" max="100" onChange={e => setLine(i, "discount_pct", e.target.value)} />
                       </td>
                       <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                        <input type="number" className="form-input" style={{ width: 70 }} value={line.vat_rate} min="0" max="100" onChange={e => setLine(i, "vat_rate", e.target.value)} />
+                        <select className="form-input form-select" style={{ width: 82 }} value={line.vat_rate} onChange={e => setLine(i, "vat_rate", e.target.value)}>
+                          <option value="15">15%</option>
+                          <option value="0">0% — {ar ? "صفرية" : "Zero-rated"}</option>
+                        </select>
                       </td>
                       <td style={{ textAlign: "end", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.taxable)}</td>
                       <td style={{ textAlign: "end", color: "var(--warning)", verticalAlign: "top", paddingTop: 12 }}>{fmt(c.vatAmt)}</td>

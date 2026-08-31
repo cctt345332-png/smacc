@@ -182,7 +182,7 @@ export default function NewBillPage(props: { params: Promise<{ locale: string }>
         unit_price:       l.picked.unit_price || 0,
         discount_pct:     parseFloat(l.discount_pct) || 0,
         vat_rate:         l.vat_rate === "" ? 15 : (isNaN(parseFloat(l.vat_rate)) ? 15 : parseFloat(l.vat_rate)),
-        vat_category:     "S",
+        vat_category:     parseFloat(l.vat_rate) === 0 ? "Z" : "S",
         inventory_item_id: l.picked.inventory_item_id || null,
         // سيريالات — كل عنصر: { serial_number, condition, sale_price }
         // sale_price هنا = سعر بيع هذا السيريال تحديداً (منفصل عن unit_price)
@@ -674,11 +674,14 @@ export default function NewBillPage(props: { params: Promise<{ locale: string }>
 
                     {/* ضريبة% */}
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                      <input
-                        type="number" className="form-input" style={{ width: 70 }}
-                        value={line.vat_rate} min="0" max="100"
+                        <select
+                        className="form-input form-select" style={{ width: 82 }}
+                        value={line.vat_rate}
                         onChange={e => setLine(i, "vat_rate", e.target.value)}
-                      />
+                      >
+                        <option value="15">15%</option>
+                        <option value="0">0% — {ar ? "صفرية" : "Zero-rated"}</option>
+                      </select>
                     </td>
 
                     {/* قبل الضريبة */}
