@@ -95,7 +95,10 @@ export default function EditBillPage(props: { params: Promise<{ locale: string; 
               batch_expiry_date: l.batch_expiry_date || undefined,
             },
             discount_pct: String(Number(l.discount_pct || 0)),
-            vat_rate: String(Number(l.vat_rate || 15)),
+            // لا نستخدم || هنا لأن قيمة 0% صحيحة وليست قيمة مفقودة.
+            vat_rate: l.vat_rate === null || l.vat_rate === undefined || l.vat_rate === ""
+              ? "15"
+              : String(Number(l.vat_rate)),
           };
         });
         if (mappedLines.length === 0) mappedLines.push({ picked: { mode: "free", description_ar: "", unit_price: 0, quantity: 1 }, discount_pct: "0", vat_rate: "15" });
