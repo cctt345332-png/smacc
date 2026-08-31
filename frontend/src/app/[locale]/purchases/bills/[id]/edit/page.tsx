@@ -77,9 +77,12 @@ export default function EditBillPage(props: { params: Promise<{ locale: string; 
             try { newSerials = JSON.parse(l.new_serial_numbers_json); } catch {}
           }
           return {
-            picked: {
+                          picked: {
               mode: l.inventory_item_id ? (newSerials || l.new_serial_number ? "serial" : l.batch_number ? "batch" : "item") : "free",
+              // يحفظ اسم المادة منفصلاً عن السيريال حتى لا يظهر الحقل كأنه فارغ.
+              item_name: l.item_name || l.inventory_item_name || String(l.description_ar || "").split(" — ")[0],
               description_ar: l.description_ar || "",
+
               unit_price: Number(l.unit_price || 0),
               quantity: Number(l.quantity || 1),
               inventory_item_id: l.inventory_item_id || undefined,
