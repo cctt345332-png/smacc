@@ -144,7 +144,7 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
   return (
     <div className="udoc-root" dir={ar ? "rtl" : "ltr"} style={{ "--udoc-accent": meta.accent } as React.CSSProperties}>
       <style>{`
-        .udoc-root { --udoc-ink:#17342D; --udoc-border:#C8D0C7; --udoc-paper:#FFFEFA; font-family:"IBM Plex Sans Arabic", Cairo, Arial, sans-serif; color:var(--udoc-ink); background:#EEF1ED; min-height:100vh; padding:22px 0; }
+        .udoc-root { --udoc-ink:#2B1A32; --udoc-border:#D5C8DD; --udoc-paper:#FFFDFF; font-family:"IBM Plex Sans Arabic", Cairo, Arial, sans-serif; color:var(--udoc-ink); background:#F6F1F8; min-height:100vh; padding:22px 0; }
         .udoc-toolbar { width:190mm; margin:0 auto 10px; display:flex; justify-content:flex-end; gap:8px; }
         .udoc-toolbar button { border:1px solid var(--udoc-accent); color:white; background:var(--udoc-accent); padding:8px 16px; font:700 13px inherit; cursor:pointer; border-radius:2px; }
         .udoc-page { width:210mm; min-height:297mm; margin:0 auto; padding:13mm 14mm 15mm; background:var(--udoc-paper); position:relative; box-shadow:0 4px 20px rgba(16,49,41,.12); }
@@ -169,9 +169,9 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
         .udoc-info div { padding:6px 8px; border-inline-start:1px solid var(--udoc-border); font-size:10px; }
         .udoc-info span { display:block; color:#64736B; font-size:9px; }
         .udoc-info b { font-family:"Courier New", monospace; }
-        .udoc-reason { border-inline-start:3px solid var(--udoc-accent); background:#F1F6F2; padding:8px 10px; margin-bottom:10px; font-size:11px; }
+        .udoc-reason { border-inline-start:3px solid var(--udoc-accent); background:#F4EFF7; padding:8px 10px; margin-bottom:10px; font-size:11px; }
         .udoc-table { width:100%; border-collapse:collapse; background:white; border:1px solid var(--udoc-border); }
-        .udoc-table th { background:#E9ECE6; color:#24453B; font-size:10px; padding:7px 6px; text-align:start; border:1px solid var(--udoc-border); white-space:nowrap; }
+        .udoc-table th { background:#EFE8F3; color:#3E0865; font-size:10px; padding:7px 6px; text-align:start; border:1px solid var(--udoc-border); white-space:nowrap; }
         .udoc-table td { border:1px solid var(--udoc-border); padding:7px 6px; font-size:10px; vertical-align:top; }
         .udoc-number { text-align:end; font-family:"Courier New", monospace; direction:ltr; }
         .udoc-totals-wrap { display:flex; justify-content:flex-end; margin-top:12px; }

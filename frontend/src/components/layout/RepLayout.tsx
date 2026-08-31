@@ -290,11 +290,11 @@ export default function RepLayout({
   return (
     <div className="rep-legacy-shell" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       <style jsx global>{`
-        .rep-legacy-shell { --rep-green:#3E0865; --rep-paper:#FFFEFA; --rep-grid:#C8D0C7; --rep-soft:#F4EFF7; background-color:var(--rep-paper); background-image:linear-gradient(rgba(11,93,74,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(11,93,74,.035) 1px,transparent 1px); background-size:24px 24px; color:#1F2D27; }
-        .rep-legacy-shell .rep-legacy-menu { display:flex; align-items:center; gap:0; background:#E9ECE6; border-bottom:1px solid var(--rep-grid); min-height:34px; padding-inline:14px; overflow-x:auto; }
+        .rep-legacy-shell { --rep-green:#3E0865; --rep-paper:#FFFDFF; --rep-grid:#D5C8DD; --rep-soft:#F4EFF7; background-color:var(--rep-paper); background-image:linear-gradient(rgba(62,8,101,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(62,8,101,.035) 1px,transparent 1px); background-size:24px 24px; color:#2B1A32; }
+        .rep-legacy-shell .rep-legacy-menu { display:flex; align-items:center; gap:0; background:#EFE8F3; border-bottom:1px solid var(--rep-grid); min-height:34px; padding-inline:14px; overflow-x:auto; }
         .rep-legacy-shell .rep-legacy-menu a { color:#233B31; text-decoration:none; font-size:12px; font-weight:700; padding:8px 13px; border-inline-start:1px solid #D5DAD4; white-space:nowrap; }
         .rep-legacy-shell .rep-legacy-menu a:hover, .rep-legacy-shell .rep-legacy-menu a.active { background:var(--rep-soft); color:var(--rep-green); }
-        .rep-legacy-shell .rep-legacy-toolbar { display:flex; align-items:center; gap:7px; padding:8px 14px; background:#FFFEFA; border-bottom:1px solid var(--rep-grid); }
+        .rep-legacy-shell .rep-legacy-toolbar { display:flex; align-items:center; gap:7px; padding:8px 14px; background:#FFFDFF; border-bottom:1px solid var(--rep-grid); }
         .rep-legacy-shell .rep-legacy-toolbar a { background:linear-gradient(#16806a,#3E0865); color:#fff; border:1px solid #26033F; border-radius:2px; padding:6px 10px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; }
         .rep-legacy-shell .rep-legacy-toolbar span { font-size:11px; color:#587066; margin-inline-start:5px; }
         .rep-legacy-shell main { max-width:1160px !important; padding:18px 20px 88px !important; }
@@ -303,25 +303,25 @@ export default function RepLayout({
         .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { border-radius:1px !important; border-color:var(--rep-grid) !important; }
         .rep-legacy-shell .rep-legacy-note { font-family:"IBM Plex Sans Arabic", Cairo, sans-serif; font-size:11px; color:#577066; }
         /* طبقة موحدة لكافة صفحات المندوب: أزرار ونماذج وجداول Legacy ERP */
-        .rep-legacy-shell .btn-primary, .rep-legacy-shell .btn.btn-primary { background:linear-gradient(#16806A,#3E0865) !important; border:1px solid #26033F !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
-        .rep-legacy-shell .btn-secondary, .rep-legacy-shell .btn.btn-secondary { background:#E9ECE6 !important; border:1px solid #AEB9B0 !important; color:#23463A !important; border-radius:2px !important; box-shadow:none !important; }
-        .rep-legacy-shell .card, .rep-legacy-shell .table-wrapper { background:#FFFEFA !important; border-color:#C8D0C7 !important; border-radius:2px !important; box-shadow:none !important; }
-        .rep-legacy-shell .card-header { background:#F4EFF7 !important; border-bottom:1px solid #C8D0C7 !important; }
-        .rep-legacy-shell table { border-collapse:collapse !important; background:#FFFEFA !important; }
-        .rep-legacy-shell th { background:#E9ECE6 !important; color:#28463A !important; border:1px solid #C8D0C7 !important; font-size:12px !important; }
+        .rep-legacy-shell .btn-primary, .rep-legacy-shell .btn.btn-primary { background:linear-gradient(#6B3F83,#3E0865) !important; border:1px solid #26033F !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
+        .rep-legacy-shell .btn-secondary, .rep-legacy-shell .btn.btn-secondary { background:#EFE8F3 !important; border:1px solid #AEB9B0 !important; color:#23463A !important; border-radius:2px !important; box-shadow:none !important; }
+        .rep-legacy-shell .card, .rep-legacy-shell .table-wrapper { background:#FFFDFF !important; border-color:#D5C8DD !important; border-radius:2px !important; box-shadow:none !important; }
+        .rep-legacy-shell .card-header { background:#F4EFF7 !important; border-bottom:1px solid #D5C8DD !important; }
+        .rep-legacy-shell table { border-collapse:collapse !important; background:#FFFDFF !important; }
+        .rep-legacy-shell th { background:#EFE8F3 !important; color:#3E0865 !important; border:1px solid #D5C8DD !important; font-size:12px !important; }
         .rep-legacy-shell td { border:1px solid #D7DDD6 !important; }
         .rep-legacy-shell tr:hover td { background:#F0F6F0 !important; }
-        .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { background:#FFFEFA !important; color:#1F2D27 !important; box-shadow:inset 0 1px 1px rgba(0,0,0,.03) !important; }
+        .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { background:#FFFDFF !important; color:#2B1A32 !important; box-shadow:inset 0 1px 1px rgba(0,0,0,.03) !important; }
         .rep-legacy-shell input:focus, .rep-legacy-shell select:focus, .rep-legacy-shell textarea:focus { outline:2px solid #9BBBAD !important; outline-offset:-1px !important; border-color:#3E0865 !important; }
         .rep-legacy-shell input[type="checkbox"], .rep-legacy-shell input[type="radio"] { accent-color:#3E0865 !important; }
-        .rep-legacy-shell a[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell button[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell a[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell button[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell a[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell button[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell a[style*="background: rgb(99, 102, 241)"], .rep-legacy-shell button[style*="background: rgb(99, 102, 241)"] { background:linear-gradient(#16806A,#3E0865) !important; border:1px solid #26033F !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
+        .rep-legacy-shell a[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell button[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell a[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell button[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell a[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell button[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell a[style*="background: rgb(99, 102, 241)"], .rep-legacy-shell button[style*="background: rgb(99, 102, 241)"] { background:linear-gradient(#6B3F83,#3E0865) !important; border:1px solid #26033F !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
         .rep-legacy-shell [style*="color: rgb(37, 99, 235)"], .rep-legacy-shell [style*="color: rgb(124, 58, 237)"], .rep-legacy-shell [style*="color: rgb(59, 130, 246)"], .rep-legacy-shell [style*="color: rgb(99, 102, 241)"], .rep-legacy-shell [style*="color: rgb(79, 70, 229)"], .rep-legacy-shell [style*="color: rgb(139, 92, 246)"] { color:#3E0865 !important; }
         .rep-legacy-shell [style*="background: rgb(239, 246, 255)"], .rep-legacy-shell [style*="background: rgb(245, 243, 255)"], .rep-legacy-shell [style*="background: rgb(238, 242, 255)"], .rep-legacy-shell [style*="background: rgb(243, 244, 246)"] { background:#F4EFF7 !important; }
         .rep-legacy-shell [style*="border: 1px solid rgb(191, 219, 254)"], .rep-legacy-shell [style*="border: 1.5px solid rgb(191, 219, 254)"] { border-color:#9BBBAD !important; }
         .rep-legacy-shell [style*="border-radius"] { border-radius:2px !important; }
-        .rep-legacy-shell .empty-state { background:#FFFEFA !important; border:1px dashed #9BBBAD !important; border-radius:2px !important; }
+        .rep-legacy-shell .empty-state { background:#FFFDFF !important; border:1px dashed #9BBBAD !important; border-radius:2px !important; }
         .rep-legacy-shell .rep-mobile-nav { display:none; }
-        @media (max-width: 799px) { .rep-legacy-shell .rep-legacy-menu { display:none; } .rep-legacy-shell .rep-legacy-toolbar span { display:none; } .rep-legacy-shell .rep-legacy-toolbar { justify-content:center; } .rep-legacy-shell .rep-mobile-nav { position:fixed; display:flex; align-items:stretch; justify-content:space-around; bottom:0; inset-inline:0; height:76px; background:#FFFEFA; border-top:2px solid #3E0865; box-shadow:0 -4px 12px rgba(11,93,74,.14); z-index:220; padding:5px 4px max(5px, env(safe-area-inset-bottom)); } .rep-legacy-shell .rep-mobile-nav button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:4px 2px; border:0 !important; border-radius:2px !important; background:transparent; color:#6B7E75; font-family:inherit; cursor:pointer; } .rep-legacy-shell .rep-mobile-nav .rep-nav-icon { width:31px; height:29px; display:flex; align-items:center; justify-content:center; border:1px solid transparent; } .rep-legacy-shell .rep-mobile-nav .rep-nav-label { font-size:11px; font-weight:800; white-space:nowrap; } .rep-legacy-shell .rep-mobile-nav button.active { color:#3E0865; background:#F4EFF7; border:1px solid #9BBBAD !important; } .rep-legacy-shell .rep-mobile-nav button.active .rep-nav-icon { background:#3E0865; color:#fff; border-color:#26033F; } .rep-legacy-shell main { padding-bottom:94px !important; } }
+        @media (max-width: 799px) { .rep-legacy-shell .rep-legacy-menu { display:none; } .rep-legacy-shell .rep-legacy-toolbar span { display:none; } .rep-legacy-shell .rep-legacy-toolbar { justify-content:center; } .rep-legacy-shell .rep-mobile-nav { position:fixed; display:flex; align-items:stretch; justify-content:space-around; bottom:0; inset-inline:0; height:76px; background:#FFFDFF; border-top:2px solid #3E0865; box-shadow:0 -4px 12px rgba(62,8,101,.14); z-index:220; padding:5px 4px max(5px, env(safe-area-inset-bottom)); } .rep-legacy-shell .rep-mobile-nav button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:4px 2px; border:0 !important; border-radius:2px !important; background:transparent; color:#75617F; font-family:inherit; cursor:pointer; } .rep-legacy-shell .rep-mobile-nav .rep-nav-icon { width:31px; height:29px; display:flex; align-items:center; justify-content:center; border:1px solid transparent; } .rep-legacy-shell .rep-mobile-nav .rep-nav-label { font-size:11px; font-weight:800; white-space:nowrap; } .rep-legacy-shell .rep-mobile-nav button.active { color:#3E0865; background:#F4EFF7; border:1px solid #9BBBAD !important; } .rep-legacy-shell .rep-mobile-nav button.active .rep-nav-icon { background:#3E0865; color:#fff; border-color:#26033F; } .rep-legacy-shell main { padding-bottom:94px !important; } }
         @media (min-width: 800px) { .rep-legacy-shell .rep-mobile-nav { display:none !important; } .rep-legacy-shell main { padding-bottom:28px !important; } }
       `}</style>
 
@@ -329,13 +329,13 @@ export default function RepLayout({
       {isImpersonating && (
                 <div style={{
           background: "#F4EFF7", color: "#3E0865",
-          borderBottom: "1px solid #C8D0C7", padding: "6px 14px",
+          borderBottom: "1px solid #D5C8DD", padding: "6px 14px",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           fontSize: 11, fontWeight: 700, flexShrink: 0, zIndex: 200,
         }}>
           <span>{ar ? "وضع مراجعة المدير: بيانات المندوب" : "Manager review mode: rep data"}</span>
           <button onClick={handleExitImpersonation} style={{
-            background: "#FFFEFA", border: "1px solid #3E0865", borderRadius: 1,
+            background: "#FFFDFF", border: "1px solid #3E0865", borderRadius: 1,
             color: "#3E0865", padding: "3px 9px", cursor: "pointer", fontWeight: 800, fontSize: 11,
           }}>{ar ? "العودة للإدارة" : "Back to Admin"}</button>
         </div>

@@ -342,7 +342,7 @@ export default function RepInvoicesPage(props: { params: Promise<{ locale: strin
                     <button onClick={() => handleDeleteDraft(inv)} style={{ padding: "5px 8px", border: "1px solid #FECACA", background: "#FEF2F2", color: "#B42318", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
                   )}
                   {["confirmed", "paid", "partial", "overdue"].includes(inv.status) && (
-                    <Link href={`/${locale}/reps/me/returns/new?invoice=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #AEB9B0", background: "#E9ECE6", color: "#23463A", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "مرتجع" : "Return"}</Link>
+                    <Link href={`/${locale}/reps/me/returns/new?invoice=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #AEB9B0", background: "#EFE8F3", color: "#23463A", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "مرتجع" : "Return"}</Link>
                   )}
                 </div>
 

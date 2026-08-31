@@ -314,7 +314,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                     <td style={{ padding: "12px 16px" }}>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                         <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`} style={{ fontSize: 12, color: "#3E0865", fontWeight: 700, textDecoration: "none", padding: "4px 9px", border: "1px solid #9BBBAD", background: "#F4EFF7" }}>{ar ? "فاتورة" : "Invoice"}</Link>
-                        <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#23463A", fontWeight: 700, padding: "4px 9px", border: "1px solid #AEB9B0", background: "#F7F9F5", cursor: "pointer" }}>{ar ? "تعديل" : "Edit"}</button>
+                        <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#23463A", fontWeight: 700, padding: "4px 9px", border: "1px solid #AEB9B0", background: "#FAF8FB", cursor: "pointer" }}>{ar ? "تعديل" : "Edit"}</button>
                         <button onClick={() => handleDelete(c)} style={{ fontSize: 12, color: "#B42318", fontWeight: 700, padding: "4px 9px", border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
                       </div>
                     </td>

@@ -20,8 +20,8 @@ function StatCard({
 }) {
   return (
     <div style={{
-      background: "#FFFEFA", borderRadius: 2,
-      padding: "12px 14px", border: "1px solid #C8D0C7",
+      background: "#FFFDFF", borderRadius: 2,
+      padding: "12px 14px", border: "1px solid #D5C8DD",
       flex: 1, minWidth: 0,
     }}>
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6, fontWeight: 500 }}>
@@ -42,8 +42,8 @@ function ActionCard({
 }) {
   const inner = (
     <div style={{
-      background: "#FFFEFA", borderRadius: 2,
-      padding: "13px 14px", border: "1px solid #C8D0C7",
+      background: "#FFFDFF", borderRadius: 2,
+      padding: "13px 14px", border: "1px solid #D5C8DD",
       cursor: "pointer", transition: "all 0.15s",
       display: "flex", alignItems: "center", gap: 14,
     }}

@@ -272,7 +272,7 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
           </div>
         </div>
 
-        <div style={{ padding: "14px 28px", borderTop: "1px solid var(--border)", background: "#FFFEFA" }}>
+        <div style={{ padding: "14px 28px", borderTop: "1px solid var(--border)", background: "#FFFDFF" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <div>
               <div style={{ fontWeight: 800, fontSize: 13 }}>{ar ? "طلبات الاسترداد" : "Refund requests"}</div>
