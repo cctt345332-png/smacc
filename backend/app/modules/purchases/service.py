@@ -577,7 +577,7 @@ async def _reverse_bill_inventory(
     """
     from app.models.inventory import (
         SerialItem, StockMovement, InventoryItem, InventoryStock,
-        BatchItem, MovementType,
+        BatchItem, MovementType, SerialStatus,
     )
 
     lines_r = await db.execute(
@@ -619,7 +619,18 @@ async def _reverse_bill_inventory(
                         notes=f"عكس عند تعديل الفاتورة — سيريال {sn}",
                         created_by=user_id,
                     ))
-                    await db.delete(serial)
+                    # لا نحذف سيريالاً له حركات مخزون؛ السجل التاريخي مرتبط به عبر FK.
+                    movement_ref = await db.execute(
+                        select(StockMovement.id)
+                        .where(StockMovement.serial_item_id == serial.id)
+                        .limit(1)
+                    )
+                    if movement_ref.scalar_one_or_none():
+                        serial.status = SerialStatus.RETURNED
+                        serial.purchase_bill_id = None
+                        serial.notes = ((serial.notes or "") + " | أُعيد عند تعديل فاتورة الشراء").strip()
+                    else:
+                        await db.delete(serial)
 
         # ── عكس كمية عادية أو تشغيلة ──────────────────────────────
         else:
