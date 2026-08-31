@@ -806,7 +806,7 @@ function TrackingTab({
       </div>
 
       {/* الخريطة */}
-      <div style={{ height: "clamp(280px, 46vh, 380px)", minHeight: 280, borderRadius: 2, overflow: "hidden", border: "1px solid var(--border)", position: "relative", background: "#F7F9F5" }}>
+      <div style={{ height: "clamp(280px, 46vh, 380px)", minHeight: 280, borderRadius: 2, overflow: "hidden", border: "1px solid var(--border)", position: "relative", background: "#FAF8FB" }}>
         <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
         {trackPoints.length === 0 && !trackLoading && (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.85)", flexDirection: "column", gap: 8 }}>

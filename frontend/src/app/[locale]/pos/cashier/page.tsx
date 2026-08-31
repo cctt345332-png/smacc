@@ -17,7 +17,7 @@ const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#9A6B13", bg: "#FFF8E5", tracking: "quantity", allowPurchase: false },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#8B651D", bg: "#FCF5E2", tracking: "weight",   allowPurchase: false },
   clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#516A5B", bg: "#EDF2EC", tracking: "variant",  allowPurchase: false },
-  construction:  { label: "مواد بناء",            icon: "construction", color: "#4D5C54", bg: "#E9ECE6", tracking: "quantity", allowPurchase: false },
+  construction:  { label: "مواد بناء",            icon: "construction", color: "#4D5C54", bg: "#EFE8F3", tracking: "quantity", allowPurchase: false },
   general:       { label: "عام",                 icon: "general",      color: "#3E0865", bg: "#F2F6F1", tracking: "quantity", allowPurchase: false },
 };
 
