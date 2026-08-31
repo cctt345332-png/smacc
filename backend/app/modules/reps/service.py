@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, RepLocation, SalesRep
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
-from app.models.sales import Invoice, Payment
+from app.models.sales import Customer, Invoice, Payment
 from app.models.accounting import Account, AccountType, AccountNature
 from app.models.notifications import Notification, NotificationSeverity, NotificationType
 
@@ -251,6 +251,125 @@ async def get_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         "is_active": rep.is_active,
         "created_at": rep.created_at,
     }
+
+
+async def import_rep_customers_from_tree(
+    db: AsyncSession, tenant_id: str, rep_id: str, actor_user_id: str,
+) -> dict:
+    """استيراد العملاء من الحسابات النهائية الموجودة تحت حساب مندوب محدد."""
+    rep = await db.get(SalesRep, rep_id)
+    if not rep or rep.tenant_id != tenant_id:
+        raise HTTPException(404, "المندوب غير موجود")
+    if not rep.customer_account_id:
+        raise HTTPException(400, "لم يتم ربط حساب محاسبي بهذا المندوب")
+
+    rep_account = await db.get(Account, rep.customer_account_id)
+    if not rep_account or rep_account.tenant_id != tenant_id:
+        raise HTTPException(400, "الحساب المحاسبي المرتبط بالمندوب غير موجود")
+
+    accounts = (await db.execute(
+        select(Account).where(Account.tenant_id == tenant_id).order_by(Account.code)
+    )).scalars().all()
+    account_by_id = {account.id: account for account in accounts}
+
+    def is_descendant(account: Account) -> bool:
+        current = account
+        visited: set[str] = set()
+        while current.parent_id:
+            if current.parent_id == rep_account.id:
+                return True
+            if current.parent_id in visited:
+                break
+            visited.add(current.parent_id)
+            current = account_by_id.get(current.parent_id)
+            if not current:
+                break
+        return False
+
+    customer_accounts = [
+        account for account in accounts
+        if account.id != rep_account.id
+        and account.is_customer_account
+        and account.is_posting
+        and is_descendant(account)
+    ]
+
+    existing = (await db.execute(
+        select(Customer).where(Customer.tenant_id == tenant_id)
+    )).scalars().all()
+    existing_by_account = {
+        customer.ar_account_id: customer
+        for customer in existing
+        if customer.ar_account_id
+    }
+    existing_rep_names = {
+        _normalize_rep_customer_name(customer.name_ar)
+        for customer in existing
+        if customer.rep_id == rep_id
+    }
+
+    from app.modules.sales.service import _create_customer_opening_journal
+
+    next_number = (await db.execute(
+        select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id)
+    )).scalar() or 0
+    created = []
+    skipped = 0
+    for account in customer_accounts:
+        normalized_name = _normalize_rep_customer_name(account.name_ar)
+        if account.id in existing_by_account or normalized_name in existing_rep_names:
+            skipped += 1
+            continue
+
+        next_number += 1
+        customer = Customer(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_id,
+            customer_number=f"CUS-{next_number:05d}",
+            customer_type="company",
+            name_ar=account.name_ar,
+            name_en=account.name_en or account.name_ar,
+            rep_id=rep.id,
+            ar_account_id=account.id,
+            credit_limit=Decimal("0"),
+            payment_terms_days=30,
+            currency_code="SAR",
+            is_active=True,
+            notes=f"مستورد تلقائياً من شجرة حسابات المندوب {rep.rep_code}",
+        )
+        db.add(customer)
+        await db.flush()
+        if account.opening_balance and Decimal(str(account.opening_balance)) != 0:
+            await _create_customer_opening_journal(
+                db, tenant_id, actor_user_id, customer, account,
+                Decimal(str(account.opening_balance)),
+            )
+            account.opening_balance = Decimal("0")
+
+        existing_by_account[account.id] = customer
+        existing_rep_names.add(normalized_name)
+        created.append({
+            "customer_id": customer.id,
+            "account_id": account.id,
+            "account_code": account.code,
+            "name_ar": account.name_ar,
+        })
+
+    await db.commit()
+    return {
+        "rep_id": rep.id,
+        "rep_code": rep.rep_code,
+        "account_id": rep_account.id,
+        "account_name": rep_account.name_ar,
+        "total_accounts": len(customer_accounts),
+        "created": len(created),
+        "skipped": skipped,
+        "items": created,
+    }
+
+
+def _normalize_rep_customer_name(value: str | None) -> str:
+    return " ".join((value or "").replace("ـ", "").split()).strip().lower()
 
 
 async def get_rep_by_user(db: AsyncSession, user_id: str) -> SalesRep | None:

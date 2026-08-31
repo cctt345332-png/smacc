@@ -27,6 +27,9 @@ export const updateRep = (repId: string, data: object) =>
 
 export const getRep = (repId: string) => api.get(`/reps/${repId}`);
 
+export const importRepCustomersFromTree = (repId: string) =>
+  api.post(`/reps/${repId}/customers/import-from-tree`);
+
 export const getRepStock = (repId: string) => api.get(`/reps/${repId}/stock`);
 
 export const getRepInvoices = (repId: string) =>

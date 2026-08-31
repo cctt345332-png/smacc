@@ -309,6 +309,18 @@ async def impersonate_rep(
     }
 
 
+@router.post("/{rep_id}/customers/import-from-tree")
+async def import_rep_customers_from_tree(
+    rep_id: str,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """استيراد العملاء من الحساب المحاسبي المرتبط بهذا المندوب فقط."""
+    return await service.import_rep_customers_from_tree(
+        db, user["tenant_id"], rep_id, user["user_id"]
+    )
+
+
 @router.get("/{rep_id}")
 async def get_rep(
     rep_id: str,

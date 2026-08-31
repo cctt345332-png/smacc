@@ -2,7 +2,7 @@
 import { getMapboxTileUrl } from "@/lib/mapConfig";
 import { useEffect, useRef, useState, use } from "react";
 import Link from "next/link";
-import { getRep, getRepSummary, getRepStock, getRepInvoices, getRepTransfers, getRepLocationHistory, updateRep } from "@/lib/reps";
+import { getRep, getRepSummary, getRepStock, getRepInvoices, getRepTransfers, getRepLocationHistory, updateRep, importRepCustomersFromTree } from "@/lib/reps";
 import api from "@/lib/api";
 
 const fmt  = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -110,6 +110,31 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
       load();
     } catch (e: any) { setMsg({ type: "err", text: e.response?.data?.detail || "خطأ" }); }
     finally { setActionLoading(null); }
+  };
+
+  const doImportRepCustomers = async () => {
+    if (!rep?.customer_account_id) {
+      setMsg({ type: "err", text: ar ? "لا يوجد حساب محاسبي مرتبط بهذا المندوب" : "No accounting account is linked to this rep" });
+      return;
+    }
+    const confirmed = window.confirm(ar
+      ? "سيتم استيراد العملاء الموجودين تحت حساب هذا المندوب فقط. هل تريد المتابعة؟"
+      : "Only customers under this rep's linked account will be imported. Continue?");
+    if (!confirmed) return;
+
+    setActionLoading("import-customers");
+    try {
+      const response = await importRepCustomersFromTree(rep_id);
+      const result = response.data;
+      setMsg({
+        type: "ok",
+        text: ar
+          ? `تمت مزامنة العملاء: أضيف ${result.created || 0}، موجود مسبقاً ${result.skipped || 0}`
+          : `Customer sync complete: ${result.created || 0} created, ${result.skipped || 0} already linked`,
+      });
+    } catch (e: any) {
+      setMsg({ type: "err", text: e.response?.data?.detail || (ar ? "تعذر مزامنة العملاء" : "Customer sync failed") });
+    } finally { setActionLoading(null); }
   };
 
   // ── Render guards ─────────────────────────────────────────────────
@@ -279,6 +304,34 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          <div className="card" style={{ padding: 20, gridColumn: "1 / -1" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 14 }}>{ar ? "عملاء المندوب من الشجرة المحاسبية" : "Rep Customers from Accounting Tree"}</div>
+                <div style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.7 }}>
+                  {rep.customer_account_id
+                    ? (ar ? "تتم المزامنة من الحساب المرتبط بهذا المندوب فقط، دون استيراد فروع المناديب الآخرين." : "Syncs only the customers under this rep's linked account, without importing other reps' branches.")
+                    : (ar ? "لم يتم ربط حساب محاسبي بهذا المندوب." : "No accounting account is linked to this rep.")}
+                </div>
+                {rep.customer_account_id && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: "var(--primary)", fontFamily: "monospace" }}>
+                    {rep.customer_account_id}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={doImportRepCustomers}
+                disabled={actionLoading === "import-customers" || !rep.customer_account_id}
+                className="btn-primary"
+                style={{ whiteSpace: "nowrap", opacity: !rep.customer_account_id ? 0.55 : 1 }}
+              >
+                {actionLoading === "import-customers"
+                  ? (ar ? "جاري المزامنة..." : "Syncing...")
+                  : (ar ? "مزامنة العملاء من الشجرة" : "Sync Customers from Tree")}
+              </button>
             </div>
           </div>
         </div>
