@@ -434,6 +434,30 @@ async def add_serial(
         row = location.first() if location is not None else None
         if row:
             bill_number, old_bill_id, item_name = row
+            # عند تعديل نفس الفاتورة المؤكدة، يكون السيريال قد وُضع مؤقتًا
+            # كمرتجع أثناء العكس؛ نعيد استخدام نفس السجل بدل إنشاء مكرر.
+            if (
+                purchase_bill_id == old_bill_id
+                and existing_serial.status in (SerialStatus.RETURNED, "returned")
+            ):
+                existing_serial.status = SerialStatus.IN_STOCK
+                existing_serial.purchase_bill_id = purchase_bill_id
+                existing_serial.warehouse_id = warehouse_id
+                existing_serial.condition = condition
+                existing_serial.cost_price = _decimal_price(cost_price) or Decimal("0")
+                existing_serial.sale_price = _decimal_price(sale_price)
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    product_id=product_id, warehouse_id=warehouse_id,
+                    movement_type="purchase", quantity=Decimal("1"),
+                    unit_cost=_decimal_price(cost_price) or Decimal("0"),
+                    serial_item_id=existing_serial.id,
+                    reference_type="bill", reference_id=purchase_bill_id,
+                ))
+                if auto_commit:
+                    await db.commit()
+                    await db.refresh(existing_serial)
+                return existing_serial
             raise HTTPException(
                 400,
                 f"السيريال {serial_number} موجود مسبقاً — المادة: {item_name} — فاتورة المشتريات: {bill_number} (المعرف: {old_bill_id})"
