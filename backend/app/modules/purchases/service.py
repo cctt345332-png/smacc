@@ -751,7 +751,6 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
         await db.execute(sql_delete(BillLine).where(BillLine.bill_id == bill_id))
 
         gross_total = disc_total = taxable_total = vat_total = grand_total = Decimal("0")
-        new_lines_data: list = []
 
         for i, line in enumerate(data.get("lines", [])):
             new_serials: list | None = line.get("new_serial_numbers")
@@ -788,7 +787,6 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
                 batch_expiry_date=line.get("batch_expiry_date") or None,
             )
             db.add(new_line)
-            new_lines_data.append(new_line)
 
         bill.subtotal        = gross_total
         bill.discount_amount = disc_total
@@ -798,10 +796,9 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
         # 3) أضف المخزون الجديد للفواتير المؤكدة
         if is_confirmed:
-            # نحتاج flush أولاً حتى تُحفظ الأسطر الجديدة في الـ session
+            # خدمة المخزون تعيد جلب السطور الجديدة باستعلام صريح،
+            # لذلك لا نلمس bill.lines غير المحمّلة حتى لا يحدث MissingGreenlet.
             await db.flush()
-            # حدّث bill.lines مؤقتاً للـ _add_inventory_for_bill
-            bill.lines = new_lines_data
             await _add_inventory_for_bill(db, tenant_id, user_id, bill)
 
     # نلتقط القيم قبل commit لأن AsyncSession قد يفرغ خصائص ORM بعده،
