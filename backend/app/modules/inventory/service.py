@@ -15,6 +15,7 @@ from app.models.inventory import (
     StockMovement, Warehouse, ProductCategory,
     TrackingType, SerialStatus, MovementType
 )
+from app.models.purchases import Bill, BillLine
 from sqlalchemy import select
 
 
@@ -399,8 +400,29 @@ async def add_serial(
             SerialItem.serial_number == serial_number,
         )
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(400, f"السيريال {serial_number} موجود مسبقاً")
+    existing_serial = existing.scalar_one_or_none()
+    if existing_serial:
+        # نوضح مكان التكرار: المادة ورقم فاتورة الشراء التي سجّلته أولاً.
+        location = await db.execute(
+            select(Bill.bill_number, Bill.id, InventoryItem.name_ar)
+            .select_from(BillLine)
+            .join(Bill, Bill.id == BillLine.bill_id)
+            .join(InventoryItem, InventoryItem.id == BillLine.inventory_item_id)
+            .where(
+                BillLine.bill_id == existing_serial.purchase_bill_id,
+                Bill.tenant_id == tenant_id,
+                BillLine.inventory_item_id == product_id,
+            )
+            .limit(1)
+        ) if existing_serial.purchase_bill_id else None
+        row = location.first() if location is not None else None
+        if row:
+            bill_number, old_bill_id, item_name = row
+            raise HTTPException(
+                400,
+                f"السيريال {serial_number} موجود مسبقاً — المادة: {item_name} — فاتورة المشتريات: {bill_number} (المعرف: {old_bill_id})"
+            )
+        raise HTTPException(400, f"السيريال {serial_number} موجود مسبقاً لهذا الصنف")
 
     # أول سيريال هو نقطة التهيئة فقط: يملأ بطاقة الصنف إذا كانت أسعارها
     # غير محددة. بعد ذلك تبقى بطاقة الصنف المرجع الموحد ولا تُستبدل بسعر
