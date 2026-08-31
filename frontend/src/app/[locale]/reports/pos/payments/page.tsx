@@ -8,7 +8,7 @@ import StructuredReportPrintButton from "@/components/documents/StructuredReport
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const PAYMENT_LABELS: Record<string, { ar: string; en: string; color: string; bg: string }> = {
-  cash:        { ar: "نقدي",           en: "Cash",        color: "#059669", bg: "#ECFDF5" },
+  cash:        { ar: "نقدي",           en: "Cash",        color: "#6F4A84", bg: "#F4EFF7" },
   mada:        { ar: "مدى",            en: "Mada",        color: "#5A187E", bg: "#EFF6FF" },
   credit_card: { ar: "بطاقة ائتمان",  en: "Credit Card", color: "#75617F", bg: "#F5F3FF" },
   stc_pay:     { ar: "STC Pay",        en: "STC Pay",     color: "#D97706", bg: "#FFFBEB" },

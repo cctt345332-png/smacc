@@ -173,10 +173,10 @@ export default function BackupPage(props: { params: Promise<{ locale: string }> 
       {/* رسائل */}
       {message && (
         <div style={{
-          background: message.type === "success" ? "#DCFCE7" : "#FEF2F2",
-          border: `1px solid ${message.type === "success" ? "#86EFAC" : "#FECACA"}`,
+          background: message.type === "success" ? "#F0E7F4" : "#FEF2F2",
+          border: `1px solid ${message.type === "success" ? "#C8AED4" : "#FECACA"}`,
           borderRadius: 8, padding: "10px 16px", marginBottom: 16,
-          fontSize: 13, color: message.type === "success" ? "#166534" : "#DC2626",
+          fontSize: 13, color: message.type === "success" ? "#3E0865" : "#DC2626",
           display: "flex", alignItems: "center", gap: 8,
         }}>
           {message.type === "success" ? <IcCheck /> : <IcInfo />}
@@ -187,7 +187,7 @@ export default function BackupPage(props: { params: Promise<{ locale: string }> 
       {/* بطاقات الحالة */}
       <div className="grid-3" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#ECFDF5", color: "#059669" }}><IcShield /></div>
+          <div className="stat-icon" style={{ background: "#F4EFF7", color: "#6F4A84" }}><IcShield /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "آخر نسخة احتياطية" : "Last Backup"}</div>
             <div className="stat-value" style={{ fontSize: 14 }}>

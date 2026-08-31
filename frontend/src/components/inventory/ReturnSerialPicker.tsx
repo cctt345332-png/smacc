@@ -29,7 +29,7 @@ const conditionAr: Record<string, string> = {
 };
 
 const statusColor: Record<string, string> = {
-  in_stock: "#059669",
+  in_stock: "#6F4A84",
   sold: "#75617F",
   returned: "#D97706",
 };
@@ -146,7 +146,7 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
                           </span>
                         </div>
                       </div>
-                      <span style={{ fontSize: 11, color: "#059669", fontWeight: 700 }}>
+                      <span style={{ fontSize: 11, color: "#6F4A84", fontWeight: 700 }}>
                         {s.cost_price.toFixed(0)}
                       </span>
                     </label>

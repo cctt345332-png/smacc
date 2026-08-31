@@ -95,7 +95,7 @@ export default function RepStockPage(props: { params: Promise<{ locale: string }
               <div key={s.item_id || s.id} style={{
                 background: "var(--surface)", borderRadius: 14,
                 padding: "14px 16px", border: "1px solid var(--border)",
-                borderInlineStart: `3px solid ${isEmpty ? "#DC2626" : isLow ? "#D97706" : "#059669"}`,
+                borderInlineStart: `3px solid ${isEmpty ? "#DC2626" : isLow ? "#D97706" : "#6F4A84"}`,
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -110,7 +110,7 @@ export default function RepStockPage(props: { params: Promise<{ locale: string }
                     </div>
                   </div>
                   <div style={{ textAlign: "end", flexShrink: 0, marginInlineStart: 12 }}>
-                    <div style={{ fontWeight: 800, fontSize: 18, color: isEmpty ? "#DC2626" : isLow ? "#D97706" : "#059669" }}>
+                    <div style={{ fontWeight: 800, fontSize: 18, color: isEmpty ? "#DC2626" : isLow ? "#D97706" : "#6F4A84" }}>
                       {fmt(qty)}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "قطعة" : "units"}</div>

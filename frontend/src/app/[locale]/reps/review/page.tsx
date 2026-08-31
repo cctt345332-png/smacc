@@ -8,7 +8,7 @@ const fmt  = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractio
 const fmtD = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year:"numeric", month:"short", day:"numeric" }) : "—";
 
 const PAY_METHOD: Record<string, { ar: string; color: string }> = {
-  cash:     { ar: "نقد",    color: "#059669" },
+  cash:     { ar: "نقد",    color: "#6F4A84" },
   credit:   { ar: "آجل",   color: "#D97706" },
   cheque:   { ar: "شيك",   color: "#75617F" },
   transfer: { ar: "تحويل", color: "#5A187E" },
@@ -19,8 +19,8 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
   approved:  { ar: "موافق عليها",      color: "#5A187E", bg: "#EFF6FF" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
-  confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
-  paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+  confirmed: { ar: "مؤكدة",            color: "#6F4A84", bg: "#F7F2F8" },
+  paid:      { ar: "مدفوعة",           color: "#6F4A84", bg: "#F7F2F8" },
   partial:   { ar: "جزئي",             color: "#D97706", bg: "#FEF3C7" },
   cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
 };
@@ -198,8 +198,8 @@ function InvoiceDetailModal({
               </div>
               {Number(d.paid_amount || 0) > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span style={{ color: "#059669" }}>{ar ? "المدفوع" : "Paid"}</span>
-                  <span style={{ fontWeight: 700, color: "#059669" }}>{fmt(d.paid_amount)} SAR</span>
+                  <span style={{ color: "#6F4A84" }}>{ar ? "المدفوع" : "Paid"}</span>
+                  <span style={{ fontWeight: 700, color: "#6F4A84" }}>{fmt(d.paid_amount)} SAR</span>
                 </div>
               )}
               {remaining > 0.01 && (
@@ -223,7 +223,7 @@ function InvoiceDetailModal({
               <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
                 <button onClick={() => { onApprove(inv.id); onClose(); }} disabled={actionLoad === inv.id}
                   style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none",
-                    background: "#059669", color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                    background: "#6F4A84", color: "white", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
                   {actionLoad === inv.id ? "..." : (ar ? "موافقة على الفاتورة" : "Approve Invoice")}
                 </button>
                 <button onClick={() => { onReject(inv); onClose(); }}
@@ -362,7 +362,7 @@ export default function ReviewPage(props: { params: Promise<{ locale: string }> 
           { label: ar ? "إجمالي الفواتير المعلّقة" : "Pending Invoices", value: invoices.length, color: "#D97706" },
           { label: ar ? "الفواتير المعروضة" : "Filtered", value: filtered.length, color: "#5A187E" },
           { label: ar ? "إجمالي المبالغ المعلّقة" : "Pending Amount", value: fmt(invoices.reduce((s: number, i: any) => s + Number(i.total || 0), 0)) + " SAR", color: "#75617F" },
-          { label: ar ? "مبالغ الفواتير المعروضة" : "Filtered Amount", value: fmt(totalAmount) + " SAR", color: "#059669" },
+          { label: ar ? "مبالغ الفواتير المعروضة" : "Filtered Amount", value: fmt(totalAmount) + " SAR", color: "#6F4A84" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -372,7 +372,7 @@ export default function ReviewPage(props: { params: Promise<{ locale: string }> 
       </div>
 
       {msg && (
-        <div style={{ background: msg.type === "ok" ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${msg.type === "ok" ? "#BBF7D0" : "#FECACA"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: msg.type === "ok" ? "#059669" : "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
+        <div style={{ background: msg.type === "ok" ? "#F7F2F8" : "#FEF2F2", border: `1px solid ${msg.type === "ok" ? "#BBF7D0" : "#FECACA"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: msg.type === "ok" ? "#6F4A84" : "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
           <span>{msg.text}</span>
           <button onClick={() => setMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}>x</button>
         </div>

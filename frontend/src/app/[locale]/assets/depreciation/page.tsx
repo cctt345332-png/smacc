@@ -103,11 +103,11 @@ export default function DepreciationPage(props: { params: Promise<{ locale: stri
         </div>
 
         {result && (
-          <div style={{ background: "#DCFCE7", border: "1px solid #86EFAC", borderRadius: 12, padding: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#166534", marginBottom: 8 }}>
+          <div style={{ background: "#F0E7F4", border: "1px solid #C8AED4", borderRadius: 12, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#3E0865", marginBottom: 8 }}>
               {ar ? "تم تشغيل الاستهلاك بنجاح" : "Depreciation Run Completed"}
             </div>
-            <div style={{ fontSize: 13, color: "#166534" }}>
+            <div style={{ fontSize: 13, color: "#3E0865" }}>
               {ar ? `تم احتساب استهلاك ${result.processed} أصل` : `Processed ${result.processed} assets`}
             </div>
           </div>

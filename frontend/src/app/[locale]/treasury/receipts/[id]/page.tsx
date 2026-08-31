@@ -101,12 +101,12 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
 
       <div className="card">
         {/* Header */}
-        <div style={{ padding: "20px 28px", borderBottom: "1px solid var(--border)", background: "#F0FDF4" }}>
+        <div style={{ padding: "20px 28px", borderBottom: "1px solid var(--border)", background: "#F7F2F8" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
               {company?.logo_data && <img src={company.logo_data} alt="Logo" style={{ height: 48, objectFit: "contain", borderRadius: 6 }} />}
               <div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#6F4A84" }}>
                   {ar ? "سند قبض" : "Receipt Voucher — سند قبض"}
                 </div>
                 <span className={`badge ${status.badge}`} style={{ marginTop: 4 }}>{status.ar}</span>
@@ -156,10 +156,10 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
 
         {/* Amount */}
         <div style={{ padding: "28px", display: "flex", justifyContent: "center" }}>
-          <div style={{ textAlign: "center", background: "#F0FDF4", borderRadius: 12, padding: "24px 48px", border: "2px solid #BBF7D0" }}>
+          <div style={{ textAlign: "center", background: "#F7F2F8", borderRadius: 12, padding: "24px 48px", border: "2px solid #BBF7D0" }}>
             <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>{ar ? "المبلغ المستلم" : "Amount Received"}</div>
-            <div style={{ fontSize: 36, fontWeight: 800, color: "#059669" }}>{fmt(voucher.amount)}</div>
-            <div style={{ fontSize: 14, color: "#059669", marginTop: 4 }}>SAR</div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#6F4A84" }}>{fmt(voucher.amount)}</div>
+            <div style={{ fontSize: 14, color: "#6F4A84", marginTop: 4 }}>SAR</div>
             {Number(voucher.vat_amount) > 0 && (
               <div style={{ fontSize: 12, color: "#D97706", marginTop: 8 }}>
                 {ar ? "منها ضريبة:" : "incl. VAT:"} {fmt(voucher.vat_amount)} SAR

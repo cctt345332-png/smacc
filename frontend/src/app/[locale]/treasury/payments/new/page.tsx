@@ -198,7 +198,7 @@ export default function NewPaymentPage(props: { params: Promise<{ locale: string
                     {assets.map(a => <option key={a.id} value={a.id}>{a.asset_number} — {a.name_ar}</option>)}
                   </select>
                   {form.asset_id && (
-                    <p className="form-hint" style={{ color: "#059669" }}>
+                    <p className="form-hint" style={{ color: "#6F4A84" }}>
                       {ar ? "سيتم تسجيل هذه الدفعة في سجل الأصل تلقائياً عند الترحيل" : "Payment will be recorded in asset history upon posting"}
                     </p>
                   )}

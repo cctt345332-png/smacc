@@ -91,7 +91,7 @@ export default function SerialPicker({ locale, productId, productName, warehouse
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{productName}</div>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ background: selected.length > 0 ? "#059669" : "#F1F5F9", color: selected.length > 0 ? "white" : "var(--text-muted)", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
+            <span style={{ background: selected.length > 0 ? "#6F4A84" : "#F1F5F9", color: selected.length > 0 ? "white" : "var(--text-muted)", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
               {selected.length} {ar ? "مختار" : "selected"}
             </span>
             <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--text-muted)" }}>✕</button>
@@ -146,7 +146,7 @@ export default function SerialPicker({ locale, productId, productName, warehouse
                           <code style={{ fontWeight: 700, fontSize: 12 }}>{s.serial_number}</code>
                           {s.condition && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{s.condition}</div>}
                         </div>
-                        {s.sale_price && <span style={{ marginInlineStart: "auto", fontSize: 11, color: "#059669" }}>{Number(s.sale_price).toFixed(0)}</span>}
+                        {s.sale_price && <span style={{ marginInlineStart: "auto", fontSize: 11, color: "#6F4A84" }}>{Number(s.sale_price).toFixed(0)}</span>}
                       </label>
                     );
                   })}
@@ -170,7 +170,7 @@ export default function SerialPicker({ locale, productId, productName, warehouse
                 </button>
                 {validResult && (
                   <div style={{ fontSize: 12 }}>
-                    <span style={{ color: "#059669", fontWeight: 700 }}>✅ {validResult.found?.length}</span>
+                    <span style={{ color: "#6F4A84", fontWeight: 700 }}>✅ {validResult.found?.length}</span>
                     {validResult.not_found?.length > 0 && <span style={{ color: "#DC2626", marginInlineStart: 8 }}>❌ {validResult.not_found.length} {ar ? "غير موجود" : "not found"}</span>}
                     {validResult.wrong_warehouse?.length > 0 && <span style={{ color: "#D97706", marginInlineStart: 8 }}>⚠️ {validResult.wrong_warehouse.length} {ar ? "مستودع آخر" : "wrong wh"}</span>}
                   </div>

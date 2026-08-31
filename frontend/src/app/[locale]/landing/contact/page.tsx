@@ -92,14 +92,14 @@ export default function ContactPage() {
           {/* Form */}
           <div>
             {sent ? (
-              <div style={{ textAlign: "center", padding: "48px 24px", borderRadius: 16, border: "1px solid #D1FAE5", background: "#ECFDF5" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#059669", display: "flex", alignItems: "center", justifyContent: "center", color: "white", margin: "0 auto 16px" }}>
+              <div style={{ textAlign: "center", padding: "48px 24px", borderRadius: 16, border: "1px solid #E9DDED", background: "#F4EFF7" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#6F4A84", display: "flex", alignItems: "center", justifyContent: "center", color: "white", margin: "0 auto 16px" }}>
                   <IcCheck />
                 </div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, color: "#059669", marginBottom: 8 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 800, color: "#6F4A84", marginBottom: 8 }}>
                   {ar ? "تم إرسال رسالتك" : "Message Sent"}
                 </h3>
-                <p style={{ color: "#065F46", fontSize: 14 }}>
+                <p style={{ color: "#4B2A5A", fontSize: 14 }}>
                   {ar ? "سنتواصل معك خلال ساعات العمل. شكراً لتواصلك معنا." : "We'll get back to you during business hours. Thank you for reaching out."}
                 </p>
               </div>

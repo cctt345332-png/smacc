@@ -144,7 +144,7 @@ export default function AISettingsPage() {
           {/* Status */}
           <div style={{
             padding: "14px 20px", borderRadius: 12,
-            background: info?.is_enabled ? "#F0FDF4" : "#FEF2F2",
+            background: info?.is_enabled ? "#F7F2F8" : "#FEF2F2",
             border: `1px solid ${info?.is_enabled ? "#BBF7D0" : "#FECACA"}`,
             display: "flex", alignItems: "center", gap: 10,
           }}>
@@ -270,7 +270,7 @@ export default function AISettingsPage() {
                 </div>
               )}
               {provider !== "internal" && (
-                <div style={{ background: "#F0FDF4", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--success)", fontWeight: 600, textAlign: "center" }}>
+                <div style={{ background: "#F7F2F8", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "var(--success)", fontWeight: 600, textAlign: "center" }}>
                   {ar ? "مفتاحك الخاص — غير محدود" : "Your own key — unlimited"}
                 </div>
               )}

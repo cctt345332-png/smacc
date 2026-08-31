@@ -306,8 +306,8 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                     <td style={{ padding: "12px 8px", color: "var(--text-secondary)" }}>{c.address_city || "—"}</td>
                     <td style={{ padding: "12px 8px" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20,
-                        background: c.is_active ? "#D1FAE5" : "#FEE2E2",
-                        color: c.is_active ? "#059669" : "#DC2626" }}>
+                        background: c.is_active ? "#E9DDED" : "#FEE2E2",
+                        color: c.is_active ? "#6F4A84" : "#DC2626" }}>
                         {c.is_active ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}
                       </span>
                     </td>
@@ -412,12 +412,12 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
               </label>
               {form.latitude && form.longitude ? (
                 <div style={{ display: "flex", gap: 8, alignItems: "center",
-                  background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 14px" }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2">
+                  background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 14px" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6F4A84" strokeWidth="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
                     <circle cx="12" cy="10" r="3"/>
                   </svg>
-                  <span style={{ fontSize: 12, color: "#059669", fontFamily: "monospace", flex: 1 }}>
+                  <span style={{ fontSize: 12, color: "#6F4A84", fontFamily: "monospace", flex: 1 }}>
                     {parseFloat(form.latitude).toFixed(5)}, {parseFloat(form.longitude).toFixed(5)}
                   </span>
                   <button type="button" onClick={() => setShowLocationPicker(true)}

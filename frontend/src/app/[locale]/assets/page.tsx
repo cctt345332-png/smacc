@@ -78,7 +78,7 @@ export default function AssetsPage(props: { params: Promise<{ locale: string }> 
             { label: ar ? "إجمالي الأصول" : "Total Assets", value: summary.total_assets, color: "#5A187E", icon: <Icon name="box" size={20} /> },
             { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(summary.total_cost)} ${ar ? "ر.س" : "SAR"}`, color: "#75617F", icon: <Icon name="money" size={20} /> },
             { label: ar ? "مجمع الاستهلاك" : "Accum. Depreciation", value: `${fmt(summary.total_accumulated_depreciation)} ${ar ? "ر.س" : "SAR"}`, color: "#D97706", icon: <Icon name="trendingDown" size={20} /> },
-            { label: ar ? "القيمة الدفترية" : "Net Book Value", value: `${fmt(summary.total_book_value)} ${ar ? "ر.س" : "SAR"}`, color: "#059669", icon: <Icon name="chart" size={20} /> },
+            { label: ar ? "القيمة الدفترية" : "Net Book Value", value: `${fmt(summary.total_book_value)} ${ar ? "ر.س" : "SAR"}`, color: "#6F4A84", icon: <Icon name="chart" size={20} /> },
           ].map(s => (
             <div key={s.label} className="stat-card">
               <div className="stat-icon" style={{ background: s.color + "18", color: s.color }}>{s.icon}</div>
@@ -155,7 +155,7 @@ export default function AssetsPage(props: { params: Promise<{ locale: string }> 
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(Number(asset.purchase_cost))}</td>
                     <td style={{ textAlign: "end", color: "#D97706" }}>{fmt(Number(asset.accumulated_depreciation))}</td>
-                    <td style={{ textAlign: "end", fontWeight: 700, color: "#059669" }}>{fmt(Number(asset.book_value))}</td>
+                    <td style={{ textAlign: "end", fontWeight: 700, color: "#6F4A84" }}>{fmt(Number(asset.book_value))}</td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                       {asset.depreciation_method === "straight_line"
                         ? (ar ? "قسط ثابت" : "Straight Line")

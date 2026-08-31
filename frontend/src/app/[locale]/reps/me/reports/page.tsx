@@ -14,8 +14,8 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
   approved:  { ar: "موافق عليها",      color: "#3E0865", bg: "#F4EFF7" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
-  confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
-  paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+  confirmed: { ar: "مؤكدة",            color: "#6F4A84", bg: "#F7F2F8" },
+  paid:      { ar: "مدفوعة",           color: "#6F4A84", bg: "#F7F2F8" },
   partial:   { ar: "مدفوعة جزئيًا",    color: "#D97706", bg: "#FEF3C7" },
   overdue:   { ar: "متأخرة السداد",    color: "#DC2626", bg: "#FEF2F2" },
   cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
@@ -83,8 +83,8 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
         <td style="padding:7px 12px;font-size:12px">${fmtDate(t.date)}</td>
         <td style="padding:7px 12px;font-size:12px">${t.description || ""}</td>
         <td style="padding:7px 12px;font-size:12px;color:#3E0865">${(t.debit || t.amount || 0) > 0 && t.type === "invoice" ? fmt(t.debit || t.amount) + " SAR" : ""}</td>
-        <td style="padding:7px 12px;font-size:12px;color:#059669">${(t.credit || t.amount || 0) > 0 && t.type === "payment" ? fmt(t.credit || t.amount) + " SAR" : ""}</td>
-        <td style="padding:7px 12px;font-size:12px;font-weight:700;color:${(t.balance ?? t.running_balance ?? 0) > 0 ? "#DC2626" : "#059669"}">${fmt(t.balance ?? t.running_balance ?? 0)} SAR</td>
+        <td style="padding:7px 12px;font-size:12px;color:#6F4A84">${(t.credit || t.amount || 0) > 0 && t.type === "payment" ? fmt(t.credit || t.amount) + " SAR" : ""}</td>
+        <td style="padding:7px 12px;font-size:12px;font-weight:700;color:${(t.balance ?? t.running_balance ?? 0) > 0 ? "#DC2626" : "#6F4A84"}">${fmt(t.balance ?? t.running_balance ?? 0)} SAR</td>
       </tr>`).join("");
 
     const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
@@ -106,7 +106,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
         <div style="font-size:12px;color:#6B7280">إجمالي المبيعات</div>
         <div style="font-size:16px;font-weight:700;color:#3E0865">${fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0)} SAR</div>
         <div style="font-size:12px;color:#6B7280;margin-top:4px">إجمالي المقبوض</div>
-        <div style="font-size:16px;font-weight:700;color:#059669">${fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0)} SAR</div>
+        <div style="font-size:16px;font-weight:700;color:#6F4A84">${fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0)} SAR</div>
         <div style="font-size:12px;color:#6B7280;margin-top:4px">الرصيد المستحق</div>
         <div style="font-size:18px;font-weight:800;color:#DC2626">${fmt(stmtData.summary?.closing_balance ?? stmtData.summary?.outstanding ?? stmtData.outstanding ?? 0)} SAR</div>
       </div>
@@ -115,14 +115,14 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
       <thead><tr>
         <th>التاريخ</th><th>البيان</th>
         <th style="color:#3E0865">مدين (فاتورة)</th>
-        <th style="color:#059669">دائن (قبض)</th>
+        <th style="color:#6F4A84">دائن (قبض)</th>
         <th>الرصيد</th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr style="background:#F9FAFB;font-weight:700">
         <td colspan="2" style="padding:10px 12px;font-size:13px">الإجمالي</td>
         <td style="padding:10px 12px;color:#3E0865;font-size:13px">${fmt(stmtData.total_invoiced)} SAR</td>
-        <td style="padding:10px 12px;color:#059669;font-size:13px">${fmt(stmtData.total_paid)} SAR</td>
+        <td style="padding:10px 12px;color:#6F4A84;font-size:13px">${fmt(stmtData.total_paid)} SAR</td>
         <td style="padding:10px 12px;color:#DC2626;font-size:14px;font-weight:800">${fmt(stmtData.outstanding)} SAR</td>
       </tr></tfoot>
     </table>
@@ -187,8 +187,8 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
         </div>
         {tab === "invoices" && (
           <button onClick={exportCSV}
-            style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #BBF7D0", background: "#F0FDF4",
-              color: "#059669", fontSize: 12, fontWeight: 700, cursor: "pointer",
+            style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #BBF7D0", background: "#F7F2F8",
+              color: "#6F4A84", fontSize: 12, fontWeight: 700, cursor: "pointer",
               display: "flex", alignItems: "center", gap: 5 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -225,8 +225,8 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {[
                   { label: ar ? "إجمالي مبيعاتي" : "Total Sales",     value: fmt(totalSales) + " SAR",       color: "#3E0865" },
-                  { label: ar ? "المقبوض" : "Collected",               value: fmt(totalCollected) + " SAR",   color: "#059669" },
-                  { label: ar ? "المستحق" : "Outstanding",             value: fmt(totalOutstanding) + " SAR", color: totalOutstanding > 0 ? "#DC2626" : "#059669" },
+                  { label: ar ? "المقبوض" : "Collected",               value: fmt(totalCollected) + " SAR",   color: "#6F4A84" },
+                  { label: ar ? "المستحق" : "Outstanding",             value: fmt(totalOutstanding) + " SAR", color: totalOutstanding > 0 ? "#DC2626" : "#6F4A84" },
                   { label: ar ? "عدد الفواتير" : "Invoices",           value: String(summary?.invoice_count || 0), color: "#356B63" },
                 ].map(s => (
                   <div key={s.label} style={{ background: "var(--surface)", borderRadius: 14,
@@ -242,13 +242,13 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
                 <div style={{ background: "var(--surface)", borderRadius: 14, padding: "16px", border: "1px solid var(--border)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{ar ? "الهدف الشهري" : "Monthly Target"}</span>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#3E0865" }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#3E0865" }}>
                       {pct}%
                     </span>
                   </div>
                   <div style={{ height: 10, background: "var(--border)", borderRadius: 5, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${pct}%`, borderRadius: 5,
-                      background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#3E0865",
+                      background: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#3E0865",
                       transition: "width 0.6s" }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 11, color: "var(--text-muted)" }}>
@@ -380,7 +380,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
                       </div>
                       <div style={{ textAlign: "end" }}>
                         <div style={{ fontWeight: 800, fontSize: 16,
-                          color: Number(s.quantity) <= 0 ? "#DC2626" : Number(s.quantity) <= 3 ? "#D97706" : "#059669" }}>
+                          color: Number(s.quantity) <= 0 ? "#DC2626" : Number(s.quantity) <= 3 ? "#D97706" : "#6F4A84" }}>
                           {fmt(s.quantity)}
                         </div>
                         <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "قطعة" : "units"}</div>
@@ -420,7 +420,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[
                       { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: fmt(stmtData.summary?.total_invoiced ?? stmtData.total_invoiced ?? 0) + " SAR", color: "#3E0865" },
-                      { label: ar ? "إجمالي المقبوض" : "Total Paid",     value: fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0) + " SAR",     color: "#059669" },
+                      { label: ar ? "إجمالي المقبوض" : "Total Paid",     value: fmt(stmtData.summary?.total_paid ?? stmtData.total_paid ?? 0) + " SAR",     color: "#6F4A84" },
                       { label: ar ? "الرصيد المستحق" : "Outstanding",    value: fmt(stmtData.summary?.closing_balance ?? stmtData.summary?.outstanding ?? stmtData.outstanding ?? 0) + " SAR",    color: "#DC2626" },
                     ].map(s => (
                       <div key={s.label} style={{ background: "var(--surface)", borderRadius: 12, padding: "12px", border: "1px solid var(--border)" }}>
@@ -447,13 +447,13 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
                           </div>
                           <div style={{ textAlign: "end", flexShrink: 0, marginInlineStart: 12 }}>
                             <div style={{ fontWeight: 700, fontSize: 13,
-                              color: t.type === "invoice" ? "#3E0865" : "#059669" }}>
+                              color: t.type === "invoice" ? "#3E0865" : "#6F4A84" }}>
                               {t.type === "invoice"
                                 ? `+ ${fmt(t.debit || t.amount || 0)} SAR`
                                 : `- ${fmt(t.credit || t.amount || 0)} SAR`}
                             </div>
                             <div style={{ fontSize: 11,
-                              color: Number(t.balance ?? t.running_balance ?? 0) > 0 ? "#DC2626" : "#059669",
+                              color: Number(t.balance ?? t.running_balance ?? 0) > 0 ? "#DC2626" : "#6F4A84",
                               fontWeight: 600 }}>
                               {ar ? "رصيد:" : "Bal:"} {fmt(t.balance ?? t.running_balance ?? 0)} SAR
                             </div>

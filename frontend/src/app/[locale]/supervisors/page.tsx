@@ -204,7 +204,7 @@ export default function SupervisorsPage(props: { params: Promise<{ locale: strin
                     </div>
                   </div>
                   <span style={{ marginInlineStart: "auto", fontSize: 11, fontWeight: 600,
-                    color: rep.is_active ? "#059669" : "#DC2626" }}>
+                    color: rep.is_active ? "#6F4A84" : "#DC2626" }}>
                     {rep.is_active ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}
                   </span>
                 </label>

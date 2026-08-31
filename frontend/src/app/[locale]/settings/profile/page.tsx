@@ -13,7 +13,7 @@ const ROLE_LABELS: Record<string, { ar: string; en: string; color: string; bg: s
   admin:      { ar: "مدير عام",      en: "Admin",       color: "#DC2626", bg: "#FEF2F2" },
   manager:    { ar: "مدير",          en: "Manager",     color: "#75617F", bg: "#F5F3FF" },
   accountant: { ar: "محاسب",         en: "Accountant",  color: "#5A187E", bg: "#EFF6FF" },
-  sales:      { ar: "مبيعات",        en: "Sales",       color: "#059669", bg: "#ECFDF5" },
+  sales:      { ar: "مبيعات",        en: "Sales",       color: "#6F4A84", bg: "#F4EFF7" },
   purchaser:  { ar: "مشتريات",       en: "Purchaser",   color: "#D97706", bg: "#FFFBEB" },
   cashier:    { ar: "كاشير",         en: "Cashier",     color: "#0891B2", bg: "#ECFEFF" },
   warehouse:  { ar: "مستودع",        en: "Warehouse",   color: "#64748B", bg: "#F1F5F9" },
@@ -184,7 +184,7 @@ export default function ProfilePage(props: { params: Promise<{ locale: string }>
                 </div>
               )}
               {savedPwd && (
-                <div style={{ background: "#DCFCE7", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#166534", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ background: "#F0E7F4", border: "1px solid #C8AED4", borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#3E0865", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
                   <IcCheck />{ar ? "تم تغيير كلمة المرور بنجاح" : "Password changed successfully"}
                 </div>
               )}

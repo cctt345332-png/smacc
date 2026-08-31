@@ -54,7 +54,7 @@ export default function MyStockPage(props: { params: Promise<{ locale: string }>
         {[
           { label: ar ? "إجمالي الأصناف" : "Total Items", value: new Set(stock.map((r: any) => r.item_id)).size, color: "#5A187E" },
           { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(totalValue)} SAR`, color: "#75617F" },
-          { label: ar ? "أصناف منخفضة" : "Low Stock", value: lowCount, color: lowCount > 0 ? "#DC2626" : "#059669" },
+          { label: ar ? "أصناف منخفضة" : "Low Stock", value: lowCount, color: lowCount > 0 ? "#DC2626" : "#6F4A84" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -112,7 +112,7 @@ export default function MyStockPage(props: { params: Promise<{ locale: string }>
                       </span>
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(row.quantity)}</td>
-                    <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#059669" : "#DC2626" }}>
+                    <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#6F4A84" : "#DC2626" }}>
                       {fmt(row.available_qty)}
                     </td>
                     <td style={{ textAlign: "end", color: "#75617F", fontWeight: 600 }}>{fmt(row.stock_value)} SAR</td>

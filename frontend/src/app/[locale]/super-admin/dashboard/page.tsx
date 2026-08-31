@@ -29,7 +29,7 @@ const IcTarget    = () => <svg {...s}><circle cx="12" cy="12" r="10"/><circle cx
 const IcGlobe     = () => <svg {...s}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
 
 const PLAN_CFG: Record<string, { ar: string; en: string; color: string; bg: string }> = {
-  trial:        { ar: "تجريبية",  en: "Trial",        color: "#059669", bg: "#ECFDF5" },
+  trial:        { ar: "تجريبية",  en: "Trial",        color: "#6F4A84", bg: "#F4EFF7" },
   starter:      { ar: "أساسية",   en: "Starter",      color: "#5A187E", bg: "#EFF6FF" },
   professional: { ar: "احترافية", en: "Professional", color: "#75617F", bg: "#F5F3FF" },
   enterprise:   { ar: "مؤسسية",  en: "Enterprise",   color: "#0F172A", bg: "#F8FAFC" },
@@ -65,7 +65,7 @@ export default function SuperAdminDashboard() {
 
   const kpis = [
     { label: ar ? "إجمالي الشركات"    : "Total Companies",  value: stats?.total_tenants ?? 0,    Icon: IcBuilding, color: "#5A187E", bg: "#EFF6FF" },
-    { label: ar ? "شركات نشطة"        : "Active Companies", value: stats?.active_tenants ?? 0,   Icon: IcCheck,    color: "#059669", bg: "#ECFDF5" },
+    { label: ar ? "شركات نشطة"        : "Active Companies", value: stats?.active_tenants ?? 0,   Icon: IcCheck,    color: "#6F4A84", bg: "#F4EFF7" },
     { label: ar ? "إجمالي المستخدمين" : "Total Users",      value: stats?.total_users ?? 0,      Icon: IcUsers,    color: "#75617F", bg: "#F5F3FF" },
     { label: ar ? "باقات منتهية"      : "Expired Plans",    value: stats?.expired_plans ?? 0,    Icon: IcWarning,  color: "#DC2626", bg: "#FEF2F2" },
     { label: ar ? "شركات موقوفة"      : "Inactive",         value: stats?.inactive_tenants ?? 0, Icon: IcPause,    color: "#D97706", bg: "#FFFBEB" },
@@ -75,7 +75,7 @@ export default function SuperAdminDashboard() {
   const quickActions = [
     { href: `/${locale}/super-admin/tenants`,    label: ar ? "إدارة الشركات"       : "Manage Companies",  Icon: IcBuilding, color: "#5A187E", bg: "#EFF6FF" },
     { href: `/${locale}/super-admin/plans`,      label: ar ? "تعديل الباقات"       : "Edit Plans",        Icon: IcDiamond,  color: "#75617F", bg: "#F5F3FF" },
-    { href: `/${locale}/super-admin/activities`, label: ar ? "إدارة الأنشطة"       : "Manage Activities", Icon: IcTarget,   color: "#059669", bg: "#ECFDF5" },
+    { href: `/${locale}/super-admin/activities`, label: ar ? "إدارة الأنشطة"       : "Manage Activities", Icon: IcTarget,   color: "#6F4A84", bg: "#F4EFF7" },
     { href: `/${locale}/super-admin/landing`,    label: ar ? "تعديل صفحة الهبوط"  : "Edit Landing Page", Icon: IcGlobe,    color: "#D97706", bg: "#FFFBEB" },
   ];
 

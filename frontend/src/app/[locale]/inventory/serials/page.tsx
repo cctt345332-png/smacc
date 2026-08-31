@@ -264,7 +264,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, display: "flex", gap: 8 }}>
                   <span>{p.sku}</span>
                   {p.color && <span style={{ color: "#6366F1" }}>{p.color}</span>}
-                  {p.storage && <span style={{ color: "#059669" }}>{p.storage}</span>}
+                  {p.storage && <span style={{ color: "#6F4A84" }}>{p.storage}</span>}
                 </div>
               </div>
             ))}
@@ -301,7 +301,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                       </div>
                       <div style={{ textAlign: "end" }}>
                         <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "تكلفة:" : "Cost:"} {fmt(s.cost_price)}</div>
-                        {s.sale_price && <div style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>{ar ? "بيع:" : "Sale:"} {fmt(s.sale_price)}</div>}
+                        {s.sale_price && <div style={{ fontSize: 12, color: "#6F4A84", fontWeight: 600 }}>{ar ? "بيع:" : "Sale:"} {fmt(s.sale_price)}</div>}
                       </div>
                     </div>
                     <button className="btn btn-ghost btn-sm" style={{ marginTop: 6, fontSize: 11 }}
@@ -323,7 +323,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
             <div>
               <span className="card-title">{selectedProduct.name_ar}</span>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                {ar ? "متاح:" : "In Stock:"} <strong style={{ color: "#059669" }}>{inStockCount}</strong>
+                {ar ? "متاح:" : "In Stock:"} <strong style={{ color: "#6F4A84" }}>{inStockCount}</strong>
                 {" · "}
                 {ar ? "مباع:" : "Sold:"} <strong style={{ color: "#94A3B8" }}>{soldCount}</strong>
               </div>
@@ -378,8 +378,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                         <td style={{ fontSize: 13 }}>{s.color || "—"}</td>
                         <td style={{ fontSize: 13 }}>{s.storage || "—"}</td>
                         <td style={{ textAlign: "end", fontFamily: "monospace" }}>{fmt(s.cost_price)}</td>
-                        <td style={{ textAlign: "end", fontFamily: "monospace", color: "#059669" }}>{s.sale_price ? fmt(s.sale_price) : "—"}</td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: profit !== null ? (profit >= 0 ? "#059669" : "#DC2626") : "var(--text-muted)" }}>
+                        <td style={{ textAlign: "end", fontFamily: "monospace", color: "#6F4A84" }}>{s.sale_price ? fmt(s.sale_price) : "—"}</td>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: profit !== null ? (profit >= 0 ? "#6F4A84" : "#DC2626") : "var(--text-muted)" }}>
                           {profit !== null ? fmt(profit) : "—"}
                         </td>
                         <td>
@@ -629,9 +629,9 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
 
                   {/* معاينة النتيجة */}
                   {parsedFromPaste.length > 0 && (
-                    <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px" }}>
+                    <div style={{ background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px" }}>
                       <div style={{ fontSize: 12, marginBottom: 6 }}>
-                        <span style={{ color: "#059669", fontWeight: 700 }}>✅ {parsedFromPaste.length}</span>
+                        <span style={{ color: "#6F4A84", fontWeight: 700 }}>✅ {parsedFromPaste.length}</span>
                         <span style={{ color: "var(--text-secondary)" }}>
                           {" "}{ar ? `سيريال من العمود ${excelColumn === "first" ? "الأول" : "الثاني"}` : `serials from ${excelColumn} column`}
                         </span>

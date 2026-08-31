@@ -26,7 +26,7 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
     { label: ar ? "الأصناف" : "Items", href: `/${locale}/inventory/items`, icon: <Icon name="inventory" size={24} />, color: "#5A187E", desc: ar ? "إدارة المنتجات والأصناف" : "Manage products and items" },
     { label: ar ? "التصنيفات" : "Categories", href: `/${locale}/inventory/categories`, icon: <Icon name="box" size={24} />, color: "#6366F1", desc: ar ? "تنظيم الأصناف في تصنيفات" : "Organize items into categories" },
     { label: ar ? "المستودعات" : "Warehouses", href: `/${locale}/inventory/warehouses`, icon: <Icon name="bank" size={24} />, color: "#75617F", desc: ar ? "إدارة المستودعات والفروع" : "Manage warehouses and branches" },
-    { label: ar ? "حركات المخزون" : "Stock Movements", href: `/${locale}/inventory/movements`, icon: <Icon name="trending" size={24} />, color: "#059669", desc: ar ? "سجل جميع حركات المخزون" : "All stock movement history" },
+    { label: ar ? "حركات المخزون" : "Stock Movements", href: `/${locale}/inventory/movements`, icon: <Icon name="trending" size={24} />, color: "#6F4A84", desc: ar ? "سجل جميع حركات المخزون" : "All stock movement history" },
     { label: ar ? "جرد المخزون" : "Stock Count", href: `/${locale}/inventory/adjustments`, icon: <Icon name="check" size={24} />, color: "#D97706", desc: ar ? "عدّ الكميات ومراجعة السيريالات" : "Count quantities and review serials" },
   ];
 
@@ -53,7 +53,7 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
             { label: ar ? "إجمالي الأصناف" : "Total Items", value: summary.total_items, color: "#5A187E", suffix: "" },
             { label: ar ? "قيمة المخزون" : "Stock Value", value: fmt(summary.total_value), color: "#75617F", suffix: " SAR" },
             { label: ar ? "أصناف منخفضة" : "Low Stock", value: summary.low_stock_count, color: "#DC2626", suffix: "" },
-            { label: ar ? "سيريالات متاحة" : "Serials In Stock", value: summary.serials_in_stock, color: "#059669", suffix: "" },
+            { label: ar ? "سيريالات متاحة" : "Serials In Stock", value: summary.serials_in_stock, color: "#6F4A84", suffix: "" },
           ].map(s => (
             <div key={s.label} className="stat-card">
               <div className="stat-icon" style={{ background: s.color + "18", color: s.color }}>
@@ -96,7 +96,7 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
           <Link href={`/${locale}/reports/inventory`} className="btn btn-secondary btn-sm" style={{ color: "#5A187E", borderColor: "#5A187E40" }}>
             {ar ? "تقرير المخزون" : "Inventory Report"}
           </Link>
-          <Link href={`/${locale}/reports/inventory/serial-profit`} className="btn btn-secondary btn-sm" style={{ color: "#059669", borderColor: "#05996940" }}>
+          <Link href={`/${locale}/reports/inventory/serial-profit`} className="btn btn-secondary btn-sm" style={{ color: "#6F4A84", borderColor: "#6F4A8440" }}>
             {ar ? "تقرير ربح السيريالات" : "Serial Profit Report"}
           </Link>
         </div>
@@ -142,7 +142,7 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
                       <td style={{ textAlign: "end", color: "var(--text-secondary)" }}>{a.reorder_point}</td>
                       <td style={{ textAlign: "end", fontWeight: 700, color: "#DC2626" }}>-{a.shortage}</td>
                       <td>
-                        <Link href={`/${locale}/purchases/bills/new`} className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#059669" }}>
+                        <Link href={`/${locale}/purchases/bills/new`} className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: "#6F4A84" }}>
                           {ar ? "طلب شراء" : "Order"}
                         </Link>
                       </td>

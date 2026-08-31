@@ -104,7 +104,7 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
             {[
               { label: ar ? "إجمالي الأصناف" : "Total Items", value: data.summary.total_items, color: "#5A187E", isMoney: false },
               { label: ar ? "قيمة المخزون (تكلفة)" : "Stock Value (Cost)", value: data.summary.total_cost_value, color: "#75617F", isMoney: true },
-              { label: ar ? "قيمة المخزون (بيع)" : "Stock Value (Sale)", value: data.summary.total_sale_value, color: "#059669", isMoney: true },
+              { label: ar ? "قيمة المخزون (بيع)" : "Stock Value (Sale)", value: data.summary.total_sale_value, color: "#6F4A84", isMoney: true },
               { label: ar ? "الربح المتوقع" : "Potential Profit", value: data.summary.total_potential_profit, color: "#D97706", isMoney: true },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -181,7 +181,7 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
                         <td style={{ textAlign: "end" }}>{fmt(row.cost_price)}</td>
                         <td style={{ textAlign: "end" }}>{fmt(row.sale_price)}</td>
                         <td style={{ textAlign: "end", fontWeight: 600, color: "#75617F" }}>{fmt(row.cost_value)} SAR</td>
-                        <td style={{ textAlign: "end", fontWeight: 600, color: row.potential_profit >= 0 ? "#059669" : "#DC2626" }}>
+                        <td style={{ textAlign: "end", fontWeight: 600, color: row.potential_profit >= 0 ? "#6F4A84" : "#DC2626" }}>
                           {fmt(row.potential_profit)} SAR
                         </td>
                         <td>
@@ -199,7 +199,7 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#75617F" }}>
                         {fmt(filtered.reduce((s: number, r: any) => s + r.cost_value, 0))} SAR
                       </td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                         {fmt(filtered.reduce((s: number, r: any) => s + r.potential_profit, 0))} SAR
                       </td>
                       <td />

@@ -123,10 +123,10 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#ECFDF5", color: "#059669" }}><IcCheck /></div>
+          <div className="stat-icon" style={{ background: "#F4EFF7", color: "#6F4A84" }}><IcCheck /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "المدفوع" : "Paid"}</div>
-            <div className="stat-value" style={{ color: "#059669" }}>{paidAmount.toLocaleString()}</div>
+            <div className="stat-value" style={{ color: "#6F4A84" }}>{paidAmount.toLocaleString()}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{paidCount} {ar ? "موظف" : "employees"}</div>
           </div>
         </div>
@@ -179,7 +179,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                       </div>
                     </td>
                     <td>{Number(rec.basic_salary || 0).toLocaleString()}</td>
-                    <td style={{ color: "#059669" }}>+{(Number(rec.housing_allowance || 0) + Number(rec.transport_allowance || 0) + Number(rec.other_allowances || 0)).toLocaleString()}</td>
+                    <td style={{ color: "#6F4A84" }}>+{(Number(rec.housing_allowance || 0) + Number(rec.transport_allowance || 0) + Number(rec.other_allowances || 0)).toLocaleString()}</td>
                     <td style={{ color: "#DC2626" }}>-{Number(rec.total_deductions || 0).toLocaleString()}</td>
                     <td style={{ fontWeight: 700 }}>{Number(rec.net_salary || 0).toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
                     <td><span className={rec.status === "paid" ? "badge badge-success" : rec.status === "draft" ? "badge badge-warning" : "badge badge-info"}>{rec.status === "paid" ? (ar ? "مدفوع" : "Paid") : rec.status === "draft" ? (ar ? "مسودة" : "Draft") : (ar ? "معلق" : "Pending")}</span></td>
@@ -190,7 +190,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700 }}>
                   <td style={{ fontWeight: 700 }}>{ar ? "الإجمالي" : "Total"}</td>
                   <td>{records.reduce((s, r) => s + Number(r.basic_salary || 0), 0).toLocaleString()}</td>
-                  <td style={{ color: "#059669" }}>+{records.reduce((s, r) => s + Number(r.housing_allowance || 0) + Number(r.transport_allowance || 0) + Number(r.other_allowances || 0), 0).toLocaleString()}</td>
+                  <td style={{ color: "#6F4A84" }}>+{records.reduce((s, r) => s + Number(r.housing_allowance || 0) + Number(r.transport_allowance || 0) + Number(r.other_allowances || 0), 0).toLocaleString()}</td>
                   <td style={{ color: "#DC2626" }}>-{records.reduce((s, r) => s + Number(r.total_deductions || 0), 0).toLocaleString()}</td>
                   <td style={{ fontWeight: 700, fontSize: 14 }}>{totalNet.toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
                   <td></td>

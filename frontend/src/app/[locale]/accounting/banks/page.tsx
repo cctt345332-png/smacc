@@ -62,7 +62,7 @@ export default function BankAccountsPage(props: { params: Promise<{ locale: stri
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#05966918", color: "#059669" }}><Icon name="money" size={20} /></div>
+          <div className="stat-icon" style={{ background: "#6F4A8418", color: "#6F4A84" }}><Icon name="money" size={20} /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "إجمالي الأرصدة" : "Total Balance"}</div>
             <div className="stat-value">{fmt(items.reduce((s, i) => s + Number(i.opening_balance), 0))} {ar ? "ر.س" : "SAR"}</div>

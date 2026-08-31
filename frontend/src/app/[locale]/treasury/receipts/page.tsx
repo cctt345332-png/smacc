@@ -55,7 +55,7 @@ export default function ReceiptsPage(props: { params: Promise<{ locale: string }
       {summary && (
         <div className="grid-3" style={{ marginBottom: 20 }}>
           {[
-            { label: ar ? "إجمالي المقبوضات" : "Total Receipts", value: summary.total_receipts, color: "#059669" },
+            { label: ar ? "إجمالي المقبوضات" : "Total Receipts", value: summary.total_receipts, color: "#6F4A84" },
             { label: ar ? "عدد السندات" : "Count", value: items.length, color: "#5A187E" },
             { label: ar ? "مسودة" : "Draft", value: items.filter(i => i.status === "draft").length, color: "#D97706" },
           ].map(s => (
@@ -103,12 +103,12 @@ export default function ReceiptsPage(props: { params: Promise<{ locale: string }
                       <td style={{ fontSize: 13 }}>{v.party_name || "—"}</td>
                       <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{v.description_ar}</td>
                       <td style={{ fontSize: 12 }}>{ar ? METHODS[v.payment_method] || v.payment_method : v.payment_method}</td>
-                      <td style={{ textAlign: "end", fontWeight: 700, color: "#059669" }}>{fmt(v.amount)} SAR</td>
+                      <td style={{ textAlign: "end", fontWeight: 700, color: "#6F4A84" }}>{fmt(v.amount)} SAR</td>
                       <td><span className={`badge ${s.badge}`}>{s.ar}</span></td>
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
                           <Link href={`/${locale}/treasury/receipts/${v.id}`} className="btn btn-ghost btn-sm btn-icon"><Icon name="view" size={14} /></Link>
-                          {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "#059669" }} onClick={() => handle(() => postVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="check" size={14} /></button>}
+                          {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "#6F4A84" }} onClick={() => handle(() => postVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="check" size={14} /></button>}
                           {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "var(--danger)" }} onClick={() => handle(() => cancelVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="cancel" size={14} /></button>}
                         </div>
                       </td>

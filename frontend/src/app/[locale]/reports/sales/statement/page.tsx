@@ -179,8 +179,8 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
             {[
               { label: ar ? "الرصيد الافتتاحي" : "Opening Balance", value: data.summary.opening_balance, color: "#64748B" },
               { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: data.summary.total_invoiced, color: "#5A187E" },
-              { label: ar ? "إجمالي المدفوعات" : "Total Paid", value: data.summary.total_paid, color: "#059669" },
-              { label: ar ? "الرصيد المستحق" : "Closing Balance", value: data.summary.closing_balance, color: data.summary.closing_balance > 0 ? "#DC2626" : "#059669" },
+              { label: ar ? "إجمالي المدفوعات" : "Total Paid", value: data.summary.total_paid, color: "#6F4A84" },
+              { label: ar ? "الرصيد المستحق" : "Closing Balance", value: data.summary.closing_balance, color: data.summary.closing_balance > 0 ? "#DC2626" : "#6F4A84" },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "16px 20px" }}>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6 }}>{s.label}</div>
@@ -213,7 +213,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                   </thead>
                   <tbody>
                     {data.transactions.map((t: any, i: number) => (
-                      <tr key={i} style={{ background: t.type === "payment" ? "#F0FDF4" : "transparent" }}>
+                      <tr key={i} style={{ background: t.type === "payment" ? "#F7F2F8" : "transparent" }}>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(t.date).toLocaleDateString("en-SA")}</td>
                         <td>
                           <span className={`badge ${t.type === "invoice" ? "badge-info" : t.type === "opening_balance" ? "badge-warning" : "badge-success"}`}>
@@ -225,10 +225,10 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                         <td style={{ textAlign: "end", color: "#5A187E", fontWeight: t.debit > 0 ? 600 : 400 }}>
                           {t.debit > 0 ? fmt(t.debit) : "—"}
                         </td>
-                        <td style={{ textAlign: "end", color: "#059669", fontWeight: t.credit > 0 ? 600 : 400 }}>
+                        <td style={{ textAlign: "end", color: "#6F4A84", fontWeight: t.credit > 0 ? 600 : 400 }}>
                           {t.credit > 0 ? fmt(t.credit) : "—"}
                         </td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: t.balance > 0 ? "#DC2626" : "#059669" }}>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: t.balance > 0 ? "#DC2626" : "#6F4A84" }}>
                           {fmt(Math.abs(t.balance))} {t.balance > 0 ? (ar ? "مدين" : "Dr") : (ar ? "دائن" : "Cr")}
                         </td>
                       </tr>
@@ -238,8 +238,8 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                       <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الرصيد الختامي" : "Closing Balance"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#5A187E" }}>{fmt(data.summary.total_invoiced)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(data.summary.total_paid)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", fontSize: 15, color: data.summary.closing_balance > 0 ? "#DC2626" : "#059669" }}>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(data.summary.total_paid)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", fontSize: 15, color: data.summary.closing_balance > 0 ? "#DC2626" : "#6F4A84" }}>
                         {fmt(data.summary.closing_balance)} SAR
                       </td>
                     </tr>

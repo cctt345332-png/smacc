@@ -203,7 +203,7 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
                 <td style={{ padding: "12px 16px", textAlign: "end", fontWeight: 700, fontSize: 14, color: "#5A187E" }}>
                   {totalDebit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </td>
-                <td style={{ padding: "12px 16px", textAlign: "end", fontWeight: 700, fontSize: 14, color: "#059669" }}>
+                <td style={{ padding: "12px 16px", textAlign: "end", fontWeight: 700, fontSize: 14, color: "#6F4A84" }}>
                   {totalCredit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </td>
                 <td />
@@ -215,7 +215,7 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
         {/* Balance indicator */}
         <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
           {isBalanced ? (
-            <span style={{ color: "#059669", fontWeight: 600, fontSize: 13 }}>✅ {ar ? "القيد متوازن" : "Entry is balanced"}</span>
+            <span style={{ color: "#6F4A84", fontWeight: 600, fontSize: 13 }}>✅ {ar ? "القيد متوازن" : "Entry is balanced"}</span>
           ) : (
             <span style={{ color: "#DC2626", fontWeight: 600, fontSize: 13 }}>
               ⚠️ {ar ? "الفرق:" : "Difference:"} {Math.abs(totalDebit - totalCredit).toLocaleString("en-US", { minimumFractionDigits: 2 })}

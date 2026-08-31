@@ -13,7 +13,7 @@ const TYPE_BADGE: Record<string, string> = {
   damage: "badge-danger", initial: "badge-gray",
 };
 const TYPE_COLOR: Record<string, string> = {
-  purchase: "#059669", sale: "#5A187E", return_in: "#D97706",
+  purchase: "#6F4A84", sale: "#5A187E", return_in: "#D97706",
   return_out: "#D97706", adjustment: "#6366F1", transfer: "#75617F",
   damage: "#DC2626", initial: "#94A3B8",
 };
@@ -91,7 +91,7 @@ export default function MovementsPage(props: { params: Promise<{ locale: string 
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
           { label: ar ? "إجمالي الحركات" : "Total Movements", value: movements.length, color: "#5A187E" },
-          { label: ar ? "قيمة الوارد" : "Total In Value", value: `${fmt(totalIn)} SAR`, color: "#059669" },
+          { label: ar ? "قيمة الوارد" : "Total In Value", value: `${fmt(totalIn)} SAR`, color: "#6F4A84" },
           { label: ar ? "قيمة الصادر" : "Total Out Value", value: `${fmt(totalOut)} SAR`, color: "#DC2626" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -186,7 +186,7 @@ export default function MovementsPage(props: { params: Promise<{ locale: string 
                           {m.movement_type_ar}
                         </span>
                       </td>
-                      <td style={{ textAlign: "end", fontWeight: 700, color: isIn ? "#059669" : "#DC2626" }}>
+                      <td style={{ textAlign: "end", fontWeight: 700, color: isIn ? "#6F4A84" : "#DC2626" }}>
                         {isIn ? "+" : ""}{fmt(m.quantity)}
                       </td>
                       <td style={{ textAlign: "end", fontFamily: "monospace", fontSize: 12 }}>{fmt(m.unit_cost)}</td>

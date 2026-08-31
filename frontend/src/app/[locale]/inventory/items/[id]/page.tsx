@@ -178,10 +178,10 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
             {item.tracking_type === "serial" ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {[
-                  { label: ar ? "في المخزون" : "In Stock", value: inStock.length, color: "#059669", suffix: "" },
+                  { label: ar ? "في المخزون" : "In Stock", value: inStock.length, color: "#6F4A84", suffix: "" },
                   { label: ar ? "مباع" : "Sold", value: sold.length, color: "#5A187E", suffix: "" },
                   { label: ar ? "قيمة المخزون (تكلفة)" : "Stock Value (Cost)", value: stockValue, color: "#75617F", suffix: " SAR" },
-                  { label: ar ? "الربح المحقق" : "Realized Profit", value: realizedProfit, color: realizedProfit >= 0 ? "#059669" : "#DC2626", suffix: " SAR" },
+                  { label: ar ? "الربح المحقق" : "Realized Profit", value: realizedProfit, color: realizedProfit >= 0 ? "#6F4A84" : "#DC2626", suffix: " SAR" },
                 ].map(s => (
                   <div key={s.label} style={{ background: "#F8FAFC", borderRadius: 8, padding: "12px 14px" }}>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -194,10 +194,10 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {[
-                  { label: ar ? "الكمية المتاحة" : "On Hand", value: fmt(item.quantity_on_hand), color: "#059669" },
+                  { label: ar ? "الكمية المتاحة" : "On Hand", value: fmt(item.quantity_on_hand), color: "#6F4A84" },
                   { label: ar ? "الكمية المحجوزة" : "Reserved", value: fmt(item.quantity_reserved), color: "#D97706" },
                   { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(Number(item.quantity_on_hand) * Number(item.cost_price))} SAR`, color: "#75617F" },
-                  { label: ar ? "نقطة إعادة الطلب" : "Reorder Point", value: fmt(item.reorder_point), color: Number(item.quantity_on_hand) <= Number(item.reorder_point) ? "#DC2626" : "#059669" },
+                  { label: ar ? "نقطة إعادة الطلب" : "Reorder Point", value: fmt(item.reorder_point), color: Number(item.quantity_on_hand) <= Number(item.reorder_point) ? "#DC2626" : "#6F4A84" },
                 ].map(s => (
                   <div key={s.label} style={{ background: "#F8FAFC", borderRadius: 8, padding: "12px 14px" }}>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -260,7 +260,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
                     return (
                       <tr key={b.id} style={{ background: b.is_expired ? "#FEF2F2" : b.days_to_expiry !== null && b.days_to_expiry <= 30 ? "#FFF7ED" : "transparent" }}>
                         <td><code style={{ background: "#F1F5F9", padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>{b.batch_number}</code></td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: b.quantity > 0 ? "#059669" : "var(--text-muted)" }}>{fmt(b.quantity)}</td>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: b.quantity > 0 ? "#6F4A84" : "var(--text-muted)" }}>{fmt(b.quantity)}</td>
                         <td style={{ textAlign: "end" }}>{fmt(b.cost_price)} SAR</td>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                           {b.manufacture_date ? new Date(b.manufacture_date).toLocaleDateString("en-SA") : "—"}
@@ -268,7 +268,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
                         <td style={{ fontWeight: 600, color: b.is_expired ? "#DC2626" : b.is_near_expiry ? "#D97706" : "var(--text-primary)" }}>
                           {b.expiry_date ? new Date(b.expiry_date).toLocaleDateString("en-SA") : "—"}
                         </td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: b.is_expired ? "#DC2626" : b.is_near_expiry ? "#D97706" : "#059669" }}>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: b.is_expired ? "#DC2626" : b.is_near_expiry ? "#D97706" : "#6F4A84" }}>
                           {b.days_to_expiry !== null
                             ? b.days_to_expiry < 0
                               ? `${Math.abs(b.days_to_expiry)} ${ar ? "يوم مضى" : "days ago"}`
@@ -409,7 +409,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
                         <td><span className={`badge ${st.badge}`}>{st.ar}</span></td>
                         <td style={{ textAlign: "end", fontFamily: "monospace" }}>{fmt(s.cost_price)}</td>
                         <td style={{ textAlign: "end", fontFamily: "monospace" }}>{s.sale_price ? fmt(s.sale_price) : "—"}</td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: profit !== null ? (profit >= 0 ? "#059669" : "#DC2626") : "var(--text-muted)" }}>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: profit !== null ? (profit >= 0 ? "#6F4A84" : "#DC2626") : "var(--text-muted)" }}>
                           {profit !== null ? fmt(profit) : "—"}
                         </td>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{s.notes || "—"}</td>

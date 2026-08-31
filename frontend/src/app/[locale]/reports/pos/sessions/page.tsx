@@ -64,7 +64,7 @@ export default function POSSessionsReportPage(props: { params: Promise<{ locale:
       <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
           { label: ar ? "إجمالي الجلسات" : "Total Sessions",   value: String(filtered.length),          icon: "session"  as const, color: "#5A187E", bg: "#EFF6FF" },
-          { label: ar ? "جلسات مغلقة"    : "Closed Sessions",  value: String(closed.length),            icon: "lock"     as const, color: "#059669", bg: "#ECFDF5" },
+          { label: ar ? "جلسات مغلقة"    : "Closed Sessions",  value: String(closed.length),            icon: "lock"     as const, color: "#6F4A84", bg: "#F4EFF7" },
           { label: ar ? "متوسط المبيعات" : "Avg Sales/Session", value: `${fmt(avgSales)} ${sar}`,       icon: "revenue"  as const, color: "#75617F", bg: "#F5F3FF" },
           { label: ar ? "متوسط المعاملات": "Avg Txns/Session",  value: avgTxns.toFixed(1),              icon: "receipt"  as const, color: "#D97706", bg: "#FFFBEB" },
         ].map(s => (

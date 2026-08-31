@@ -103,7 +103,7 @@ export default function AssetAlertsPage(props: { params: Promise<{ locale: strin
       </div>
 
       {saved && (
-        <div style={{ background: "#DCFCE7", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#166534", fontSize: 13, fontWeight: 600 }}>
+        <div style={{ background: "#F0E7F4", border: "1px solid #C8AED4", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#3E0865", fontSize: 13, fontWeight: 600 }}>
           {ar ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully"}
         </div>
       )}
@@ -145,7 +145,7 @@ export default function AssetAlertsPage(props: { params: Promise<{ locale: strin
                 <input type="checkbox" checked={settings.warranty_alert_enabled}
                   onChange={e => upd("warranty_alert_enabled", e.target.checked)}
                   style={{ width: 16, height: 16, accentColor: "var(--primary)" }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: settings.warranty_alert_enabled ? "#059669" : "var(--text-muted)" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: settings.warranty_alert_enabled ? "#6F4A84" : "var(--text-muted)" }}>
                   {settings.warranty_alert_enabled ? (ar ? "مفعّل" : "Enabled") : (ar ? "معطّل" : "Disabled")}
                 </span>
               </label>
@@ -172,7 +172,7 @@ export default function AssetAlertsPage(props: { params: Promise<{ locale: strin
                 <input type="checkbox" checked={settings.full_depreciation_alert}
                   onChange={e => upd("full_depreciation_alert", e.target.checked)}
                   style={{ width: 16, height: 16, accentColor: "var(--primary)" }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: settings.full_depreciation_alert ? "#059669" : "var(--text-muted)" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: settings.full_depreciation_alert ? "#6F4A84" : "var(--text-muted)" }}>
                   {settings.full_depreciation_alert ? (ar ? "مفعّل" : "Enabled") : (ar ? "معطّل" : "Disabled")}
                 </span>
               </label>
@@ -192,7 +192,7 @@ export default function AssetAlertsPage(props: { params: Promise<{ locale: strin
                 <input type="checkbox" checked={settings.depreciation_due_alert}
                   onChange={e => upd("depreciation_due_alert", e.target.checked)}
                   style={{ width: 16, height: 16, accentColor: "var(--primary)" }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: settings.depreciation_due_alert ? "#059669" : "var(--text-muted)" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: settings.depreciation_due_alert ? "#6F4A84" : "var(--text-muted)" }}>
                   {settings.depreciation_due_alert ? (ar ? "مفعّل" : "Enabled") : (ar ? "معطّل" : "Disabled")}
                 </span>
               </label>
@@ -219,7 +219,7 @@ export default function AssetAlertsPage(props: { params: Promise<{ locale: strin
                 <input type="checkbox" checked={settings.high_depreciation_alert}
                   onChange={e => upd("high_depreciation_alert", e.target.checked)}
                   style={{ width: 16, height: 16, accentColor: "var(--primary)" }} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: settings.high_depreciation_alert ? "#059669" : "var(--text-muted)" }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: settings.high_depreciation_alert ? "#6F4A84" : "var(--text-muted)" }}>
                   {settings.high_depreciation_alert ? (ar ? "مفعّل" : "Enabled") : (ar ? "معطّل" : "Disabled")}
                 </span>
               </label>

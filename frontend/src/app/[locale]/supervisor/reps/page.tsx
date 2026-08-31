@@ -57,8 +57,8 @@ export default function SupervisorRepsPage(props: { params: Promise<{ locale: st
                 </div>
               </div>
               <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
-                background: rep.is_active ? "#D1FAE5" : "#FEE2E2",
-                color: rep.is_active ? "#059669" : "#DC2626" }}>
+                background: rep.is_active ? "#E9DDED" : "#FEE2E2",
+                color: rep.is_active ? "#6F4A84" : "#DC2626" }}>
                 {rep.is_active ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}
               </span>
             </div>

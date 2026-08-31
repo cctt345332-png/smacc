@@ -177,7 +177,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
         {[
           { label: ar ? "إجمالي المناديب" : "Total Reps", value: fmtNum(reps.length), color: "#5A187E" },
-          { label: ar ? "المناديب النشطين" : "Active", value: fmtNum(reps.filter(r => r.is_active).length), color: "#059669" },
+          { label: ar ? "المناديب النشطين" : "Active", value: fmtNum(reps.filter(r => r.is_active).length), color: "#6F4A84" },
           { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(totalSales) + " SAR", color: "#75617F" },
           { label: ar ? "إجمالي المحصّل" : "Collected", value: fmt(totalCollected) + " SAR", color: "#D97706" },
         ].map(s => (
@@ -190,7 +190,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
 
       {/* رسائل */}
       {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: "#DC2626", fontSize: 13 }}>{error}</div>}
-      {success && <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: "#059669", fontSize: 13 }}>{success}</div>}
+      {success && <div style={{ background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: "#6F4A84", fontSize: 13 }}>{success}</div>}
 
       {/* أدوات البحث */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -272,7 +272,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                             {pct !== null && (
                               <div style={{ marginTop: 4 }}>
                                 <div style={{ height: 4, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
-                                  <div style={{ height: "100%", width: `${pct}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#5A187E", borderRadius: 2 }} />
+                                  <div style={{ height: "100%", width: `${pct}%`, background: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#5A187E", borderRadius: 2 }} />
                                 </div>
                                 <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{pct}%</div>
                               </div>
@@ -281,7 +281,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                         ) : <span style={{ color: "var(--text-muted)", fontSize: 12 }}>—</span>}
                       </td>
                       <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(sum?.total_sales || 0)}</td>
-                      <td style={{ textAlign: "end", color: "#059669", fontWeight: 600 }}>{fmt(sum?.total_collected || 0)}</td>
+                      <td style={{ textAlign: "end", color: "#6F4A84", fontWeight: 600 }}>{fmt(sum?.total_collected || 0)}</td>
                       <td style={{ textAlign: "end", color: Number(sum?.outstanding || 0) > 0 ? "#DC2626" : "var(--text-secondary)", fontWeight: 600 }}>
                         {fmt(sum?.outstanding || 0)}
                       </td>
@@ -315,7 +315,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                           </button>
                           <button className="btn btn-ghost btn-sm btn-icon" title={rep.is_active ? (ar ? "إيقاف" : "Deactivate") : (ar ? "تفعيل" : "Activate")}
                             onClick={() => toggleActive(rep)}
-                            style={{ color: rep.is_active ? "#DC2626" : "#059669" }}>
+                            style={{ color: rep.is_active ? "#DC2626" : "#6F4A84" }}>
                             {rep.is_active
                               ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="8" x2="16" y2="16"/><line x1="16" y1="8" x2="8" y2="16"/></svg>
                               : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>

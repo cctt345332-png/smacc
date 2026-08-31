@@ -16,7 +16,7 @@ export default function AboutPage() {
 
   const values = [
     { icon: <IcShield />, color: "#5A187E", bg: "#EFF6FF", title: ar ? "الامتثال أولاً" : "Compliance First",    desc: ar ? "نظامنا مبني من الأساس ليكون متوافقاً مع متطلبات زاتكا والفوترة الإلكترونية المرحلة الثانية" : "Our system is built from the ground up to comply with ZATCA Phase 2 e-invoicing requirements" },
-    { icon: <IcTarget />, color: "#059669", bg: "#ECFDF5", title: ar ? "مصمم للسوق السعودي" : "Built for Saudi Market", desc: ar ? "نفهم احتياجات الأعمال السعودية — من الرقم الضريبي إلى العنوان الوطني إلى متطلبات GOSI" : "We understand Saudi business needs — from VAT numbers to national addresses to GOSI requirements" },
+    { icon: <IcTarget />, color: "#6F4A84", bg: "#F4EFF7", title: ar ? "مصمم للسوق السعودي" : "Built for Saudi Market", desc: ar ? "نفهم احتياجات الأعمال السعودية — من الرقم الضريبي إلى العنوان الوطني إلى متطلبات GOSI" : "We understand Saudi business needs — from VAT numbers to national addresses to GOSI requirements" },
     { icon: <IcUsers />,  color: "#75617F", bg: "#F5F3FF", title: ar ? "سهولة الاستخدام" : "Ease of Use",         desc: ar ? "واجهة عربية أولاً، مصممة لتكون بسيطة وسريعة حتى بدون خبرة محاسبية" : "Arabic-first interface, designed to be simple and fast even without accounting experience" },
   ];
 

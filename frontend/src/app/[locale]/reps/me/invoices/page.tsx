@@ -38,8 +38,8 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   submitted: { ar: "بانتظار المراجعة",   color: "#D97706", bg: "#FEF3C7" },
   approved:  { ar: "موافق عليها",        color: "#3E0865", bg: "#F4EFF7" },
   rejected:  { ar: "مرفوضة",             color: "#DC2626", bg: "#FEF2F2" },
-  confirmed: { ar: "مؤكدة",              color: "#059669", bg: "#F0FDF4" },
-  paid:      { ar: "مدفوعة",             color: "#059669", bg: "#F0FDF4" },
+  confirmed: { ar: "مؤكدة",              color: "#6F4A84", bg: "#F7F2F8" },
+  paid:      { ar: "مدفوعة",             color: "#6F4A84", bg: "#F7F2F8" },
   partial:   { ar: "جزئي",               color: "#D97706", bg: "#FEF3C7" },
   overdue:   { ar: "متأخرة",             color: "#DC2626", bg: "#FEF2F2" },
   cancelled: { ar: "ملغاة",              color: "#6B7280", bg: "#F3F4F6" },
@@ -177,8 +177,8 @@ function InvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; onCl
               </div>
               {Number(data.paid_amount || 0) > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                  <span style={{ color: "#059669", fontWeight: 600 }}>{ar ? "المدفوع" : "Paid"}</span>
-                  <span style={{ fontWeight: 700, color: "#059669" }}>{fmt(data.paid_amount)} SAR</span>
+                  <span style={{ color: "#6F4A84", fontWeight: 600 }}>{ar ? "المدفوع" : "Paid"}</span>
+                  <span style={{ fontWeight: 700, color: "#6F4A84" }}>{fmt(data.paid_amount)} SAR</span>
                 </div>
               )}
               {Number(data.total || 0) - Number(data.paid_amount || 0) > 0.01 && (

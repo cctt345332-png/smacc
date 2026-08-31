@@ -72,7 +72,7 @@ export default function DepartmentsPage(props: { params: Promise<{ locale: strin
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#ECFDF5", color: "#059669" }}><IcUsers /></div>
+          <div className="stat-icon" style={{ background: "#F4EFF7", color: "#6F4A84" }}><IcUsers /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "إجمالي الموظفين" : "Total Employees"}</div>
             <div className="stat-value">{totalEmployees}</div>

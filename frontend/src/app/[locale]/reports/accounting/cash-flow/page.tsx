@@ -44,7 +44,7 @@ export default function CashFlowPage(props: { params: Promise<{ locale: string }
   const Row = ({ label, value, bold, indent }: any) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: `${bold ? 12 : 8}px ${indent ? 32 : 20}px`, borderBottom: "1px solid #F1F5F9", fontWeight: bold ? 700 : 400, fontSize: bold ? 14 : 13 }}>
       <span style={{ color: indent ? "var(--text-secondary)" : "var(--text-primary)" }}>{label}</span>
-      <span style={{ color: value >= 0 ? "#059669" : "#DC2626", fontWeight: 600 }}>
+      <span style={{ color: value >= 0 ? "#6F4A84" : "#DC2626", fontWeight: 600 }}>
         {value < 0 ? "(" : ""}{fmt(Math.abs(value))}{value < 0 ? ")" : ""} {ar ? "ر.س" : "SAR"}
       </span>
     </div>
@@ -115,9 +115,9 @@ export default function CashFlowPage(props: { params: Promise<{ locale: string }
             <Row label={ar ? "إجمالي التدفقات التمويلية" : "Total Financing Cash Flow"} value={0} bold />
 
             {/* Net */}
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 20px", fontWeight: 800, fontSize: 16, background: data.operating >= 0 ? "#F0FDF4" : "#FEF2F2", borderTop: "2px solid var(--border)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 20px", fontWeight: 800, fontSize: 16, background: data.operating >= 0 ? "#F7F2F8" : "#FEF2F2", borderTop: "2px solid var(--border)" }}>
               <span>{ar ? "صافي التغير في النقدية" : "Net Change in Cash"}</span>
-              <span style={{ color: data.operating >= 0 ? "#059669" : "#DC2626" }}>
+              <span style={{ color: data.operating >= 0 ? "#6F4A84" : "#DC2626" }}>
                 {fmt(data.operating)} {ar ? "ر.س" : "SAR"}
               </span>
             </div>

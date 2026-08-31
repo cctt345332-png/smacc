@@ -274,7 +274,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
                       <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{item.category?.name_ar || "—"}</td>
                       <td style={{ textAlign: "end" }}>
                         {item.tracking_type === "serial" ? (
-                          <span style={{ color: "#059669", fontWeight: 600 }}>
+                          <span style={{ color: "#6F4A84", fontWeight: 600 }}>
                             {Number(item.serial_count ?? item.quantity_on_hand ?? 0).toLocaleString("en-US")} {ar ? "سيريال" : "serials"}
                           </span>
                         ) : (

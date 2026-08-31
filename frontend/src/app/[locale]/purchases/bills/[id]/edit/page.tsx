@@ -257,7 +257,7 @@ export default function EditBillPage(props: { params: Promise<{ locale: string; 
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span style={{ color: "#6B7280" }}>{ar ? "الحالة:" : "Status:"}</span>
-                <span style={{ fontWeight: 700, color: isDraft ? "#D97706" : "#059669" }}>
+                <span style={{ fontWeight: 700, color: isDraft ? "#D97706" : "#6F4A84" }}>
                   {isDraft ? (ar ? "مسودة" : "Draft") : (ar ? "مؤكدة" : "Confirmed")}                </span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -265,7 +265,7 @@ export default function EditBillPage(props: { params: Promise<{ locale: string; 
                 <span style={{ fontWeight: 700 }}>{fmt(bill.total)} SAR</span>
               </div>
               {!isDraft && (
-                <div style={{ marginTop: 8, padding: 10, background: "#D1FAE5", borderRadius: 8, fontSize: 11, color: "#065F46" }}>
+                <div style={{ marginTop: 8, padding: 10, background: "#E9DDED", borderRadius: 8, fontSize: 11, color: "#4B2A5A" }}>
                   {ar ? "الفاتورة مؤكدة — التعديل سيحدث الأسطر والمبالغ مباشرة" : "Confirmed bill — changes will update lines and amounts directly"}
                 </div>
               )}

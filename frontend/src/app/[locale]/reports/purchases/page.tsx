@@ -112,8 +112,8 @@ export default function PurchasesReportPage(props: { params: Promise<{ locale: s
               { label: ar ? "عدد الفواتير" : "Bill Count", value: bills.length, color: "#5A187E", isMoney: false },
               { label: ar ? "المشتريات قبل الضريبة" : "Net Purchases", value: totalNet, color: "#75617F", isMoney: true },
               { label: ar ? "ضريبة المدخلات" : "Input VAT", value: totalVAT, color: "#D97706", isMoney: true },
-              { label: ar ? "إجمالي المشتريات" : "Gross Purchases", value: totalGross, color: "#059669", isMoney: true },
-              { label: ar ? "المدفوع للموردين" : "Paid to Vendors", value: totalPaid, color: "#059669", isMoney: true },
+              { label: ar ? "إجمالي المشتريات" : "Gross Purchases", value: totalGross, color: "#6F4A84", isMoney: true },
+              { label: ar ? "المدفوع للموردين" : "Paid to Vendors", value: totalPaid, color: "#6F4A84", isMoney: true },
               { label: ar ? "المستحق للموردين" : "Outstanding AP", value: totalOutstanding, color: overdueCount > 0 ? "#DC2626" : "#D97706", isMoney: true },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -184,8 +184,8 @@ export default function PurchasesReportPage(props: { params: Promise<{ locale: s
                       <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totalNet)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#D97706" }}>{fmt(totalVAT)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669", fontSize: 15 }}>{fmt(totalGross)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(totalPaid)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84", fontSize: 15 }}>{fmt(totalGross)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(totalPaid)}</td>
                       <td />
                     </tr>
                   </tfoot>

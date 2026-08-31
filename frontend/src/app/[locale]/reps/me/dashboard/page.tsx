@@ -217,12 +217,12 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
         <StatCard
           label={ar ? "المقبوض" : "Collected"}
           value={`${fmt(summary?.total_collected)} SAR`}
-          color="#059669"
+          color="#6F4A84"
         />
         <StatCard
           label={ar ? "المستحق" : "Outstanding"}
           value={`${fmt(summary?.outstanding)} SAR`}
-          color={Number(summary?.outstanding) > 0 ? "#DC2626" : "#059669"}
+          color={Number(summary?.outstanding) > 0 ? "#DC2626" : "#6F4A84"}
         />
         <StatCard
           label={ar ? "رصيد المخزون" : "Stock Items"}
@@ -242,7 +242,7 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
             </div>
             <span style={{
               fontSize: 13, fontWeight: 800,
-              color: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#3E0865",
+              color: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#3E0865",
             }}>{pct}%</span>
           </div>
           <div style={{ height: 10, background: "var(--border)", borderRadius: 5, overflow: "hidden" }}>
@@ -250,7 +250,7 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
               height: "100%",
               width: `${pct}%`,
               borderRadius: 5,
-              background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#3E0865",
+              background: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#3E0865",
               transition: "width 0.6s ease",
             }} />
           </div>
@@ -302,7 +302,7 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {recentInvoices.map((inv: any) => {
               const statusColors: Record<string, string> = {
-                paid: "#059669", confirmed: "#3E0865", partial: "#D97706",
+                paid: "#6F4A84", confirmed: "#3E0865", partial: "#D97706",
                 overdue: "#DC2626", draft: "#94A3B8", cancelled: "#6B7280",
               };
               const statusLabels: Record<string, { ar: string; en: string }> = {
@@ -447,8 +447,8 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
     submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
     approved:  { ar: "موافق عليها",      color: "#3E0865", bg: "#F4EFF7" },
     rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
-    confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
-    paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+    confirmed: { ar: "مؤكدة",            color: "#6F4A84", bg: "#F7F2F8" },
+    paid:      { ar: "مدفوعة",           color: "#6F4A84", bg: "#F7F2F8" },
     partial:   { ar: "جزئي",             color: "#D97706", bg: "#FEF3C7" },
     cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
   };
@@ -576,8 +576,8 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
               </div>
               {Number(d.paid_amount || 0) > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, paddingTop: 4 }}>
-                  <span style={{ color: "#059669" }}>{ar ? "المدفوع" : "Paid"}</span>
-                  <span style={{ fontWeight: 700, color: "#059669" }}>{fmt2(d.paid_amount)} SAR</span>
+                  <span style={{ color: "#6F4A84" }}>{ar ? "المدفوع" : "Paid"}</span>
+                  <span style={{ fontWeight: 700, color: "#6F4A84" }}>{fmt2(d.paid_amount)} SAR</span>
                 </div>
               )}
               {remaining > 0.01 && (

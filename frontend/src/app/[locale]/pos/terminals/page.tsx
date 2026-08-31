@@ -11,7 +11,7 @@ import api from "@/lib/api";
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
   mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#5A187E", bg: "#EFF6FF" },
   spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#75617F", bg: "#F5F3FF" },
-  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#059669", bg: "#ECFDF5" },
+  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#6F4A84", bg: "#F4EFF7" },
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#D97706", bg: "#FFFBEB" },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#B45309", bg: "#FEF3C7" },
   clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#EC4899", bg: "#FDF2F8" },

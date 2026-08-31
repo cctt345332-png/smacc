@@ -59,7 +59,7 @@ const FEATURES = [
 
 const PLANS = ["trial", "starter", "professional", "enterprise"];
 const PLAN_COLORS: Record<string, string> = {
-  trial: "#059669", starter: "#5A187E", professional: "#75617F", enterprise: "#0F172A"
+  trial: "#6F4A84", starter: "#5A187E", professional: "#75617F", enterprise: "#0F172A"
 };
 const PLAN_AR: Record<string, string> = {
   trial: "تجريبية", starter: "أساسية", professional: "احترافية", enterprise: "مؤسسية"
@@ -205,7 +205,7 @@ export default function AdminAIPage() {
       {/* Status Banner */}
       <div style={{
         padding: "14px 20px", borderRadius: 12,
-        background: config?.internal_enabled ? "#F0FDF4" : "#FEF2F2",
+        background: config?.internal_enabled ? "#F7F2F8" : "#FEF2F2",
         border: `1px solid ${config?.internal_enabled ? "#BBF7D0" : "#FECACA"}`,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
@@ -309,7 +309,7 @@ export default function AdminAIPage() {
               {config?.has_api_key && !newKey && (
                 <div style={{
                   display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                  background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, marginBottom: 10,
+                  background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, marginBottom: 10,
                 }}>
                   <IcCheck />
                   <span style={{ fontSize: 13, color: "var(--success)", fontWeight: 600 }}>
@@ -474,7 +474,7 @@ export default function AdminAIPage() {
             {[
               { label: ar ? "إجمالي الرسائل" : "Total Messages",  value: stats.total_messages,  Icon: IcChart, color: "#5A187E", bg: "#EFF6FF" },
               { label: ar ? "إجمالي الـ Tokens" : "Total Tokens", value: stats.total_tokens,    Icon: IcChart, color: "#75617F", bg: "#F5F3FF" },
-              { label: ar ? "شركات نشطة" : "Active Tenants",      value: stats.active_tenants,  Icon: IcUsers, color: "#059669", bg: "#ECFDF5" },
+              { label: ar ? "شركات نشطة" : "Active Tenants",      value: stats.active_tenants,  Icon: IcUsers, color: "#6F4A84", bg: "#F4EFF7" },
               { label: ar ? "شركات مفعّلة" : "Enabled Tenants",   value: stats.enabled_tenants, Icon: IcUsers, color: "#D97706", bg: "#FFFBEB" },
             ].map((k, i) => (
               <div key={i} className="stat-card">

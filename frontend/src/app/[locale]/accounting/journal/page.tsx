@@ -68,7 +68,7 @@ export default function JournalPage(props: { params: Promise<{ locale: string }>
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
           { label: ar ? "مسودة" : "Draft", status: "draft", color: "#D97706", icon: "draft" as const },
-          { label: ar ? "مرحّلة" : "Posted", status: "posted", color: "#059669", icon: "check" as const },
+          { label: ar ? "مرحّلة" : "Posted", status: "posted", color: "#6F4A84", icon: "check" as const },
           { label: ar ? "ملغاة" : "Cancelled", status: "cancelled", color: "#DC2626", icon: "cancel" as const },
         ].map(s => (
           <div key={s.status} className="stat-card" style={{ cursor: "pointer" }} onClick={() => setFilterStatus(filterStatus === s.status ? "" : s.status)}>
@@ -140,7 +140,7 @@ export default function JournalPage(props: { params: Promise<{ locale: string }>
                     <td style={{ textAlign: "end", fontWeight: 600, color: "#5A187E" }}>
                       {Number(e.total_debit).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
-                    <td style={{ textAlign: "end", fontWeight: 600, color: "#059669" }}>
+                    <td style={{ textAlign: "end", fontWeight: 600, color: "#6F4A84" }}>
                       {Number(e.total_credit).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
                     <td><span className={`badge ${STATUS_COLORS[e.status]}`}>{ar ? STATUS_AR[e.status] : e.status}</span></td>

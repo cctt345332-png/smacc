@@ -79,7 +79,7 @@ export default function AssetReportsPage(props: { params: Promise<{ locale: stri
             { label: ar ? "إجمالي الأصول" : "Total Assets", value: summary.total_assets, color: "#5A187E" },
             { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(summary.total_cost)} ${ar ? "ر.س" : "SAR"}`, color: "#75617F" },
             { label: ar ? "مجمع الاستهلاك" : "Accum. Dep.", value: `${fmt(summary.total_accumulated_depreciation)} ${ar ? "ر.س" : "SAR"}`, color: "#D97706" },
-            { label: ar ? "القيمة الدفترية" : "Net Book Value", value: `${fmt(summary.total_book_value)} ${ar ? "ر.س" : "SAR"}`, color: "#059669" },
+            { label: ar ? "القيمة الدفترية" : "Net Book Value", value: `${fmt(summary.total_book_value)} ${ar ? "ر.س" : "SAR"}`, color: "#6F4A84" },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -137,7 +137,7 @@ export default function AssetReportsPage(props: { params: Promise<{ locale: stri
                       {(reportType === "register" || reportType === "depreciation" || reportType === "bookvalue") && (
                         <>
                           <td style={{ textAlign: "end", color: "#D97706" }}>{fmt(Number(asset.accumulated_depreciation))}</td>
-                          <td style={{ textAlign: "end", fontWeight: 700, color: "#059669" }}>{fmt(Number(asset.book_value))}</td>
+                          <td style={{ textAlign: "end", fontWeight: 700, color: "#6F4A84" }}>{fmt(Number(asset.book_value))}</td>
                         </>
                       )}
                       {reportType === "depreciation" && (
@@ -170,7 +170,7 @@ export default function AssetReportsPage(props: { params: Promise<{ locale: stri
                         <td style={{ textAlign: "end", padding: "12px 16px", color: "#D97706" }}>
                           {fmt(activeAssets.reduce((s, a) => s + Number(a.accumulated_depreciation), 0))}
                         </td>
-                        <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>
+                        <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                           {fmt(activeAssets.reduce((s, a) => s + Number(a.book_value), 0))}
                         </td>
                       </>

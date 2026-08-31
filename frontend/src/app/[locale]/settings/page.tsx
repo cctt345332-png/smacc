@@ -57,7 +57,7 @@ export default function SettingsPage(props: { params: Promise<{ locale: string }
     {
       href: `/${locale}/settings/users`,
       icon: <IcUsers />,
-      color: "#059669", bg: "#ECFDF5",
+      color: "#6F4A84", bg: "#F4EFF7",
       title_ar: "المستخدمون",
       title_en: "Users",
       desc_ar: "إضافة وإدارة مستخدمي الشركة",
@@ -138,7 +138,7 @@ export default function SettingsPage(props: { params: Promise<{ locale: string }
     {
       href: `/${locale}/settings/backup`,
       icon: <IcBackup />,
-      color: "#059669", bg: "#ECFDF5",
+      color: "#6F4A84", bg: "#F4EFF7",
       title_ar: "النسخ الاحتياطي",
       title_en: "Backup",
       desc_ar: "نسخ احتياطية تلقائية ويدوية",

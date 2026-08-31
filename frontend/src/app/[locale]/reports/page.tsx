@@ -20,7 +20,7 @@ const groups = (base: string, ar: boolean): { title: string; color: string; icon
   },
   {
     title: ar ? "تقارير المبيعات" : "Sales Reports",
-    color: "#059669",
+    color: "#6F4A84",
     icon: "receipt" as IconName,
     reports: [
       { label: ar ? "تقرير المبيعات" : "Sales Report", href: `${base}/reports/sales`, desc: ar ? "إجمالي المبيعات بالفترة" : "Total sales by period" },
@@ -45,7 +45,7 @@ const groups = (base: string, ar: boolean): { title: string; color: string; icon
   },
   {
     title: ar ? "تقارير نقطة البيع" : "POS Reports",
-    color: "#059669",
+    color: "#6F4A84",
     icon: "pos" as IconName,
     reports: [
       { label: ar ? "مبيعات POS اليومية" : "Daily POS Sales",      href: `${base}/reports/pos`,              desc: ar ? "إجمالي مبيعات الكاشير يومياً" : "Daily cashier sales totals" },

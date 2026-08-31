@@ -73,8 +73,8 @@ export default function AttendancePage(props: { params: Promise<{ locale: string
 
       <div className="grid-4" style={{ marginBottom: 24 }}>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#ECFDF5", color: "#059669" }}><IcCheck /></div>
-          <div className="stat-content"><div className="stat-label">{ar ? "حاضر" : "Present"}</div><div className="stat-value" style={{ color: "#059669" }}>{present}</div></div>
+          <div className="stat-icon" style={{ background: "#F4EFF7", color: "#6F4A84" }}><IcCheck /></div>
+          <div className="stat-content"><div className="stat-label">{ar ? "حاضر" : "Present"}</div><div className="stat-value" style={{ color: "#6F4A84" }}>{present}</div></div>
         </div>
         <div className="stat-card">
           <div className="stat-icon" style={{ background: "#FEF2F2", color: "#DC2626" }}><IcX /></div>

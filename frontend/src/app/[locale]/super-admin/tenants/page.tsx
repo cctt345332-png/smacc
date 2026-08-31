@@ -19,7 +19,7 @@ const IcChevronL= () => <svg {...s}><polyline points="15 18 9 12 15 6"/></svg>;
 const IcChevronR= () => <svg {...s}><polyline points="9 18 15 12 9 6"/></svg>;
 
 const PLAN_CFG: Record<string, { ar: string; en: string; color: string; bg: string }> = {
-  trial:        { ar: "تجريبية",  en: "Trial",        color: "#059669", bg: "#DCFCE7" },
+  trial:        { ar: "تجريبية",  en: "Trial",        color: "#6F4A84", bg: "#F0E7F4" },
   starter:      { ar: "أساسية",   en: "Starter",      color: "#5A187E", bg: "#DBEAFE" },
   professional: { ar: "احترافية", en: "Professional", color: "#75617F", bg: "#EDE9FE" },
   enterprise:   { ar: "مؤسسية",  en: "Enterprise",   color: "#0F172A", bg: "#F1F5F9" },
@@ -317,7 +317,7 @@ export default function TenantsPage() {
                         </button>
                         <button onClick={() => handleToggle(t)}
                           className="btn btn-sm"
-                          style={{ background: t.is_active ? "#FEE2E2" : "#DCFCE7", color: t.is_active ? "var(--danger)" : "var(--success)", border: "none" }}>
+                          style={{ background: t.is_active ? "#FEE2E2" : "#F0E7F4", color: t.is_active ? "var(--danger)" : "var(--success)", border: "none" }}>
                           {t.is_active ? (ar ? "إيقاف" : "Disable") : (ar ? "تفعيل" : "Enable")}
                         </button>
                       </div>
@@ -496,8 +496,8 @@ export default function TenantsPage() {
                 {resetError && <div style={{ color: "#B91C1C", fontSize: 12, marginTop: 8 }}>{resetError}</div>}
               </div>
 
-              <div style={{ marginTop: 14, padding: 10, background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8 }}>
-                <div style={{ fontSize: 12, color: "#166534", marginBottom: 8 }}>
+              <div style={{ marginTop: 14, padding: 10, background: "#F7F2F8", border: "1px solid #C8AED4", borderRadius: 8 }}>
+                <div style={{ fontSize: 12, color: "#3E0865", marginBottom: 8 }}>
                   {ar ? "إصلاح الأرصدة القديمة التي حُفظت دون قيد:" : "Repair legacy balances saved without a journal:"}
                 </div>
                 <button type="button" onClick={repairCustomerOpeningBalances} disabled={saving} className="btn btn-secondary btn-sm">
