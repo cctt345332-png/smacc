@@ -12,13 +12,13 @@ import { useAuthStore } from "@/store/authStore";
 // ─── Activity config ──────────────────────────────────────────────────
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string; tracking: string; allowPurchase: boolean }> = {
   mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#3E0865", bg: "#F4EFF7", tracking: "serial",   allowPurchase: true  },
-  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#6F4A84", bg: "#EEF4ED", tracking: "serial",   allowPurchase: true  },
-  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#6F4A84", bg: "#EAF5ED", tracking: "batch",    allowPurchase: false },
+  spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#6F4A84", bg: "#F4EFF7", tracking: "serial",   allowPurchase: true  },
+  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#6F4A84", bg: "#F4EFF7", tracking: "batch",    allowPurchase: false },
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#9A6B13", bg: "#FFF8E5", tracking: "quantity", allowPurchase: false },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#8B651D", bg: "#FCF5E2", tracking: "weight",   allowPurchase: false },
-  clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#6F4A84", bg: "#EDF2EC", tracking: "variant",  allowPurchase: false },
+  clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#6F4A84", bg: "#F4EFF7", tracking: "variant",  allowPurchase: false },
   construction:  { label: "مواد بناء",            icon: "construction", color: "#6F4A84", bg: "#EFE8F3", tracking: "quantity", allowPurchase: false },
-  general:       { label: "عام",                 icon: "general",      color: "#3E0865", bg: "#F2F6F1", tracking: "quantity", allowPurchase: false },
+  general:       { label: "عام",                 icon: "general",      color: "#3E0865", bg: "#F4EFF7", tracking: "quantity", allowPurchase: false },
 };
 
 interface CartLine {

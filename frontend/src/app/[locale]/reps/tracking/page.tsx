@@ -375,7 +375,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
                     {geoEvents.map(event=>{
                       const entered=event.event_type==="entered";
                       const initial=event.is_initial;
-                      return <button key={event.id} type="button" onClick={()=>focusGeoEvent(event)} style={{textAlign:"start",padding:"8px 9px",border:"1px solid var(--border)",borderInlineStart:`3px solid ${entered?"#6F4A84":"#B42318"}`,background:entered?"#ECFDF3":"#FEF3F2",borderRadius:6,cursor:"pointer"}}>
+                      return <button key={event.id} type="button" onClick={()=>focusGeoEvent(event)} style={{textAlign:"start",padding:"8px 9px",border:"1px solid var(--border)",borderInlineStart:`3px solid ${entered?"#6F4A84":"#B42318"}`,background:entered?"#F4EFF7":"#FEF3F2",borderRadius:6,cursor:"pointer"}}>
                         <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{fontWeight:800,fontSize:11,color:entered?"#6F4A84":"#B42318"}}>{initial?(ar?"حالة بداية التتبع":"Initial location state"):(entered?(ar?"دخل منطقة العمل":"Entered work zone"):(ar?"خرج من منطقة العمل":"Left work zone"))}</span><span style={{fontSize:10,color:"var(--text-muted)"}}>{fmtTime(event.occurred_at)}</span></div>
                         <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{ar?"اضغط لعرض موقع الحدث على الخريطة":"Click to view the event on the map"}</div>
                       </button>;

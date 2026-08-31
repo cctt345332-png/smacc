@@ -64,7 +64,7 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginBottom: 16 }} className="rep-attendance-summary">
         {[
           { label: ar ? "إجمالي المناديب" : "Total reps", value: summary.total, color: "#3E0865", bg: "#F4EFF7" },
-          { label: ar ? "سجلوا الحضور" : "Checked in", value: summary.present, color: "#6F4A84", bg: "#ECFDF3" },
+          { label: ar ? "سجلوا الحضور" : "Checked in", value: summary.present, color: "#6F4A84", bg: "#F4EFF7" },
           { label: ar ? "لم يسجلوا" : "Not checked in", value: summary.absent, color: "#B54708", bg: "#FFFAEB" },
         ].map((item) => (
           <div className="card" key={item.label} style={{ padding: "14px 16px", background: item.bg }}>
@@ -125,7 +125,7 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
                         {ar ? "فتح الموقع" : "Open map"}{record.check_in_accuracy != null ? ` (${Math.round(record.check_in_accuracy)}m)` : ""}
                       </a>
                     ) : "—"}</td>
-                    <td><span style={{ display: "inline-flex", padding: "3px 8px", borderRadius: 3, fontWeight: 700, fontSize: 11, background: present ? "#ECFDF3" : "#FFFAEB", color: present ? "#6F4A84" : "#B54708" }}>{present ? (ar ? "حاضر" : "Present") : (ar ? "لم يسجل / غائب" : "Not checked in")}</span></td>
+                    <td><span style={{ display: "inline-flex", padding: "3px 8px", borderRadius: 3, fontWeight: 700, fontSize: 11, background: present ? "#F4EFF7" : "#FFFAEB", color: present ? "#6F4A84" : "#B54708" }}>{present ? (ar ? "حاضر" : "Present") : (ar ? "لم يسجل / غائب" : "Not checked in")}</span></td>
                     <td>{present ? (ar ? "لوحة المندوب" : "Rep dashboard") : "—"}</td>
                   </tr>
                 );

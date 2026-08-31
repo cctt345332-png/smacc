@@ -285,7 +285,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price_monthly: 249,
     price_yearly: 2490,
     color: "#75617F",
-    bg: "#EDF7EF",
+    bg: "#F4EFF7",
     popular: true,
     limits: {
       invoices_per_month: 2000,
@@ -327,7 +327,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     price_monthly: 499,
     price_yearly: 4990,
     color: "#4C126D",
-    bg: "#EEF2EE",
+    bg: "#F4EFF7",
     limits: {
       invoices_per_month: null,
       users: null,

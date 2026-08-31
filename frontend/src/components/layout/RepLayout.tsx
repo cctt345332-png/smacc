@@ -309,8 +309,8 @@ export default function RepLayout({
         .rep-legacy-shell .card-header { background:#F4EFF7 !important; border-bottom:1px solid #D5C8DD !important; }
         .rep-legacy-shell table { border-collapse:collapse !important; background:#FFFDFF !important; }
         .rep-legacy-shell th { background:#EFE8F3 !important; color:#3E0865 !important; border:1px solid #D5C8DD !important; font-size:12px !important; }
-        .rep-legacy-shell td { border:1px solid #D7DDD6 !important; }
-        .rep-legacy-shell tr:hover td { background:#F0F6F0 !important; }
+        .rep-legacy-shell td { border:1px solid #D5C8DD !important; }
+        .rep-legacy-shell tr:hover td { background:#F4EFF7 !important; }
         .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { background:#FFFDFF !important; color:#2B1A32 !important; box-shadow:inset 0 1px 1px rgba(0,0,0,.03) !important; }
         .rep-legacy-shell input:focus, .rep-legacy-shell select:focus, .rep-legacy-shell textarea:focus { outline:2px solid #CDBED6 !important; outline-offset:-1px !important; border-color:#3E0865 !important; }
         .rep-legacy-shell input[type="checkbox"], .rep-legacy-shell input[type="radio"] { accent-color:#3E0865 !important; }
@@ -365,7 +365,7 @@ export default function RepLayout({
             <div style={{ fontWeight: 800, fontSize: 13, lineHeight: 1.2, color: "#fff" }}>
               {(user as any)?.fullName || (ar ? "المندوب" : "Rep")}
             </div>
-            <div style={{ fontSize: 10, color: "#D9EEE7" }}>
+            <div style={{ fontSize: 10, color: "#F4EFF7" }}>
               {ar ? "مندوب مبيعات" : "Sales Rep"}
             </div>
           </div>

@@ -32,8 +32,8 @@ export default function ContactPage() {
 
   const contactInfo = [
     { icon: <IcMail />,  color: "#3E0865", bg: "#F4EFF7", label: ar ? "البريد الإلكتروني" : "Email", value: PUBLIC_CONTACT.email, href: publicContactLinks.email },
-    { icon: <IcPhone />, color: "#75617F", bg: "#EAF5ED", label: ar ? "الهاتف / واتساب" : "Phone / WhatsApp", value: PUBLIC_CONTACT.phone, href: publicContactLinks.phone },
-    { icon: <IcClock />, color: "#6F4A84", bg: "#EEF3EE", label: ar ? "العنوان" : "Address", value: ar ? PUBLIC_CONTACT.addressAr : PUBLIC_CONTACT.addressEn },
+    { icon: <IcPhone />, color: "#75617F", bg: "#F4EFF7", label: ar ? "الهاتف / واتساب" : "Phone / WhatsApp", value: PUBLIC_CONTACT.phone, href: publicContactLinks.phone },
+    { icon: <IcClock />, color: "#6F4A84", bg: "#F4EFF7", label: ar ? "العنوان" : "Address", value: ar ? PUBLIC_CONTACT.addressAr : PUBLIC_CONTACT.addressEn },
     { icon: <IcClock />, color: "#D97706", bg: "#FFFBEB", label: ar ? "ساعات العمل"      : "Working Hours", value: ar ? "الأحد — الخميس، 9ص — 6م" : "Sun — Thu, 9AM — 6PM" },
   ];
 

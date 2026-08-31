@@ -148,7 +148,7 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
         .udoc-toolbar { width:190mm; margin:0 auto 10px; display:flex; justify-content:flex-end; gap:8px; }
         .udoc-toolbar button { border:1px solid var(--udoc-accent); color:white; background:var(--udoc-accent); padding:8px 16px; font:700 13px inherit; cursor:pointer; border-radius:2px; }
         .udoc-page { width:210mm; min-height:297mm; margin:0 auto; padding:13mm 14mm 15mm; background:var(--udoc-paper); position:relative; box-shadow:0 4px 20px rgba(62,8,101,.12); }
-        .udoc-page::before { content:""; position:absolute; inset:0; opacity:.25; pointer-events:none; background-image:linear-gradient(#e9eee7 1px,transparent 1px),linear-gradient(90deg,#e9eee7 1px,transparent 1px); background-size:18px 18px; }
+        .udoc-page::before { content:""; position:absolute; inset:0; opacity:.25; pointer-events:none; background-image:linear-gradient(#F4EFF7 1px,transparent 1px),linear-gradient(90deg,#F4EFF7 1px,transparent 1px); background-size:18px 18px; }
         .udoc-content { position:relative; z-index:1; }
         .udoc-head { border-bottom:3px solid var(--udoc-accent); padding-bottom:12px; display:grid; grid-template-columns:1fr auto 1fr; gap:12px; align-items:start; }
         .udoc-brand { display:flex; gap:10px; align-items:flex-start; }
