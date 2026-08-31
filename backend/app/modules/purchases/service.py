@@ -689,9 +689,9 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
     """
     from sqlalchemy import delete as sql_delete
 
+    # نحمّل الرأس فقط؛ تحميل العلاقة ثم حذفها وإعادتها قد يسبب recursion/500 في SQLAlchemy.
     r = await db.execute(
-        select(Bill).options(selectinload(Bill.lines))
-        .where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
+        select(Bill).where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
     )
     bill = r.scalar_one_or_none()
     if not bill:
@@ -794,7 +794,9 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
             await _add_inventory_for_bill(db, tenant_id, user_id, bill)
 
     await db.commit()
-    return await get_bill(db, tenant_id, bill_id)
+    # لا نعيد كائن ORM بعلاقاته بعد التعديل؛ الواجهة تعيد جلب الفاتورة عند فتحها.
+    status_value = bill.status.value if hasattr(bill.status, "value") else str(bill.status)
+    return {"id": bill.id, "bill_number": bill.bill_number, "status": status_value, "updated": True}
 
 
 async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
