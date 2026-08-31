@@ -129,7 +129,7 @@ export default function RepReturnPage(props: { params: Promise<{ locale: string 
         </div>
       </section>
 
-      <div style={{ background: "#F4EFF7", border: "1px solid #9BBBAD", padding: "10px 13px", fontSize: 12, color: "#23463A" }}>
+      <div style={{ background: "#F4EFF7", border: "1px solid #CDBED6", padding: "10px 13px", fontSize: 12, color: "#3E0865" }}>
         {ar ? "المرتجع ينشئ إشعارًا دائنًا مرتبطًا بالفاتورة الأصلية. يظهر مبلغ سندات القبض أعلاه للمتابعة؛ أي صرف نقدي للعميل يُنفذ كسند صرف منفصل بعد اعتماد سياسة المنشأة." : "The return creates a credit note linked to the original invoice. Receipt amount is shown for reference; any customer cash refund is processed separately as a payment voucher under company policy."}
       </div>
 

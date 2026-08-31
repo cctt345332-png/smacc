@@ -145,7 +145,7 @@ export default function AISettingsPage() {
           <div style={{
             padding: "14px 20px", borderRadius: 12,
             background: info?.is_enabled ? "#F7F2F8" : "#FEF2F2",
-            border: `1px solid ${info?.is_enabled ? "#BBF7D0" : "#FECACA"}`,
+            border: `1px solid ${info?.is_enabled ? "#E9DDF0" : "#FECACA"}`,
             display: "flex", alignItems: "center", gap: 10,
           }}>
             <div style={{ width: 10, height: 10, borderRadius: "50%", background: info?.is_enabled ? "var(--success)" : "var(--danger)", flexShrink: 0 }} />

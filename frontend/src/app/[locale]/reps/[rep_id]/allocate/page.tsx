@@ -122,7 +122,7 @@ export default function AllocateStockPage(
         </div>
       )}
       {success && (
-        <div style={{ background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 16px", marginBottom: 12, color: "#6F4A84", fontSize: 13 }}>
+        <div style={{ background: "#F7F2F8", border: "1px solid #E9DDF0", borderRadius: 8, padding: "12px 16px", marginBottom: 12, color: "#6F4A84", fontSize: 13 }}>
           {success}
         </div>
       )}

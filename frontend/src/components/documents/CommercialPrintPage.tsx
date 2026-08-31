@@ -112,6 +112,6 @@ export default function CommercialPrintPage({ source, locale, id }: Props) {
   }, [source, id, ar]);
 
   if (error) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#B42318", fontFamily: "Cairo, sans-serif" }}>{error}</div>;
-  if (!document) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#64736B", fontFamily: "Cairo, sans-serif" }}>{ar ? "جارٍ تجهيز قالب الطباعة…" : "Preparing print template…"}</div>;
+  if (!document) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#75617F", fontFamily: "Cairo, sans-serif" }}>{ar ? "جارٍ تجهيز قالب الطباعة…" : "Preparing print template…"}</div>;
   return <UnifiedDocumentPrint kind={configs[source].kind} document={document} company={company} party={party} locale={locale} />;
 }

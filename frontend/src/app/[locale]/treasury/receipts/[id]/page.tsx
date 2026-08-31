@@ -156,7 +156,7 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
 
         {/* Amount */}
         <div style={{ padding: "28px", display: "flex", justifyContent: "center" }}>
-          <div style={{ textAlign: "center", background: "#F7F2F8", borderRadius: 12, padding: "24px 48px", border: "2px solid #BBF7D0" }}>
+          <div style={{ textAlign: "center", background: "#F7F2F8", borderRadius: 12, padding: "24px 48px", border: "2px solid #E9DDF0" }}>
             <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>{ar ? "المبلغ المستلم" : "Amount Received"}</div>
             <div style={{ fontSize: 36, fontWeight: 800, color: "#6F4A84" }}>{fmt(voucher.amount)}</div>
             <div style={{ fontSize: 14, color: "#6F4A84", marginTop: 4 }}>SAR</div>

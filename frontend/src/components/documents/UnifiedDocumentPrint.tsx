@@ -88,7 +88,7 @@ const kindMeta: Record<PrintDocumentKind, { ar: string; en: string; accent: stri
   sales_order: { ar: "أمر بيع", en: "Sales Order", accent: "#3E0865", tax: false },
   purchase_order: { ar: "أمر شراء", en: "Purchase Order", accent: "#4C126D", tax: false },
   purchase_bill: { ar: "فاتورة مورد", en: "Purchase Bill", accent: "#4C126D", tax: false },
-  receipt: { ar: "سند قبض", en: "Receipt Voucher", accent: "#047857", tax: false },
+  receipt: { ar: "سند قبض", en: "Receipt Voucher", accent: "#6F4A84", tax: false },
   payment: { ar: "سند صرف", en: "Payment Voucher", accent: "#B45309", tax: false },
   expense: { ar: "سند مصروف", en: "Expense Voucher", accent: "#9F1239", tax: false },
 };
@@ -147,17 +147,17 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
         .udoc-root { --udoc-ink:#2B1A32; --udoc-border:#D5C8DD; --udoc-paper:#FFFDFF; font-family:"IBM Plex Sans Arabic", Cairo, Arial, sans-serif; color:var(--udoc-ink); background:#F6F1F8; min-height:100vh; padding:22px 0; }
         .udoc-toolbar { width:190mm; margin:0 auto 10px; display:flex; justify-content:flex-end; gap:8px; }
         .udoc-toolbar button { border:1px solid var(--udoc-accent); color:white; background:var(--udoc-accent); padding:8px 16px; font:700 13px inherit; cursor:pointer; border-radius:2px; }
-        .udoc-page { width:210mm; min-height:297mm; margin:0 auto; padding:13mm 14mm 15mm; background:var(--udoc-paper); position:relative; box-shadow:0 4px 20px rgba(16,49,41,.12); }
+        .udoc-page { width:210mm; min-height:297mm; margin:0 auto; padding:13mm 14mm 15mm; background:var(--udoc-paper); position:relative; box-shadow:0 4px 20px rgba(62,8,101,.12); }
         .udoc-page::before { content:""; position:absolute; inset:0; opacity:.25; pointer-events:none; background-image:linear-gradient(#e9eee7 1px,transparent 1px),linear-gradient(90deg,#e9eee7 1px,transparent 1px); background-size:18px 18px; }
         .udoc-content { position:relative; z-index:1; }
         .udoc-head { border-bottom:3px solid var(--udoc-accent); padding-bottom:12px; display:grid; grid-template-columns:1fr auto 1fr; gap:12px; align-items:start; }
         .udoc-brand { display:flex; gap:10px; align-items:flex-start; }
         .udoc-logo { width:56px; height:56px; object-fit:contain; border:1px solid var(--udoc-border); background:white; padding:3px; }
         .udoc-title { color:var(--udoc-accent); font-size:23px; font-weight:900; line-height:1.25; }
-        .udoc-subtitle,.udoc-muted { display:block; color:#64736B; font-size:10px; margin-top:3px; }
+        .udoc-subtitle,.udoc-muted { display:block; color:#75617F; font-size:10px; margin-top:3px; }
         .udoc-qr { text-align:center; min-width:104px; }
         .udoc-qr canvas { background:white; border:1px solid var(--udoc-border); padding:3px; }
-        .udoc-qr small { display:block; color:#64736B; font-size:9px; margin-top:2px; }
+        .udoc-qr small { display:block; color:#75617F; font-size:9px; margin-top:2px; }
         .udoc-docmeta { text-align:end; font-size:11px; line-height:1.75; }
         .udoc-docno { font:800 18px "Courier New", monospace; letter-spacing:.02em; }
         .udoc-status { display:inline-block; padding:1px 7px; border:1px solid var(--udoc-accent); color:var(--udoc-accent); font-weight:700; font-size:10px; }
@@ -167,7 +167,7 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
         .udoc-section-label { color:var(--udoc-accent); font-weight:800; font-size:10px; letter-spacing:.03em; }
         .udoc-info { display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--udoc-border); border-inline-start:0; margin-bottom:10px; background:white; }
         .udoc-info div { padding:6px 8px; border-inline-start:1px solid var(--udoc-border); font-size:10px; }
-        .udoc-info span { display:block; color:#64736B; font-size:9px; }
+        .udoc-info span { display:block; color:#75617F; font-size:9px; }
         .udoc-info b { font-family:"Courier New", monospace; }
         .udoc-reason { border-inline-start:3px solid var(--udoc-accent); background:#F4EFF7; padding:8px 10px; margin-bottom:10px; font-size:11px; }
         .udoc-table { width:100%; border-collapse:collapse; background:white; border:1px solid var(--udoc-border); }
@@ -180,7 +180,7 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
         .udoc-totalrow strong { font-family:"Courier New", monospace; direction:ltr; }
         .udoc-grand { background:var(--udoc-accent); color:white; padding:9px 8px; font-weight:800; font-size:13px; }
         .udoc-note { border:1px solid var(--udoc-border); background:#fff; padding:8px 10px; margin-top:10px; font-size:10px; line-height:1.6; }
-        .udoc-footer { position:absolute; inset-inline:14mm; bottom:8mm; border-top:1px solid var(--udoc-border); padding-top:5px; display:flex; justify-content:space-between; color:#64736B; font-size:8.5px; }
+        .udoc-footer { position:absolute; inset-inline:14mm; bottom:8mm; border-top:1px solid var(--udoc-border); padding-top:5px; display:flex; justify-content:space-between; color:#75617F; font-size:8.5px; }
         @media print { body:not(.thermal-print-mode) .udoc-root, body:not(.thermal-print-mode) .udoc-root * { visibility:visible !important; } .udoc-root { background:white; padding:0; } .udoc-toolbar { display:none!important; } .udoc-page { width:210mm; min-height:297mm; box-shadow:none; margin:0; padding:12mm 13mm 14mm; } @page { size:A4 portrait; margin:0; } }
       `}</style>
       <div className="udoc-toolbar no-print"><button onClick={() => window.print()}>{ar ? "طباعة / حفظ PDF" : "Print / Save PDF"}</button></div>
@@ -195,7 +195,7 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
                 {meta.tax && <span className="udoc-subtitle">{ar ? "وثيقة ضريبية إلكترونية" : "Electronic tax document"}</span>}
               </div>
             </div>
-            <div className="udoc-qr">{meta.tax && <>{document.qr_code ? <QR value={document.qr_code} /> : <div style={{ width:94, height:94, border:"1px dashed #9AA9A1", display:"grid", placeItems:"center", fontSize:9, color:"#64736B" }}>{ar ? "QR غير متاح" : "QR unavailable"}</div>}<small>{ar ? "رمز الاستجابة السريعة" : "QR code"}</small></>}</div>
+            <div className="udoc-qr">{meta.tax && <>{document.qr_code ? <QR value={document.qr_code} /> : <div style={{ width:94, height:94, border:"1px dashed #B39ABC", display:"grid", placeItems:"center", fontSize:9, color:"#75617F" }}>{ar ? "QR غير متاح" : "QR unavailable"}</div>}<small>{ar ? "رمز الاستجابة السريعة" : "QR code"}</small></>}</div>
             <div className="udoc-docmeta">
               <div className="udoc-docno">{document.number}</div>
               <div>{ar ? "تاريخ الإصدار: " : "Issue date: "}{dateFmt(document.issue_date)}</div>

@@ -75,7 +75,7 @@ function MoreDrawer({
   const base = `/${locale}`;
   const links = [
     { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/me/payments`,  color: "#6F4A84" },
-    { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/me/reports`,   color: "#356B63" },
+    { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/me/reports`,   color: "#6F4A84" },
   ];
 
   return (
@@ -292,19 +292,19 @@ export default function RepLayout({
       <style jsx global>{`
         .rep-legacy-shell { --rep-green:#3E0865; --rep-paper:#FFFDFF; --rep-grid:#D5C8DD; --rep-soft:#F4EFF7; background-color:var(--rep-paper); background-image:linear-gradient(rgba(62,8,101,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(62,8,101,.035) 1px,transparent 1px); background-size:24px 24px; color:#2B1A32; }
         .rep-legacy-shell .rep-legacy-menu { display:flex; align-items:center; gap:0; background:#EFE8F3; border-bottom:1px solid var(--rep-grid); min-height:34px; padding-inline:14px; overflow-x:auto; }
-        .rep-legacy-shell .rep-legacy-menu a { color:#233B31; text-decoration:none; font-size:12px; font-weight:700; padding:8px 13px; border-inline-start:1px solid #D5DAD4; white-space:nowrap; }
+        .rep-legacy-shell .rep-legacy-menu a { color:#2B1A32; text-decoration:none; font-size:12px; font-weight:700; padding:8px 13px; border-inline-start:1px solid #D5C8DD; white-space:nowrap; }
         .rep-legacy-shell .rep-legacy-menu a:hover, .rep-legacy-shell .rep-legacy-menu a.active { background:var(--rep-soft); color:var(--rep-green); }
         .rep-legacy-shell .rep-legacy-toolbar { display:flex; align-items:center; gap:7px; padding:8px 14px; background:#FFFDFF; border-bottom:1px solid var(--rep-grid); }
-        .rep-legacy-shell .rep-legacy-toolbar a { background:linear-gradient(#16806a,#3E0865); color:#fff; border:1px solid #26033F; border-radius:2px; padding:6px 10px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; }
-        .rep-legacy-shell .rep-legacy-toolbar span { font-size:11px; color:#587066; margin-inline-start:5px; }
+        .rep-legacy-shell .rep-legacy-toolbar a { background:linear-gradient(#6F4A84,#3E0865); color:#fff; border:1px solid #26033F; border-radius:2px; padding:6px 10px; font-size:12px; font-weight:700; text-decoration:none; white-space:nowrap; }
+        .rep-legacy-shell .rep-legacy-toolbar span { font-size:11px; color:#6F4A84; margin-inline-start:5px; }
         .rep-legacy-shell main { max-width:1160px !important; padding:18px 20px 88px !important; }
         .rep-legacy-shell main > div > div { border-radius:2px; }
         .rep-legacy-shell button { border-radius:2px !important; }
         .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { border-radius:1px !important; border-color:var(--rep-grid) !important; }
-        .rep-legacy-shell .rep-legacy-note { font-family:"IBM Plex Sans Arabic", Cairo, sans-serif; font-size:11px; color:#577066; }
+        .rep-legacy-shell .rep-legacy-note { font-family:"IBM Plex Sans Arabic", Cairo, sans-serif; font-size:11px; color:#6F4A84; }
         /* طبقة موحدة لكافة صفحات المندوب: أزرار ونماذج وجداول Legacy ERP */
         .rep-legacy-shell .btn-primary, .rep-legacy-shell .btn.btn-primary { background:linear-gradient(#6B3F83,#3E0865) !important; border:1px solid #26033F !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
-        .rep-legacy-shell .btn-secondary, .rep-legacy-shell .btn.btn-secondary { background:#EFE8F3 !important; border:1px solid #AEB9B0 !important; color:#23463A !important; border-radius:2px !important; box-shadow:none !important; }
+        .rep-legacy-shell .btn-secondary, .rep-legacy-shell .btn.btn-secondary { background:#EFE8F3 !important; border:1px solid #CDBED6 !important; color:#3E0865 !important; border-radius:2px !important; box-shadow:none !important; }
         .rep-legacy-shell .card, .rep-legacy-shell .table-wrapper { background:#FFFDFF !important; border-color:#D5C8DD !important; border-radius:2px !important; box-shadow:none !important; }
         .rep-legacy-shell .card-header { background:#F4EFF7 !important; border-bottom:1px solid #D5C8DD !important; }
         .rep-legacy-shell table { border-collapse:collapse !important; background:#FFFDFF !important; }
@@ -312,16 +312,16 @@ export default function RepLayout({
         .rep-legacy-shell td { border:1px solid #D7DDD6 !important; }
         .rep-legacy-shell tr:hover td { background:#F0F6F0 !important; }
         .rep-legacy-shell input, .rep-legacy-shell select, .rep-legacy-shell textarea { background:#FFFDFF !important; color:#2B1A32 !important; box-shadow:inset 0 1px 1px rgba(0,0,0,.03) !important; }
-        .rep-legacy-shell input:focus, .rep-legacy-shell select:focus, .rep-legacy-shell textarea:focus { outline:2px solid #9BBBAD !important; outline-offset:-1px !important; border-color:#3E0865 !important; }
+        .rep-legacy-shell input:focus, .rep-legacy-shell select:focus, .rep-legacy-shell textarea:focus { outline:2px solid #CDBED6 !important; outline-offset:-1px !important; border-color:#3E0865 !important; }
         .rep-legacy-shell input[type="checkbox"], .rep-legacy-shell input[type="radio"] { accent-color:#3E0865 !important; }
         .rep-legacy-shell a[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell button[style*="background: rgb(37, 99, 235)"], .rep-legacy-shell a[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell button[style*="background: rgb(124, 58, 237)"], .rep-legacy-shell a[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell button[style*="background: rgb(59, 130, 246)"], .rep-legacy-shell a[style*="background: rgb(99, 102, 241)"], .rep-legacy-shell button[style*="background: rgb(99, 102, 241)"] { background:linear-gradient(#6B3F83,#3E0865) !important; border:1px solid #26033F !important; color:#fff !important; border-radius:2px !important; box-shadow:none !important; }
         .rep-legacy-shell [style*="color: rgb(37, 99, 235)"], .rep-legacy-shell [style*="color: rgb(124, 58, 237)"], .rep-legacy-shell [style*="color: rgb(59, 130, 246)"], .rep-legacy-shell [style*="color: rgb(99, 102, 241)"], .rep-legacy-shell [style*="color: rgb(79, 70, 229)"], .rep-legacy-shell [style*="color: rgb(139, 92, 246)"] { color:#3E0865 !important; }
         .rep-legacy-shell [style*="background: rgb(239, 246, 255)"], .rep-legacy-shell [style*="background: rgb(245, 243, 255)"], .rep-legacy-shell [style*="background: rgb(238, 242, 255)"], .rep-legacy-shell [style*="background: rgb(243, 244, 246)"] { background:#F4EFF7 !important; }
-        .rep-legacy-shell [style*="border: 1px solid rgb(191, 219, 254)"], .rep-legacy-shell [style*="border: 1.5px solid rgb(191, 219, 254)"] { border-color:#9BBBAD !important; }
+        .rep-legacy-shell [style*="border: 1px solid rgb(191, 219, 254)"], .rep-legacy-shell [style*="border: 1.5px solid rgb(191, 219, 254)"] { border-color:#CDBED6 !important; }
         .rep-legacy-shell [style*="border-radius"] { border-radius:2px !important; }
-        .rep-legacy-shell .empty-state { background:#FFFDFF !important; border:1px dashed #9BBBAD !important; border-radius:2px !important; }
+        .rep-legacy-shell .empty-state { background:#FFFDFF !important; border:1px dashed #CDBED6 !important; border-radius:2px !important; }
         .rep-legacy-shell .rep-mobile-nav { display:none; }
-        @media (max-width: 799px) { .rep-legacy-shell .rep-legacy-menu { display:none; } .rep-legacy-shell .rep-legacy-toolbar span { display:none; } .rep-legacy-shell .rep-legacy-toolbar { justify-content:center; } .rep-legacy-shell .rep-mobile-nav { position:fixed; display:flex; align-items:stretch; justify-content:space-around; bottom:0; inset-inline:0; height:76px; background:#FFFDFF; border-top:2px solid #3E0865; box-shadow:0 -4px 12px rgba(62,8,101,.14); z-index:220; padding:5px 4px max(5px, env(safe-area-inset-bottom)); } .rep-legacy-shell .rep-mobile-nav button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:4px 2px; border:0 !important; border-radius:2px !important; background:transparent; color:#75617F; font-family:inherit; cursor:pointer; } .rep-legacy-shell .rep-mobile-nav .rep-nav-icon { width:31px; height:29px; display:flex; align-items:center; justify-content:center; border:1px solid transparent; } .rep-legacy-shell .rep-mobile-nav .rep-nav-label { font-size:11px; font-weight:800; white-space:nowrap; } .rep-legacy-shell .rep-mobile-nav button.active { color:#3E0865; background:#F4EFF7; border:1px solid #9BBBAD !important; } .rep-legacy-shell .rep-mobile-nav button.active .rep-nav-icon { background:#3E0865; color:#fff; border-color:#26033F; } .rep-legacy-shell main { padding-bottom:94px !important; } }
+        @media (max-width: 799px) { .rep-legacy-shell .rep-legacy-menu { display:none; } .rep-legacy-shell .rep-legacy-toolbar span { display:none; } .rep-legacy-shell .rep-legacy-toolbar { justify-content:center; } .rep-legacy-shell .rep-mobile-nav { position:fixed; display:flex; align-items:stretch; justify-content:space-around; bottom:0; inset-inline:0; height:76px; background:#FFFDFF; border-top:2px solid #3E0865; box-shadow:0 -4px 12px rgba(62,8,101,.14); z-index:220; padding:5px 4px max(5px, env(safe-area-inset-bottom)); } .rep-legacy-shell .rep-mobile-nav button { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:4px 2px; border:0 !important; border-radius:2px !important; background:transparent; color:#75617F; font-family:inherit; cursor:pointer; } .rep-legacy-shell .rep-mobile-nav .rep-nav-icon { width:31px; height:29px; display:flex; align-items:center; justify-content:center; border:1px solid transparent; } .rep-legacy-shell .rep-mobile-nav .rep-nav-label { font-size:11px; font-weight:800; white-space:nowrap; } .rep-legacy-shell .rep-mobile-nav button.active { color:#3E0865; background:#F4EFF7; border:1px solid #CDBED6 !important; } .rep-legacy-shell .rep-mobile-nav button.active .rep-nav-icon { background:#3E0865; color:#fff; border-color:#26033F; } .rep-legacy-shell main { padding-bottom:94px !important; } }
         @media (min-width: 800px) { .rep-legacy-shell .rep-mobile-nav { display:none !important; } .rep-legacy-shell main { padding-bottom:28px !important; } }
       `}</style>
 
@@ -344,7 +344,7 @@ export default function RepLayout({
       {/* ── Top Bar ────────────────────────────────────────────────── */}
       <header style={{
         position: "sticky", top: 0, zIndex: 100,
-        background: "linear-gradient(180deg,#11725D,#3E0865)",
+        background: "linear-gradient(180deg,#6F4A84,#3E0865)",
         color: "#fff",
         borderBottom: "1px solid #26033F",
         padding: "0 16px",

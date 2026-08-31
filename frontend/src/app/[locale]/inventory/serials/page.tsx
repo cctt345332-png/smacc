@@ -444,7 +444,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                   <option value="sold">{ar ? "مباع" : "Sold"}</option>
                 </select>
               </div>
-              <div style={{ marginBottom: 12, padding: "8px 10px", border: "1px solid #B8D5C8", background: "#F2F8F3", color: "#15543E", fontSize: 12, lineHeight: 1.7 }}>
+              <div style={{ marginBottom: 12, padding: "8px 10px", border: "1px solid #D5C8DD", background: "#F7F2F8", color: "#6F4A84", fontSize: 12, lineHeight: 1.7 }}>
                 {ar
                   ? "أسعار التكلفة والبيع موحدة لهذا الصنف وتُدار من بطاقة الصنف. لا يمكن إنشاء سعر مختلف لهذا السيريال."
                   : "Cost and sale prices are unified for this item and managed from the item card. A different price cannot be set for this serial."}
@@ -507,7 +507,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                   </div>
                 </div>
               </div>
-              <div style={{ marginTop: -8, marginBottom: 16, fontSize: 11, color: "#15543E", lineHeight: 1.7 }}>
+              <div style={{ marginTop: -8, marginBottom: 16, fontSize: 11, color: "#6F4A84", lineHeight: 1.7 }}>
                 {ar
                   ? "تُستخدم هذه الأسعار لتهيئة بطاقة الصنف عند إضافة أول سيريال فقط. بعد ذلك ترث كل السيريالات الجديدة سعر بطاقة الصنف الموحد."
                   : "These prices initialize the item card only when its first serial is added. Later serials inherit the unified item-card price."}
@@ -629,7 +629,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
 
                   {/* معاينة النتيجة */}
                   {parsedFromPaste.length > 0 && (
-                    <div style={{ background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px" }}>
+                    <div style={{ background: "#F7F2F8", border: "1px solid #E9DDF0", borderRadius: 8, padding: "10px 14px" }}>
                       <div style={{ fontSize: 12, marginBottom: 6 }}>
                         <span style={{ color: "#6F4A84", fontWeight: 700 }}>✅ {parsedFromPaste.length}</span>
                         <span style={{ color: "var(--text-secondary)" }}>
@@ -638,7 +638,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         {parsedFromPaste.slice(0, 6).map(sn => (
-                          <code key={sn} style={{ background: "white", border: "1px solid #BBF7D0", borderRadius: 4, padding: "1px 5px", fontSize: 11 }}>{sn}</code>
+                          <code key={sn} style={{ background: "white", border: "1px solid #E9DDF0", borderRadius: 4, padding: "1px 5px", fontSize: 11 }}>{sn}</code>
                         ))}
                         {parsedFromPaste.length > 6 && (
                           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>+{parsedFromPaste.length - 6} {ar ? "أخرى" : "more"}</span>

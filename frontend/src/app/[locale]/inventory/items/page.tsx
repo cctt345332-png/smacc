@@ -405,7 +405,7 @@ function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categ
             </div>
           </div>
           {isSerial && (
-            <div style={{ marginTop: 4, padding: "8px 10px", border: "1px solid #B8D5C8", background: "#F2F8F3", color: "#15543E", fontSize: 12, lineHeight: 1.7 }}>
+            <div style={{ marginTop: 4, padding: "8px 10px", border: "1px solid #D5C8DD", background: "#F7F2F8", color: "#6F4A84", fontSize: 12, lineHeight: 1.7 }}>
               {ar
                 ? "بطاقة الصنف هي المرجع الموحد. عند الحفظ تُطبّق تكلفة وسعر البيع على كل السيريالات المتاحة في المخزون، ولا تتغير تكلفة أو ربح الأجهزة المباعة سابقاً."
                 : "The item card is the unified source. Saving applies cost and sale price to all in-stock serials without changing historical cost or profit for sold units."}

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback, use } from "react";
 import Link from "next/link";
 import { getAllRepsLiveLocations, getReps, getSupervisors, getRepLocationHistory, getRepGeoEvents } from "@/lib/reps";
 
-const PIN_COLORS = ["#5A187E","#6F4A84","#DC2626","#D97706","#75617F","#0891B2","#BE185D","#15803D","#B45309","#4338CA"];
+const PIN_COLORS = ["#5A187E","#6F4A84","#DC2626","#D97706","#75617F","#0891B2","#BE185D","#6F4A84","#B45309","#4338CA"];
 const SUPERVISOR_COLOR = "#4C126D";
 const normaliseIso=(iso:string)=>/(Z|[+-]\d{2}:\d{2})$/.test(iso)?iso:`${iso}Z`;
 const fmtTime=(iso:string)=>{try{return new Date(normaliseIso(iso)).toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
@@ -233,7 +233,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
     const current = leafletMap.current;
     if (!current) return;
     const { map, L } = current;
-    L.circleMarker([event.latitude, event.longitude], { radius: 10, color: event.event_type === "entered" ? "#067647" : "#B42318", fillColor: "#fff", fillOpacity: 1, weight: 3 }).addTo(map);
+    L.circleMarker([event.latitude, event.longitude], { radius: 10, color: event.event_type === "entered" ? "#6F4A84" : "#B42318", fillColor: "#fff", fillOpacity: 1, weight: 3 }).addTo(map);
     map.flyTo([event.latitude, event.longitude], 16, { duration: 0.65 });
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
       window.setTimeout(() => mapRef.current?.closest(".rep-tracking-map")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
@@ -375,8 +375,8 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
                     {geoEvents.map(event=>{
                       const entered=event.event_type==="entered";
                       const initial=event.is_initial;
-                      return <button key={event.id} type="button" onClick={()=>focusGeoEvent(event)} style={{textAlign:"start",padding:"8px 9px",border:"1px solid var(--border)",borderInlineStart:`3px solid ${entered?"#067647":"#B42318"}`,background:entered?"#ECFDF3":"#FEF3F2",borderRadius:6,cursor:"pointer"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{fontWeight:800,fontSize:11,color:entered?"#067647":"#B42318"}}>{initial?(ar?"حالة بداية التتبع":"Initial location state"):(entered?(ar?"دخل منطقة العمل":"Entered work zone"):(ar?"خرج من منطقة العمل":"Left work zone"))}</span><span style={{fontSize:10,color:"var(--text-muted)"}}>{fmtTime(event.occurred_at)}</span></div>
+                      return <button key={event.id} type="button" onClick={()=>focusGeoEvent(event)} style={{textAlign:"start",padding:"8px 9px",border:"1px solid var(--border)",borderInlineStart:`3px solid ${entered?"#6F4A84":"#B42318"}`,background:entered?"#ECFDF3":"#FEF3F2",borderRadius:6,cursor:"pointer"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{fontWeight:800,fontSize:11,color:entered?"#6F4A84":"#B42318"}}>{initial?(ar?"حالة بداية التتبع":"Initial location state"):(entered?(ar?"دخل منطقة العمل":"Entered work zone"):(ar?"خرج من منطقة العمل":"Left work zone"))}</span><span style={{fontSize:10,color:"var(--text-muted)"}}>{fmtTime(event.occurred_at)}</span></div>
                         <div style={{fontSize:10,color:"var(--text-muted)",marginTop:2}}>{ar?"اضغط لعرض موقع الحدث على الخريطة":"Click to view the event on the map"}</div>
                       </button>;
                     })}

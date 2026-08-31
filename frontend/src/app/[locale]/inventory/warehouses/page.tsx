@@ -447,7 +447,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                         {res.tracking_type === "serial" && res.transferred?.length > 0 && (
                           <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
                             {res.transferred.map((s: any) => (
-                              <code key={s.serial_id} style={{ background: "white", border: "1px solid #BBF7D0", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>
+                              <code key={s.serial_id} style={{ background: "white", border: "1px solid #E9DDF0", borderRadius: 4, padding: "2px 6px", fontSize: 11 }}>
                                 {s.serial_number}
                               </code>
                             ))}

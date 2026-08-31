@@ -313,8 +313,8 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`} style={{ fontSize: 12, color: "#3E0865", fontWeight: 700, textDecoration: "none", padding: "4px 9px", border: "1px solid #9BBBAD", background: "#F4EFF7" }}>{ar ? "فاتورة" : "Invoice"}</Link>
-                        <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#23463A", fontWeight: 700, padding: "4px 9px", border: "1px solid #AEB9B0", background: "#FAF8FB", cursor: "pointer" }}>{ar ? "تعديل" : "Edit"}</button>
+                        <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`} style={{ fontSize: 12, color: "#3E0865", fontWeight: 700, textDecoration: "none", padding: "4px 9px", border: "1px solid #CDBED6", background: "#F4EFF7" }}>{ar ? "فاتورة" : "Invoice"}</Link>
+                        <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#3E0865", fontWeight: 700, padding: "4px 9px", border: "1px solid #CDBED6", background: "#FAF8FB", cursor: "pointer" }}>{ar ? "تعديل" : "Edit"}</button>
                         <button onClick={() => handleDelete(c)} style={{ fontSize: 12, color: "#B42318", fontWeight: 700, padding: "4px 9px", border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
                       </div>
                     </td>
@@ -412,7 +412,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
               </label>
               {form.latitude && form.longitude ? (
                 <div style={{ display: "flex", gap: 8, alignItems: "center",
-                  background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 10, padding: "10px 14px" }}>
+                  background: "#F7F2F8", border: "1px solid #E9DDF0", borderRadius: 10, padding: "10px 14px" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6F4A84" strokeWidth="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
                     <circle cx="12" cy="10" r="3"/>

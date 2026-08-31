@@ -379,7 +379,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
 
       {/* في وضع البيع — التشغيلة تُخصم تلقائياً FEFO */}
       {value.mode === "batch" && !purchaseMode && (
-        <div style={{ fontSize: 11, color: "#6F4A84", padding: "4px 8px", background: "#F7F2F8", borderRadius: 6, border: "1px solid #BBF7D0" }}>
+        <div style={{ fontSize: 11, color: "#6F4A84", padding: "4px 8px", background: "#F7F2F8", borderRadius: 6, border: "1px solid #E9DDF0" }}>
           {ar ? "سيُخصم تلقائياً من الأقرب للانتهاء (FEFO)" : "Auto-deducted from nearest expiry (FEFO)"}
         </div>
       )}

@@ -206,7 +206,7 @@ export default function AdminAIPage() {
       <div style={{
         padding: "14px 20px", borderRadius: 12,
         background: config?.internal_enabled ? "#F7F2F8" : "#FEF2F2",
-        border: `1px solid ${config?.internal_enabled ? "#BBF7D0" : "#FECACA"}`,
+        border: `1px solid ${config?.internal_enabled ? "#E9DDF0" : "#FECACA"}`,
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -309,7 +309,7 @@ export default function AdminAIPage() {
               {config?.has_api_key && !newKey && (
                 <div style={{
                   display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                  background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, marginBottom: 10,
+                  background: "#F7F2F8", border: "1px solid #E9DDF0", borderRadius: 8, marginBottom: 10,
                 }}>
                   <IcCheck />
                   <span style={{ fontSize: 13, color: "var(--success)", fontWeight: 600 }}>

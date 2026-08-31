@@ -190,7 +190,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
 
       {/* رسائل */}
       {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: "#DC2626", fontSize: 13 }}>{error}</div>}
-      {success && <div style={{ background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: "#6F4A84", fontSize: 13 }}>{success}</div>}
+      {success && <div style={{ background: "#F7F2F8", border: "1px solid #E9DDF0", borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: "#6F4A84", fontSize: 13 }}>{success}</div>}
 
       {/* أدوات البحث */}
       <div className="card" style={{ marginBottom: 16 }}>

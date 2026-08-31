@@ -69,7 +69,7 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{ar ? "التقارير" : "Reports"}</h1>
         <button onClick={exportCSV}
-          style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #BBF7D0",
+          style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #E9DDF0",
             background: "#F7F2F8", color: "#6F4A84", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
           Excel
         </button>

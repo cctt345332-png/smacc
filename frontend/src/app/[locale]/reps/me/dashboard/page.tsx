@@ -236,7 +236,7 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
       {pct !== null && (
         <div style={{ background: "var(--surface)", borderRadius: 16, padding: "16px 18px", border: "1px solid var(--border)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#356B63" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#6F4A84" }}>
               {Icons.target}
               <span style={{ fontSize: 13, fontWeight: 700 }}>{ar ? "الهدف الشهري" : "Monthly Target"}</span>
             </div>
@@ -272,19 +272,19 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
             color="#3E0865" href={`${base}/reps/me/invoices/new`} />
           <ActionCard icon={Icons.customers} label={ar ? "عملائي" : "My Customers"}
             desc={ar ? "عرض وإدارة عملائك" : "View and manage your customers"}
-            color="#28705D" href={`${base}/reps/me/customers`} />
+            color="#6F4A84" href={`${base}/reps/me/customers`} />
           <ActionCard icon={Icons.stock} label={ar ? "مخزوني" : "My Stock"}
             desc={ar ? `${stock.length} صنف متاح` : `${stock.length} items available`}
-            color="#697A3B" href={`${base}/reps/me/stock`} />
+            color="#6F4A84" href={`${base}/reps/me/stock`} />
           <ActionCard icon={Icons.receipt} label={ar ? "سندات القبض" : "Receipts"}
             desc={ar ? "سندات القبض من العملاء" : "Customer payment receipts"}
-            color="#356B63" href={`${base}/reps/me/payments`} />
+            color="#6F4A84" href={`${base}/reps/me/payments`} />
           <ActionCard icon={Icons.newCustomer} label={ar ? "عميل جديد" : "New Customer"}
             desc={ar ? "أضف عميلاً جديداً" : "Add a new customer"}
-            color="#4D766B" href={`${base}/reps/me/customers?action=new`} />
+            color="#6F4A84" href={`${base}/reps/me/customers?action=new`} />
           <ActionCard icon={Icons.reports} label={ar ? "تقاريري" : "My Reports"}
             desc={ar ? "عرض تقارير أدائك" : "View your performance reports"}
-            color="#566A60" href={`${base}/reps/me/reports`} />
+            color="#6F4A84" href={`${base}/reps/me/reports`} />
         </div>
       </div>
 
@@ -495,7 +495,7 @@ function DashInvoiceModal({ inv, locale, onClose }: { inv: any; locale: string; 
           <div style={{ display: "flex", gap: 8 }}>
             {["approved","confirmed","paid","partial"].includes(inv.status) && (
               <button onClick={handlePDF} disabled={downloading}
-                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #9BBBAD",
+                style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid #CDBED6",
                   background: "#F4EFF7", color: "#3E0865", fontSize: 12, fontWeight: 600, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 5 }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

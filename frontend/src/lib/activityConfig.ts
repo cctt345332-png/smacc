@@ -213,7 +213,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     label_en: "Free Trial",
     price_monthly: 0,
     price_yearly: 0,
-    color: "#176545",
+    color: "#6F4A84",
     bg: "#F4EFF7",
     limits: {
       invoices_per_month: 50,
@@ -326,7 +326,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     label_en: "Enterprise",
     price_monthly: 499,
     price_yearly: 4990,
-    color: "#2E493C",
+    color: "#4C126D",
     bg: "#EEF2EE",
     limits: {
       invoices_per_month: null,

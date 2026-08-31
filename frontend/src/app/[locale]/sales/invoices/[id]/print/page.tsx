@@ -50,6 +50,6 @@ export default function SalesInvoicePrintPage(props: { params: Promise<{ locale:
       .catch(() => setDocument(null));
   }, [id]);
 
-  if (!document) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#64736B", fontFamily: "Cairo, sans-serif" }}>{ar ? "جارٍ تجهيز الفاتورة للطباعة…" : "Preparing invoice for print…"}</div>;
+  if (!document) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#75617F", fontFamily: "Cairo, sans-serif" }}>{ar ? "جارٍ تجهيز الفاتورة للطباعة…" : "Preparing invoice for print…"}</div>;
   return <UnifiedDocumentPrint kind={document.invoice_type === "simplified" ? "simplified_invoice" : "tax_invoice"} document={document} company={company} party={party} locale={locale} />;
 }

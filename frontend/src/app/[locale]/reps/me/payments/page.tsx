@@ -11,10 +11,10 @@ const fmtDate = (d: any) =>
 const METHOD: Record<string, { ar: string; color: string; bg: string }> = {
   cash:          { ar: "نقداً",       color: "#6F4A84", bg: "#E9DDED" },
   bank_transfer: { ar: "تحويل بنكي", color: "#3E0865", bg: "#DBEAFE" },
-  cheque:        { ar: "شيك",        color: "#356B63", bg: "#EDE9FE" },
+  cheque:        { ar: "شيك",        color: "#6F4A84", bg: "#EDE9FE" },
   credit_card:   { ar: "بطاقة",      color: "#0891B2", bg: "#CFFAFE" },
   mada:          { ar: "مدى",        color: "#6F4A84", bg: "#E9DDED" },
-  stc_pay:       { ar: "STC Pay",    color: "#356B63", bg: "#EDE9FE" },
+  stc_pay:       { ar: "STC Pay",    color: "#6F4A84", bg: "#EDE9FE" },
 };
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -135,7 +135,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
       </div>
 
       {payments.length > 0 && (
-        <div style={{ background:"#F7F2F8", border:"1px solid #BBF7D0", borderRadius:14,
+        <div style={{ background:"#F7F2F8", border:"1px solid #E9DDF0", borderRadius:14,
           padding:"14px 18px", marginBottom:16, display:"flex", justifyContent:"space-between" }}>
           <span style={{ fontSize:13, color:"#4B2A5A", fontWeight:600 }}>{ar ? "إجمالي المقبوض" : "Total Collected"}</span>
           <span style={{ fontSize:20, fontWeight:800, color:"#6F4A84" }}>{fmt(total)} SAR</span>

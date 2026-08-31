@@ -20,7 +20,7 @@ function PDFButton({ invoiceId, invoiceNumber, locale }: { invoiceId: string; in
   return (
     <button onClick={handleDownload}
       style={{
-        width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #9BBBAD",
+        width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #CDBED6",
         background: "#F4EFF7", color: "#3E0865", fontWeight: 700, fontSize: 14,
         cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
@@ -336,13 +336,13 @@ export default function RepInvoicesPage(props: { params: Promise<{ locale: strin
                 {/* إجراءات دورة الفاتورة */}
                 <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
                   {["draft", "rejected"].includes(inv.status) && (
-                    <Link href={`/${locale}/reps/me/invoices/new?draft=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #9BBBAD", background: "#F4EFF7", color: "#3E0865", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "تعديل" : "Edit"}</Link>
+                    <Link href={`/${locale}/reps/me/invoices/new?draft=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #CDBED6", background: "#F4EFF7", color: "#3E0865", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "تعديل" : "Edit"}</Link>
                   )}
                   {inv.status === "draft" && (
                     <button onClick={() => handleDeleteDraft(inv)} style={{ padding: "5px 8px", border: "1px solid #FECACA", background: "#FEF2F2", color: "#B42318", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
                   )}
                   {["confirmed", "paid", "partial", "overdue"].includes(inv.status) && (
-                    <Link href={`/${locale}/reps/me/returns/new?invoice=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #AEB9B0", background: "#EFE8F3", color: "#23463A", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "مرتجع" : "Return"}</Link>
+                    <Link href={`/${locale}/reps/me/returns/new?invoice=${inv.id}`} style={{ padding: "5px 8px", border: "1px solid #CDBED6", background: "#EFE8F3", color: "#3E0865", fontSize: 11, fontWeight: 800, textDecoration: "none" }}>{ar ? "مرتجع" : "Return"}</Link>
                   )}
                 </div>
 

@@ -187,7 +187,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
         </div>
         {tab === "invoices" && (
           <button onClick={exportCSV}
-            style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #BBF7D0", background: "#F7F2F8",
+            style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #E9DDF0", background: "#F7F2F8",
               color: "#6F4A84", fontSize: 12, fontWeight: 700, cursor: "pointer",
               display: "flex", alignItems: "center", gap: 5 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -227,7 +227,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
                   { label: ar ? "إجمالي مبيعاتي" : "Total Sales",     value: fmt(totalSales) + " SAR",       color: "#3E0865" },
                   { label: ar ? "المقبوض" : "Collected",               value: fmt(totalCollected) + " SAR",   color: "#6F4A84" },
                   { label: ar ? "المستحق" : "Outstanding",             value: fmt(totalOutstanding) + " SAR", color: totalOutstanding > 0 ? "#DC2626" : "#6F4A84" },
-                  { label: ar ? "عدد الفواتير" : "Invoices",           value: String(summary?.invoice_count || 0), color: "#356B63" },
+                  { label: ar ? "عدد الفواتير" : "Invoices",           value: String(summary?.invoice_count || 0), color: "#6F4A84" },
                 ].map(s => (
                   <div key={s.label} style={{ background: "var(--surface)", borderRadius: 14,
                     padding: "14px 16px", border: "1px solid var(--border)" }}>

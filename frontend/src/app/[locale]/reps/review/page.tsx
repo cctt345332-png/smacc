@@ -372,7 +372,7 @@ export default function ReviewPage(props: { params: Promise<{ locale: string }> 
       </div>
 
       {msg && (
-        <div style={{ background: msg.type === "ok" ? "#F7F2F8" : "#FEF2F2", border: `1px solid ${msg.type === "ok" ? "#BBF7D0" : "#FECACA"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: msg.type === "ok" ? "#6F4A84" : "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
+        <div style={{ background: msg.type === "ok" ? "#F7F2F8" : "#FEF2F2", border: `1px solid ${msg.type === "ok" ? "#E9DDF0" : "#FECACA"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: msg.type === "ok" ? "#6F4A84" : "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
           <span>{msg.text}</span>
           <button onClick={() => setMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}>x</button>
         </div>

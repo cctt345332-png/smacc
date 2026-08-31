@@ -932,17 +932,17 @@ tbody tr:hover { background: #FAFBFC; }
 }
 
 /* Legacy ERP access override: kept at the end to supersede the original auth theme. */
-.auth-page { background:#F2F4F0 !important; background-image:linear-gradient(rgba(62,8,101,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(62,8,101,.025) 1px,transparent 1px) !important; background-size:28px 28px !important; font-family:"IBM Plex Sans Arabic",Arial,sans-serif !important; }
+.auth-page { background:#F8F5FA !important; background-image:linear-gradient(rgba(62,8,101,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(62,8,101,.025) 1px,transparent 1px) !important; background-size:28px 28px !important; font-family:"IBM Plex Sans Arabic",Arial,sans-serif !important; }
 .auth-left { background:linear-gradient(180deg,#75617F,#3E0865) !important; border-inline-end:1px solid #26033F !important; }
 .auth-left h1 { font-family:Cairo,sans-serif !important; }
 .auth-left [style*="borderRadius: 8"] { border-radius:2px !important; }
 .auth-right { background:transparent !important; }
 .auth-card { border:1px solid #D5C8DD !important; border-radius:0 !important; background:#FFFDFF !important; box-shadow:3px 4px 0 rgba(62,8,101,.13) !important; }
 .auth-card::before { content:"نظام محاسبي — دخول المستخدم"; display:block; margin:-32px -32px 22px; padding:8px 12px; color:#fff; background:linear-gradient(180deg,#75617F,#3E0865); border-bottom:1px solid #26033F; font-family:Cairo,sans-serif; font-size:11px; font-weight:800; }
-.auth-title { color:#2A4035 !important; font-family:Cairo,sans-serif !important; font-size:19px !important; }
-.auth-subtitle { color:#718077 !important; font-size:11px !important; }
-.auth-page .form-label { color:#42544A !important; font-family:Cairo,sans-serif !important; font-size:10px !important; font-weight:800 !important; }
-.auth-page .form-input { min-height:31px !important; border:1px solid #AEBBAF !important; border-radius:1px !important; background:#FFFDFF !important; font-family:"IBM Plex Sans Arabic",Arial,sans-serif !important; }
+.auth-title { color:#3E0865 !important; font-family:Cairo,sans-serif !important; font-size:19px !important; }
+.auth-subtitle { color:#75617F !important; font-size:11px !important; }
+.auth-page .form-label { color:#3E0865 !important; font-family:Cairo,sans-serif !important; font-size:10px !important; font-weight:800 !important; }
+.auth-page .form-input { min-height:31px !important; border:1px solid #CDBED6 !important; border-radius:1px !important; background:#FFFDFF !important; font-family:"IBM Plex Sans Arabic",Arial,sans-serif !important; }
 .auth-page .btn { border-radius:2px !important; font-family:Cairo,sans-serif !important; }
 .auth-page .btn-primary { background:linear-gradient(180deg,#5A187E,#3E0865) !important; border-color:#26033F !important; }
 
@@ -969,7 +969,7 @@ tbody tr:hover { background: #FAFBFC; }
   .report-print-brand { display: flex; gap: 9px; align-items: center; }
   .report-print-brand img { width: 38px; height: 38px; object-fit: contain; }
   .report-print-brand strong, .report-print-meta strong { display: block; font-size: 13px; }
-  .report-print-brand span, .report-print-meta span { display: block; font-size: 9px; color: #64736B; margin-top: 2px; }
+  .report-print-brand span, .report-print-meta span { display: block; font-size: 9px; color: #75617F; margin-top: 2px; }
   .report-print-meta { text-align: end; }
   .legacy-app-shell .page-header { margin: 0 0 10px !important; padding: 0 0 8px !important; border-bottom: 1px solid #D5C8DD !important; }
   .legacy-app-shell .breadcrumb { display: none !important; }
@@ -1096,9 +1096,9 @@ tbody tr:hover { background: #FAFBFC; }
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid #AAB8AA;
-  background: #F8FAF6;
-  color: #405248;
+  border: 1px solid #CDBED6;
+  background: #FBF8FC;
+  color: #4C126D;
   cursor: pointer;
   font-family: Cairo, "IBM Plex Sans Arabic", sans-serif;
   font-weight: 800;
@@ -1121,8 +1121,8 @@ tbody tr:hover { background: #FAFBFC; }
   min-width: 86px;
   margin-inline-start: auto;
   padding: 4px 12px;
-  border-inline-start: 1px solid #AEBBAF;
-  border-inline-end: 1px solid #AEBBAF;
+  border-inline-start: 1px solid #CDBED6;
+  border-inline-end: 1px solid #CDBED6;
   border-top: 0;
   border-bottom: 0;
   border-radius: 0;

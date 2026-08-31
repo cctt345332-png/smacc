@@ -266,7 +266,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
       )}
 
       {/* بانر workflow */}
-      <div style={{ background: "#F4EFF7", border: "1px solid #9BBBAD", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#1E40AF" }}>
+      <div style={{ background: "#F4EFF7", border: "1px solid #CDBED6", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#1E40AF" }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         <span>
           {ar
