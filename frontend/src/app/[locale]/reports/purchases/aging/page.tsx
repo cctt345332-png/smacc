@@ -10,7 +10,7 @@ const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFraction
 interface AgingRow { vendor: string; current: number; days30: number; days60: number; days90: number; over90: number; total: number; }
 
 const cols = [
-  { key: "current", ar: "جاري",        en: "Current",      color: "#059669" },
+  { key: "current", ar: "جاري",        en: "Current",      color: "#6F4A84" },
   { key: "days30",  ar: "1-30 يوم",     en: "1-30 Days",    color: "#D97706" },
   { key: "days60",  ar: "31-60 يوم",    en: "31-60 Days",   color: "#F97316" },
   { key: "days90",  ar: "61-90 يوم",    en: "61-90 Days",   color: "#DC2626" },

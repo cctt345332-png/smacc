@@ -11,8 +11,8 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FEF3C7" },
   approved:  { ar: "موافق عليها",      color: "#5A187E", bg: "#EFF6FF" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
-  confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
-  paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+  confirmed: { ar: "مؤكدة",            color: "#6F4A84", bg: "#F7F2F8" },
+  paid:      { ar: "مدفوعة",           color: "#6F4A84", bg: "#F7F2F8" },
   partial:   { ar: "جزئي",             color: "#D97706", bg: "#FEF3C7" },
   cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
 };
@@ -134,7 +134,7 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
               {[
                 { label: ar ? "الإجمالي" : "Total", value: fmt(selected.total) + " SAR", color: "#75617F" },
-                { label: ar ? "المدفوع" : "Paid",   value: fmt(selected.paid_amount) + " SAR", color: "#059669" },
+                { label: ar ? "المدفوع" : "Paid",   value: fmt(selected.paid_amount) + " SAR", color: "#6F4A84" },
                 { label: ar ? "المتبقي" : "Due",    value: fmt(Math.max(0, Number(selected.total) - Number(selected.paid_amount))) + " SAR", color: "#DC2626" },
                 { label: ar ? "التاريخ" : "Date",   value: fmtDate(selected.issue_date), color: "var(--text-primary)" },
               ].map(f => (

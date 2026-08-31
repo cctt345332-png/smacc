@@ -87,8 +87,8 @@ export default function CustomerDetailPage(props: { params: Promise<{ locale: st
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
           { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: `${fmt(totalInvoiced)} SAR`, color: "#5A187E", icon: <Icon name="invoice" size={20} /> },
-          { label: ar ? "المحصّل" : "Total Paid", value: `${fmt(totalPaid)} SAR`, color: "#059669", icon: <Icon name="wallet" size={20} /> },
-          { label: ar ? "المستحق" : "Outstanding", value: `${fmt(outstanding)} SAR`, color: outstanding > 0 ? "#DC2626" : "#059669", icon: <Icon name="money" size={20} /> },
+          { label: ar ? "المحصّل" : "Total Paid", value: `${fmt(totalPaid)} SAR`, color: "#6F4A84", icon: <Icon name="wallet" size={20} /> },
+          { label: ar ? "المستحق" : "Outstanding", value: `${fmt(outstanding)} SAR`, color: outstanding > 0 ? "#DC2626" : "#6F4A84", icon: <Icon name="money" size={20} /> },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div className="stat-icon" style={{ background: s.color + "18", color: s.color }}>{s.icon}</div>
@@ -174,8 +174,8 @@ export default function CustomerDetailPage(props: { params: Promise<{ locale: st
                       <td><Link href={`/${locale}/sales/invoices/${inv.id}`} style={{ color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}>{inv.invoice_number}</Link></td>
                       <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(inv.issue_date).toLocaleDateString("en-SA")}</td>
                       <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(inv.total)}</td>
-                      <td style={{ textAlign: "end", color: "#059669" }}>{fmt(inv.paid_amount)}</td>
-                      <td style={{ textAlign: "end", fontWeight: 700, color: bal > 0.01 ? "#DC2626" : "#059669" }}>{fmt(bal)}</td>
+                      <td style={{ textAlign: "end", color: "#6F4A84" }}>{fmt(inv.paid_amount)}</td>
+                      <td style={{ textAlign: "end", fontWeight: 700, color: bal > 0.01 ? "#DC2626" : "#6F4A84" }}>{fmt(bal)}</td>
                       <td><span className={`badge ${s.badge}`}>{s.ar}</span></td>
                     </tr>
                   );

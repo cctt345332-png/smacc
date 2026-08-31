@@ -19,7 +19,7 @@ const ROLES: { key: string; ar: string; en: string; color: string; bg: string; d
   { key: "admin",      ar: "مدير عام",        en: "Admin",       color: "#DC2626", bg: "#FEF2F2", desc_ar: "وصول كامل لكل شيء",                    desc_en: "Full access to everything" },
   { key: "manager",    ar: "مدير",            en: "Manager",     color: "#75617F", bg: "#F5F3FF", desc_ar: "كل الوحدات بدون حذف",                  desc_en: "All modules without delete" },
   { key: "accountant", ar: "محاسب",           en: "Accountant",  color: "#5A187E", bg: "#EFF6FF", desc_ar: "محاسبة، مبيعات، مشتريات، خزينة",       desc_en: "Accounting, sales, purchases, treasury" },
-  { key: "sales",      ar: "مبيعات",          en: "Sales",       color: "#059669", bg: "#ECFDF5", desc_ar: "مبيعات وعملاء ومخزون (قراءة)",          desc_en: "Sales, customers, inventory (read)" },
+  { key: "sales",      ar: "مبيعات",          en: "Sales",       color: "#6F4A84", bg: "#F4EFF7", desc_ar: "مبيعات وعملاء ومخزون (قراءة)",          desc_en: "Sales, customers, inventory (read)" },
   { key: "purchaser",  ar: "مشتريات",         en: "Purchaser",   color: "#D97706", bg: "#FFFBEB", desc_ar: "مشتريات وموردين ومخزون (قراءة)",        desc_en: "Purchases, vendors, inventory (read)" },
   { key: "cashier",    ar: "كاشير",           en: "Cashier",     color: "#0891B2", bg: "#ECFEFF", desc_ar: "نقطة البيع فقط",                        desc_en: "POS only" },
   { key: "warehouse",  ar: "مستودع",          en: "Warehouse",   color: "#64748B", bg: "#F1F5F9", desc_ar: "إدارة المخزون والمستودعات",             desc_en: "Inventory and warehouse management" },
@@ -244,7 +244,7 @@ export default function UsersPage(props: { params: Promise<{ locale: string }> }
                         </button>
                         <button
                           className="btn btn-sm"
-                          style={{ background: u.is_active ? "#FEF2F2" : "#ECFDF5", color: u.is_active ? "#DC2626" : "#059669" }}
+                          style={{ background: u.is_active ? "#FEF2F2" : "#F4EFF7", color: u.is_active ? "#DC2626" : "#6F4A84" }}
                           onClick={() => toggleActive(u)}
                         >
                           {u.is_active ? (ar ? "إيقاف" : "Disable") : (ar ? "تفعيل" : "Enable")}

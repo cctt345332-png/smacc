@@ -56,8 +56,8 @@ export default function SupervisorDashboard(props: { params: Promise<{ locale: s
         {[
           { label: ar ? "عدد المناديب" : "My Reps",        value: String(summary?.rep_count || 0),    color: "#75617F" },
           { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(summary?.total_sales) + " SAR", color: "#5A187E" },
-          { label: ar ? "المقبوض" : "Collected",           value: fmt(summary?.total_collected) + " SAR", color: "#059669" },
-          { label: ar ? "المستحق" : "Outstanding",         value: fmt(summary?.outstanding) + " SAR", color: Number(summary?.outstanding) > 0 ? "#DC2626" : "#059669" },
+          { label: ar ? "المقبوض" : "Collected",           value: fmt(summary?.total_collected) + " SAR", color: "#6F4A84" },
+          { label: ar ? "المستحق" : "Outstanding",         value: fmt(summary?.outstanding) + " SAR", color: Number(summary?.outstanding) > 0 ? "#DC2626" : "#6F4A84" },
         ].map(s => (
           <div key={s.label} style={{ background: "var(--surface)", borderRadius: 16,
             padding: "16px 18px", border: "1px solid var(--border)" }}>
@@ -75,7 +75,7 @@ export default function SupervisorDashboard(props: { params: Promise<{ locale: s
         {[
           { label: ar ? "فواتير مناديبي" : "Invoices",   desc: ar ? "عرض فواتير مناديبي" : "View rep invoices", href: `${base}/supervisor/invoices`, color: "#5A187E" },
           { label: ar ? "التقارير" : "Reports",           desc: ar ? "تقارير الأداء" : "Performance reports",  href: `${base}/supervisor/reports`,  color: "#75617F" },
-          { label: ar ? "مناديبي" : "My Reps",            desc: ar ? `${reps.length} مندوب` : `${reps.length} reps`, href: `${base}/supervisor/reps`, color: "#059669" },
+          { label: ar ? "مناديبي" : "My Reps",            desc: ar ? `${reps.length} مندوب` : `${reps.length} reps`, href: `${base}/supervisor/reps`, color: "#6F4A84" },
         ].map(a => (
           <Link key={a.href} href={a.href} style={{ textDecoration: "none" }}>
             <div style={{ background: "var(--surface)", borderRadius: 16, padding: "16px 18px",
@@ -122,8 +122,8 @@ export default function SupervisorDashboard(props: { params: Promise<{ locale: s
                 </div>
                 <span style={{ marginInlineStart: "auto", fontSize: 11, fontWeight: 600,
                   padding: "2px 8px", borderRadius: 20,
-                  background: rep.is_active ? "#D1FAE5" : "#FEE2E2",
-                  color: rep.is_active ? "#059669" : "#DC2626" }}>
+                  background: rep.is_active ? "#E9DDED" : "#FEE2E2",
+                  color: rep.is_active ? "#6F4A84" : "#DC2626" }}>
                   {rep.is_active ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}
                 </span>
               </div>

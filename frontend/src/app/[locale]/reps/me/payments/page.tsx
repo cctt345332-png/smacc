@@ -9,11 +9,11 @@ const fmtDate = (d: any) =>
   d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
 
 const METHOD: Record<string, { ar: string; color: string; bg: string }> = {
-  cash:          { ar: "نقداً",       color: "#059669", bg: "#D1FAE5" },
+  cash:          { ar: "نقداً",       color: "#6F4A84", bg: "#E9DDED" },
   bank_transfer: { ar: "تحويل بنكي", color: "#3E0865", bg: "#DBEAFE" },
   cheque:        { ar: "شيك",        color: "#356B63", bg: "#EDE9FE" },
   credit_card:   { ar: "بطاقة",      color: "#0891B2", bg: "#CFFAFE" },
-  mada:          { ar: "مدى",        color: "#059669", bg: "#D1FAE5" },
+  mada:          { ar: "مدى",        color: "#6F4A84", bg: "#E9DDED" },
   stc_pay:       { ar: "STC Pay",    color: "#356B63", bg: "#EDE9FE" },
 };
 
@@ -135,10 +135,10 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
       </div>
 
       {payments.length > 0 && (
-        <div style={{ background:"#F0FDF4", border:"1px solid #BBF7D0", borderRadius:14,
+        <div style={{ background:"#F7F2F8", border:"1px solid #BBF7D0", borderRadius:14,
           padding:"14px 18px", marginBottom:16, display:"flex", justifyContent:"space-between" }}>
-          <span style={{ fontSize:13, color:"#065F46", fontWeight:600 }}>{ar ? "إجمالي المقبوض" : "Total Collected"}</span>
-          <span style={{ fontSize:20, fontWeight:800, color:"#059669" }}>{fmt(total)} SAR</span>
+          <span style={{ fontSize:13, color:"#4B2A5A", fontWeight:600 }}>{ar ? "إجمالي المقبوض" : "Total Collected"}</span>
+          <span style={{ fontSize:20, fontWeight:800, color:"#6F4A84" }}>{fmt(total)} SAR</span>
         </div>
       )}
 
@@ -174,7 +174,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     <span style={{ fontFamily:"monospace", fontWeight:700, fontSize:13, color:"#3E0865" }}>
                       {p.payment_number || `#${p.id?.slice(-6)}`}
                     </span>
-                    <span style={{ fontWeight:800, fontSize:15, color:"#059669" }}>+ {fmt(p.amount)} SAR</span>
+                    <span style={{ fontWeight:800, fontSize:15, color:"#6F4A84" }}>+ {fmt(p.amount)} SAR</span>
                   </div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
                     <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:m.bg, color:m.color }}>
@@ -285,7 +285,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                         </div>
                         <div>
                           <div style={{ fontSize:10, color:"#6B7280" }}>{ar ? "المدفوع" : "Paid"}</div>
-                          <div style={{ fontWeight:700, fontSize:13, color:"#059669" }}>{fmt(inv.paid_amount)} SAR</div>
+                          <div style={{ fontWeight:700, fontSize:13, color:"#6F4A84" }}>{fmt(inv.paid_amount)} SAR</div>
                         </div>
                         <div>
                           <div style={{ fontSize:10, color:"#6B7280" }}>{ar ? "المتبقي" : "Remaining"}</div>
@@ -357,7 +357,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                   )}
 
                   {customerInvoices.length === 0 && form.customer_id && !loadingBalance && (
-                    <div style={{ marginTop:8, fontSize:12, color:"#059669", fontWeight:600 }}>
+                    <div style={{ marginTop:8, fontSize:12, color:"#6F4A84", fontWeight:600 }}>
                       {ar ? "لا توجد مبالغ مستحقة لهذا العميل" : "No outstanding balance for this customer"}
                     </div>
                   )}
@@ -371,7 +371,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                 </label>
                 <input type="number" className="form-input" min="0.01" step="0.01"
                   value={form.amount} onChange={e => upd("amount", e.target.value)}
-                  placeholder="0.00" style={{ fontSize:18, fontWeight:700, color:"#059669" }} />
+                  placeholder="0.00" style={{ fontSize:18, fontWeight:700, color:"#6F4A84" }} />
               </div>
 
               {/* طريقة الدفع */}

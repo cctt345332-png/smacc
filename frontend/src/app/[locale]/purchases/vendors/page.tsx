@@ -413,7 +413,7 @@ export default function VendorsPage(props: { params: Promise<{ locale: string }>
                           {ar ? "اختر ملف" : "Choose File"}
                         </button>
                         {docs[doc.key] ? (
-                          <span style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>✓ {ar ? "تم الاختيار" : "Selected"}</span>
+                          <span style={{ fontSize: 12, color: "#6F4A84", fontWeight: 600 }}>✓ {ar ? "تم الاختيار" : "Selected"}</span>
                         ) : (
                           <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "لم يتم الاختيار" : "No file chosen"}</span>
                         )}

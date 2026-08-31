@@ -69,9 +69,9 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
           {/* Summary cards */}
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
-              { label: ar ? "ضريبة المبيعات (مخرجات)" : "Output VAT", value: data.summary.output_vat, color: "#059669", icon: "📤" },
+              { label: ar ? "ضريبة المبيعات (مخرجات)" : "Output VAT", value: data.summary.output_vat, color: "#6F4A84", icon: "📤" },
               { label: ar ? "ضريبة المشتريات (مدخلات)" : "Input VAT", value: data.summary.input_vat, color: "#5A187E", icon: "📥" },
-              { label: ar ? "صافي الضريبة المستحقة" : "Net VAT Payable", value: data.summary.net_vat_payable, color: data.summary.net_vat_payable > 0 ? "#D97706" : "#059669", icon: "🏛️" },
+              { label: ar ? "صافي الضريبة المستحقة" : "Net VAT Payable", value: data.summary.net_vat_payable, color: data.summary.net_vat_payable > 0 ? "#D97706" : "#6F4A84", icon: "🏛️" },
             ].map(s => (
               <div key={s.label} className="stat-card">
                 <div className="stat-icon" style={{ background: s.color + "18", color: s.color, fontSize: 22 }}>{s.icon}</div>
@@ -95,7 +95,7 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
             </div>
             <div style={{ padding: 0 }}>
               {/* المبيعات */}
-              <div style={{ padding: "12px 20px", background: "#F0FDF4", fontWeight: 700, color: "#059669", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ padding: "12px 20px", background: "#F7F2F8", fontWeight: 700, color: "#6F4A84", borderBottom: "1px solid var(--border)" }}>
                 {ar ? "أولاً: المبيعات (المخرجات)" : "I. Sales (Output VAT)"}
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -110,7 +110,7 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
                   <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
                     <td style={{ padding: "12px 20px", fontSize: 13 }}>{ar ? "مبيعات خاضعة للضريبة (15%)" : "Standard rated sales (15%)"}</td>
                     <td style={{ padding: "12px 20px", textAlign: "end" }}>{fmt(data.output_vat.standard_rated_sales)}</td>
-                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#059669", fontWeight: 600 }}>{fmt(data.output_vat.standard_vat_amount)}</td>
+                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#6F4A84", fontWeight: 600 }}>{fmt(data.output_vat.standard_vat_amount)}</td>
                   </tr>
                   <tr style={{ borderBottom: "1px solid #F1F5F9" }}>
                     <td style={{ padding: "12px 20px", fontSize: 13 }}>{ar ? "مبيعات بنسبة صفر" : "Zero rated sales"}</td>
@@ -122,10 +122,10 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
                     <td style={{ padding: "12px 20px", textAlign: "end" }}>{fmt(data.output_vat.exempt_sales)}</td>
                     <td style={{ padding: "12px 20px", textAlign: "end", color: "var(--text-muted)" }}>—</td>
                   </tr>
-                  <tr style={{ background: "#F0FDF4", fontWeight: 700 }}>
+                  <tr style={{ background: "#F7F2F8", fontWeight: 700 }}>
                     <td style={{ padding: "12px 20px" }}>{ar ? "إجمالي المبيعات" : "Total Sales"}</td>
                     <td style={{ padding: "12px 20px", textAlign: "end" }}>{fmt(data.output_vat.total_sales)}</td>
-                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#059669" }}>{fmt(data.output_vat.standard_vat_amount)}</td>
+                    <td style={{ padding: "12px 20px", textAlign: "end", color: "#6F4A84" }}>{fmt(data.output_vat.standard_vat_amount)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -150,9 +150,9 @@ export default function VATReportPage(props: { params: Promise<{ locale: string 
               </table>
 
               {/* الصافي */}
-              <div style={{ padding: "16px 20px", borderTop: "2px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: data.summary.net_vat_payable > 0 ? "#FEF9C3" : "#F0FDF4" }}>
+              <div style={{ padding: "16px 20px", borderTop: "2px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: data.summary.net_vat_payable > 0 ? "#FEF9C3" : "#F7F2F8" }}>
                 <span style={{ fontWeight: 800, fontSize: 16 }}>{ar ? "صافي الضريبة المستحقة للهيئة" : "Net VAT Due to ZATCA"}</span>
-                <span style={{ fontWeight: 800, fontSize: 20, color: data.summary.net_vat_payable > 0 ? "#D97706" : "#059669" }}>
+                <span style={{ fontWeight: 800, fontSize: 20, color: data.summary.net_vat_payable > 0 ? "#D97706" : "#6F4A84" }}>
                   {fmt(data.summary.net_vat_payable)} {ar ? "ر.س" : "SAR"}
                 </span>
               </div>

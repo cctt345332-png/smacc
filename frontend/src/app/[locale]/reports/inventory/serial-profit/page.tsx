@@ -89,8 +89,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
             {[
               { label: ar ? "عدد الوحدات المباعة" : "Units Sold", value: data.summary.count, color: "#5A187E" },
               { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(data.summary.total_cost)} SAR`, color: "#DC2626" },
-              { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: `${fmt(data.summary.total_revenue)} SAR`, color: "#059669" },
-              { label: ar ? "صافي الربح" : "Net Profit", value: `${fmt(data.summary.total_profit)} SAR`, color: data.summary.total_profit >= 0 ? "#059669" : "#DC2626" },
+              { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: `${fmt(data.summary.total_revenue)} SAR`, color: "#6F4A84" },
+              { label: ar ? "صافي الربح" : "Net Profit", value: `${fmt(data.summary.total_profit)} SAR`, color: data.summary.total_profit >= 0 ? "#6F4A84" : "#DC2626" },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -130,8 +130,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-SA") : "—"}</td>
                         <td style={{ textAlign: "end" }}>{fmt(row.cost_price)}</td>
                         <td style={{ textAlign: "end" }}>{fmt(row.sale_price)}</td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: row.profit >= 0 ? "#059669" : "#DC2626" }}>{fmt(row.profit)}</td>
-                        <td style={{ textAlign: "end", color: row.profit_pct >= 20 ? "#059669" : row.profit_pct >= 10 ? "#D97706" : "#DC2626" }}>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: row.profit >= 0 ? "#6F4A84" : "#DC2626" }}>{fmt(row.profit)}</td>
+                        <td style={{ textAlign: "end", color: row.profit_pct >= 20 ? "#6F4A84" : row.profit_pct >= 10 ? "#D97706" : "#DC2626" }}>
                           {fmt(row.profit_pct)}%
                         </td>
                       </tr>
@@ -141,8 +141,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                       <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#DC2626" }}>{fmt(data.summary.total_cost)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(data.summary.total_revenue)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669", fontSize: 15 }}>{fmt(data.summary.total_profit)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(data.summary.total_revenue)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84", fontSize: 15 }}>{fmt(data.summary.total_profit)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(data.summary.avg_profit_pct)}%</td>
                     </tr>
                   </tfoot>

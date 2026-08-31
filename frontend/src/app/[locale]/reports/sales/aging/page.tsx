@@ -62,7 +62,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   }), { current: 0, days30: 0, days60: 0, days90: 0, over90: 0, total: 0 });
 
   const cols = [
-    { key: "current", label: ar ? "جاري" : "Current", color: "#059669" },
+    { key: "current", label: ar ? "جاري" : "Current", color: "#6F4A84" },
     { key: "days30", label: ar ? "1-30 يوم" : "1-30 Days", color: "#D97706" },
     { key: "days60", label: ar ? "31-60 يوم" : "31-60 Days", color: "#F97316" },
     { key: "days90", label: ar ? "61-90 يوم" : "61-90 Days", color: "#DC2626" },

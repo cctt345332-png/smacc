@@ -93,7 +93,7 @@ export default function POSSalesReportPage(props: { params: Promise<{ locale: st
       {/* KPIs */}
       <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
-          { label: ar ? "إجمالي المبيعات"       : "Total Sales",    value: `${fmt(totalSales)} ${sar}`, icon: "revenue" as const, color: "#059669", bg: "#ECFDF5" },
+          { label: ar ? "إجمالي المبيعات"       : "Total Sales",    value: `${fmt(totalSales)} ${sar}`, icon: "revenue" as const, color: "#6F4A84", bg: "#F4EFF7" },
           { label: ar ? "إجمالي النقد"           : "Cash",           value: `${fmt(totalCash)} ${sar}`,  icon: "cash"    as const, color: "#5A187E", bg: "#EFF6FF" },
           { label: ar ? "إجمالي البطاقة"         : "Card",           value: `${fmt(totalCard)} ${sar}`,  icon: "card"    as const, color: "#75617F", bg: "#F5F3FF" },
           { label: ar ? "ضريبة القيمة المضافة"   : "VAT",            value: `${fmt(totalVat)} ${sar}`,   icon: "tax"     as const, color: "#D97706", bg: "#FFFBEB" },
@@ -130,7 +130,7 @@ export default function POSSalesReportPage(props: { params: Promise<{ locale: st
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ flex: 1, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${totalSales > 0 ? (amount / totalSales) * 100 : 0}%`, background: "#059669", borderRadius: 3 }} />
+                          <div style={{ height: "100%", width: `${totalSales > 0 ? (amount / totalSales) * 100 : 0}%`, background: "#6F4A84", borderRadius: 3 }} />
                         </div>
                         <span style={{ fontSize: 11, color: "var(--text-muted)", minWidth: 36 }}>
                           {totalSales > 0 ? ((amount / totalSales) * 100).toFixed(1) : 0}%

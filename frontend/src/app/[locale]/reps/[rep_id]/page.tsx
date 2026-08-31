@@ -13,8 +13,8 @@ const STATUS: Record<string, { ar: string; color: string; bg: string }> = {
   submitted: { ar: "بانتظار المراجعة", color: "#D97706", bg: "#FFFBEB" },
   approved:  { ar: "موافق عليها",      color: "#5A187E", bg: "#EFF6FF" },
   rejected:  { ar: "مرفوضة",           color: "#DC2626", bg: "#FEF2F2" },
-  confirmed: { ar: "مؤكدة",            color: "#059669", bg: "#F0FDF4" },
-  paid:      { ar: "مدفوعة",           color: "#059669", bg: "#F0FDF4" },
+  confirmed: { ar: "مؤكدة",            color: "#6F4A84", bg: "#F7F2F8" },
+  paid:      { ar: "مدفوعة",           color: "#6F4A84", bg: "#F7F2F8" },
   partial:   { ar: "جزئي",             color: "#D97706", bg: "#FFFBEB" },
   unpaid:    { ar: "غير مدفوعة",       color: "#DC2626", bg: "#FEF2F2" },
   cancelled: { ar: "ملغاة",            color: "#6B7280", bg: "#F3F4F6" },
@@ -165,7 +165,7 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
 
       {/* ── رسائل ── */}
       {msg && (
-        <div style={{ background: msg.type === "ok" ? "#F0FDF4" : "#FEF2F2", border: `1px solid ${msg.type === "ok" ? "#BBF7D0" : "#FECACA"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: msg.type === "ok" ? "#059669" : "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
+        <div style={{ background: msg.type === "ok" ? "#F7F2F8" : "#FEF2F2", border: `1px solid ${msg.type === "ok" ? "#BBF7D0" : "#FECACA"}`, borderRadius: 8, padding: "10px 14px", marginBottom: 12, color: msg.type === "ok" ? "#6F4A84" : "#DC2626", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
           <span>{msg.text}</span>
           <button onClick={() => setMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontSize: 16 }}>x</button>
         </div>
@@ -177,8 +177,8 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
           {[
             { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(summary.total_sales) + " SAR", color: "#5A187E" },
             { label: ar ? "عدد الفواتير" : "Invoices",       value: summary.invoice_count,             color: "#75617F" },
-            { label: ar ? "المحصّل" : "Collected",            value: fmt(summary.total_collected) + " SAR", color: "#059669" },
-            { label: ar ? "المستحق" : "Outstanding",          value: fmt(summary.outstanding) + " SAR",     color: Number(summary.outstanding) > 0 ? "#DC2626" : "#059669" },
+            { label: ar ? "المحصّل" : "Collected",            value: fmt(summary.total_collected) + " SAR", color: "#6F4A84" },
+            { label: ar ? "المستحق" : "Outstanding",          value: fmt(summary.outstanding) + " SAR",     color: Number(summary.outstanding) > 0 ? "#DC2626" : "#6F4A84" },
             { label: ar ? "المخزون" : "Stock Qty",            value: Number(summary.stock_qty || 0).toLocaleString("en-US"), color: "#D97706" },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -261,12 +261,12 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
               </div>
               <div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{ar ? "نسبة التحقق" : "Achievement"}</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: pct !== null ? (pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#5A187E") : "var(--text-muted)" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: pct !== null ? (pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#5A187E") : "var(--text-muted)" }}>
                   {pct !== null ? `${pct}%` : "—"}
                 </div>
                 {pct !== null && (
                   <div style={{ marginTop: 6, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#5A187E", borderRadius: 3, transition: "width 0.3s" }} />
+                    <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#5A187E", borderRadius: 3, transition: "width 0.3s" }} />
                   </div>
                 )}
               </div>
@@ -391,7 +391,7 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                         <td style={{ fontSize: 12 }}>{PAY_METHOD[inv.invoice_payment_method] || "—"}</td>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmtD(inv.issue_date)}</td>
                         <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(inv.total)} SAR</td>
-                        <td style={{ textAlign: "end", color: remaining > 0 ? "#DC2626" : "#059669", fontWeight: 600 }}>
+                        <td style={{ textAlign: "end", color: remaining > 0 ? "#DC2626" : "#6F4A84", fontWeight: 600 }}>
                           {remaining > 0.01 ? fmt(remaining) : "0.00"} SAR
                         </td>
                         <td>
@@ -437,7 +437,7 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                       <td style={{ fontFamily: "monospace", fontSize: 12 }}>{s.item_sku || "—"}</td>
                       <td><span style={{ background: "#F3F4F6", padding: "2px 8px", borderRadius: 6, fontSize: 11 }}>{s.item_tracking}</span></td>
                       <td style={{ textAlign: "end", fontWeight: 600 }}>{s.quantity}</td>
-                      <td style={{ textAlign: "end", fontWeight: 700, color: s.available_qty <= 0 ? "#DC2626" : s.is_low_stock ? "#D97706" : "#059669" }}>
+                      <td style={{ textAlign: "end", fontWeight: 700, color: s.available_qty <= 0 ? "#DC2626" : s.is_low_stock ? "#D97706" : "#6F4A84" }}>
                         {s.available_qty}
                         {s.is_low_stock && <span style={{ fontSize: 10, marginInlineStart: 4, color: "#D97706" }}>منخفض</span>}
                       </td>
@@ -474,7 +474,7 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                     <tr key={i}>
                       <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{t.date}</td>
                       <td>
-                        <span style={{ background: t.direction === "in" ? "#F0FDF4" : "#FEF2F2", color: t.direction === "in" ? "#059669" : "#DC2626", padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+                        <span style={{ background: t.direction === "in" ? "#F7F2F8" : "#FEF2F2", color: t.direction === "in" ? "#6F4A84" : "#DC2626", padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
                           {t.direction === "in" ? (ar ? "وارد" : "In") : (ar ? "صادر" : "Out")}
                         </span>
                       </td>
@@ -630,11 +630,11 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
                   </div>
                   {Number(selectedInvoice.paid_amount) > 0 && (
                     <>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#059669" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#6F4A84" }}>
                         <span>{ar ? "المدفوع" : "Paid"}</span>
                         <span>{fmt(selectedInvoice.paid_amount)} SAR</span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#059669" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#6F4A84" }}>
                         <span>{ar ? "المتبقي" : "Remaining"}</span>
                         <span>{fmt(Math.max(0, Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)))} SAR</span>
                       </div>
@@ -754,7 +754,7 @@ function TrackingTab({
     polyline.addTo(map);
 
     if (coords.length > 0) {
-      const start = L.circleMarker(coords[0], { radius: 8, color: "#059669", fillColor: "#059669", fillOpacity: 1, weight: 2 });
+      const start = L.circleMarker(coords[0], { radius: 8, color: "#6F4A84", fillColor: "#6F4A84", fillOpacity: 1, weight: 2 });
       start._isTrackLayer = true;
       start.bindTooltip(ar ? "نقطة البداية" : "Start", { permanent: false }).addTo(map);
     }
@@ -845,7 +845,7 @@ function TrackingTab({
                     <td style={{ fontSize: 12 }}>{p.speed != null ? `${p.speed} km/h` : "—"}</td>
                     <td style={{ fontSize: 12 }}>{p.battery_level != null ? `${p.battery_level}%` : "—"}</td>
                     <td>
-                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: p.is_moving ? "#D1FAE5" : "#F3F4F6", color: p.is_moving ? "#059669" : "#6B7280" }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: p.is_moving ? "#E9DDED" : "#F3F4F6", color: p.is_moving ? "#6F4A84" : "#6B7280" }}>
                         {p.is_moving ? (ar ? "متحرك" : "Moving") : (ar ? "ثابت" : "Still")}
                       </span>
                     </td>

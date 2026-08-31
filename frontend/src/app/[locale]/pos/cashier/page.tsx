@@ -691,7 +691,7 @@ export default function POSCashierPage() {
             {payMethod === "cash" && (
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                 <input type="number" className="form-input" style={{ flex: 1, fontSize: 13 }} placeholder={isAr ? "المبلغ المدفوع" : "Cash tendered"} value={cashTendered} onChange={(e) => setCashTendered(e.target.value)} />
-                {change > 0 && <div style={{ display: "flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#059669", whiteSpace: "nowrap" }}>{isAr ? "الباقي:" : "Change:"} {fmt(change)} {sar}</div>}
+                {change > 0 && <div style={{ display: "flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6F4A84", whiteSpace: "nowrap" }}>{isAr ? "الباقي:" : "Change:"} {fmt(change)} {sar}</div>}
               </div>
             )}
             {payMethod === "split" && (
@@ -938,7 +938,7 @@ export default function POSCashierPage() {
             {/* Header */}
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center", color: "#059669" }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#F4EFF7", display: "flex", alignItems: "center", justifyContent: "center", color: "#6F4A84" }}>
                   <Icon name="check" size={18} />
                 </div>
                 <div>

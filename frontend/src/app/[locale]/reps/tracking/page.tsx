@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback, use } from "react";
 import Link from "next/link";
 import { getAllRepsLiveLocations, getReps, getSupervisors, getRepLocationHistory, getRepGeoEvents } from "@/lib/reps";
 
-const PIN_COLORS = ["#5A187E","#059669","#DC2626","#D97706","#75617F","#0891B2","#BE185D","#15803D","#B45309","#4338CA"];
+const PIN_COLORS = ["#5A187E","#6F4A84","#DC2626","#D97706","#75617F","#0891B2","#BE185D","#15803D","#B45309","#4338CA"];
 const SUPERVISOR_COLOR = "#4C126D";
 const normaliseIso=(iso:string)=>/(Z|[+-]\d{2}:\d{2})$/.test(iso)?iso:`${iso}Z`;
 const fmtTime=(iso:string)=>{try{return new Date(normaliseIso(iso)).toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});}catch{return"—";}};
@@ -295,7 +295,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
               </div>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:9,fontWeight:600,padding:"2px 6px",borderRadius:20,background:loc.is_moving?"#D1FAE5":"#F3F4F6",color:loc.is_moving?"#059669":"#6B7280"}}>{loc.is_moving?(ar?"متحرك":"Moving"):(ar?"ثابت":"Still")}</span>
+              <span style={{fontSize:9,fontWeight:600,padding:"2px 6px",borderRadius:20,background:loc.is_moving?"#E9DDED":"#F3F4F6",color:loc.is_moving?"#6F4A84":"#6B7280"}}>{loc.is_moving?(ar?"متحرك":"Moving"):(ar?"ثابت":"Still")}</span>
               <span style={{fontSize:9,color:"var(--text-muted)"}}>{fmtTime(loc.recorded_at)}</span>
             </div>
             {loc.battery_level!=null&&<div style={{marginTop:3,fontSize:9,color:"var(--text-muted)"}}>🔋{loc.battery_level}%</div>}
@@ -320,8 +320,8 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:10}}>
               <div style={{background:"#F8FAFC",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:16,color:panelColor}}>{quickCard.speed!=null?Math.round(quickCard.speed as number):0}</div><div style={{fontSize:9,color:"#6B7280"}}>km/h</div></div>
-              <div style={{background:"#F8FAFC",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:16,color:quickCard.battery_level!=null&&quickCard.battery_level<20?"#EF4444":"#059669"}}>{quickCard.battery_level??"-"}%</div><div style={{fontSize:9,color:"#6B7280"}}>{ar?"بطارية":"Batt"}</div></div>
-              <div style={{background:quickCard.is_moving?"#D1FAE5":"#F3F4F6",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:quickCard.is_moving?"#059669":"#6B7280"}}>{quickCard.is_moving?(ar?"متحرك":"Moving"):(ar?"ثابت":"Still")}</div><div style={{fontSize:9,color:"#6B7280"}}>{fmtTime(quickCard.recorded_at)}</div></div>
+              <div style={{background:"#F8FAFC",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:16,color:quickCard.battery_level!=null&&quickCard.battery_level<20?"#EF4444":"#6F4A84"}}>{quickCard.battery_level??"-"}%</div><div style={{fontSize:9,color:"#6B7280"}}>{ar?"بطارية":"Batt"}</div></div>
+              <div style={{background:quickCard.is_moving?"#E9DDED":"#F3F4F6",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:quickCard.is_moving?"#6F4A84":"#6B7280"}}>{quickCard.is_moving?(ar?"متحرك":"Moving"):(ar?"ثابت":"Still")}</div><div style={{fontSize:9,color:"#6B7280"}}>{fmtTime(quickCard.recorded_at)}</div></div>
             </div>
             <div style={{fontSize:11,color:"#6B7280",marginBottom:10}}>{ar?"آخر تحديث:":"Updated:"} {fmtDateTime(quickCard.recorded_at)}</div>
             <button onClick={()=>{setTripPanel(quickCard);setTripDate(todayStr());setQuickCard(null);}} style={{width:"100%",padding:"8px",borderRadius:10,background:panelColor,color:"white",border:"none",fontWeight:700,fontSize:12,cursor:"pointer"}}>
@@ -347,7 +347,7 @@ export default function RepsTrackingPage(props:{params: Promise<{locale:string}>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:12}}>
                 <div style={{background:"#DBEAFE",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#3E0865"}}>{fmtDur(totalMove)}</div><div style={{fontSize:9,color:"#3E0865"}}>{ar?"حركة":"Move"}</div></div>
                 <div style={{background:"#FEF3C7",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#B45309"}}>{fmtDur(totalStop)}</div><div style={{fontSize:9,color:"#B45309"}}>{ar?"توقف":"Stop"}</div></div>
-                <div style={{background:"#D1FAE5",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#059669"}}>{maxSpd>0?maxSpd:"-"}</div><div style={{fontSize:9,color:"#059669"}}>Max km/h</div></div>
+                <div style={{background:"#E9DDED",borderRadius:10,padding:"7px 6px",textAlign:"center"}}><div style={{fontWeight:800,fontSize:12,color:"#6F4A84"}}>{maxSpd>0?maxSpd:"-"}</div><div style={{fontSize:9,color:"#6F4A84"}}>Max km/h</div></div>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {trips.map((t,i)=>{

@@ -491,17 +491,17 @@ export default function InvoicePrint({ doc, company, party, locale, type }: Prop
                   padding: "7px 14px", fontSize: 13,
                   borderTop: "1px solid #E5E7EB",
                 }}>
-                  <span style={{ color: "#059669", fontWeight: 600 }}>{ar ? "المدفوع" : "Paid"}</span>
-                  <span style={{ color: "#059669", fontWeight: 700 }}>{fmt(doc.paid_amount)} SAR</span>
+                  <span style={{ color: "#6F4A84", fontWeight: 600 }}>{ar ? "المدفوع" : "Paid"}</span>
+                  <span style={{ color: "#6F4A84", fontWeight: 700 }}>{fmt(doc.paid_amount)} SAR</span>
                 </div>
                 <div style={{
                   display: "flex", justifyContent: "space-between",
                   padding: "7px 14px", fontSize: 13,
                 }}>
-                  <span style={{ color: remaining > 0.01 ? "#DC2626" : "#059669", fontWeight: 600 }}>
+                  <span style={{ color: remaining > 0.01 ? "#DC2626" : "#6F4A84", fontWeight: 600 }}>
                     {ar ? "المتبقي" : "Remaining"}
                   </span>
-                  <span style={{ color: remaining > 0.01 ? "#DC2626" : "#059669", fontWeight: 700 }}>
+                  <span style={{ color: remaining > 0.01 ? "#DC2626" : "#6F4A84", fontWeight: 700 }}>
                     {fmt(remaining)} SAR
                   </span>
                 </div>

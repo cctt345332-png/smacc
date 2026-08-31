@@ -39,8 +39,8 @@ const ROLES = [
     key: "sales",
     ar: "مبيعات",
     en: "Sales",
-    color: "#059669",
-    bg: "#ECFDF5",
+    color: "#6F4A84",
+    bg: "#F4EFF7",
     desc_ar: "موظف مبيعات — مبيعات وعملاء وقراءة المخزون",
     desc_en: "Sales staff — sales, customers, inventory (read)",
   },
@@ -118,7 +118,7 @@ const PERMISSIONS: ModulePerms[] = [
 const roleKeys = ["admin","manager","accountant","sales","purchaser","cashier","warehouse","hr","viewer"] as const;
 
 function PermCell({ perm }: { perm: Perm }) {
-  if (perm === true)  return <div style={{ display: "flex", justifyContent: "center" }}><span style={{ color: "#059669" }}><IcCheck /></span></div>;
+  if (perm === true)  return <div style={{ display: "flex", justifyContent: "center" }}><span style={{ color: "#6F4A84" }}><IcCheck /></span></div>;
   if (perm === "r")   return <div style={{ display: "flex", justifyContent: "center" }}><span style={{ fontSize: 10, fontWeight: 700, color: "#5A187E", background: "#EFF6FF", padding: "1px 6px", borderRadius: 4 }}>R</span></div>;
   return <div style={{ display: "flex", justifyContent: "center" }}><span style={{ color: "#CBD5E1" }}><IcX /></span></div>;
 }
@@ -174,7 +174,7 @@ export default function RolesPage(props: { params: Promise<{ locale: string }> }
         <div className="card-header">
           <span className="card-title">{ar ? "مصفوفة الصلاحيات" : "Permissions Matrix"}</span>
           <div style={{ display: "flex", gap: 12, fontSize: 12, color: "var(--text-secondary)" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: "#059669" }}><IcCheck /></span>{ar ? "كامل" : "Full"}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: "#6F4A84" }}><IcCheck /></span>{ar ? "كامل" : "Full"}</span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ fontSize: 10, fontWeight: 700, color: "#5A187E", background: "#EFF6FF", padding: "1px 6px", borderRadius: 4 }}>R</span>{ar ? "قراءة" : "Read"}</span>
             <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ color: "#CBD5E1" }}><IcX /></span>{ar ? "لا يوجد" : "None"}</span>
           </div>

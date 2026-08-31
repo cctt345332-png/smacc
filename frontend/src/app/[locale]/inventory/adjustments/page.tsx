@@ -155,7 +155,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       </div>
 
       {saved && (
-        <div style={{ background: "#DCFCE7", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#166534", fontSize: 13, fontWeight: 600 }}>
+        <div style={{ background: "#F0E7F4", border: "1px solid #C8AED4", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#3E0865", fontSize: 13, fontWeight: 600 }}>
           {ar ? "تم حفظ الجرد بنجاح" : "Stock count saved successfully"}
         </div>
       )}
@@ -224,10 +224,10 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                       <td style={{ fontSize: 13 }}>{h.warehouse_name}</td>
                       <td style={{ textAlign: "end" }}>{fmt(h.previous_qty)}</td>
                       <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(h.counted_qty)}</td>
-                      <td style={{ textAlign: "end", fontWeight: 700, color: h.diff_qty > 0 ? "#059669" : h.diff_qty < 0 ? "#DC2626" : "#94A3B8" }}>
+                      <td style={{ textAlign: "end", fontWeight: 700, color: h.diff_qty > 0 ? "#6F4A84" : h.diff_qty < 0 ? "#DC2626" : "#94A3B8" }}>
                         {h.diff_qty > 0 ? "+" : ""}{fmt(h.diff_qty)}
                       </td>
-                      <td style={{ textAlign: "end", color: h.diff_value > 0 ? "#059669" : h.diff_value < 0 ? "#DC2626" : "#94A3B8" }}>
+                      <td style={{ textAlign: "end", color: h.diff_value > 0 ? "#6F4A84" : h.diff_value < 0 ? "#DC2626" : "#94A3B8" }}>
                         {h.diff_value > 0 ? "+" : ""}{fmt(h.diff_value)} SAR
                       </td>
                       <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{h.notes || "—"}</td>
@@ -293,7 +293,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                       <td style={{ textAlign: "end", fontWeight: 600 }}>
                         {isSerial ? (
                           <div>
-                            <strong style={{ color: "#059669" }}>{fmt(systemQty)}</strong>
+                            <strong style={{ color: "#6F4A84" }}>{fmt(systemQty)}</strong>
                             <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{ar ? "سيريال متاح" : "serials in stock"}</div>
                           </div>
                         ) : fmt(systemQty)}
@@ -315,11 +315,11 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                       </td>
                       <td style={{ textAlign: "end" }}>
                         {diff !== null && diff !== 0 ? (
-                          <span style={{ fontWeight: 700, color: diff > 0 ? "#059669" : "#DC2626", fontSize: 13 }}>
+                          <span style={{ fontWeight: 700, color: diff > 0 ? "#6F4A84" : "#DC2626", fontSize: 13 }}>
                             {diff > 0 ? "+" : ""}{fmt(diff)}
                           </span>
                         ) : diff === 0 ? (
-                          <span style={{ color: "#059669", fontSize: 12 }}>✓</span>
+                          <span style={{ color: "#6F4A84", fontSize: 12 }}>✓</span>
                         ) : null}
                       </td>
                       <td>

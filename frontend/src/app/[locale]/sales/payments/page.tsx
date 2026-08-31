@@ -103,7 +103,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
       {/* إحصائيات */}
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي المقبوض" : "Total Collected", value: `${fmt(total)} SAR`, color: "#059669" },
+          { label: ar ? "إجمالي المقبوض" : "Total Collected", value: `${fmt(total)} SAR`, color: "#6F4A84" },
           { label: ar ? "عدد السندات" : "Total Receipts", value: payments.length, color: "#5A187E" },
           { label: ar ? "آخر قبض" : "Latest", value: payments[0] ? new Date(payments[0].payment_date).toLocaleDateString("ar-SA") : "—", color: "#75617F" },
         ].map(s => (
@@ -147,7 +147,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                 {payments.map((p: any) => (
                   <tr key={p.id}>
                     <td>
-                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#059669" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#6F4A84" }}>
                         {p.payment_number}
                       </span>
                     </td>
@@ -167,7 +167,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                       </span>
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{p.reference || "—"}</td>
-                    <td style={{ textAlign: "end", fontWeight: 700, color: "#059669" }}>
+                    <td style={{ textAlign: "end", fontWeight: 700, color: "#6F4A84" }}>
                       {fmt(p.amount)} SAR
                     </td>
                   </tr>
@@ -176,7 +176,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               <tfoot>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                   <td colSpan={6} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
-                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                     {fmt(total)} SAR
                   </td>
                 </tr>

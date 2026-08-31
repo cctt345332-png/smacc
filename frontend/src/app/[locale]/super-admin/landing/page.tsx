@@ -201,7 +201,7 @@ export default function LandingConfigPage() {
                 return (
                   <div key={sec.k} className="card"
                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", gap: 16,
-                      background: on ? "#F0FDF4" : "var(--surface)", borderColor: on ? "#BBF7D0" : "var(--border)" }}>
+                      background: on ? "#F7F2F8" : "var(--surface)", borderColor: on ? "#BBF7D0" : "var(--border)" }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>{ar ? sec.ar : sec.en}</div>
                       <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 3 }}>{ar ? sec.dAr : sec.dEn}</div>
@@ -252,8 +252,8 @@ export default function LandingConfigPage() {
                   return (
                     <div key={sec.k} className="stat-card"
                       style={{ flexDirection: "column", alignItems: "center", textAlign: "center", gap: 8, padding: 16,
-                        background: on ? "#F0FDF4" : "#FEF2F2", borderColor: on ? "#BBF7D0" : "#FECACA" }}>
-                      <div className="stat-icon" style={{ background: on ? "#DCFCE7" : "#FEE2E2", color: on ? "var(--success)" : "var(--danger)", width: 36, height: 36, borderRadius: 8 }}>
+                        background: on ? "#F7F2F8" : "#FEF2F2", borderColor: on ? "#BBF7D0" : "#FECACA" }}>
+                      <div className="stat-icon" style={{ background: on ? "#F0E7F4" : "#FEE2E2", color: on ? "var(--success)" : "var(--danger)", width: 36, height: 36, borderRadius: 8 }}>
                         {on ? <IcEye /> : <IcEyeOff />}
                       </div>
                       <div className="stat-label">{ar ? sec.ar : sec.en}</div>

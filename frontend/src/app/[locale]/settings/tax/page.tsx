@@ -64,7 +64,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       </div>
 
       {saved && (
-        <div style={{ background: "#DCFCE7", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#166534", fontSize: 13, fontWeight: 600 }}>
+        <div style={{ background: "#F0E7F4", border: "1px solid #C8AED4", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#3E0865", fontSize: 13, fontWeight: 600 }}>
           {ar ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully"}
         </div>
       )}
@@ -175,7 +175,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         <div className="card-body">
           <div className="grid-3">
             {[
-              { label: ar ? "ضريبة المبيعات (مخرجات)" : "Output VAT", value: "0.00", color: "#059669", icon: "vatOut" as const },
+              { label: ar ? "ضريبة المبيعات (مخرجات)" : "Output VAT", value: "0.00", color: "#6F4A84", icon: "vatOut" as const },
               { label: ar ? "ضريبة المشتريات (مدخلات)" : "Input VAT", value: "0.00", color: "#5A187E", icon: "vatIn" as const },
               { label: ar ? "صافي الضريبة المستحقة" : "Net VAT Payable", value: "0.00", color: "#D97706", icon: "money" as const },
             ].map(item => (

@@ -153,8 +153,8 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
   table{width:100%;border-collapse:collapse;margin-bottom:24px}
   th{background:#1E293B;color:white;padding:8px 12px;text-align:right;font-size:12px}
   td{padding:7px 12px;border-bottom:1px solid #E2E8F0;font-size:12px}
-  .summary{background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:14px;text-align:center}
-  .summary .count{font-size:28px;font-weight:800;color:#059669}
+  .summary{background:#F7F2F8;border:1px solid #C8AED4;border-radius:8px;padding:14px;text-align:center}
+  .summary .count{font-size:28px;font-weight:800;color:#6F4A84}
   .footer{text-align:center;color:#94A3B8;font-size:11px;margin-top:32px;border-top:1px solid #E2E8F0;padding-top:12px}
   @media print{button{display:none}}
 </style></head>
@@ -266,7 +266,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
         {[
           { label: ar ? "إجمالي الأصناف" : "Total Items", value: totalItems, color: "#5A187E" },
           { label: ar ? "قيمة المخزون" : "Stock Value", value: `${fmt(totalValue)} SAR`, color: "#75617F" },
-          { label: ar ? "أصناف منخفضة" : "Low Stock", value: lowStockCount, color: lowStockCount > 0 ? "#DC2626" : "#059669" },
+          { label: ar ? "أصناف منخفضة" : "Low Stock", value: lowStockCount, color: lowStockCount > 0 ? "#DC2626" : "#6F4A84" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -322,7 +322,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                     <td><span className="badge badge-info" style={{ fontSize: 11 }}>{TRACKING_AR[row.item_tracking] || row.item_tracking}</span></td>
                     {!selectedWarehouse && <td style={{ fontSize: 13 }}>{row.warehouse_name}</td>}
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(row.quantity)}</td>
-                    <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#059669" : "#DC2626" }}>{fmt(row.available_qty)}</td>
+                    <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#6F4A84" : "#DC2626" }}>{fmt(row.available_qty)}</td>
                     <td style={{ textAlign: "end", color: "#75617F", fontWeight: 600 }}>{fmt(row.stock_value)} SAR</td>
                     <td>
                       {row.is_low_stock
@@ -338,7 +338,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "var(--text-primary)" }}>
                     {fmt(totalQuantity)} {ar ? "وحدة" : "units"}
                   </td>
-                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                     {fmt(totalAvailable)} {ar ? "متاح" : "available"}
                   </td>
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "#75617F" }}>{fmt(totalValue)} SAR</td>
@@ -409,14 +409,14 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                 <div style={{ padding: "8px 0" }}>
                   <div style={{ textAlign: "center", marginBottom: 20 }}>
                     <div style={{ fontSize: 48 }}>✅</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: "#059669", marginTop: 8 }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: "#6F4A84", marginTop: 8 }}>
                       {ar ? "تم التحويل بنجاح" : "Transfer Complete"}
                     </div>
                     <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
                       {transferResult.from_warehouse} → {transferResult.to_warehouse}
                     </div>
                     <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 8 }}>
-                      <span style={{ background: "#F0FDF4", color: "#059669", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
+                      <span style={{ background: "#F7F2F8", color: "#6F4A84", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
                         {transferResult.total_lines} {ar ? "صنف" : "items"}
                       </span>
                       <span style={{ background: "#EFF6FF", color: "#5A187E", borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>
@@ -433,12 +433,12 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                   {/* تفاصيل كل صنف */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
                     {(transferResult.results || []).map((res: any, i: number) => (
-                      <div key={i} style={{ border: `1px solid ${res.success ? "#86EFAC" : "#FCA5A5"}`, borderRadius: 10, padding: "10px 14px", background: res.success ? "#F0FDF4" : "#FEF2F2" }}>
+                      <div key={i} style={{ border: `1px solid ${res.success ? "#C8AED4" : "#FCA5A5"}`, borderRadius: 10, padding: "10px 14px", background: res.success ? "#F7F2F8" : "#FEF2F2" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <span style={{ fontWeight: 700, fontSize: 13 }}>
                             {res.success ? "✅" : "❌"} {res.item_name}
                           </span>
-                          <span style={{ fontSize: 12, color: res.success ? "#059669" : "#DC2626", fontWeight: 600 }}>
+                          <span style={{ fontSize: 12, color: res.success ? "#6F4A84" : "#DC2626", fontWeight: 600 }}>
                             {res.success
                               ? `${res.transferred_count} ${res.tracking_type === "serial" ? (ar ? "سيريال" : "serials") : (ar ? "وحدة" : "units")}`
                               : res.error}
@@ -584,7 +584,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                                       <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                                         {ar ? "متاح:" : "Available:"} <b>{line.availableSerials.length}</b>
                                         {line.selectedSerials.length > 0 && (
-                                          <span style={{ color: "#059669", marginInlineStart: 8 }}>
+                                          <span style={{ color: "#6F4A84", marginInlineStart: 8 }}>
                                             ✅ {line.selectedSerials.length} {ar ? "مختار" : "selected"}
                                           </span>
                                         )}
@@ -647,7 +647,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                                       </button>
                                       {line.validationResult && (
                                         <span style={{ fontSize: 11 }}>
-                                          <span style={{ color: "#059669", fontWeight: 700 }}>✅ {line.validationResult.found?.length}</span>
+                                          <span style={{ color: "#6F4A84", fontWeight: 700 }}>✅ {line.validationResult.found?.length}</span>
                                           {line.validationResult.not_found?.length > 0 && (
                                             <span style={{ color: "#DC2626", marginInlineStart: 6, fontWeight: 700 }}>❌ {line.validationResult.not_found.length}</span>
                                           )}

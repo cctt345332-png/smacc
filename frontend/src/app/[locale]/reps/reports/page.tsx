@@ -18,9 +18,9 @@ const STATUS_AR: Record<string, string> = Object.fromEntries(
 );
 const STATUS_COLOR: Record<string, string> = {
   draft: "#6B7280", submitted: "#D97706", approved: "#5A187E",
-  rejected: "#DC2626", confirmed: "#059669", paid: "#059669",
+  rejected: "#DC2626", confirmed: "#6F4A84", paid: "#6F4A84",
   partial: "#D97706", overdue: "#DC2626", cancelled: "#6B7280",
-  sent: "#5A187E", zatca_pending: "#D97706", zatca_cleared: "#059669", zatca_rejected: "#DC2626",
+  sent: "#5A187E", zatca_pending: "#D97706", zatca_cleared: "#6F4A84", zatca_rejected: "#DC2626",
 };
 const PAY_AR: Record<string, string> = { cash: "نقد", credit: "آجل", cheque: "شيك", transfer: "تحويل" };
 
@@ -288,8 +288,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 20 }}>
         {[
           { label: ar ? "إجمالي مبيعات الفريق" : "Team Sales",     value: fmt(totalSales) + " SAR",       color: "#5A187E" },
-          { label: ar ? "إجمالي المحصّل" : "Collected",             value: fmt(totalCollected) + " SAR",   color: "#059669" },
-          { label: ar ? "إجمالي المستحق" : "Outstanding",           value: fmt(totalOutstanding) + " SAR", color: totalOutstanding > 0 ? "#DC2626" : "#059669" },
+          { label: ar ? "إجمالي المحصّل" : "Collected",             value: fmt(totalCollected) + " SAR",   color: "#6F4A84" },
+          { label: ar ? "إجمالي المستحق" : "Outstanding",           value: fmt(totalOutstanding) + " SAR", color: totalOutstanding > 0 ? "#DC2626" : "#6F4A84" },
           { label: ar ? "إجمالي العمولات" : "Commissions",          value: fmt(totalCommission) + " SAR",  color: "#75617F" },
         ].map(s => (
           <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -386,20 +386,20 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                           <td style={{ minWidth: 130 }}>
                             {pct !== null ? (
                               <div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#DC2626", marginBottom: 3 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#DC2626", marginBottom: 3 }}>
                                   {pct}%
                                 </div>
                                 <div style={{ height: 6, background: "#E2E8F0", borderRadius: 3, overflow: "hidden" }}>
                                   <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`,
-                                    background: pct >= 100 ? "#059669" : pct >= 70 ? "#D97706" : "#DC2626", borderRadius: 3 }} />
+                                    background: pct >= 100 ? "#6F4A84" : pct >= 70 ? "#D97706" : "#DC2626", borderRadius: 3 }} />
                                 </div>
                               </div>
                             ) : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>—</span>}
                           </td>
-                          <td style={{ textAlign: "end", fontWeight: 600, color: "#059669" }}>
+                          <td style={{ textAlign: "end", fontWeight: 600, color: "#6F4A84" }}>
                             {fmt(sum.total_collected || 0)} SAR
                           </td>
-                          <td style={{ textAlign: "end", fontWeight: 600, color: Number(sum.outstanding || 0) > 0 ? "#DC2626" : "#059669" }}>
+                          <td style={{ textAlign: "end", fontWeight: 600, color: Number(sum.outstanding || 0) > 0 ? "#DC2626" : "#6F4A84" }}>
                             {fmt(sum.outstanding || 0)} SAR
                           </td>
                           <td style={{ textAlign: "end" }}>{sum.invoice_count || 0}</td>
@@ -422,8 +422,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                       <td colSpan={4} style={{ padding: "10px 16px" }}>{ar ? "الإجمالي" : "Total"} ({repStats.length} {ar ? "مندوب" : "reps"})</td>
                       <td style={{ textAlign: "end", padding: "10px 16px", color: "#5A187E" }}>{fmt(totalSales)} SAR</td>
                       <td />
-                      <td style={{ textAlign: "end", padding: "10px 16px", color: "#059669" }}>{fmt(totalCollected)} SAR</td>
-                      <td style={{ textAlign: "end", padding: "10px 16px", color: totalOutstanding > 0 ? "#DC2626" : "#059669" }}>{fmt(totalOutstanding)} SAR</td>
+                      <td style={{ textAlign: "end", padding: "10px 16px", color: "#6F4A84" }}>{fmt(totalCollected)} SAR</td>
+                      <td style={{ textAlign: "end", padding: "10px 16px", color: totalOutstanding > 0 ? "#DC2626" : "#6F4A84" }}>{fmt(totalOutstanding)} SAR</td>
                       <td style={{ textAlign: "end", padding: "10px 16px" }}>{repStats.reduce((s, r) => s + (r.sum.invoice_count || 0), 0)}</td>
                       <td style={{ textAlign: "end", padding: "10px 16px", color: "#D97706" }}>
                         {pendingInvoices.filter(i => i.rep_id && i.status === "submitted").length}
@@ -489,8 +489,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                             </td>
                             <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmtD(inv.issue_date)}</td>
                             <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(inv.total)} SAR</td>
-                            <td style={{ textAlign: "end", color: "#059669" }}>{fmt(inv.paid_amount)} SAR</td>
-                            <td style={{ textAlign: "end", color: remaining > 0.01 ? "#DC2626" : "#059669", fontWeight: 600 }}>
+                            <td style={{ textAlign: "end", color: "#6F4A84" }}>{fmt(inv.paid_amount)} SAR</td>
+                            <td style={{ textAlign: "end", color: remaining > 0.01 ? "#DC2626" : "#6F4A84", fontWeight: 600 }}>
                               {fmt(Math.max(0, remaining))} SAR
                             </td>
                             <td className="no-print">
@@ -510,7 +510,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                         <td style={{ textAlign: "end", padding: "10px 16px", color: "#5A187E" }}>
                           {fmt(filteredInvoices.reduce((s: number, i: any) => s + Number(i.total || 0), 0))} SAR
                         </td>
-                        <td style={{ textAlign: "end", padding: "10px 16px", color: "#059669" }}>
+                        <td style={{ textAlign: "end", padding: "10px 16px", color: "#6F4A84" }}>
                           {fmt(filteredInvoices.reduce((s: number, i: any) => s + Number(i.paid_amount || 0), 0))} SAR
                         </td>
                         <td style={{ textAlign: "end", padding: "10px 16px", color: "#DC2626" }}>
@@ -710,12 +710,12 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                   </div>
                   {Number(selectedInvoice.paid_amount) > 0 && (
                     <>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#059669" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "#6F4A84" }}>
                         <span>{ar ? "المدفوع" : "Paid"}</span>
                         <span>{fmt(selectedInvoice.paid_amount)} SAR</span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700,
-                        color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#059669" }}>
+                        color: (Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)) > 0.01 ? "#DC2626" : "#6F4A84" }}>
                         <span>{ar ? "المتبقي" : "Remaining"}</span>
                         <span>{fmt(Math.max(0, Number(selectedInvoice.total) - Number(selectedInvoice.paid_amount)))} SAR</span>
                       </div>

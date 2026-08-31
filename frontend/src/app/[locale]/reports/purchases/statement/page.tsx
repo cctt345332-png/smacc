@@ -136,8 +136,8 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
               { label: ar ? "إجمالي الفواتير الواردة" : "Total Bills", value: data.summary.total_billed, color: "#DC2626" },
-              { label: ar ? "إجمالي المدفوعات" : "Total Paid", value: data.summary.total_paid, color: "#059669" },
-              { label: ar ? "الرصيد المستحق للمورد" : "Outstanding Balance", value: data.summary.closing_balance, color: data.summary.closing_balance > 0 ? "#DC2626" : "#059669" },
+              { label: ar ? "إجمالي المدفوعات" : "Total Paid", value: data.summary.total_paid, color: "#6F4A84" },
+              { label: ar ? "الرصيد المستحق للمورد" : "Outstanding Balance", value: data.summary.closing_balance, color: data.summary.closing_balance > 0 ? "#DC2626" : "#6F4A84" },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "16px 20px" }}>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6 }}>{s.label}</div>
@@ -174,7 +174,7 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
                   </thead>
                   <tbody>
                     {data.transactions.map((t: any, i: number) => (
-                      <tr key={i} style={{ background: t.type === "payment" ? "#F0FDF4" : "transparent" }}>
+                      <tr key={i} style={{ background: t.type === "payment" ? "#F7F2F8" : "transparent" }}>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                           {new Date(t.date).toLocaleDateString("en-SA")}
                         </td>
@@ -187,13 +187,13 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
                         </td>
                         <td style={{ fontWeight: 600, color: "var(--primary)", fontSize: 12 }}>{t.reference}</td>
                         <td style={{ fontSize: 13 }}>{ar ? t.description_ar : t.description_en}</td>
-                        <td style={{ textAlign: "end", color: "#059669", fontWeight: t.debit > 0 ? 600 : 400 }}>
+                        <td style={{ textAlign: "end", color: "#6F4A84", fontWeight: t.debit > 0 ? 600 : 400 }}>
                           {t.debit > 0 ? fmt(t.debit) : "—"}
                         </td>
                         <td style={{ textAlign: "end", color: "#DC2626", fontWeight: t.credit > 0 ? 600 : 400 }}>
                           {t.credit > 0 ? fmt(t.credit) : "—"}
                         </td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: t.balance > 0 ? "#DC2626" : "#059669" }}>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: t.balance > 0 ? "#DC2626" : "#6F4A84" }}>
                           {fmt(Math.abs(t.balance))}
                           <span style={{ fontSize: 11, marginInlineStart: 4 }}>
                             {t.balance > 0 ? (ar ? "مستحق" : "Owed") : (ar ? "مسدد" : "Paid")}
@@ -205,13 +205,13 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
                   <tfoot>
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                       <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الرصيد الختامي" : "Closing Balance"}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                         {fmt(data.summary.total_paid)}
                       </td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#DC2626" }}>
                         {fmt(data.summary.total_billed)}
                       </td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", fontSize: 15, color: data.summary.closing_balance > 0 ? "#DC2626" : "#059669" }}>
+                      <td style={{ textAlign: "end", padding: "12px 16px", fontSize: 15, color: data.summary.closing_balance > 0 ? "#DC2626" : "#6F4A84" }}>
                         {fmt(data.summary.closing_balance)} SAR
                         <span style={{ fontSize: 12, marginInlineStart: 6 }}>
                           {data.summary.closing_balance > 0 ? (ar ? "مستحق للمورد" : "Owed to Vendor") : (ar ? "مسدد بالكامل" : "Fully Paid")}

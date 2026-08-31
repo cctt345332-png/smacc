@@ -95,7 +95,7 @@ export default function CompanyPage(props: { params: Promise<{ locale: string }>
       </div>
 
       {saved && (
-        <div style={{ background: "#DCFCE7", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#166534", fontSize: 13, fontWeight: 600 }}>
+        <div style={{ background: "#F0E7F4", border: "1px solid #C8AED4", borderRadius: 8, padding: "10px 16px", marginBottom: 16, color: "#3E0865", fontSize: 13, fontWeight: 600 }}>
           {ar ? "تم حفظ بيانات الشركة بنجاح" : "Company information saved successfully"}
         </div>
       )}

@@ -84,7 +84,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
                           <Link href={`/${locale}/treasury/payments/${v.id}`} className="btn btn-ghost btn-sm btn-icon"><Icon name="view" size={14} /></Link>
-                          {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "#059669" }} onClick={() => handle(() => postVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="check" size={14} /></button>}
+                          {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "#6F4A84" }} onClick={() => handle(() => postVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="check" size={14} /></button>}
                           {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "var(--danger)" }} onClick={() => handle(() => cancelVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="cancel" size={14} /></button>}
                         </div>
                       </td>

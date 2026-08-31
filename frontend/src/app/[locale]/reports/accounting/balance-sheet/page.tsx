@@ -105,7 +105,7 @@ export default function BalanceSheetPage(props: { params: Promise<{ locale: stri
               <Section title={ar ? "حقوق الملكية" : "Equity"} rows={data.equity} total={data.totalEquity} color="#75617F" />
               <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", fontWeight: 800, fontSize: 15, background: "#F8FAFC", borderTop: "2px solid var(--border)" }}>
                 <span>{ar ? "إجمالي الخصوم وحقوق الملكية" : "Total Liabilities & Equity"}</span>
-                <span style={{ color: Math.abs(data.totalLiabilities + data.totalEquity - data.totalAssets) < 1 ? "#059669" : "#DC2626" }}>
+                <span style={{ color: Math.abs(data.totalLiabilities + data.totalEquity - data.totalAssets) < 1 ? "#6F4A84" : "#DC2626" }}>
                   {fmt(data.totalLiabilities + data.totalEquity)} {ar ? "ر.س" : "SAR"}
                 </span>
               </div>

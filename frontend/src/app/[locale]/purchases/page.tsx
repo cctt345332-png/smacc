@@ -23,7 +23,7 @@ export default function PurchasesPage(props: { params: Promise<{ locale: string 
   const modules = [
     { label: ar ? "الموردون" : "Vendors", href: `/${locale}/purchases/vendors`, icon: <Icon name="users" size={24} />, color: "#5A187E", desc: ar ? "إدارة قاعدة بيانات الموردين" : "Manage vendor database" },
     { label: ar ? "أوامر الشراء" : "Purchase Orders", href: `/${locale}/purchases/orders`, icon: <Icon name="receipt" size={24} />, color: "#75617F", desc: ar ? "إنشاء وتتبع أوامر الشراء" : "Create and track purchase orders" },
-    { label: ar ? "الفواتير الواردة" : "Bills", href: `/${locale}/purchases/bills`, icon: <Icon name="invoice" size={24} />, color: "#059669", desc: ar ? "فواتير الموردين والمدفوعات" : "Vendor bills and payments" },
+    { label: ar ? "الفواتير الواردة" : "Bills", href: `/${locale}/purchases/bills`, icon: <Icon name="invoice" size={24} />, color: "#6F4A84", desc: ar ? "فواتير الموردين والمدفوعات" : "Vendor bills and payments" },
     { label: ar ? "مرتجعات المشتريات" : "Purchase Returns", href: `/${locale}/purchases/debit-notes`, icon: <Icon name="reverse" size={24} />, color: "#DC2626", desc: ar ? "إرجاع البضاعة للموردين" : "Return goods to vendors" },
   ];
 
@@ -46,7 +46,7 @@ export default function PurchasesPage(props: { params: Promise<{ locale: string 
         <div className="grid-3" style={{ marginBottom: 24 }}>
           {[
             { label: ar ? "إجمالي الفواتير" : "Total Billed", value: `${fmt(summary.total_billed)} SAR`, color: "#75617F" },
-            { label: ar ? "المدفوع" : "Total Paid", value: `${fmt(summary.total_paid)} SAR`, color: "#059669" },
+            { label: ar ? "المدفوع" : "Total Paid", value: `${fmt(summary.total_paid)} SAR`, color: "#6F4A84" },
             { label: ar ? "المستحق للموردين" : "Outstanding", value: `${fmt(summary.total_outstanding)} SAR`, color: "#DC2626" },
           ].map(s => (
             <div key={s.label} className="stat-card">

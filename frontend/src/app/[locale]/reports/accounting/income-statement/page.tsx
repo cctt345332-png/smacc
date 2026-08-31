@@ -83,9 +83,9 @@ export default function IncomeStatementPage(props: { params: Promise<{ locale: s
           <div id="report-content-income-statement">
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
-              { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: data.totalRevenue, color: "#059669", icon: "trending" as const },
+              { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: data.totalRevenue, color: "#6F4A84", icon: "trending" as const },
               { label: ar ? "إجمالي المصروفات" : "Total Expenses", value: data.totalExpense, color: "#DC2626", icon: "trendingDown" as const },
-              { label: ar ? "صافي الربح" : "Net Profit", value: data.netProfit, color: data.netProfit >= 0 ? "#059669" : "#DC2626", icon: "profit" as const },
+              { label: ar ? "صافي الربح" : "Net Profit", value: data.netProfit, color: data.netProfit >= 0 ? "#6F4A84" : "#DC2626", icon: "profit" as const },
             ].map(s => (
               <div key={s.label} className="stat-card">
                 <div className="stat-icon" style={{ background: s.color + "18", color: s.color }}><Icon name={s.icon} size={20} /></div>
@@ -100,7 +100,7 @@ export default function IncomeStatementPage(props: { params: Promise<{ locale: s
           <div className="card">
             <div className="card-body" style={{ padding: "0" }}>
               {/* Revenue */}
-              <div style={{ padding: "14px 20px", background: "#F0FDF4", borderBottom: "1px solid var(--border)", fontWeight: 700, color: "#059669" }}>
+              <div style={{ padding: "14px 20px", background: "#F7F2F8", borderBottom: "1px solid var(--border)", fontWeight: 700, color: "#6F4A84" }}>
                 {ar ? "الإيرادات" : "Revenue"}
               </div>
               {data.revenues.map((r: any, i: number) => {
@@ -109,13 +109,13 @@ export default function IncomeStatementPage(props: { params: Promise<{ locale: s
                 return (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 20px", borderBottom: "1px solid #F1F5F9", fontSize: 13 }}>
                     <span style={{ color: "var(--text-secondary)" }}>{r.account_code} — {ar ? r.account_name_ar : r.account_name_en}</span>
-                    <span style={{ fontWeight: 600, color: "#059669" }}>{fmt(val)} {ar ? "ر.س" : "SAR"}</span>
+                    <span style={{ fontWeight: 600, color: "#6F4A84" }}>{fmt(val)} {ar ? "ر.س" : "SAR"}</span>
                   </div>
                 );
               })}
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", fontWeight: 700, background: "#F0FDF4", borderBottom: "2px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 20px", fontWeight: 700, background: "#F7F2F8", borderBottom: "2px solid var(--border)" }}>
                 <span>{ar ? "إجمالي الإيرادات" : "Total Revenue"}</span>
-                <span style={{ color: "#059669", fontSize: 15 }}>{fmt(data.totalRevenue)} {ar ? "ر.س" : "SAR"}</span>
+                <span style={{ color: "#6F4A84", fontSize: 15 }}>{fmt(data.totalRevenue)} {ar ? "ر.س" : "SAR"}</span>
               </div>
 
               {/* Expenses */}
@@ -138,9 +138,9 @@ export default function IncomeStatementPage(props: { params: Promise<{ locale: s
               </div>
 
               {/* Net */}
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 20px", fontWeight: 800, fontSize: 16, background: data.netProfit >= 0 ? "#F0FDF4" : "#FEF2F2" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 20px", fontWeight: 800, fontSize: 16, background: data.netProfit >= 0 ? "#F7F2F8" : "#FEF2F2" }}>
                 <span>{ar ? "صافي الربح / الخسارة" : "Net Profit / Loss"}</span>
-                <span style={{ color: data.netProfit >= 0 ? "#059669" : "#DC2626" }}>
+                <span style={{ color: data.netProfit >= 0 ? "#6F4A84" : "#DC2626" }}>
                   {data.netProfit < 0 ? "(" : ""}{fmt(data.netProfit)}{data.netProfit < 0 ? ")" : ""} {ar ? "ر.س" : "SAR"}
                 </span>
               </div>

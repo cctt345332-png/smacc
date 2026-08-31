@@ -556,9 +556,9 @@ export default function NewBillPage(props: { params: Promise<{ locale: string }>
           </div>
 
           {/* ربط المخزون */}
-          <div className="card" style={{ borderColor: "#D1FAE5", background: "#F0FDF4" }}>
+          <div className="card" style={{ borderColor: "#E9DDED", background: "#F7F2F8" }}>
             <div className="card-body" style={{ padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#065F46", display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ fontSize: 12, color: "#4B2A5A", display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>
                   {ar ? "ربط المخزون التلقائي" : "Auto Inventory Link"}
                 </div>

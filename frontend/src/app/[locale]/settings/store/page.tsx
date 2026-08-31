@@ -47,7 +47,7 @@ export default function StoreSettingsPage(props: { params: Promise<{ locale: str
 
   const quickLinks = [
     { href: `/${locale}/inventory/items`,      labelAr: "إدارة المنتجات", labelEn: "Manage Products", icon: <IcPackage />,      color: "#5A187E", bg: "#EFF6FF" },
-    { href: `/${locale}/sales/orders`,         labelAr: "الطلبات",         labelEn: "Orders",           icon: <IcShoppingCart />, color: "#059669", bg: "#ECFDF5" },
+    { href: `/${locale}/sales/orders`,         labelAr: "الطلبات",         labelEn: "Orders",           icon: <IcShoppingCart />, color: "#6F4A84", bg: "#F4EFF7" },
     { href: `/${locale}/inventory/categories`, labelAr: "التصنيفات",       labelEn: "Categories",       icon: <IcTag />,          color: "#75617F", bg: "#F5F3FF" },
   ];
 
@@ -107,9 +107,9 @@ export default function StoreSettingsPage(props: { params: Promise<{ locale: str
                 </div>
                 <Toggle checked={storeEnabled} onChange={setStoreEnabled} />
               </div>
-              <div style={{ marginTop: 12, padding: "10px 14px", background: storeEnabled ? "#ECFDF5" : "#F1F5F9", borderRadius: 8, border: `1px solid ${storeEnabled ? "#A7F3D0" : "var(--border)"}`, display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 8, height: 8, borderRadius: "50%", background: storeEnabled ? "#059669" : "#94A3B8", flexShrink: 0 }} />
-                <span style={{ fontSize: 13, color: storeEnabled ? "#065F46" : "var(--text-secondary)", fontWeight: 500 }}>
+              <div style={{ marginTop: 12, padding: "10px 14px", background: storeEnabled ? "#F4EFF7" : "#F1F5F9", borderRadius: 8, border: `1px solid ${storeEnabled ? "#DCCBE3" : "var(--border)"}`, display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: storeEnabled ? "#6F4A84" : "#94A3B8", flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: storeEnabled ? "#4B2A5A" : "var(--text-secondary)", fontWeight: 500 }}>
                   {storeEnabled ? (ar ? "المتجر نشط ومتاح للعملاء" : "Store is active and accessible") : (ar ? "المتجر معطّل حالياً" : "Store is currently disabled")}
                 </span>
               </div>

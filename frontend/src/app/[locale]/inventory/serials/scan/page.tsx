@@ -147,7 +147,7 @@ export default function ScanPage(props: { params: Promise<{ locale: string }> })
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div style={{ background: "#059669", borderRadius: 20, padding: "4px 14px", fontSize: 13, fontWeight: 700 }}>
+          <div style={{ background: "#6F4A84", borderRadius: 20, padding: "4px 14px", fontSize: 13, fontWeight: 700 }}>
             {scanned.length} {ar ? "سيريال" : "serials"}
           </div>
           <button onClick={() => router.push(`/${locale}/inventory/serials`)}
@@ -196,9 +196,9 @@ export default function ScanPage(props: { params: Promise<{ locale: string }> })
 
             {/* آخر مُضاف */}
             {lastAdded && (
-              <div style={{ marginTop: 12, background: "#064E3B", border: "1px solid #059669", borderRadius: 10, padding: "10px 16px", textAlign: "center", animation: "fadeIn 0.3s" }}>
-                <div style={{ fontSize: 11, color: "#6EE7B7" }}>{ar ? "✅ تمت الإضافة" : "✅ Added"}</div>
-                <code style={{ fontSize: 16, fontWeight: 800, color: "#34D399" }}>{lastAdded}</code>
+              <div style={{ marginTop: 12, background: "#35183F", border: "1px solid #6F4A84", borderRadius: 10, padding: "10px 16px", textAlign: "center", animation: "fadeIn 0.3s" }}>
+                <div style={{ fontSize: 11, color: "#B99AC7" }}>{ar ? "✅ تمت الإضافة" : "✅ Added"}</div>
+                <code style={{ fontSize: 16, fontWeight: 800, color: "#A982BB" }}>{lastAdded}</code>
               </div>
             )}
           </div>
@@ -245,12 +245,12 @@ export default function ScanPage(props: { params: Promise<{ locale: string }> })
 
           {/* نتيجة الحفظ */}
           {saved > 0 && (
-            <div style={{ marginTop: 20, background: "#064E3B", border: "1px solid #059669", borderRadius: 12, padding: "16px 24px", textAlign: "center" }}>
+            <div style={{ marginTop: 20, background: "#35183F", border: "1px solid #6F4A84", borderRadius: 12, padding: "16px 24px", textAlign: "center" }}>
               <div style={{ fontSize: 32 }}>✅</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#34D399", marginTop: 8 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#A982BB", marginTop: 8 }}>
                 {ar ? `تم إضافة ${saved} سيريال بنجاح` : `${saved} serials added successfully`}
               </div>
-              <div style={{ fontSize: 12, color: "#6EE7B7", marginTop: 4 }}>{ar ? "جاري التحويل..." : "Redirecting..."}</div>
+              <div style={{ fontSize: 12, color: "#B99AC7", marginTop: 4 }}>{ar ? "جاري التحويل..." : "Redirecting..."}</div>
             </div>
           )}
 
@@ -295,7 +295,7 @@ export default function ScanPage(props: { params: Promise<{ locale: string }> })
               style={{ width: "100%", padding: "10px 12px", background: "#0F172A", border: "1px solid #334155", borderRadius: 8, color: "white", fontSize: 14, boxSizing: "border-box" }}
               placeholder="0.00" />
             {costPrice && salePrice && (
-              <div style={{ marginTop: 6, fontSize: 12, color: parseFloat(salePrice) >= parseFloat(costPrice) ? "#34D399" : "#EF4444" }}>
+              <div style={{ marginTop: 6, fontSize: 12, color: parseFloat(salePrice) >= parseFloat(costPrice) ? "#A982BB" : "#EF4444" }}>
                 {ar ? "الربح:" : "Profit:"} {(parseFloat(salePrice) - parseFloat(costPrice)).toFixed(2)} SAR
               </div>
             )}
@@ -314,7 +314,7 @@ export default function ScanPage(props: { params: Promise<{ locale: string }> })
 
           <button onClick={handleSave} disabled={saving || scanned.length === 0}
             style={{
-              background: scanned.length > 0 ? "#059669" : "#1E293B",
+              background: scanned.length > 0 ? "#6F4A84" : "#1E293B",
               border: "none", color: "white", padding: "14px", borderRadius: 12,
               fontWeight: 700, fontSize: 15, cursor: scanned.length > 0 ? "pointer" : "not-allowed",
               opacity: scanned.length === 0 ? 0.5 : 1,

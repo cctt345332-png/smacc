@@ -116,7 +116,7 @@ export default function AlertSettingsPage(props: { params: Promise<{ locale: str
       </div>
 
       {runResult && (
-        <div style={{ background: "#DCFCE7", border: "1px solid #86EFAC", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#166534", display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ background: "#F0E7F4", border: "1px solid #C8AED4", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#3E0865", display: "flex", alignItems: "center", gap: 8 }}>
           <IcCheck />
           {ar ? `تم الفحص — أُنشئ ${runResult.alerts_created} تنبيه جديد` : `Check complete — ${runResult.alerts_created} new alerts created`}
         </div>
@@ -161,7 +161,7 @@ export default function AlertSettingsPage(props: { params: Promise<{ locale: str
       </Section>
 
       {/* المبيعات */}
-      <Section title={ar ? "المبيعات" : "Sales"} color="#059669">
+      <Section title={ar ? "المبيعات" : "Sales"} color="#6F4A84">
         <AlertRow label={ar ? "فواتير متأخرة" : "Overdue Invoices"} desc={ar ? "تنبيه عند تأخر دفع الفواتير" : "Alert when invoices are overdue"} enabled={settings.sales_overdue_alert} onToggle={v => upd("sales_overdue_alert", v)}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "بعد:" : "After:"}</span>

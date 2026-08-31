@@ -74,7 +74,7 @@ function MoreDrawer({
 }) {
   const base = `/${locale}`;
   const links = [
-    { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/me/payments`,  color: "#059669" },
+    { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/me/payments`,  color: "#6F4A84" },
     { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/me/reports`,   color: "#356B63" },
   ];
 

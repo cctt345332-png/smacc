@@ -117,7 +117,7 @@ export default function TrialBalancePage(props: { params: Promise<{ locale: stri
                     <td style={{ textAlign: "end" }}>{Number(r.opening_debit) > 0 ? fmt(Number(r.opening_debit)) : "—"}</td>
                     <td style={{ textAlign: "end" }}>{Number(r.opening_credit) > 0 ? fmt(Number(r.opening_credit)) : "—"}</td>
                     <td style={{ textAlign: "end", color: "#5A187E" }}>{Number(r.period_debit) > 0 ? fmt(Number(r.period_debit)) : "—"}</td>
-                    <td style={{ textAlign: "end", color: "#059669" }}>{Number(r.period_credit) > 0 ? fmt(Number(r.period_credit)) : "—"}</td>
+                    <td style={{ textAlign: "end", color: "#6F4A84" }}>{Number(r.period_credit) > 0 ? fmt(Number(r.period_credit)) : "—"}</td>
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{Number(r.closing_debit) > 0 ? fmt(Number(r.closing_debit)) : "—"}</td>
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{Number(r.closing_credit) > 0 ? fmt(Number(r.closing_credit)) : "—"}</td>
                   </tr>
@@ -129,14 +129,14 @@ export default function TrialBalancePage(props: { params: Promise<{ locale: stri
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.od)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.oc)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "#5A187E" }}>{fmt(totals.pd)}</td>
-                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(totals.pc)}</td>
+                  <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(totals.pc)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.cd)}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totals.cc)}</td>
                 </tr>
                 <tr>
                   <td colSpan={8} style={{ padding: "8px 16px", fontSize: 12 }}>
                     {Math.abs(totals.cd - totals.cc) < 0.01
-                      ? <span style={{ color: "#059669", fontWeight: 600 }}>{ar ? "الميزان متوازن" : "Balanced"}</span>
+                      ? <span style={{ color: "#6F4A84", fontWeight: 600 }}>{ar ? "الميزان متوازن" : "Balanced"}</span>
                       : <span style={{ color: "#DC2626", fontWeight: 600 }}>{ar ? "غير متوازن" : "Not balanced"}</span>}
                   </td>
                 </tr>

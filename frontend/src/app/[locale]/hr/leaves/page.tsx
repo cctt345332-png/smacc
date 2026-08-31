@@ -145,7 +145,7 @@ export default function LeavesPage(props: { params: Promise<{ locale: string }> 
                     {activeTab === "pending" && (
                       <td>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button className="btn btn-sm" style={{ background: "#DCFCE7", color: "#166534", gap: 4 }} onClick={() => handleApprove(req.id)}><IcCheck />{ar ? "قبول" : "Approve"}</button>
+                          <button className="btn btn-sm" style={{ background: "#F0E7F4", color: "#3E0865", gap: 4 }} onClick={() => handleApprove(req.id)}><IcCheck />{ar ? "قبول" : "Approve"}</button>
                           <button className="btn btn-sm" style={{ background: "#FEE2E2", color: "#991B1B", gap: 4 }} onClick={() => handleReject(req.id)}><IcX />{ar ? "رفض" : "Reject"}</button>
                         </div>
                       </td>

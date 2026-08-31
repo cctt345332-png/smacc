@@ -58,7 +58,7 @@ export default function HRPage(props: { params: Promise<{ locale: string }> }) {
   const quickLinks = [
     { href: `/${locale}/hr/employees`,   labelAr: "الموظفون",   labelEn: "Employees",   icon: <IcUsers />,    color: "#5A187E", bg: "#EFF6FF" },
     { href: `/${locale}/hr/departments`, labelAr: "الأقسام",    labelEn: "Departments", icon: <IcBuilding />, color: "#75617F", bg: "#F5F3FF" },
-    { href: `/${locale}/hr/attendance`,  labelAr: "الحضور",     labelEn: "Attendance",  icon: <IcClock />,    color: "#059669", bg: "#ECFDF5" },
+    { href: `/${locale}/hr/attendance`,  labelAr: "الحضور",     labelEn: "Attendance",  icon: <IcClock />,    color: "#6F4A84", bg: "#F4EFF7" },
     { href: `/${locale}/hr/leaves`,      labelAr: "الإجازات",   labelEn: "Leaves",      icon: <IcCalendar />, color: "#D97706", bg: "#FFFBEB" },
     { href: `/${locale}/hr/payroll`,     labelAr: "الرواتب",    labelEn: "Payroll",     icon: <IcDollar />,   color: "#DC2626", bg: "#FEF2F2" },
     { href: `/${locale}/hr/gosi`,        labelAr: "GOSI",       labelEn: "GOSI",        icon: <IcShield />,   color: "#0891B2", bg: "#ECFEFF" },
@@ -85,7 +85,7 @@ export default function HRPage(props: { params: Promise<{ locale: string }> }) {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ background: "#ECFDF5", color: "#059669" }}><IcCalendar /></div>
+          <div className="stat-icon" style={{ background: "#F4EFF7", color: "#6F4A84" }}><IcCalendar /></div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "الحضور اليوم" : "Present Today"}</div>
             <div className="stat-value">{summary?.present_today ?? 0}</div>

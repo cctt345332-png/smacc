@@ -70,7 +70,7 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{ar ? "التقارير" : "Reports"}</h1>
         <button onClick={exportCSV}
           style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid #BBF7D0",
-            background: "#F0FDF4", color: "#059669", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            background: "#F7F2F8", color: "#6F4A84", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
           Excel
         </button>
       </div>
@@ -79,7 +79,7 @@ export default function SupervisorReportsPage(props: { params: Promise<{ locale:
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {[
           { label: ar ? "إجمالي المبيعات" : "Total Sales", value: fmt(totalSales) + " SAR", color: "#75617F" },
-          { label: ar ? "المقبوض" : "Collected", value: fmt(totalCollected) + " SAR", color: "#059669" },
+          { label: ar ? "المقبوض" : "Collected", value: fmt(totalCollected) + " SAR", color: "#6F4A84" },
           { label: ar ? "المستحق" : "Outstanding", value: fmt(totalSales - totalCollected) + " SAR", color: "#DC2626" },
           { label: ar ? "عدد الفواتير" : "Invoices", value: String(summary?.invoice_count || 0), color: "#5A187E" },
         ].map(s => (

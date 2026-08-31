@@ -34,7 +34,7 @@ export default function PricingPage() {
   ];
 
   const renderCell = (val: any) => {
-    if (val === true)  return <span style={{ color: "#059669" }}><IcCheck /></span>;
+    if (val === true)  return <span style={{ color: "#6F4A84" }}><IcCheck /></span>;
     if (val === false) return <span style={{ color: "#CBD5E1" }}><IcX /></span>;
     return <span style={{ fontSize: 12, fontWeight: 600 }}>{val}</span>;
   };

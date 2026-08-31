@@ -267,8 +267,8 @@ export default function NewItemPage(props: { params: Promise<{ locale: string }>
                         onClick={() => { setUseSerial(false); upd("tracking_type", "quantity"); }}
                         style={{
                           flex: 1, padding: "10px 12px", borderRadius: 8, border: "2px solid",
-                          borderColor: !useSerial ? "#059669" : "var(--border)",
-                          background: !useSerial ? "#059669" : "white",
+                          borderColor: !useSerial ? "#6F4A84" : "var(--border)",
+                          background: !useSerial ? "#6F4A84" : "white",
                           color: !useSerial ? "white" : "var(--text-primary)",
                           fontWeight: 600, fontSize: 13, cursor: "pointer",
                         }}>

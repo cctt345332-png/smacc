@@ -16,7 +16,7 @@ const STATUS_CONFIG = {
   expired:  { ar: "منتهي الصلاحية", badge: "badge-danger",  bg: "#FEF2F2", color: "#DC2626" },
   critical: { ar: "ينتهي خلال 30 يوم", badge: "badge-danger", bg: "#FFF7ED", color: "#EA580C" },
   warning:  { ar: "ينتهي خلال 90 يوم", badge: "badge-warning", bg: "#FFFBEB", color: "#D97706" },
-  ok:       { ar: "صالح", badge: "badge-success", bg: "#F0FDF4", color: "#059669" },
+  ok:       { ar: "صالح", badge: "badge-success", bg: "#F7F2F8", color: "#6F4A84" },
 };
 
 export default function ExpiryReportPage(props: { params: Promise<{ locale: string }> }) {

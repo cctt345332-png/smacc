@@ -12,7 +12,7 @@ const ACTIVITY_CONFIG: Record<string, {
 }> = {
   mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#5A187E", bg: "#EFF6FF" },
   spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#75617F", bg: "#F5F3FF" },
-  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#059669", bg: "#ECFDF5" },
+  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#6F4A84", bg: "#F4EFF7" },
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#D97706", bg: "#FFFBEB" },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#B45309", bg: "#FEF3C7" },
   clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#EC4899", bg: "#FDF2F8" },
@@ -104,8 +104,8 @@ export default function POSDashboardPage() {
             label: isAr ? "جلسات مفتوحة" : "Open Sessions",
             value: loading ? "—" : String(openSessions.length),
             icon: "session" as const,
-            color: "#059669",
-            bg: "#ECFDF5",
+            color: "#6F4A84",
+            bg: "#F4EFF7",
           },
           {
             label: isAr ? "مبيعات اليوم" : "Today's Sales",
@@ -150,8 +150,8 @@ export default function POSDashboardPage() {
             label: isAr ? "فتح الكاشير" : "Open Cashier",
             desc: isAr ? "ابدأ جلسة بيع جديدة" : "Start a new sales session",
             href: `/${locale}/pos/cashier`,
-            color: "#059669",
-            bg: "#ECFDF5",
+            color: "#6F4A84",
+            bg: "#F4EFF7",
           },
           {
             icon: "session" as const,
@@ -223,8 +223,8 @@ export default function POSDashboardPage() {
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <span style={{ fontSize: 11, fontWeight: 600, color: cfg.color, background: cfg.bg, padding: "2px 8px", borderRadius: 20, border: `1px solid ${cfg.color}30` }}>{cfg.label}</span>
                       {openSession ? (
-                        <span style={{ fontSize: 11, color: "#059669", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#059669", display: "inline-block" }} />
+                        <span style={{ fontSize: 11, color: "#6F4A84", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#6F4A84", display: "inline-block" }} />
                           {isAr ? "مفتوح" : "Open"}
                         </span>
                       ) : (

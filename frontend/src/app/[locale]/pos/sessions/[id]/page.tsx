@@ -9,7 +9,7 @@ import StructuredReportPrintButton from "@/components/documents/StructuredReport
 const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
   mobile_phones: { label: "جوالات وإلكترونيات", icon: "mobile",       color: "#5A187E", bg: "#EFF6FF" },
   spare_parts:   { label: "قطع غيار",            icon: "spareParts",   color: "#75617F", bg: "#F5F3FF" },
-  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#059669", bg: "#ECFDF5" },
+  pharmacy:      { label: "صيدلية",              icon: "pharmacy",     color: "#6F4A84", bg: "#F4EFF7" },
   grocery:       { label: "بقالة",               icon: "grocery",      color: "#D97706", bg: "#FFFBEB" },
   spices:        { label: "عطارة وتوابل",         icon: "spices",       color: "#B45309", bg: "#FEF3C7" },
   clothing:      { label: "ملابس وأزياء",         icon: "clothing",     color: "#EC4899", bg: "#FDF2F8" },
@@ -146,7 +146,7 @@ export default function SessionDetailPage() {
       {/* ── Stats ──────────────────────────────────────────────────── */}
       <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
-          { label: isAr ? "إجمالي المبيعات" : "Total Sales",    value: `${fmt(Number(session.total_sales))} ${sar}`,    icon: "revenue"  as const, color: "#059669", bg: "#ECFDF5" },
+          { label: isAr ? "إجمالي المبيعات" : "Total Sales",    value: `${fmt(Number(session.total_sales))} ${sar}`,    icon: "revenue"  as const, color: "#6F4A84", bg: "#F4EFF7" },
           { label: isAr ? "إجمالي النقد" : "Cash Sales",        value: `${fmt(Number(session.total_cash))} ${sar}`,     icon: "cash"     as const, color: "#5A187E", bg: "#EFF6FF" },
           { label: isAr ? "إجمالي البطاقة" : "Card Sales",      value: `${fmt(Number(session.total_card))} ${sar}`,     icon: "card"     as const, color: "#75617F", bg: "#F5F3FF" },
           { label: isAr ? "ضريبة القيمة المضافة" : "VAT",       value: `${fmt(Number(session.total_vat))} ${sar}`,      icon: "tax"      as const, color: "#D97706", bg: "#FFFBEB" },
@@ -211,7 +211,7 @@ export default function SessionDetailPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[
               { label: isAr ? "رصيد الافتتاح" : "Opening Cash",  value: fmt(Number(session.opening_cash)),  color: "" },
-              { label: isAr ? "مبيعات نقدية" : "Cash Sales",     value: `+ ${fmt(Number(session.total_cash))}`, color: "#059669" },
+              { label: isAr ? "مبيعات نقدية" : "Cash Sales",     value: `+ ${fmt(Number(session.total_cash))}`, color: "#6F4A84" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                 <span style={{ color: "var(--text-muted)" }}>{label}</span>
@@ -231,8 +231,8 @@ export default function SessionDetailPage() {
                 <div style={{
                   display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 700,
                   padding: "10px 12px", borderRadius: 8,
-                  background: difference! >= 0 ? "#ECFDF5" : "#FEF2F2",
-                  color: difference! >= 0 ? "#059669" : "#DC2626",
+                  background: difference! >= 0 ? "#F4EFF7" : "#FEF2F2",
+                  color: difference! >= 0 ? "#6F4A84" : "#DC2626",
                 }}>
                   <span>{isAr ? "الفرق" : "Difference"}</span>
                   <span>{difference! >= 0 ? "+" : ""}{fmt(difference!)} {sar}</span>

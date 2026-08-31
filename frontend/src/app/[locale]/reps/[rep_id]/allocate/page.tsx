@@ -122,7 +122,7 @@ export default function AllocateStockPage(
         </div>
       )}
       {success && (
-        <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 16px", marginBottom: 12, color: "#059669", fontSize: 13 }}>
+        <div style={{ background: "#F7F2F8", border: "1px solid #BBF7D0", borderRadius: 8, padding: "12px 16px", marginBottom: 12, color: "#6F4A84", fontSize: 13 }}>
           {success}
         </div>
       )}
@@ -163,7 +163,7 @@ export default function AllocateStockPage(
                           <input type="checkbox" checked={isSelected} readOnly />
                         </td>
                         <td style={{ fontWeight: 600 }}>{item.item_name || item.name_ar}</td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: Number(item.quantity) > 0 ? "#059669" : "#DC2626" }}>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: Number(item.quantity) > 0 ? "#6F4A84" : "#DC2626" }}>
                           {fmt(item.quantity)}
                         </td>
                         <td style={{ textAlign: "end", color: "var(--text-secondary)" }}>

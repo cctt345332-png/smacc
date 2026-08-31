@@ -245,7 +245,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                     <span style={{ color: "#75617F", fontWeight: 600 }}>سيريال</span>
                   )}
                   {item.tracking_type === "quantity" && (
-                    <span style={{ color: item.quantity_on_hand > 0 ? "#059669" : "#DC2626" }}>
+                    <span style={{ color: item.quantity_on_hand > 0 ? "#6F4A84" : "#DC2626" }}>
                       متاح: {item.quantity_on_hand ?? 0}
                     </span>
                   )}
@@ -296,14 +296,14 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
       {/* بطاقة الصنف المختار */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        background: isSerial ? "#F5F3FF" : "#F0FDF4",
-        border: `1px solid ${isSerial ? "#C4B5FD" : "#86EFAC"}`,
+        background: isSerial ? "#F5F3FF" : "#F7F2F8",
+        border: `1px solid ${isSerial ? "#C4B5FD" : "#C8AED4"}`,
         borderRadius: 8, padding: "8px 12px",
       }}>
         {/* أيقونة النوع */}
         <div style={{
           width: 28, height: 28, borderRadius: 6, flexShrink: 0,
-          background: isSerial ? "#75617F" : "#059669",
+          background: isSerial ? "#75617F" : "#6F4A84",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
@@ -315,10 +315,10 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
         </div>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: isSerial ? "#5B21B6" : "#065F46", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: isSerial ? "#5B21B6" : "#4B2A5A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {value.item_name}
           </div>
-          <div style={{ fontSize: 11, color: isSerial ? "#75617F" : "#059669", marginTop: 1 }}>
+          <div style={{ fontSize: 11, color: isSerial ? "#75617F" : "#6F4A84", marginTop: 1 }}>
             {isSerial
               ? (value.serial_number
                   ? `${value.serial_number}${value.condition ? ` — ${conditionAr[value.condition] || value.condition}` : ""}`
@@ -344,7 +344,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
       {/* حقول التشغيلة — للصيدلية في وضع الشراء فقط */}
       {value.mode === "batch" && purchaseMode && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#059669", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#6F4A84", textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {ar ? "بيانات التشغيلة" : "Batch Details"}
           </div>
           <div style={{ display: "flex", gap: 6 }}>
@@ -379,7 +379,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
 
       {/* في وضع البيع — التشغيلة تُخصم تلقائياً FEFO */}
       {value.mode === "batch" && !purchaseMode && (
-        <div style={{ fontSize: 11, color: "#059669", padding: "4px 8px", background: "#F0FDF4", borderRadius: 6, border: "1px solid #BBF7D0" }}>
+        <div style={{ fontSize: 11, color: "#6F4A84", padding: "4px 8px", background: "#F7F2F8", borderRadius: 6, border: "1px solid #BBF7D0" }}>
           {ar ? "سيُخصم تلقائياً من الأقرب للانتهاء (FEFO)" : "Auto-deducted from nearest expiry (FEFO)"}
         </div>
       )}
@@ -446,18 +446,18 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
             <div>
               {/* إذا عنده سيريالات محددة → عرضها */}
               {value.serial_ids && value.serial_ids.length > 0 ? (
-                <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 8, padding: "8px 12px" }}>
+                <div style={{ background: "#F7F2F8", border: "1px solid #C8AED4", borderRadius: 8, padding: "8px 12px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#059669" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#6F4A84" }}>
                       ✅ {value.serial_ids.length} {ar ? "سيريال محدد" : "serials selected"}
                     </span>
                     <button type="button" onClick={() => setShowSerialPicker(true)}
-                      style={{ background: "none", border: "1px solid #059669", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#059669", cursor: "pointer" }}>
+                      style={{ background: "none", border: "1px solid #6F4A84", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#6F4A84", cursor: "pointer" }}>
                       {ar ? "تعديل" : "Edit"}
                     </button>
                   </div>
                   {value.serial_numbers && value.serial_numbers.length > 0 && (
-                    <div style={{ marginTop: 4, fontSize: 10, color: "#059669", fontFamily: "monospace" }}>
+                    <div style={{ marginTop: 4, fontSize: 10, color: "#6F4A84", fontFamily: "monospace" }}>
                       {value.serial_numbers.slice(0, 3).join(" · ")}
                       {value.serial_numbers.length > 3 && ` +${value.serial_numbers.length - 3}`}
                     </div>

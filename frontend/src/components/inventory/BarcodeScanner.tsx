@@ -173,7 +173,7 @@ export default function BarcodeScanner({ onResult, onClose, locale = "ar", conti
         }}>
           {ar ? "وجّه الكاميرا نحو الباركود\nسيُمسح تلقائياً" : "Point camera at barcode\nIt will scan automatically"}
           {continuous && lastScanned && (
-            <div style={{ marginTop: 10, background: "#059669", color: "white", borderRadius: 8, padding: "6px 16px", fontFamily: "monospace", fontSize: 14, fontWeight: 700 }}>
+            <div style={{ marginTop: 10, background: "#6F4A84", color: "white", borderRadius: 8, padding: "6px 16px", fontFamily: "monospace", fontSize: 14, fontWeight: 700 }}>
               ✅ {lastScanned}
             </div>
           )}

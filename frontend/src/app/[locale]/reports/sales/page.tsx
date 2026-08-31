@@ -91,8 +91,8 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
               { label: ar ? "عدد الفواتير" : "Invoice Count", value: invoices.length, color: "#5A187E", isMoney: false },
               { label: ar ? "المبيعات قبل الضريبة" : "Net Sales", value: totalNet, color: "#75617F", isMoney: true },
               { label: ar ? "ضريبة القيمة المضافة" : "VAT Amount", value: totalVAT, color: "#D97706", isMoney: true },
-              { label: ar ? "إجمالي المبيعات" : "Gross Sales", value: totalGross, color: "#059669", isMoney: true },
-              { label: ar ? "المحصّل" : "Collected", value: totalPaid, color: "#059669", isMoney: true },
+              { label: ar ? "إجمالي المبيعات" : "Gross Sales", value: totalGross, color: "#6F4A84", isMoney: true },
+              { label: ar ? "المحصّل" : "Collected", value: totalPaid, color: "#6F4A84", isMoney: true },
               { label: ar ? "المستحق" : "Outstanding", value: totalOutstanding, color: overdueCount > 0 ? "#DC2626" : "#D97706", isMoney: true },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
@@ -160,8 +160,8 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
                       <td colSpan={5} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totalNet)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#D97706" }}>{fmt(totalVAT)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669", fontSize: 15 }}>{fmt(totalGross)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#059669" }}>{fmt(totalPaid)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84", fontSize: 15 }}>{fmt(totalGross)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(totalPaid)}</td>
                       <td />
                     </tr>
                   </tfoot>

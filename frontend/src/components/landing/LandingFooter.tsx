@@ -57,7 +57,7 @@ export default function LandingFooter({ locale }: { locale: string }) {
             © 2026 Masar. {ar ? "جميع الحقوق محفوظة" : "All rights reserved"}
           </p>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#059669" }} />
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#6F4A84" }} />
             <span style={{ fontSize: 12, color: "#475569" }}>
               {ar ? "جميع الأنظمة تعمل" : "All systems operational"}
             </span>
