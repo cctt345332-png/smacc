@@ -403,18 +403,34 @@ async def add_serial(
     existing_serial = existing.scalar_one_or_none()
     if existing_serial:
         # نوضح مكان التكرار: المادة ورقم فاتورة الشراء التي سجّلته أولاً.
+        source_bill_id = existing_serial.purchase_bill_id
+        # عند عكس فاتورة مؤكدة قد يُفك purchase_bill_id للحفاظ على السيريال،
+        # لذلك نرجع إلى حركة الشراء التاريخية لمعرفة الفاتورة الأصلية.
+        if not source_bill_id:
+            movement_ref = await db.execute(
+                select(StockMovement.reference_id)
+                .where(
+                    StockMovement.serial_item_id == existing_serial.id,
+                    StockMovement.reference_type == "bill",
+                    StockMovement.reference_id.is_not(None),
+                )
+                .order_by(StockMovement.created_at.asc())
+                .limit(1)
+            )
+            source_bill_id = movement_ref.scalar_one_or_none()
+
         location = await db.execute(
             select(Bill.bill_number, Bill.id, InventoryItem.name_ar)
             .select_from(BillLine)
             .join(Bill, Bill.id == BillLine.bill_id)
             .join(InventoryItem, InventoryItem.id == BillLine.inventory_item_id)
             .where(
-                BillLine.bill_id == existing_serial.purchase_bill_id,
+                BillLine.bill_id == source_bill_id,
                 Bill.tenant_id == tenant_id,
                 BillLine.inventory_item_id == product_id,
             )
             .limit(1)
-        ) if existing_serial.purchase_bill_id else None
+        ) if source_bill_id else None
         row = location.first() if location is not None else None
         if row:
             bill_number, old_bill_id, item_name = row
