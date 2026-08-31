@@ -436,9 +436,18 @@ async def update_customer(
     updates = data.model_dump(exclude_none=True)
     # الرصيد الافتتاحي ليس حقلاً يُخزن على العميل؛ بل يُترجم إلى قيد محاسبي.
     updates.pop("opening_balance", None)
-    # يسمح الحقل الاختياري بإزالة الحساب صراحة، ولا يغير الحقول الأخرى عند إرسالها فارغة.
+    # عند تغيير الحساب الرئيسي ننقل حساب العميل المحاسبي نفسه، لا سجل العميل فقط.
+    # هذا يحافظ على ارتباط العميل بالشجرة ويولد كودًا تابعًا للأب الجديد.
     if "ar_account_id" in data.model_fields_set:
-        await _validate_customer_ar_account(db, tenant_id, data.ar_account_id)
+        new_parent = await _validate_customer_ar_account(db, tenant_id, data.ar_account_id)
+        if data.ar_account_id and data.ar_account_id != c.ar_account_id:
+            customer_account = await db.get(Account, c.ar_account_id) if c.ar_account_id else None
+            if customer_account and new_parent:
+                customer_account.parent_id = new_parent.id
+                customer_account.level = new_parent.level + 1
+                customer_account.code = await _next_customer_account_code(db, tenant_id, new_parent)
+                customer_account.name_ar = c.name_ar
+                customer_account.name_en = c.name_en or c.name_ar
         updates["ar_account_id"] = data.ar_account_id
     changed_fields = list(updates.keys())
     for k, v in updates.items():
