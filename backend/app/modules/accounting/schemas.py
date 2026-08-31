@@ -22,6 +22,7 @@ class AccountCreate(BaseModel):
 class AccountUpdate(BaseModel):
     name_ar: Optional[str] = None
     name_en: Optional[str] = None
+    parent_id: Optional[str] = None
     is_active: Optional[bool] = None
     is_posting: Optional[bool] = None
     notes: Optional[str] = None

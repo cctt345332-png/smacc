@@ -105,6 +105,19 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     try { await deleteAccount(id); load(); } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
   };
 
+  const isDescendantOf = (candidateId: string, ancestorId: string) => {
+    const byId = new Map(accounts.map(a => [a.id, a]));
+    const visited = new Set<string>();
+    let current = byId.get(candidateId);
+    while (current?.parent_id) {
+      if (current.parent_id === ancestorId) return true;
+      if (visited.has(current.parent_id)) return false;
+      visited.add(current.parent_id);
+      current = byId.get(current.parent_id);
+    }
+    return false;
+  };
+
   const filtered = accounts.filter(a => {
     const q = search.toLowerCase();
     const matchSearch = !q || a.code.includes(q) || a.name_ar.includes(q) || a.name_en.toLowerCase().includes(q);
@@ -382,7 +395,9 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   <label className="form-label">{ar ? "الحساب الأب" : "Parent Account"}</label>
                   <select className="form-input form-select" value={form.parent_id} onChange={e => setForm(f => ({ ...f, parent_id: e.target.value }))}>
                     <option value="">{ar ? "— بدون —" : "— None —"}</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.code} - {ar ? a.name_ar : a.name_en}</option>)}
+                    {accounts
+                      .filter(a => !editItem || (a.id !== editItem.id && !isDescendantOf(a.id, editItem.id)))
+                      .map(a => <option key={a.id} value={a.id}>{a.code} - {ar ? a.name_ar : a.name_en}</option>)}
                   </select>
                 </div>
               </div>

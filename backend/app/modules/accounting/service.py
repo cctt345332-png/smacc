@@ -148,8 +148,55 @@ async def update_account(db: AsyncSession, tenant_id: str, account_id: str, data
     acc = await db.get(Account, account_id)
     if not acc or acc.tenant_id != tenant_id:
         raise HTTPException(404, "Account not found")
-    for k, v in data.model_dump(exclude_none=True).items():
-        setattr(acc, k, v)
+
+    # parent_id is intentionally handled separately because a null value means
+    # "move to the root", while an omitted value means "leave unchanged".
+    if "parent_id" in data.model_fields_set:
+        accounts_result = await db.execute(
+            select(Account).where(Account.tenant_id == tenant_id)
+        )
+        accounts = accounts_result.scalars().all()
+        account_by_id = {account.id: account for account in accounts}
+        new_parent_id = data.parent_id
+
+        if new_parent_id is not None:
+            new_parent = account_by_id.get(new_parent_id)
+            if not new_parent:
+                raise HTTPException(404, "Parent account not found")
+            if new_parent_id == account_id:
+                raise HTTPException(400, "An account cannot be its own parent")
+
+            # Walking upward from the proposed parent detects moving an account
+            # below one of its own descendants, which would create a cycle.
+            current_id = new_parent_id
+            visited: set[str] = set()
+            while current_id:
+                if current_id == account_id:
+                    raise HTTPException(400, "Cannot move an account below one of its descendants")
+                if current_id in visited:
+                    raise HTTPException(400, "Account hierarchy contains a cycle")
+                visited.add(current_id)
+                current = account_by_id.get(current_id)
+                current_id = current.parent_id if current else None
+
+        acc.parent_id = new_parent_id
+        acc.level = (account_by_id[new_parent_id].level + 1) if new_parent_id else 1
+
+        # Preserve the subtree structure while recalculating each descendant's
+        # level after the move.
+        children_by_parent: dict[str, list[Account]] = {}
+        for account in accounts:
+            if account.parent_id:
+                children_by_parent.setdefault(account.parent_id, []).append(account)
+        pending = list(children_by_parent.get(account_id, []))
+        while pending:
+            child = pending.pop(0)
+            child.level = acc.level + 1 if child.parent_id == account_id else account_by_id[child.parent_id].level + 1
+            pending.extend(children_by_parent.get(child.id, []))
+
+    values = data.model_dump(exclude_none=True, exclude={"parent_id"})
+    for key, value in values.items():
+        setattr(acc, key, value)
     await db.commit()
     await db.refresh(acc)
     return acc
