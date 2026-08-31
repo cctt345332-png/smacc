@@ -804,10 +804,13 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
             bill.lines = new_lines_data
             await _add_inventory_for_bill(db, tenant_id, user_id, bill)
 
-    await db.commit()
-    # لا نعيد كائن ORM بعلاقاته بعد التعديل؛ الواجهة تعيد جلب الفاتورة عند فتحها.
+    # نلتقط القيم قبل commit لأن AsyncSession قد يفرغ خصائص ORM بعده،
+    # وقراءتها لاحقًا قد تسبب MissingGreenlet أثناء بناء الاستجابة.
     status_value = bill.status.value if hasattr(bill.status, "value") else str(bill.status)
-    return {"id": bill.id, "bill_number": bill.bill_number, "status": status_value, "updated": True}
+    response = {"id": bill.id, "bill_number": bill.bill_number, "status": status_value, "updated": True}
+    await db.commit()
+    # استجابة بسيطة لا تعتمد على lazy loading؛ الواجهة تعيد جلب الفاتورة عند فتحها.
+    return response
 
 
 async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
