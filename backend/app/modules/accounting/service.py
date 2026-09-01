@@ -473,7 +473,35 @@ async def get_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
     entry = result.scalar_one_or_none()
     if not entry or entry.tenant_id != tenant_id:
         raise HTTPException(404, "Journal entry not found")
-    return entry
+    # أعد DTO صريحًا لتجنب أي تحميل كسول أثناء تسلسل استجابة FastAPI/Pydantic.
+    # صفحة التفاصيل تحتاج السطور فقط، ولا تحتاج علاقات الحسابات من ORM.
+    return {
+        "id": entry.id,
+        "entry_number": entry.entry_number,
+        "entry_date": entry.entry_date,
+        "fiscal_year_id": entry.fiscal_year_id,
+        "description_ar": entry.description_ar,
+        "description_en": entry.description_en,
+        "status": entry.status,
+        "reference": entry.reference,
+        "source": entry.source,
+        "total_debit": entry.total_debit,
+        "total_credit": entry.total_credit,
+        "notes": entry.notes,
+        "created_at": entry.created_at,
+        "lines": [
+            {
+                "id": line.id,
+                "account_id": line.account_id,
+                "cost_center_id": line.cost_center_id,
+                "description": line.description,
+                "debit": line.debit,
+                "credit": line.credit,
+                "line_order": line.line_order,
+            }
+            for line in sorted(entry.lines, key=lambda item: item.line_order or 0)
+        ],
+    }
 
 
 async def create_journal_entry(db: AsyncSession, tenant_id: str, user_id: str, data: JournalEntryCreate):
