@@ -5,16 +5,16 @@ import Link from "next/link";
 import { getRep, getRepCustomerPermissions, updateRepCustomerPermissions } from "@/lib/reps";
 
 const FIELDS = [
-  ["name_ar", "اسم العميل"],
+  ["name_ar", "اسم العميل بالعربي"],
+  ["name_en", "اسم العميل بالإنجليزي"],
   ["phone", "الهاتف"],
-  ["email", "البريد الإلكتروني"],
   ["address_city", "المدينة"],
-  ["address_district", "الحي"],
+  ["vat_number", "الرقم الضريبي"],
+  ["national_id", "رقم الهوية"],
   ["payment_terms_days", "شروط الدفع"],
-  ["credit_limit", "حد الائتمان"],
   ["notes", "ملاحظات العميل"],
-  ["latitude", "خط العرض للموقع"],
-  ["longitude", "خط الطول للموقع"],
+  ["latitude", "موقع العميل - خط العرض"],
+  ["longitude", "موقع العميل - خط الطول"],
 ] as const;
 
 export default function RepCustomerPermissionsPage(props: { params: Promise<{ locale: string; rep_id: string }> }) {

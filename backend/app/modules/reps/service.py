@@ -605,7 +605,7 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
         permissions = data["customer_edit_permissions"]
         if not isinstance(permissions, dict):
             raise HTTPException(400, "إعدادات صلاحيات العملاء غير صحيحة")
-        allowed_permission_keys = {"name_ar", "phone", "email", "address_city", "address_district", "latitude", "longitude", "payment_terms_days", "credit_limit", "notes"}
+        allowed_permission_keys = {"name_ar", "phone", "email", "address_city", "address_district", "vat_number", "national_id", "latitude", "longitude", "payment_terms_days", "credit_limit", "notes"}
         rep.customer_edit_permissions = {key: bool(value) for key, value in permissions.items() if key in allowed_permission_keys}
     if "is_active" in data:
         rep.is_active = data["is_active"]

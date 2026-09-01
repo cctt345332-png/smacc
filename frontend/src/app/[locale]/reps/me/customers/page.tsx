@@ -207,6 +207,8 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             phone: form.phone,
             email: form.email,
             address_city: form.address_city,
+            vat_number: form.vat_number || null,
+            national_id: form.national_id || null,
             payment_terms_days: parseInt(form.payment_terms_days) || 30,
             credit_limit: parseFloat(form.credit_limit) || 0,
             notes: form.notes || null,
