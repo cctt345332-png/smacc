@@ -132,16 +132,23 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
         </div>
       </div>
 
-      {/* زر التحميل */}
-      {!data && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button className="btn btn-primary" onClick={load} disabled={loading}>
-              {loading ? (ar ? "جاري التحميل..." : "Loading...") : (ar ? "عرض تقرير المخزون" : "Show Inventory Report")}
-            </button>
-          </div>
+      {/* الفلاتر تظهر دائمًا قبل تحميل التقرير وبعده */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <select className="form-input form-select" style={{ width: 170 }} value={reportMode} onChange={e => { setReportMode(e.target.value as any); setData(null); }}>
+            <option value="all">{ar ? "كل المخزون" : "All Inventory"}</option>
+            <option value="warehouse">{ar ? "حسب المستودع" : "By Warehouse"}</option>
+            <option value="item">{ar ? "حسب الصنف" : "By Item"}</option>
+          </select>
+          {reportMode === "warehouse" && <select className="form-input form-select" style={{ width: 190 }} value={selectedWarehouse} onChange={e => { setSelectedWarehouse(e.target.value); setData(null); }}><option value="">{ar ? "كل المستودعات" : "All Warehouses"}</option>{warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name_ar || w.name_en}</option>)}</select>}
+          {reportMode === "item" && <select className="form-input form-select" style={{ width: 210 }} value={selectedItem} onChange={e => { setSelectedItem(e.target.value); setData(null); }}><option value="">{ar ? "كل الأصناف" : "All Items"}</option>{items.map((item: any) => <option key={item.id} value={item.id}>{item.name_ar || item.name_en}</option>)}</select>}
+          <select className="form-input form-select" style={{ width: 160 }} value={sortBy} onChange={e => setSortBy(e.target.value as any)}><option value="name">{ar ? "فرز حسب الصنف" : "Sort by Item"}</option><option value="warehouse">{ar ? "فرز حسب المستودع" : "Sort by Warehouse"}</option><option value="quantity">{ar ? "الأعلى كمية" : "Highest Quantity"}</option><option value="value">{ar ? "الأعلى قيمة" : "Highest Value"}</option></select>
+          <select className="form-input form-select" style={{ width: 180 }} value={filterTracking} onChange={e => setFilterTracking(e.target.value)}><option value="">{ar ? "كل أنواع التتبع" : "All Tracking Types"}</option>{Object.entries(TRACKING_AR).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={filterLowStock} onChange={e => setFilterLowStock(e.target.checked)} />{ar ? "منخفض المخزون فقط" : "Low stock only"}{data && reportSummary.low_stock_count > 0 && <span className="badge badge-danger" style={{ marginInlineStart: 4 }}>{reportSummary.low_stock_count}</span>}</label>
+          <span style={{ fontSize: 13, color: "var(--text-secondary)", marginInlineStart: "auto" }}>{data ? `${filtered.length} ${ar ? "سطر" : "rows"}` : (ar ? "اختر الفلاتر ثم اعرض التقرير" : "Choose filters then show report")}</span>
+          <button className="btn btn-primary btn-sm" onClick={load} disabled={loading}>{loading ? (ar ? "جاري التحميل..." : "Loading...") : (data ? (ar ? "تحديث التقرير" : "Refresh Report") : (ar ? "عرض التقرير" : "Show Report"))}</button>
         </div>
-      )}
+      </div>
 
       {data && (
         <>
@@ -162,49 +169,6 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
             ))}
           </div>
 
-          {/* Filters */}
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <select className="form-input form-select" style={{ width: 170 }} value={reportMode} onChange={e => { setReportMode(e.target.value as any); setData(null); }}>
-                <option value="all">{ar ? "كل المخزون" : "All Inventory"}</option>
-                <option value="warehouse">{ar ? "حسب المستودع" : "By Warehouse"}</option>
-                <option value="item">{ar ? "حسب الصنف" : "By Item"}</option>
-              </select>
-              {reportMode === "warehouse" && (
-                <select className="form-input form-select" style={{ width: 190 }} value={selectedWarehouse} onChange={e => { setSelectedWarehouse(e.target.value); setData(null); }}>
-                  <option value="">{ar ? "كل المستودعات" : "All Warehouses"}</option>
-                  {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name_ar || w.name_en}</option>)}
-                </select>
-              )}
-              {reportMode === "item" && (
-                <select className="form-input form-select" style={{ width: 210 }} value={selectedItem} onChange={e => { setSelectedItem(e.target.value); setData(null); }}>
-                  <option value="">{ar ? "كل الأصناف" : "All Items"}</option>
-                  {items.map((item: any) => <option key={item.id} value={item.id}>{item.name_ar || item.name_en}</option>)}
-                </select>
-              )}
-              <select className="form-input form-select" style={{ width: 160 }} value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
-                <option value="name">{ar ? "فرز حسب الصنف" : "Sort by Item"}</option>
-                <option value="warehouse">{ar ? "فرز حسب المستودع" : "Sort by Warehouse"}</option>
-                <option value="quantity">{ar ? "الأعلى كمية" : "Highest Quantity"}</option>
-                <option value="value">{ar ? "الأعلى قيمة" : "Highest Value"}</option>
-              </select>
-              <select className="form-input form-select" style={{ width: 180 }} value={filterTracking} onChange={e => setFilterTracking(e.target.value)}>
-                <option value="">{ar ? "كل أنواع التتبع" : "All Tracking Types"}</option>
-                {Object.entries(TRACKING_AR).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-              </select>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                <input type="checkbox" checked={filterLowStock} onChange={e => setFilterLowStock(e.target.checked)} />
-                {ar ? "منخفض المخزون فقط" : "Low stock only"}
-                {reportSummary.low_stock_count > 0 && (
-                  <span className="badge badge-danger" style={{ marginInlineStart: 4 }}>{reportSummary.low_stock_count}</span>
-                )}
-              </label>
-              <span style={{ fontSize: 13, color: "var(--text-secondary)", marginInlineStart: "auto" }}>
-                {filtered.length} {ar ? "سطر" : "rows"}
-              </span>
-              <button className="btn btn-secondary btn-sm" onClick={load}>{ar ? "تحديث" : "Refresh"}</button>
-            </div>
-          </div>
 
           {/* Table */}
           <div className="card">
