@@ -780,8 +780,10 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
         .where(Payment.tenant_id == tenant_id, Payment.rep_id == rep_id)
     )
     total_collected = pay_r.scalar() or Decimal("0")
-
+    opening_balance = await _get_rep_opening_balance(db, tenant_id, rep_id)
+    operational_outstanding = (total_sales or 0) - total_collected
     # كمية المخزون الحالية
+
     stock_r = await db.execute(
         select(func.sum(InventoryStock.quantity))
         .where(
