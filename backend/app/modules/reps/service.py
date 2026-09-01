@@ -15,7 +15,7 @@ from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, RepLocation,
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Customer, Invoice, Payment
-from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine
+from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine, JournalEntryStatus
 from app.models.notifications import Notification, NotificationSeverity, NotificationType
 
 
@@ -552,6 +552,36 @@ async def get_my_stock(db: AsyncSession, tenant_id: str, user_id: str) -> list:
     return await get_stock_by_warehouse(db, tenant_id, rep.warehouse_id)
 
 
+async def _get_rep_opening_balance(db: AsyncSession, tenant_id: str, rep_id: str) -> Decimal:
+    """الرصيد الافتتاحي الحقيقي لعملاء المندوب من الحسابات والقيود المرحّلة."""
+    account_ids = (await db.execute(
+        select(Customer.ar_account_id).where(
+            Customer.tenant_id == tenant_id,
+            Customer.rep_id == rep_id,
+            Customer.ar_account_id.is_not(None),
+        )
+    )).scalars().all()
+    account_ids = [account_id for account_id in account_ids if account_id]
+    if not account_ids:
+        return Decimal("0")
+    account_opening = (await db.execute(
+        select(func.coalesce(func.sum(Account.opening_balance), 0)).where(
+            Account.tenant_id == tenant_id, Account.id.in_(account_ids)
+        )
+    )).scalar() or 0
+    journal_opening = (await db.execute(
+        select(func.coalesce(func.sum(JournalEntryLine.debit - JournalEntryLine.credit), 0))
+        .join(JournalEntry, JournalEntry.id == JournalEntryLine.entry_id)
+        .where(
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.status == JournalEntryStatus.POSTED,
+            JournalEntry.source == "customer_opening_balance",
+            JournalEntryLine.account_id.in_(account_ids),
+        )
+    )).scalar() or 0
+    return Decimal(str(account_opening or 0)) + Decimal(str(journal_opening or 0))
+
+
 async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
     """ملخص أداء المندوب الحالي — فقط الفواتير المؤكدة/المدفوعة"""
     rep = await get_rep_by_user(db, user_id)
@@ -575,6 +605,8 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
         .where(Payment.tenant_id == tenant_id, Payment.rep_id == rep.id)
     )
     total_collected = pay_r.scalar() or Decimal("0")
+    opening_balance = await _get_rep_opening_balance(db, tenant_id, rep.id)
+    operational_outstanding = (total_sales or 0) - total_collected
 
     # كمية المخزون
     stock_r = await db.execute(
@@ -591,7 +623,9 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
         "total_sales": float(total_sales or 0),
         "invoice_count": invoice_count or 0,
         "total_collected": float(total_collected),
-        "outstanding": float((total_sales or 0) - total_collected),
+        "opening_balance": float(opening_balance),
+        "operational_outstanding": float(operational_outstanding),
+        "outstanding": float(opening_balance + operational_outstanding),
         "stock_qty": float(stock_qty),
         "target_monthly": float(rep.target_monthly or 0),
         "commission_pct": float(rep.commission_pct or 0),
@@ -766,7 +800,9 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
         "total_sales": float(total_sales or 0),
         "invoice_count": invoice_count or 0,
         "total_collected": float(total_collected),
-        "outstanding": float((total_sales or 0) - total_collected),
+        "opening_balance": float(opening_balance),
+        "operational_outstanding": float(operational_outstanding),
+        "outstanding": float(opening_balance + operational_outstanding),
         "stock_qty": float(stock_qty),
     }
 

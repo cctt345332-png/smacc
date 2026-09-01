@@ -452,7 +452,8 @@ async def _next_entry_number(db: AsyncSession, tenant_id: str) -> str:
 
 async def get_journal_entries(db: AsyncSession, tenant_id: str, status: str | None = None,
                                from_date: datetime | None = None, to_date: datetime | None = None):
-    q = select(JournalEntry).where(JournalEntry.tenant_id == tenant_id)
+    from sqlalchemy.orm import selectinload
+    q = select(JournalEntry).options(selectinload(JournalEntry.lines)).where(JournalEntry.tenant_id == tenant_id)
     if status:
         q = q.where(JournalEntry.status == status)
     if from_date:
