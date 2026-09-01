@@ -24,8 +24,8 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
   const [costCenters, setCostCenters] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [entryKind, setEntryKind] = useState<"manual" | "opening">("manual");
-  const [openingCustomerId, setOpeningCustomerId] = useState("");
-  const [openingAmount, setOpeningAmount] = useState("");
+  const [openingCustomerIds, setOpeningCustomerIds] = useState<string[]>([]);
+  const [openingAmounts, setOpeningAmounts] = useState<Record<string, string>>({});
   const [openingOffsetAccount, setOpeningOffsetAccount] = useState("");
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -66,12 +66,14 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
 
     let validLines = lines.filter(l => l.account_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
     if (entryKind === "opening") {
-      const customer = customers.find(c => c.id === openingCustomerId);
-      const amount = parseFloat(openingAmount) || 0;
-      if (!customer?.ar_account_id) return alert(ar ? "العميل غير مربوط بحساب ذمم مدينة" : "Customer has no receivable account");
+      const selectedCustomers = openingCustomerIds.map(id => customers.find(c => c.id === id)).filter(Boolean);
+      if (!selectedCustomers.length) return alert(ar ? "اختر عميلاً واحدًا على الأقل" : "Select at least one customer");
       if (!openingOffsetAccount) return alert(ar ? "اختر الحساب المقابل" : "Select the offset account");
-      if (amount <= 0) return alert(ar ? "أدخل مبلغًا أكبر من صفر" : "Enter an amount greater than zero");
-      validLines = [{ account_id: customer.ar_account_id, cost_center_id: "", description: ar ? `رصيد افتتاحي - ${customer.name_ar}` : `Opening balance - ${customer.name_en || customer.name_ar}`, debit: String(amount), credit: "" }, { account_id: openingOffsetAccount, cost_center_id: "", description: ar ? "الحساب المقابل للرصيد الافتتاحي" : "Opening balance offset", debit: "", credit: String(amount) }];
+      const openingEntries = selectedCustomers.map(customer => ({ customer, amount: parseFloat(openingAmounts[customer!.id] || "0") || 0 }));
+      if (openingEntries.some(item => !item.customer?.ar_account_id)) return alert(ar ? "يوجد عميل غير مربوط بحساب ذمم مدينة" : "One selected customer has no receivable account");
+      if (openingEntries.some(item => item.amount <= 0)) return alert(ar ? "أدخل مبلغًا أكبر من صفر لكل عميل مختار" : "Enter an amount greater than zero for every selected customer");
+      const totalOpening = openingEntries.reduce((sum, item) => sum + item.amount, 0);
+      validLines = [...openingEntries.map(({ customer, amount }) => ({ account_id: customer!.ar_account_id!, cost_center_id: "", description: ar ? `رصيد افتتاحي - ${customer!.name_ar}` : `Opening balance - ${customer!.name_en || customer!.name_ar}`, debit: String(amount), credit: "" })), { account_id: openingOffsetAccount, cost_center_id: "", description: ar ? `الحساب المقابل لأرصدة ${openingEntries.length} عملاء` : `Opening balance offset for ${openingEntries.length} customers`, debit: "", credit: String(totalOpening) }];
     }
     if (validLines.length < 2) return alert(ar ? "أضف سطرين على الأقل" : "Add at least 2 lines");
 
@@ -137,8 +139,7 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
           </div>
           {entryKind === "opening" && (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, padding: 14, marginBottom: 16, border: "1px solid #E9DDF0", borderRadius: 12, background: "#FBF9FC" }}>
-              <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "العميل" : "Customer"}</label><select className="form-input form-select" value={openingCustomerId} onChange={e => { const id = e.target.value; setOpeningCustomerId(id); const customer = customers.find(c => c.id === id); if (customer) setForm(f => ({ ...f, description_ar: `رصيد افتتاحي - ${customer.name_ar}`, description_en: `Opening balance - ${customer.name_en || customer.name_ar}` })); }}><option value="">{ar ? "اختر العميل" : "Select customer"}</option>{customers.map(c => <option key={c.id} value={c.id}>{c.customer_number} — {c.name_ar}</option>)}</select></div>
-              <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "المبلغ" : "Amount"}</label><input className="form-input" type="number" min="0.01" step="0.01" value={openingAmount} onChange={e => setOpeningAmount(e.target.value)} placeholder="0.00" /></div>
+              <div className="form-group" style={{ margin: 0, gridColumn: "span 2" }}><label className="form-label">{ar ? "العملاء والمبالغ" : "Customers and amounts"}</label><div style={{ maxHeight: 230, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, background: "#fff" }}>{customers.map(c => { const checked = openingCustomerIds.includes(c.id); return <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderBottom: "1px solid #F1F5F9" }}><input type="checkbox" checked={checked} onChange={e => { setOpeningCustomerIds(prev => e.target.checked ? [...prev, c.id] : prev.filter(id => id !== c.id)); }} /><span style={{ flex: 1, fontSize: 12 }}>{c.customer_number} — {c.name_ar}</span>{checked && <input className="form-input" style={{ width: 125, padding: "5px 8px", fontSize: 12 }} type="number" min="0.01" step="0.01" placeholder="0.00" value={openingAmounts[c.id] || ""} onChange={e => setOpeningAmounts(prev => ({ ...prev, [c.id]: e.target.value }))} />}</div>; })}</div></div>
               <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "الحساب المقابل" : "Offset account"}</label><SearchableAccountSelect accounts={accounts} value={openingOffsetAccount} onChange={setOpeningOffsetAccount} locale={locale} allowGroups placeholder={ar ? "اختر الحساب المقابل" : "Select offset account"} /></div>
             </div>
           )}
