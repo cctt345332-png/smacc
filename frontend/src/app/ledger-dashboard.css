@@ -462,3 +462,28 @@
 .ops-metric,.ops-table td { background:#FFFDFF; }.ops-table th { color:#405267; border-color:#C6D3DF; background:#E7EDF3; }.ops-table tbody tr:nth-child(even) td { background:#F8FAFC; }.ops-table tbody tr:not(.ops-rejection-row):hover td { background:#F4EFF7; }
 .ops-primary-action,.ops-approve-button { background:linear-gradient(180deg,#75617F,#3E0865)!important; border-color:#26033F!important; }
 .ops-view-link:hover,.ops-secondary-action:hover { color:#3E0865; border-color:#C9BACF; background:#F4EFF7; }
+
+/* Customizable admin quickbar */
+.legacy-app-shell .legacy-quickbar { display:flex; align-items:stretch; }
+.legacy-app-shell .legacy-quickbar-items { min-width:0; flex:1; display:flex; align-items:stretch; overflow-x:auto; overscroll-behavior-x:contain; }
+.legacy-app-shell .legacy-quickbar-items .legacy-quick-action { flex:0 0 auto; }
+.legacy-app-shell .legacy-quick-action.active { color:#fff; border-color:#26033F; background:linear-gradient(180deg,#5A187E,#3E0865); }
+.legacy-app-shell .legacy-quick-action.active:hover { color:#fff; background:#26033F; }
+.legacy-app-shell .legacy-quickbar-config-wrap { position:relative; flex:0 0 auto; z-index:30; background:#EDE7F2; border-inline-start:1px solid #CDBED6; }
+.legacy-app-shell .legacy-quickbar-config { min-width:104px; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px 9px; color:#3E0865; background:#EDE7F2; border:0; font-family:Cairo,sans-serif; font-size:8px; font-weight:800; line-height:1.15; cursor:pointer; }
+.legacy-app-shell .legacy-quickbar-config:hover,.legacy-app-shell .legacy-quickbar-config.open { color:#fff; background:#5A187E; }
+.legacy-app-shell .legacy-quickbar-settings-panel { position:absolute; inset-inline-start:0; top:calc(100% + 1px); width:310px; max-height:min(70vh,520px); overflow:auto; padding:12px; color:#334155; background:#fff; border:1px solid #CDBED6; border-radius:0 0 10px 10px; box-shadow:0 12px 28px rgba(30,15,45,.18); text-align:start; }
+.legacy-app-shell .legacy-quickbar-settings-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-bottom:8px; border-bottom:1px solid #E8DFED; }
+.legacy-app-shell .legacy-quickbar-settings-head strong { color:#3E0865; font-size:13px; }
+.legacy-app-shell .legacy-quickbar-settings-head button { color:#5A187E; background:transparent; border:0; font-family:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+.legacy-app-shell .legacy-quickbar-settings-panel > p { margin:8px 0 10px; color:#64748B; font-size:11px; }
+.legacy-app-shell .legacy-quickbar-settings-section { margin-top:10px; }
+.legacy-app-shell .legacy-quickbar-section-title { margin-bottom:4px; color:#6F4A84; font-size:11px; font-weight:800; }
+.legacy-app-shell .legacy-quickbar-option { display:flex; align-items:center; gap:8px; min-height:28px; padding:3px 4px; border-radius:5px; color:#475569; font-size:11px; cursor:pointer; }
+.legacy-app-shell .legacy-quickbar-option:hover { background:#F7F1FA; color:#3E0865; }
+.legacy-app-shell .legacy-quickbar-option input { accent-color:#5A187E; }
+@media (max-width:768px) {
+  .legacy-app-shell .legacy-quickbar-config { min-width:76px; padding:3px 6px; font-size:7px; }
+  .legacy-app-shell .legacy-quickbar-settings-panel { position:fixed; inset-inline:8px; top:89px; width:auto; max-height:calc(100vh - 100px); border-radius:10px; }
+}
+@media print { .legacy-app-shell .legacy-quickbar-config-wrap { display:none; } }

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { getUnreadCount, getNotifications, markRead, markAllRead } from "@/lib/notifications";
@@ -18,25 +18,84 @@ const IconSettings = () => <svg width="13" height="13" viewBox="0 0 24 24" fill=
 const IconGlobe = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>;
 const IconChevronDown = () => <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>;
 
+type QuickAction = {
+  id: string;
+  href: string;
+  icon: string;
+  ar: string;
+  en: string;
+  section: "sales" | "purchases" | "treasury" | "accounting" | "inventory" | "reports" | "reps";
+};
+
+const QUICK_ACTION_CATALOG: QuickAction[] = [
+  { id: "sales-invoice", href: "/sales/invoices/new", icon: "invoice", ar: "فاتورة مبيعات", en: "Sales invoice", section: "sales" },
+  { id: "sales-invoices", href: "/sales/invoices", icon: "invoice", ar: "فواتير المبيعات", en: "Sales invoices", section: "sales" },
+  { id: "sales-customers", href: "/sales/customers", icon: "users", ar: "العملاء", en: "Customers", section: "sales" },
+  { id: "purchase-bill", href: "/purchases/bills/new", icon: "purchase", ar: "فاتورة مشتريات", en: "Purchase bill", section: "purchases" },
+  { id: "purchase-return", href: "/purchases/debit-notes/new", icon: "reverse", ar: "مرتجع مشتريات", en: "Purchase return", section: "purchases" },
+  { id: "sales-return", href: "/sales/credit-notes/new", icon: "refund", ar: "مرتجع مبيعات", en: "Sales return", section: "sales" },
+  { id: "receipt", href: "/treasury/receipts/new", icon: "cash", ar: "سند قبض", en: "Receipt", section: "treasury" },
+  { id: "payment", href: "/treasury/payments/new", icon: "wallet", ar: "سند صرف", en: "Payment", section: "treasury" },
+  { id: "journal", href: "/accounting/journal/new", icon: "journal", ar: "قيد يومي", en: "Journal entry", section: "accounting" },
+  { id: "inventory", href: "/inventory/items", icon: "inventory", ar: "المخزون", en: "Inventory", section: "inventory" },
+  { id: "serial-report", href: "/reports/inventory/serial-profit", icon: "serial", ar: "تقرير السيريالات", en: "Serial report", section: "reports" },
+  { id: "reports", href: "/reports", icon: "chart", ar: "التقارير", en: "Reports", section: "reports" },
+  { id: "reps", href: "/reps/manage", icon: "users", ar: "إدارة المناديب", en: "Sales reps", section: "reps" },
+];
+
+const DEFAULT_QUICK_ACTION_IDS = ["sales-invoice", "purchase-bill", "sales-return", "purchase-return", "receipt", "payment", "journal"];
+const QUICK_ACTIONS_STORAGE_KEY = "smacc.admin.quick-actions.v1";
+const SECTION_LABELS = {
+  sales: { ar: "المبيعات", en: "Sales" },
+  purchases: { ar: "المشتريات", en: "Purchases" },
+  treasury: { ar: "الخزينة", en: "Treasury" },
+  accounting: { ar: "المحاسبة", en: "Accounting" },
+  inventory: { ar: "المخزون", en: "Inventory" },
+  reports: { ar: "التقارير", en: "Reports" },
+  reps: { ar: "المناديب", en: "Sales reps" },
+} as const;
+
 export default function Header({ locale, collapsed, onMobileMenuClick }: { locale: string; collapsed: boolean; onMobileMenuClick: () => void }) {
   const t = useTranslations("common");
   const { user, logout } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [quickSettingsOpen, setQuickSettingsOpen] = useState(false);
+  const [quickActionIds, setQuickActionIds] = useState<string[]>(DEFAULT_QUICK_ACTION_IDS);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<any[]>([]);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+  const quickSettingsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = (event: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) setProfileOpen(false);
       if (notifRef.current && !notifRef.current.contains(event.target as Node)) setNotifOpen(false);
+      if (quickSettingsRef.current && !quickSettingsRef.current.contains(event.target as Node)) setQuickSettingsOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(QUICK_ACTIONS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const validIds = parsed.filter((id): id is string => typeof id === "string" && QUICK_ACTION_CATALOG.some(action => action.id === id));
+          if (validIds.length > 0) setQuickActionIds(validIds);
+        }
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(QUICK_ACTIONS_STORAGE_KEY, JSON.stringify(quickActionIds)); } catch {}
+  }, [quickActionIds]);
 
   useEffect(() => {
     const fetchCount = async () => { try { const { data } = await getUnreadCount(); setUnreadCount(data.count); } catch {} };
@@ -55,12 +114,19 @@ export default function Header({ locale, collapsed, onMobileMenuClick }: { local
   const switchLocale = () => { const target = locale === "ar" ? "en" : "ar"; router.push(window.location.pathname.replace(`/${locale}`, `/${target}`)); };
   const initials = user ? (user as any).fullName?.split(" ").map((word: string) => word[0]).join("").slice(0, 2).toUpperCase() || "U" : "U";
   const base = `/${locale}`;
+  const quickActions = quickActionIds.map(id => QUICK_ACTION_CATALOG.find(action => action.id === id)).filter((action): action is QuickAction => Boolean(action));
+  const activeHref = [...quickActions].sort((a, b) => b.href.length - a.href.length).find(action => pathname === `${base}${action.href}` || pathname.startsWith(`${base}${action.href}/`))?.href;
+
+  const toggleQuickAction = (id: string) => {
+    setQuickActionIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
+  };
+  const resetQuickActions = () => setQuickActionIds(DEFAULT_QUICK_ACTION_IDS);
 
   return (
     <header className={`header legacy-global-header${collapsed ? " collapsed" : ""}`}>
       <div className="legacy-global-titlebar">
         <button className="mobile-menu-btn" onClick={onMobileMenuClick}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-        <div className="legacy-global-appname"><span>م</span><strong>{locale === "ar" ? "مسار ERP" : "Masar ERP"}</strong><small>{locale === "ar" ? "نظام المحاسبة وإدارة الأعمال" : "Accounting & business management"}</small></div>
+        <div className="legacy-global-appname"><span>م</span><strong>مسار ERP</strong><small>{locale === "ar" ? "نظام المحاسبة وإدارة الأعمال" : "Accounting & business management"}</small></div>
         <div className="header-search"><span className="header-search-icon"><IconSearch /></span><input type="text" placeholder={t("search")} /></div>
         <div className="header-spacer" />
         <div className="header-actions">
@@ -84,14 +150,20 @@ export default function Header({ locale, collapsed, onMobileMenuClick }: { local
         <nav><Link href={`${base}/dashboard`}>{locale === "ar" ? "الرئيسية" : "Home"}</Link><Link href={`${base}/accounting/journal`}>{locale === "ar" ? "العمليات" : "Operations"}</Link><Link href={`${base}/reports`}>{locale === "ar" ? "التقارير" : "Reports"}</Link><Link href={`${base}/settings`}>{locale === "ar" ? "الإعدادات" : "Settings"}</Link></nav>
       </div>
       <nav className="legacy-quickbar" aria-label={locale === "ar" ? "العمليات السريعة" : "Quick operations"}>
-        <Link className="legacy-quick-action legacy-quick-action-main" href={`${base}/sales/invoices/new`}><Icon name="invoice" size={17} /><span>{locale === "ar" ? "فاتورة مبيعات" : "Sales invoice"}</span></Link>
-        <Link className="legacy-quick-action" href={`${base}/purchases/bills/new`}><Icon name="purchase" size={17} /><span>{locale === "ar" ? "فاتورة مشتريات" : "Purchase bill"}</span></Link>
-        <Link className="legacy-quick-action" href={`${base}/sales/credit-notes/new`}><Icon name="refund" size={17} /><span>{locale === "ar" ? "مرتجع مبيعات" : "Sales return"}</span></Link>
-        <Link className="legacy-quick-action" href={`${base}/purchases/debit-notes/new`}><Icon name="reverse" size={17} /><span>{locale === "ar" ? "مرتجع مشتريات" : "Purchase return"}</span></Link>
-        <Link className="legacy-quick-action" href={`${base}/treasury/receipts/new`}><Icon name="cash" size={17} /><span>{locale === "ar" ? "سند قبض" : "Receipt"}</span></Link>
-        <Link className="legacy-quick-action" href={`${base}/treasury/payments/new`}><Icon name="wallet" size={17} /><span>{locale === "ar" ? "سند صرف" : "Payment"}</span></Link>
-        <Link className="legacy-quick-action" href={`${base}/accounting/journal/new`}><Icon name="journal" size={17} /><span>{locale === "ar" ? "قيد يومي" : "Journal entry"}</span></Link>
-        <PageBackButton locale={locale} fallbackPath={`${base}/dashboard`} className="legacy-quick-back" />
+        <div className="legacy-quickbar-items">
+          {quickActions.map(action => <Link key={action.id} className={`legacy-quick-action${activeHref === action.href ? " active" : ""}`} href={`${base}${action.href}`}><Icon name={action.icon as any} size={17} /><span>{locale === "ar" ? action.ar : action.en}</span></Link>)}
+          <PageBackButton locale={locale} fallbackPath={`${base}/dashboard`} className="legacy-quick-back" />
+        </div>
+        <div className="legacy-quickbar-config-wrap" ref={quickSettingsRef}>
+          <button type="button" className={`legacy-quickbar-config${quickSettingsOpen ? " open" : ""}`} onClick={() => setQuickSettingsOpen(value => !value)} aria-expanded={quickSettingsOpen}>
+            <Icon name="settings" size={17} /><span>{locale === "ar" ? "إعداد اللوحة" : "Customize"}</span>
+          </button>
+          {quickSettingsOpen && <div className="legacy-quickbar-settings-panel">
+            <div className="legacy-quickbar-settings-head"><strong>{locale === "ar" ? "اختصارات الشريط" : "Quick shortcuts"}</strong><button type="button" onClick={resetQuickActions}>{locale === "ar" ? "إعادة الافتراضي" : "Reset"}</button></div>
+            <p>{locale === "ar" ? "اختر الاختصارات التي تريد ظهورها في الشريط." : "Choose the shortcuts shown in the bar."}</p>
+            {(Object.keys(SECTION_LABELS) as QuickAction["section"][]).map(section => <div key={section} className="legacy-quickbar-settings-section"><div className="legacy-quickbar-section-title">{locale === "ar" ? SECTION_LABELS[section].ar : SECTION_LABELS[section].en}</div>{QUICK_ACTION_CATALOG.filter(action => action.section === section).map(action => <label key={action.id} className="legacy-quickbar-option"><input type="checkbox" checked={quickActionIds.includes(action.id)} onChange={() => toggleQuickAction(action.id)} /><span>{locale === "ar" ? action.ar : action.en}</span></label>)}</div>)}
+          </div>}
+        </div>
       </nav>
     </header>
   );
