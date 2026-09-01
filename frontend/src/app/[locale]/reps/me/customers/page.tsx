@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, use } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getCustomers, createCustomer, updateCustomer } from "@/lib/sales";
+import { getMyProfile } from "@/lib/reps";
 
 const emptyForm = {
   customer_type: "individual",
@@ -162,6 +163,8 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
   const [form, setForm] = useState({ ...emptyForm });
   const [error, setError] = useState("");
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [fieldPermissions, setFieldPermissions] = useState<Record<string, boolean>>({ latitude: true, longitude: true });
+  const canEdit = (field: string) => !!fieldPermissions[field];
 
   const load = (q?: string) => {
     setLoading(true);
@@ -171,7 +174,10 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    getMyProfile().then(res => setFieldPermissions({ latitude: true, longitude: true, ...(res.data?.customer_edit_permissions || {}) })).catch(() => {});
+  }, []);
 
   /* فتح modal إذا جاء ?action=new */
   useEffect(() => {
@@ -195,10 +201,18 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
     setSaving(true); setError("");
     try {
       const payload = editingCustomer
-        ? {
+        ? Object.fromEntries(Object.entries({
+            name_ar: form.name_ar,
+            name_en: form.name_en,
+            phone: form.phone,
+            email: form.email,
+            address_city: form.address_city,
+            payment_terms_days: parseInt(form.payment_terms_days) || 30,
+            credit_limit: parseFloat(form.credit_limit) || 0,
+            notes: form.notes || null,
             latitude: form.latitude ? parseFloat(form.latitude) : null,
             longitude: form.longitude ? parseFloat(form.longitude) : null,
-          }
+          }).filter(([key]) => key === "latitude" || key === "longitude" || canEdit(key)))
         : {
             ...form,
             payment_terms_days: parseInt(form.payment_terms_days) || 30,
@@ -359,11 +373,11 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "الاسم بالعربي *" : "Arabic Name *"}</label>
-                <input className="form-input" disabled={!!editingCustomer} value={form.name_ar} onChange={e => upd("name_ar", e.target.value)} placeholder={ar ? "الاسم..." : "Name..."} />
+                <input className="form-input" disabled={!!editingCustomer && !canEdit("name_ar")} value={form.name_ar} onChange={e => upd("name_ar", e.target.value)} placeholder={ar ? "الاسم..." : "Name..."} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "الاسم بالإنجليزي" : "English Name"}</label>
-                <input className="form-input" disabled={!!editingCustomer} value={form.name_en} onChange={e => upd("name_en", e.target.value)} placeholder="Name..." dir="ltr" />
+                <input className="form-input" disabled={!!editingCustomer && !canEdit("name_en")} value={form.name_en} onChange={e => upd("name_en", e.target.value)} placeholder="Name..." dir="ltr" />
               </div>
             </div>
 
@@ -371,11 +385,11 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "الجوال" : "Phone"}</label>
-                <input className="form-input" disabled={!!editingCustomer} value={form.phone} onChange={e => upd("phone", e.target.value)} placeholder="05xxxxxxxx" dir="ltr" />
+                <input className="form-input" disabled={!!editingCustomer && !canEdit("phone")} value={form.phone} onChange={e => upd("phone", e.target.value)} placeholder="05xxxxxxxx" dir="ltr" />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "المدينة" : "City"}</label>
-                <input className="form-input" disabled={!!editingCustomer} value={form.address_city} onChange={e => upd("address_city", e.target.value)} placeholder={ar ? "الرياض" : "Riyadh"} />
+                <input className="form-input" disabled={!!editingCustomer && !canEdit("address_city")} value={form.address_city} onChange={e => upd("address_city", e.target.value)} placeholder={ar ? "الرياض" : "Riyadh"} />
               </div>
             </div>
 
@@ -385,13 +399,13 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
                   {form.customer_type === "company" ? (ar ? "الرقم الضريبي" : "VAT Number") : (ar ? "رقم الهوية" : "ID Number")}
                 </label>
-                <input className="form-input" disabled={!!editingCustomer} dir="ltr"
+                <input className="form-input" disabled={!!editingCustomer && !canEdit(form.customer_type === "company" ? "vat_number" : "national_id")} dir="ltr"
                   value={form.customer_type === "company" ? form.vat_number : form.national_id}
                   onChange={e => upd(form.customer_type === "company" ? "vat_number" : "national_id", e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "مدة السداد (يوم)" : "Payment Terms (days)"}</label>
-                <select className="form-input form-select" disabled={!!editingCustomer} value={form.payment_terms_days} onChange={e => upd("payment_terms_days", e.target.value)}>
+                <select className="form-input form-select" disabled={!!editingCustomer && !canEdit("payment_terms_days")} value={form.payment_terms_days} onChange={e => upd("payment_terms_days", e.target.value)}>
                   {[0, 15, 30, 45, 60, 90].map(d => <option key={d} value={d}>{d === 0 ? (ar ? "نقدي فوري" : "Cash") : `${d} ${ar ? "يوم" : "days"}`}</option>)}
                 </select>
               </div>
@@ -400,7 +414,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             {/* ملاحظات */}
             <div style={{ marginBottom: 20 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "ملاحظات" : "Notes"}</label>
-              <textarea className="form-input" disabled={!!editingCustomer} rows={2} value={form.notes} onChange={e => upd("notes", e.target.value)} placeholder={ar ? "ملاحظات اختيارية..." : "Optional..."} />
+              <textarea className="form-input" disabled={!!editingCustomer && !canEdit("notes")} rows={2} value={form.notes} onChange={e => upd("notes", e.target.value)} placeholder={ar ? "ملاحظات اختيارية..." : "Optional..."} />
             </div>
 
             {/* موقع العميل */}

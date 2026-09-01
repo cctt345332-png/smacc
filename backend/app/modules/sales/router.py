@@ -8,6 +8,7 @@ from app.core.tenant import get_current_user, get_tenant_id, require_role, get_r
 from app.core.plan_limits import check_plan_limit
 from app.modules.sales import service
 from app.modules.sales import orders_service
+from app.modules.reps import service as reps_service
 from app.modules.accounting.schemas import AccountOut
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, CustomerOut,
@@ -85,9 +86,12 @@ async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(g
         if not rep_id or customer.rep_id != rep_id:
             from fastapi import HTTPException
             raise HTTPException(403, "لا يمكنك تعديل عميل مندوب آخر")
-        if not data.model_fields_set.issubset({"latitude", "longitude"}):
+        rep = await reps_service.get_rep_by_user(db, user["user_id"])
+        permissions = (rep.customer_edit_permissions if rep else {}) or {}
+        allowed_fields = {"latitude", "longitude"} | {key for key, enabled in permissions.items() if enabled}
+        if not data.model_fields_set.issubset(allowed_fields):
             from fastapi import HTTPException
-            raise HTTPException(403, "المندوب يستطيع تحديث موقع العميل فقط")
+            raise HTTPException(403, "هذا الحقل غير مسموح للمندوب حسب إعداداته")
     return await service.update_customer(db, user["tenant_id"], customer_id, data, user["user_id"])
 
 

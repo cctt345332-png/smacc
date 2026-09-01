@@ -210,6 +210,7 @@ async def get_reps(db: AsyncSession, tenant_id: str) -> list:
             "target_monthly": float(rep.target_monthly or 0),
             "commission_pct": float(rep.commission_pct or 0),
             "is_active": rep.is_active,
+            "customer_edit_permissions": rep.customer_edit_permissions or {},
             "created_at": rep.created_at,
         })
     return result
@@ -249,6 +250,7 @@ async def get_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         "target_monthly": float(rep.target_monthly or 0),
         "commission_pct": float(rep.commission_pct or 0),
         "is_active": rep.is_active,
+        "customer_edit_permissions": rep.customer_edit_permissions or {},
         "created_at": rep.created_at,
     }
 
@@ -599,6 +601,12 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
     if "phone" in data: rep.phone = data["phone"]
     if "zone" in data: rep.zone = data["zone"]
     if "notes" in data: rep.notes = data["notes"]
+    if "customer_edit_permissions" in data:
+        permissions = data["customer_edit_permissions"]
+        if not isinstance(permissions, dict):
+            raise HTTPException(400, "إعدادات صلاحيات العملاء غير صحيحة")
+        allowed_permission_keys = {"name_ar", "phone", "email", "address_city", "address_district", "latitude", "longitude", "payment_terms_days", "credit_limit", "notes"}
+        rep.customer_edit_permissions = {key: bool(value) for key, value in permissions.items() if key in allowed_permission_keys}
     if "is_active" in data:
         rep.is_active = data["is_active"]
         u_r = await db.execute(select(User).where(User.id == rep.user_id))
@@ -637,7 +645,14 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
     await db.commit()
     return await get_rep(db, tenant_id, rep_id)
 
+async def get_rep_customer_permissions(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
+    rep = await db.scalar(select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id))
+    if not rep:
+        raise HTTPException(404, "المندوب غير موجود")
+    return {"rep_id": rep.id, "permissions": rep.customer_edit_permissions or {}}
 
+async def update_rep_customer_permissions(db: AsyncSession, tenant_id: str, rep_id: str, permissions: dict) -> dict:
+    return await update_rep(db, tenant_id, rep_id, {"customer_edit_permissions": permissions})
 # ─── مخزون المندوب ────────────────────────────────────────────────────
 
 async def _get_rep_stock_quantity(db: AsyncSession, tenant_id: str, warehouse_id: str | None) -> Decimal:

@@ -127,6 +127,22 @@ export default function CustomerDetailPage(props: { params: Promise<{ locale: st
           </div>
         </div>
 
+        {/* Customer location saved by the rep */}
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-header"><span className="card-title">{ar ? "موقع العميل المحفوظ" : "Saved Customer Location"}</span></div>
+          <div className="card-body">
+            {customer.latitude != null && customer.longitude != null ? (
+              <>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
+                  {ar ? "الموقع الذي حفظه المندوب للمحل" : "Location saved by the rep"}: {Number(customer.latitude).toFixed(6)}, {Number(customer.longitude).toFixed(6)}
+                </div>
+                <iframe title={ar ? "خريطة موقع العميل" : "Customer location map"} src={`https://www.google.com/maps?q=${customer.latitude},${customer.longitude}&output=embed`} style={{ width: "100%", height: 240, border: 0, borderRadius: 10 }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+                <a href={`https://www.google.com/maps?q=${customer.latitude},${customer.longitude}`} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ marginTop: 10, display: "inline-flex" }}>{ar ? "فتح الموقع في الخرائط" : "Open in Maps"}</a>
+              </>
+            ) : <div style={{ color: "var(--text-muted)", fontSize: 13 }}>{ar ? "لم يتم حفظ موقع للعميل بعد" : "No location has been saved yet"}</div>}
+          </div>
+        </div>
+
         {/* Quick actions */}
         <div className="card">
           <div className="card-header"><span className="card-title">{ar ? "إجراءات سريعة" : "Quick Actions"}</span></div>

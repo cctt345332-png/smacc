@@ -2,7 +2,7 @@
 نموذج المناديب (Sales Representatives)
 كل مندوب = مستخدم بدور sales_rep + مستودع خاص مرتبط به
 """
-from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Text, Date, Integer, UniqueConstraint
+from sqlalchemy import String, Boolean, ForeignKey, DateTime, Numeric, Text, Date, Integer, UniqueConstraint, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, date
 from decimal import Decimal
@@ -45,6 +45,8 @@ class SalesRep(Base):
     commission_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # حقول العملاء التي يسمح المدير للمندوب بتعديلها
+    customer_edit_permissions: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

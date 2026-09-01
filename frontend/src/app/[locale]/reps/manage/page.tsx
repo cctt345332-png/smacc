@@ -315,6 +315,9 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                       </td>
                       <td>
                         <div className="rep-table-actions">
+                          <Link href={`/${locale}/reps/manage/${rep.id}/settings`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "إعدادات المندوب" : "Rep settings"} style={{ color: "#3E0865" }}>
+                            <span style={{ fontSize: 14 }}>⚙</span>
+                          </Link>
                           <Link href={`/${locale}/reps/${rep.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "تفاصيل" : "Details"}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                           </Link>

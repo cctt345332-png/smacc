@@ -352,6 +352,26 @@ async def update_rep(
     return await service.update_rep(db, user["tenant_id"], rep_id, data)
 
 
+@router.get("/{rep_id}/customer-permissions")
+async def get_rep_customer_permissions(
+    rep_id: str,
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_rep_customer_permissions(db, user["tenant_id"], rep_id)
+
+
+@router.patch("/{rep_id}/customer-permissions")
+async def update_rep_customer_permissions(
+    rep_id: str,
+    data: dict,
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    permissions = data.get("permissions", data)
+    return await service.update_rep_customer_permissions(db, user["tenant_id"], rep_id, permissions)
+
+
 @router.get("/{rep_id}/stock")
 async def rep_stock(
     rep_id: str,

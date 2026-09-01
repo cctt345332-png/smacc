@@ -32,6 +32,12 @@ export const getRep = (repId: string) => api.get(`/reps/${repId}`);
 export const importRepCustomersFromTree = (repId: string) =>
   api.post(`/reps/${repId}/customers/import-from-tree`);
 
+export const getRepCustomerPermissions = (repId: string) =>
+  api.get(`/reps/${repId}/customer-permissions`);
+
+export const updateRepCustomerPermissions = (repId: string, permissions: Record<string, boolean>) =>
+  api.patch(`/reps/${repId}/customer-permissions`, { permissions });
+
 export const getRepStock = (repId: string) => api.get(`/reps/${repId}/stock`);
 
 export const getRepInvoices = (repId: string) =>
