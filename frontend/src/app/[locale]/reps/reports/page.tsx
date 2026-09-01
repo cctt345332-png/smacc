@@ -35,9 +35,11 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const [reps, setReps] = useState<any[]>([]);
   const [summaries, setSummaries] = useState<Record<string, any>>({});
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [creditNotes, setCreditNotes] = useState<any[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"performance" | "invoices" | "stock">("performance");
+  const [tab, setTab] = useState<"performance" | "invoices" | "operations" | "stock">("performance");
   const [filterRep, setFilterRep] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -133,9 +135,11 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         const repsRes = await getReps();
         const list = Array.isArray(repsRes.data) ? repsRes.data : [];
         setReps(list);
-        const [sumResults, invRes, pendingRes] = await Promise.all([
+        const [sumResults, invRes, paymentsRes, creditNotesRes, pendingRes] = await Promise.all([
           Promise.allSettled(list.map((r: any) => getRepSummary(r.id))),
           api.get("/sales/invoices"),
+          api.get("/sales/payments").catch(() => ({ data: [] })),
+          api.get("/sales/credit-notes").catch(() => ({ data: [] })),
           api.get("/sales/invoices-pending").catch(() => ({ data: [] })),
         ]);
         const map: Record<string, any> = {};
@@ -146,6 +150,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         // مصدر التقرير المالي يعيد المؤكد فقط؛ طلبات المراجعة تبقى منفصلة
         // ولا تدخل أبداً في المبيعات أو العمولات أو التصدير.
         setInvoices(Array.isArray(invRes.data) ? invRes.data.filter((invoice: any) => isFinancialInvoiceStatus(invoice.status)) : []);
+        setPayments(Array.isArray(paymentsRes.data) ? paymentsRes.data : []);
+        setCreditNotes(Array.isArray(creditNotesRes.data) ? creditNotesRes.data : []);
         setPendingInvoices(Array.isArray(pendingRes.data) ? pendingRes.data : []);
       } catch { } finally { setLoading(false); }
     };
@@ -167,6 +173,38 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     return matchR && matchS && matchFrom && matchTo && matchZone && matchMonth;
   });
 
+  const invoiceById: Record<string, any> = {};
+  invoices.forEach((invoice: any) => { invoiceById[invoice.id] = invoice; });
+  const operations = [
+    ...invoices.map((inv: any) => ({
+      id: `invoice-${inv.id}`, type: "invoice", date: inv.issue_date, rep_id: inv.rep_id,
+      customer: inv.buyer_name_ar, reference: inv.invoice_number, debit: Number(inv.total || 0), credit: 0,
+      status: inv.status,
+    })),
+    ...payments.map((payment: any) => {
+      const invoice = invoiceById[payment.invoice_id];
+      return { id: `payment-${payment.id}`, type: "payment", date: payment.payment_date, rep_id: invoice?.rep_id,
+        customer: invoice?.buyer_name_ar || payment.customer_id, reference: payment.payment_number, debit: 0,
+        credit: Number(payment.amount || 0), status: payment.payment_method };
+    }),
+    ...creditNotes.map((note: any) => {
+      const invoice = invoiceById[note.original_invoice_id];
+      return { id: `credit-${note.id}`, type: "credit_note", date: note.issue_date, rep_id: note.rep_id || invoice?.rep_id,
+        customer: note.customer_id, reference: note.credit_note_number, debit: 0, credit: Number(note.total || 0), status: note.reason };
+    }),
+  ].filter((op: any) => {
+    const matchR = !filterRep || op.rep_id === filterRep;
+    const matchFrom = !dateFrom || new Date(op.date) >= new Date(dateFrom);
+    const matchTo = !dateTo || new Date(op.date) <= new Date(dateTo + "T23:59:59");
+    const matchMonth = !filterMonth || String(op.date || "").startsWith(filterMonth);
+    const matchZone = !filterZone || (repMap[op.rep_id]?.zone || "") === filterZone;
+    return op.rep_id && matchR && matchFrom && matchTo && matchMonth && matchZone;
+  }).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const operationTotals = {
+    debit: operations.reduce((s: number, op: any) => s + op.debit, 0),
+    credit: operations.reduce((s: number, op: any) => s + op.credit, 0),
+  };
+
   const zones = [...new Set(reps.map(r => r.zone).filter(Boolean))] as string[];
 
   const repStats = reps
@@ -186,6 +224,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const TABS = [
     { key: "performance", label: ar ? "مقارنة الأداء" : "Performance" },
     { key: "invoices",    label: ar ? "الفواتير التفصيلية" : "Invoices Detail" },
+    { key: "operations",  label: ar ? "كل العمليات" : "All Operations" },
     { key: "stock",       label: ar ? "المخزون" : "Stock" },
   ] as const;
 
@@ -198,7 +237,9 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     ? (ar ? "تقرير أداء المناديب" : "Sales Rep Performance Report")
     : tab === "invoices"
       ? (ar ? "تقرير فواتير المناديب" : "Sales Rep Invoices Report")
-      : (ar ? "تقرير مخزون المناديب" : "Sales Rep Stock Report");
+      : tab === "operations"
+        ? (ar ? "كشف عمليات المناديب" : "Sales Rep Operations Ledger")
+        : (ar ? "تقرير مخزون المناديب" : "Sales Rep Stock Report");
   const reportPeriod = filterMonth || `${dateFrom || (ar ? "بداية البيانات" : "Start")} — ${dateTo || (ar ? "حتى اليوم" : "Today")}`;
   const reportMetrics = tab === "performance" ? [
     { label: ar ? "مبيعات الفريق" : "Team sales", value: `${fmt(totalSales)} SAR`, tone: "blue" as const },
@@ -209,11 +250,16 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     { label: ar ? "عدد الفواتير" : "Invoices", value: String(filteredInvoices.length), tone: "neutral" as const },
     { label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(filteredInvoices.reduce((s: number, i: any) => s + Number(i.total || 0), 0))} SAR`, tone: "blue" as const },
     { label: ar ? "المتبقي" : "Outstanding", value: `${fmt(filteredInvoices.reduce((s: number, i: any) => s + Math.max(0, Number(i.total || 0) - Number(i.paid_amount || 0)), 0))} SAR`, tone: "amber" as const },
+  ] : tab === "operations" ? [
+    { label: ar ? "عدد العمليات" : "Operations", value: String(operations.length), tone: "neutral" as const },
+    { label: ar ? "إجمالي المدين" : "Total debit", value: `${fmt(operationTotals.debit)} SAR`, tone: "blue" as const },
+    { label: ar ? "إجمالي الدائن" : "Total credit", value: `${fmt(operationTotals.credit)} SAR`, tone: "green" as const },
+    { label: ar ? "الصافي" : "Net", value: `${fmt(operationTotals.debit - operationTotals.credit)} SAR`, tone: "amber" as const },
   ] : [
     { label: ar ? "المناديب" : "Reps", value: String(repStats.length), tone: "neutral" as const },
     { label: ar ? "كمية مخزون المناديب" : "Rep stock qty", value: String(repStats.reduce((s, r) => s + Number(r.sum.stock_qty || 0), 0)), tone: "amber" as const },
   ];
-  const reportTable = tab === "performance" ? { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "الهدف" : "Target", ar ? "المبيعات" : "Sales", ar ? "التحقق" : "Achievement", ar ? "المحصّل" : "Collected", ar ? "المستحق" : "Outstanding", ar ? "العمولة" : "Commission"], rows: repStats.map(({ rep, sum, pct, commission }) => [rep.full_name, rep.zone || "—", rep.target_monthly ? fmt(rep.target_monthly) : "—", fmt(sum.total_sales || 0), pct == null ? "—" : `${pct}%`, fmt(sum.total_collected || 0), fmt(sum.outstanding || 0), fmt(commission)]), totals: [ar ? "الإجمالي" : "Total", "", "", fmt(totalSales), "", fmt(totalCollected), fmt(totalOutstanding), fmt(totalCommission) ] } : tab === "invoices" ? { headers: [ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "الحالة" : "Status", ar ? "التاريخ" : "Date", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "المتبقي" : "Remaining"], rows: filteredInvoices.map((inv: any) => [inv.invoice_number, repMap[inv.rep_id]?.full_name || "—", inv.buyer_name_ar || "—", STATUS_AR[inv.status] || "حالة غير معروفة", fmtD(inv.issue_date), fmt(inv.total), fmt(inv.paid_amount), fmt(Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0)))]) } : { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "المركبة" : "Vehicle", ar ? "كمية المخزون" : "Stock qty", ar ? "قيمة المخزون" : "Stock value"], rows: repStats.map(({ rep, sum }) => [rep.full_name, rep.zone || "—", rep.vehicle_plate || "—", String(Number(sum.stock_qty || 0)), fmt(sum.stock_value || 0)]) };
+  const reportTable = tab === "performance" ? { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "الهدف" : "Target", ar ? "المبيعات" : "Sales", ar ? "التحقق" : "Achievement", ar ? "المحصّل" : "Collected", ar ? "المستحق" : "Outstanding", ar ? "العمولة" : "Commission"], rows: repStats.map(({ rep, sum, pct, commission }) => [rep.full_name, rep.zone || "—", rep.target_monthly ? fmt(rep.target_monthly) : "—", fmt(sum.total_sales || 0), pct == null ? "—" : `${pct}%`, fmt(sum.total_collected || 0), fmt(sum.outstanding || 0), fmt(commission)]), totals: [ar ? "الإجمالي" : "Total", "", "", fmt(totalSales), "", fmt(totalCollected), fmt(totalOutstanding), fmt(totalCommission) ] } : tab === "invoices" ? { headers: [ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "الحالة" : "Status", ar ? "التاريخ" : "Date", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "المتبقي" : "Remaining"], rows: filteredInvoices.map((inv: any) => [inv.invoice_number, repMap[inv.rep_id]?.full_name || "—", inv.buyer_name_ar || "—", STATUS_AR[inv.status] || "حالة غير معروفة", fmtD(inv.issue_date), fmt(inv.total), fmt(inv.paid_amount), fmt(Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0)))]) } : tab === "operations" ? { headers: [ar ? "النوع" : "Type", ar ? "التاريخ" : "Date", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "المرجع" : "Reference", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "البيان" : "Details"], rows: operations.map((op: any) => [op.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : op.type === "payment" ? (ar ? "سند قبض" : "Receipt") : (ar ? "مرتجع" : "Credit Note"), fmtD(op.date), repMap[op.rep_id]?.full_name || "—", op.customer || "—", op.reference || "—", fmt(op.debit), fmt(op.credit), op.status || "—"]), totals: [ar ? "الإجمالي" : "Total", "", "", "", "", fmt(operationTotals.debit), fmt(operationTotals.credit), ""] } : { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "المركبة" : "Vehicle", ar ? "كمية المخزون" : "Stock qty", ar ? "قيمة المخزون" : "Stock value"], rows: repStats.map(({ rep, sum }) => [rep.full_name, rep.zone || "—", rep.vehicle_plate || "—", String(Number(sum.stock_qty || 0)), fmt(sum.stock_value || 0)]) };
 
   return (
     <>
@@ -313,7 +359,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
       </div>
 
       {/* فلاتر إضافية للفواتير */}
-      {tab === "invoices" && (
+      {(tab === "invoices" || tab === "operations") && (
         <div className="card no-print" style={{ marginBottom: 16 }}>
           <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <select className="form-input form-select" style={{ width: 180 }} value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
@@ -519,6 +565,54 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                         <td className="no-print" />
                       </tr>
                     </tfoot>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══ تبويب: كل العمليات ══ */}
+          {tab === "operations" && (
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">{ar ? "كشف كل عمليات المناديب" : "All Rep Operations Ledger"}</span>
+                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{operations.length} {ar ? "عملية" : "operations"}</span>
+              </div>
+              <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
+                {operations.length === 0 ? (
+                  <div className="empty-state"><div className="empty-state-title">{ar ? "لا توجد عمليات للفترة المحددة" : "No operations for the selected period"}</div></div>
+                ) : (
+                  <table>
+                    <thead><tr>
+                      <th>{ar ? "النوع" : "Type"}</th>
+                      <th>{ar ? "التاريخ" : "Date"}</th>
+                      <th>{ar ? "المندوب" : "Rep"}</th>
+                      <th>{ar ? "العميل" : "Customer"}</th>
+                      <th>{ar ? "المرجع" : "Reference"}</th>
+                      <th style={{ textAlign: "end" }}>{ar ? "مدين" : "Debit"}</th>
+                      <th style={{ textAlign: "end" }}>{ar ? "دائن" : "Credit"}</th>
+                      <th>{ar ? "البيان" : "Details"}</th>
+                    </tr></thead>
+                    <tbody>{operations.map((op: any) => (
+                      <tr key={op.id}>
+                        <td><span className="badge" style={{ background: op.type === "invoice" ? "#F4EFF7" : op.type === "payment" ? "#ECFDF3" : "#FEF2F2", color: op.type === "invoice" ? "#5A187E" : op.type === "payment" ? "#15803D" : "#B42318" }}>
+                          {op.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : op.type === "payment" ? (ar ? "سند قبض" : "Receipt") : (ar ? "مرتجع" : "Credit Note")}
+                        </span></td>
+                        <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmtD(op.date)}</td>
+                        <td style={{ fontSize: 13 }}>{repMap[op.rep_id]?.full_name || "—"}</td>
+                        <td style={{ fontSize: 13 }}>{op.customer || "—"}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--primary)" }}>{op.reference || "—"}</td>
+                        <td style={{ textAlign: "end", color: op.debit ? "#5A187E" : "var(--text-muted)" }}>{op.debit ? `${fmt(op.debit)} SAR` : "—"}</td>
+                        <td style={{ textAlign: "end", color: op.credit ? "#15803D" : "var(--text-muted)" }}>{op.credit ? `${fmt(op.credit)} SAR` : "—"}</td>
+                        <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{op.status || "—"}</td>
+                      </tr>
+                    ))}</tbody>
+                    <tfoot><tr style={{ background: "#F8FAFC", fontWeight: 700 }}>
+                      <td colSpan={5}>{ar ? "الإجمالي" : "Total"}</td>
+                      <td style={{ textAlign: "end" }}>{fmt(operationTotals.debit)} SAR</td>
+                      <td style={{ textAlign: "end", color: "#15803D" }}>{fmt(operationTotals.credit)} SAR</td>
+                      <td />
+                    </tr></tfoot>
                   </table>
                 )}
               </div>
