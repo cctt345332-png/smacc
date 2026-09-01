@@ -466,7 +466,11 @@ async def get_journal_entries(db: AsyncSession, tenant_id: str, status: str | No
 
 
 async def get_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
-    entry = await db.get(JournalEntry, entry_id)
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(JournalEntry).options(selectinload(JournalEntry.lines)).where(JournalEntry.id == entry_id)
+    )
+    entry = result.scalar_one_or_none()
     if not entry or entry.tenant_id != tenant_id:
         raise HTTPException(404, "Journal entry not found")
     return entry
