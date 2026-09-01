@@ -120,6 +120,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
               onChange={setAccountId}
               locale={locale}
               allowGroups
+              openUpward
               placeholder={ar ? "كل الحسابات — اكتب الكود أو الاسم" : "All accounts — type code or name"}
             />
           </div>

@@ -20,6 +20,7 @@ type Props = {
   allowGroups?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  openUpward?: boolean;
 };
 
 export default function SearchableAccountSelect({
@@ -31,6 +32,7 @@ export default function SearchableAccountSelect({
   allowGroups = false,
   className = "form-input",
   style,
+  openUpward = false,
 }: Props) {
   const ar = locale === "ar";
   const containerRef = useRef<HTMLDivElement>(null);
@@ -96,7 +98,7 @@ export default function SearchableAccountSelect({
         }}
       />
       {open && (
-        <div style={{ position: "absolute", zIndex: 80, insetInline: 0, top: "calc(100% + 4px)", maxHeight: 280, overflowY: "auto", background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 10px 24px rgba(15,23,42,.14)" }}>
+        <div style={{ position: "absolute", zIndex: 1000, insetInline: 0, ...(openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }), maxHeight: 280, overflowY: "auto", background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 10px 24px rgba(15,23,42,.14)" }}>
           {filtered.length === 0 ? (
             <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "لا توجد حسابات مطابقة" : "No matching accounts"}</div>
           ) : filtered.map((account) => (
