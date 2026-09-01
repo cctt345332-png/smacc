@@ -44,6 +44,8 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
   const [stmtTo, setStmtTo]             = useState(new Date().toISOString().split("T")[0]);
   const [stmtData, setStmtData]         = useState<any>(null);
   const [stmtLoading, setStmtLoading]   = useState(false);
+  const [customerReports, setCustomerReports] = useState<any[]>([]);
+  const [customerReportsLoading, setCustomerReportsLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -61,17 +63,34 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
     }).finally(() => setLoading(false));
   }, []);
 
-  /* جلب كشف حساب العميل */
+  /* جلب كشف حساب عميل واحد */
+  const loadStatementFor = async (customerId: string) => {
+    if (!customerId) return null;
+    const res = await api.get(`/sales/customers/${customerId}/statement`, {
+      params: { from_date: `${stmtFrom}T00:00:00`, to_date: `${stmtTo}T23:59:59` }
+    });
+    return res.data;
+  };
   const loadStatement = async () => {
     if (!stmtCustomer) return;
     setStmtLoading(true); setStmtData(null);
-    try {
-      const res = await api.get(`/sales/customers/${stmtCustomer}/statement`, {
-        params: { from_date: `${stmtFrom}T00:00:00`, to_date: `${stmtTo}T23:59:59` }
-      });
-      setStmtData(res.data);
-    } catch { setStmtData(null); }
+    try { setStmtData(await loadStatementFor(stmtCustomer)); }
+    catch { setStmtData(null); }
     finally { setStmtLoading(false); }
+  };
+  /* جلب كشف تفصيلي لكل عملاء المندوب */
+  const loadCustomerReports = async () => {
+    setCustomerReportsLoading(true); setCustomerReports([]);
+    const scope = stmtCustomer ? customers.filter(c => c.id === stmtCustomer) : customers;
+    try {
+      const results = await Promise.all(scope.map(async (customer: any) => {
+        try {
+          const statement = await loadStatementFor(customer.id);
+          return { ...statement, customer: statement.customer || customer };
+        } catch { return { customer, error: true }; }
+      }));
+      setCustomerReports(results);
+    } finally { setCustomerReportsLoading(false); }
   };
 
   /* طباعة كشف الحساب كـ PDF */
@@ -172,6 +191,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
     { key: "summary",   label: ar ? "الملخص"              : "Summary"          },
     { key: "invoices",  label: ar ? "الفواتير"            : "Invoices"         },
     { key: "stock",     label: ar ? "المخزون"             : "Stock"            },
+    { key: "customers",  label: ar ? "تقارير العملاء"       : "Customer Reports" },
     { key: "statement", label: ar ? "كشف حساب العميل"    : "Customer Statement"},
   ] as const;
 
@@ -389,6 +409,32 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
                   ))}
                 </>
               )}
+            </div>
+          )}
+          {/* ── تبويب تقارير العملاء ── */}
+          {tab === "customers" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <select style={{ flex: 2, minWidth: 220, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13 }} value={stmtCustomer} onChange={e => setStmtCustomer(e.target.value)}>
+                  <option value="">{ar ? "كل عملاء المندوب" : "All Rep Customers"}</option>
+                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
+                </select>
+                <input type="date" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13 }} value={stmtFrom} onChange={e => setStmtFrom(e.target.value)} />
+                <input type="date" style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13 }} value={stmtTo} onChange={e => setStmtTo(e.target.value)} />
+                <button className="btn btn-primary" onClick={loadCustomerReports} disabled={customerReportsLoading}>
+                  {customerReportsLoading ? (ar ? "جاري تجهيز التقرير..." : "Preparing...") : (ar ? "عرض التقرير التفصيلي" : "Show Detailed Report")}
+                </button>
+              </div>
+              {customerReports.length > 0 && !stmtCustomer && (
+                <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", overflow: "auto" }}>
+                  <div style={{ padding: "12px 16px", fontWeight: 800 }}>{ar ? "أرصدة عملاء المندوب" : "Rep Customer Balances"}</div>
+                  <table><thead><tr><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "الرصيد الافتتاحي" : "Opening"}</th><th>{ar ? "الفواتير" : "Invoiced"}</th><th>{ar ? "المقبوض" : "Collected"}</th><th>{ar ? "التشغيلي" : "Operational"}</th><th>{ar ? "الرصيد النهائي" : "Closing"}</th><th>{ar ? "الكشف" : "Statement"}</th></tr></thead>
+                    <tbody>{customerReports.map((r: any) => { const s = r.summary || {}; return <tr key={r.customer?.id}><td style={{ fontWeight: 700 }}>{r.customer?.name_ar || "—"}</td><td>{fmt(s.opening_balance)} SAR</td><td>{fmt(s.total_invoiced)} SAR</td><td>{fmt(s.total_paid)} SAR</td><td>{fmt(s.operational_outstanding)} SAR</td><td style={{ fontWeight: 800, color: Number(s.closing_balance) > 0 ? "#DC2626" : "#6F4A84" }}>{fmt(s.closing_balance)} SAR</td><td><button className="btn btn-ghost btn-sm" onClick={async () => { setStmtCustomer(r.customer.id); setStmtData(r); setTab("statement"); }}>فتح الكشف</button></td></tr>; })}</tbody>
+                    <tfoot><tr style={{ background: "#F8FAFC", fontWeight: 800 }}><td>{ar ? "الإجمالي" : "Total"}</td><td>{fmt(customerReports.reduce((s, r) => s + Number(r.summary?.opening_balance || 0), 0))} SAR</td><td>{fmt(customerReports.reduce((s, r) => s + Number(r.summary?.total_invoiced || 0), 0))} SAR</td><td>{fmt(customerReports.reduce((s, r) => s + Number(r.summary?.total_paid || 0), 0))} SAR</td><td>{fmt(customerReports.reduce((s, r) => s + Number(r.summary?.operational_outstanding || 0), 0))} SAR</td><td>{fmt(customerReports.reduce((s, r) => s + Number(r.summary?.closing_balance || 0), 0))} SAR</td><td /></tr></tfoot>
+                  </table>
+                </div>
+              )}
+              {customerReports.length > 0 && stmtCustomer && (() => { const r = customerReports[0]; const s = r.summary || {}; return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}><div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>{[[ar ? "الرصيد الافتتاحي" : "Opening", s.opening_balance, "#5A187E"], [ar ? "الفواتير" : "Invoiced", s.total_invoiced, "#5A187E"], [ar ? "المقبوض" : "Collected", s.total_paid, "#15803D"], [ar ? "الرصيد النهائي" : "Closing", s.closing_balance, "#DC2626"]].map(([label, value, color]) => <div key={String(label)} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 12 }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</div><div style={{ fontWeight: 800, color: String(color) }}>{fmt(value)} SAR</div></div>)}</div><div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, overflow: "auto" }}><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "النوع" : "Type"}</th><th>{ar ? "المرجع" : "Reference"}</th><th>{ar ? "البيان" : "Description"}</th><th>{ar ? "مدين" : "Debit"}</th><th>{ar ? "دائن" : "Credit"}</th><th>{ar ? "الرصيد" : "Balance"}</th></tr></thead><tbody>{(r.transactions || []).map((t: any, i: number) => <tr key={`${t.reference}-${i}`}><td>{fmtDate(t.date)}</td><td>{t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : t.type === "payment" ? (ar ? "سند قبض" : "Receipt") : (ar ? "رصيد افتتاحي" : "Opening")}</td><td>{t.reference || "—"}</td><td>{t.description_ar || t.description || "—"}</td><td>{Number(t.debit || 0) ? `${fmt(t.debit)} SAR` : "—"}</td><td>{Number(t.credit || 0) ? `${fmt(t.credit)} SAR` : "—"}</td><td style={{ fontWeight: 700 }}>{fmt(t.balance)} SAR</td></tr>)}</tbody></table></div><div style={{ display: "flex", justifyContent: "flex-end" }}><StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب العميل" : "Customer Statement"} subtitle={r.customer?.name_ar || ""} period={`${stmtFrom} — ${stmtTo}`} reportCode={`CST-${r.customer?.customer_number || r.customer?.id}`} orientation="landscape" metrics={[{ label: ar ? "الرصيد الافتتاحي" : "Opening", value: `${fmt(s.opening_balance)} SAR`, tone: "blue" }, { label: ar ? "التشغيلي" : "Operational", value: `${fmt(s.operational_outstanding)} SAR`, tone: "amber" }, { label: ar ? "الرصيد النهائي" : "Closing", value: `${fmt(s.closing_balance)} SAR`, tone: "red" }]} tables={[{ headers: [ar ? "التاريخ" : "Date", ar ? "النوع" : "Type", ar ? "المرجع" : "Reference", ar ? "البيان" : "Description", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الرصيد" : "Balance"], rows: (r.transactions || []).map((t: any) => [fmtDate(t.date), t.type, t.reference || "—", t.description_ar || t.description || "—", fmt(t.debit), fmt(t.credit), fmt(t.balance)]) }]} /></div></div>; })()}
             </div>
           )}
           {/* ── تبويب كشف حساب العميل ── */}
