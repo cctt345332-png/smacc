@@ -129,8 +129,8 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
       setMsg({
         type: "ok",
         text: ar
-          ? `تمت مزامنة العملاء: أضيف ${result.created || 0}، موجود مسبقاً ${result.skipped || 0}`
-          : `Customer sync complete: ${result.created || 0} created, ${result.skipped || 0} already linked`,
+          ? `تمت المزامنة: أضيف ${result.created || 0}، تم ربط ${result.linked || 0}، قيود افتتاحية جديدة ${result.opening_repaired || 0}، قيود موجودة ${result.opening_already_journaled || 0}، تم تجاوز ${result.skipped || 0}`
+          : `Sync complete: ${result.created || 0} created, ${result.linked || 0} linked, ${result.opening_repaired || 0} opening journals created, ${result.opening_already_journaled || 0} already journaled, ${result.skipped || 0} skipped`,
       });
     } catch (e: any) {
       setMsg({ type: "err", text: e.response?.data?.detail || (ar ? "تعذر مزامنة العملاء" : "Customer sync failed") });
