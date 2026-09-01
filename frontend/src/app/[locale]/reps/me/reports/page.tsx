@@ -33,7 +33,7 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
   const [invoices, setInvoices] = useState<any[]>([]);
   const [stock, setStock]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [tab, setTab] = useState<"summary"|"invoices"|"stock"|"statement">("summary");
+  const [tab, setTab] = useState<"summary"|"invoices"|"stock"|"customers"|"statement">("summary");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterMonth, setFilterMonth]   = useState("");
 
