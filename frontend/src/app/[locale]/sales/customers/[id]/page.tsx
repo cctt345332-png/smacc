@@ -55,7 +55,9 @@ export default function CustomerDetailPage(props: { params: Promise<{ locale: st
   const totalInvoiced = statement?.summary ? Number(statement.summary.total_invoiced || 0) : invoices.reduce((s, i) => s + Number(i.total || 0), 0);
   const totalPaid = statement?.summary ? Number(statement.summary.total_paid || 0) : invoices.reduce((s, i) => s + Number(i.paid_amount || 0), 0);
   const openingBalance = Number(statement?.summary?.opening_balance || 0);
-  const outstanding = statement?.summary ? Number(statement.summary.closing_balance || 0) : totalInvoiced - totalPaid;
+  const outstanding = statement?.summary
+    ? Number(statement.summary.operational_outstanding ?? (Number(statement.summary.total_invoiced || 0) - Number(statement.summary.total_paid || 0)))
+    : totalInvoiced - totalPaid;
   const typeInfo = TYPE_MAP[customer.customer_type] || { ar: customer.customer_type, badge: "badge-gray" };
 
   return (

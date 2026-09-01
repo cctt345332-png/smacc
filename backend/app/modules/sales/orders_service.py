@@ -246,9 +246,17 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
 
     total_invoiced = sum(float(i.total or 0) for i in invoices if i.issue_date >= from_date)
     total_paid = sum(float(p.amount or 0) for p in payments if p.payment_date >= from_date)
-    period_opening = round(float(prior_balance), 2)
-    closing_balance = round(period_opening + total_invoiced - total_paid + sum(t["debit"] - t["credit"] for t in transactions if t["type"] == "opening_balance"), 2)
-    # opening_balance journal rows inside the period are already included in transactions/closing.
+    # الرصيد الافتتاحي هو الرصيد القديم + كل القيود المرحّلة
+    # من نوع customer_opening_balance، وليس مستحقًا تشغيليًا.
+    opening_journal_total = sum(
+        Decimal(str(line.debit or 0)) - Decimal(str(line.credit or 0))
+        for _, line in opening_entries
+    )
+    account_opening_total = opening_balance + opening_journal_total
+    operational_outstanding = Decimal(str(total_invoiced - total_paid))
+    closing_balance = round(float(account_opening_total + operational_outstanding), 2)
+    # قيود الافتتاح تظهر في transactions، لكنها لا تُضاف مرة أخرى
+    # إلى closing_balance لأنها محسوبة أصلًا ضمن account_opening_total.
 
     return {
         "customer": {
@@ -260,9 +268,10 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
         "from_date": from_date.isoformat(), "to_date": to_date.isoformat(),
         "transactions": transactions,
         "summary": {
-            "opening_balance": period_opening,
+            "opening_balance": round(float(account_opening_total), 2),
             "total_invoiced": round(total_invoiced, 2),
             "total_paid": round(total_paid, 2),
+            "operational_outstanding": round(float(operational_outstanding), 2),
             "closing_balance": closing_balance,
         },
     }
