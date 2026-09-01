@@ -44,10 +44,26 @@ export default function SearchableAccountSelect({
   const selectedLabel = selected ? accountLabel(selected, locale) : "";
   const [text, setText] = useState(selectedLabel);
   const [open, setOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<React.CSSProperties>({});
+
+  const updateMenuPosition = () => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMenuPosition({ position: "fixed", zIndex: 5000, left: rect.left, top: rect.bottom + 4, width: rect.width });
+  };
 
   useEffect(() => {
     setText(selectedLabel);
   }, [selectedLabel]);
+
+  useEffect(() => {
+    if (!open) return;
+    updateMenuPosition();
+    const reposition = () => updateMenuPosition();
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => { window.removeEventListener("scroll", reposition, true); window.removeEventListener("resize", reposition); };
+  }, [open]);
 
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -80,11 +96,12 @@ export default function SearchableAccountSelect({
         value={text}
         placeholder={placeholder || (ar ? "اكتب كود أو اسم الحساب..." : "Type account code or name...")}
         autoComplete="off"
-        onFocus={() => setOpen(true)}
+        onFocus={() => { setOpen(true); window.setTimeout(updateMenuPosition, 0); }}
         onChange={(event) => {
           const nextText = event.target.value;
           setText(nextText);
           setOpen(true);
+          window.setTimeout(updateMenuPosition, 0);
           const exact = available.find((account) => accountLabel(account, locale).toLocaleLowerCase() === nextText.trim().toLocaleLowerCase() || account.code?.toLocaleLowerCase() === nextText.trim().toLocaleLowerCase());
           onChange(exact?.id || "");
         }}
@@ -98,7 +115,7 @@ export default function SearchableAccountSelect({
         }}
       />
       {open && (
-        <div style={{ position: "absolute", zIndex: 1000, insetInline: 0, ...(openUpward ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }), maxHeight: 280, overflowY: "auto", background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 10px 24px rgba(15,23,42,.14)" }}>
+        <div style={{ ...menuPosition, maxHeight: 280, overflowY: "auto", background: "#fff", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "0 10px 24px rgba(15,23,42,.14)" }}>
           {filtered.length === 0 ? (
             <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "لا توجد حسابات مطابقة" : "No matching accounts"}</div>
           ) : filtered.map((account) => (
