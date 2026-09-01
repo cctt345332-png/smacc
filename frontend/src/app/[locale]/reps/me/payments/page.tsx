@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import { getMyPayments, getMyInvoices } from "@/lib/reps";
-import { createPayment, getCustomers } from "@/lib/sales";
-import api from "@/lib/api";
+import { createPayment, getCustomers, getCustomerStatement } from "@/lib/sales";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) =>
@@ -73,17 +72,20 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
     if (!cid) return;
     setLoadingBalance(true);
     try {
-      const [stmtRes] = await Promise.all([
-        api.get(`/sales/customers/${cid}/statement`, {
-          params: { from_date: "2020-01-01T00:00:00", to_date: new Date().toISOString() }
-        }).catch(() => ({ data: null })),
-      ]);
+      const stmtRes = await getCustomerStatement(
+        cid, "2020-01-01T00:00:00", new Date().toISOString()
+      ).catch(() => ({ data: null }));
+      const statementSummary = stmtRes?.data?.summary;
       const custInvs = invoices.filter(i => i.customer_id === cid);
       setCustomerInvoices(custInvs);
-      const totalDue = custInvs.reduce((s: number, i: any) =>
-        s + Math.max(0, Number(i.total||0) - Number(i.paid_amount||0)), 0);
-      setCustomerBalance({ total_due: totalDue, invoice_count: custInvs.length });
-      if (custInvs.length > 0) {
+      const totalDue = Number(statementSummary?.closing_balance || 0);
+      setCustomerBalance({
+        total_due: totalDue,
+        opening_balance: Number(statementSummary?.opening_balance || 0),
+        operational_outstanding: Number(statementSummary?.operational_outstanding || 0),
+        invoice_count: custInvs.length,
+      });
+      if (totalDue > 0) {
         setForm(f => ({ ...f, amount: totalDue.toFixed(2) }));
       }
     } finally { setLoadingBalance(false); }
@@ -325,8 +327,10 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                           {fmt(customerBalance.total_due)} SAR
                         </span>
                       </div>
-                      <div style={{ fontSize:12, color:"#6B7280" }}>
-                        {customerBalance.invoice_count} {ar ? "فاتورة معلقة" : "pending invoices"}
+                      <div style={{ fontSize:12, color:"#6B7280", display:"flex", flexDirection:"column", gap:3 }}>
+                        <span>{ar ? "الرصيد الافتتاحي" : "Opening balance"}: {fmt(customerBalance.opening_balance)} SAR</span>
+                        <span>{ar ? "المستحق التشغيلي" : "Operational outstanding"}: {fmt(customerBalance.operational_outstanding)} SAR</span>
+                        <span>{customerBalance.invoice_count} {ar ? "فاتورة معلقة" : "pending invoices"}</span>
                       </div>
                     </div>
                   )}
@@ -356,7 +360,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     </div>
                   )}
 
-                  {customerInvoices.length === 0 && form.customer_id && !loadingBalance && (
+                  {customerInvoices.length === 0 && form.customer_id && !loadingBalance && customerBalance && Number(customerBalance.total_due) <= 0 && (
                     <div style={{ marginTop:8, fontSize:12, color:"#6F4A84", fontWeight:600 }}>
                       {ar ? "لا توجد مبالغ مستحقة لهذا العميل" : "No outstanding balance for this customer"}
                     </div>
