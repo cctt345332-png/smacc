@@ -62,18 +62,22 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
   // ── جلب البيانات ─────────────────────────────────────────────────
   const load = async () => {
     setLoading(true);
-    try {
-      const [repRes, sumRes, stockRes, invRes, trRes] = await Promise.all([
-        getRep(rep_id), getRepSummary(rep_id), getRepStock(rep_id),
-        getRepInvoices(rep_id), getRepTransfers(rep_id),
-      ]);
-      setRep(repRes.data);
-      setSummary(sumRes.data);
-      setStock(Array.isArray(stockRes.data) ? stockRes.data : []);
-      setInvoices(Array.isArray(invRes.data) ? invRes.data : []);
-      setTransfers(Array.isArray(trRes.data) ? trRes.data : []);
-    } catch { }
-    finally { setLoading(false); }
+    const results = await Promise.allSettled([
+      getRep(rep_id), getRepSummary(rep_id), getRepStock(rep_id),
+      getRepInvoices(rep_id), getRepTransfers(rep_id),
+    ]);
+    const [repRes, sumRes, stockRes, invRes, trRes] = results;
+    if (repRes.status === "fulfilled") {
+      setRep(repRes.value.data);
+    } else {
+      const detail = (repRes.reason as any)?.response?.data?.detail;
+      setMsg({ type: "err", text: detail || (ar ? "تعذر تحميل بيانات المندوب" : "Could not load rep profile") });
+    }
+    if (sumRes.status === "fulfilled") setSummary(sumRes.value.data);
+    if (stockRes.status === "fulfilled") setStock(Array.isArray(stockRes.value.data) ? stockRes.value.data : []);
+    if (invRes.status === "fulfilled") setInvoices(Array.isArray(invRes.value.data) ? invRes.value.data : []);
+    if (trRes.status === "fulfilled") setTransfers(Array.isArray(trRes.value.data) ? trRes.value.data : []);
+    setLoading(false);
   };
 
   useEffect(() => { load(); }, [rep_id]);
