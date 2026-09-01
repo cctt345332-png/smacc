@@ -466,9 +466,8 @@ async def get_journal_entries(db: AsyncSession, tenant_id: str, status: str | No
 
 
 async def get_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
-    from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(JournalEntry).options(selectinload(JournalEntry.lines)).where(
+        select(JournalEntry).where(
             JournalEntry.id == entry_id,
             JournalEntry.tenant_id == tenant_id,
         )
@@ -478,6 +477,12 @@ async def get_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
         raise HTTPException(404, "Journal entry not found")
     # أعد DTO صريحًا لتجنب أي تحميل كسول أثناء تسلسل استجابة FastAPI/Pydantic.
     # صفحة التفاصيل تحتاج السطور فقط، ولا تحتاج علاقات الحسابات من ORM.
+    lines_result = await db.execute(
+        select(JournalEntryLine)
+        .where(JournalEntryLine.entry_id == entry.id)
+        .order_by(JournalEntryLine.line_order.asc(), JournalEntryLine.id.asc())
+    )
+    lines = lines_result.scalars().all()
     return {
         "id": entry.id,
         "entry_number": entry.entry_number,
@@ -502,7 +507,7 @@ async def get_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
                 "credit": line.credit or Decimal("0"),
                 "line_order": line.line_order,
             }
-            for line in sorted(entry.lines, key=lambda item: item.line_order or 0)
+            for line in lines
         ],
     }
 
