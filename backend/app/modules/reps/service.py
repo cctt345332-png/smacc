@@ -307,12 +307,22 @@ async def import_rep_customers_from_tree(
         for customer in existing
         if customer.rep_id == rep_id
     }
+    # سجلات قديمة أُنشئت بالاسم فقط؛ لا نربطها إلا عند وجود تطابق
+    # وحيد، حتى لا نربط عميلين متشابهين بالحساب الخطأ.
+    unlinked_by_name: dict[str, list[Customer]] = {}
+    for customer in existing:
+        if not customer.ar_account_id:
+            unlinked_by_name.setdefault(_normalize_rep_customer_name(customer.name_ar), []).append(customer)
+
+    from app.modules.sales.service import _create_customer_opening_journal
 
     next_number = (await db.execute(
         select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id)
     )).scalar() or 0
     created = []
     linked = 0
+    opening_repaired = 0
+    opening_already_journaled = 0
     skipped = 0
     for account in customer_accounts:
         normalized_name = _normalize_rep_customer_name(account.name_ar)
@@ -327,10 +337,19 @@ async def import_rep_customers_from_tree(
                 skipped += 1
             existing_rep_names.add(normalized_name)
             continue
-        if normalized_name in existing_rep_names:
+        legacy_matches = unlinked_by_name.get(normalized_name, [])
+        if len(legacy_matches) == 1:
+            legacy_customer = legacy_matches[0]
+            legacy_customer.ar_account_id = account.id
+            legacy_customer.rep_id = rep_id
+            existing_by_account[account.id] = legacy_customer
+            existing_rep_names.add(normalized_name)
+            unlinked_by_name.pop(normalized_name, None)
+            linked += 1
+            continue
+        if len(legacy_matches) > 1 or normalized_name in existing_rep_names:
             skipped += 1
             continue
-
         next_number += 1
         customer = Customer(
             id=str(uuid.uuid4()),
@@ -349,8 +368,8 @@ async def import_rep_customers_from_tree(
         )
         db.add(customer)
         await db.flush()
-        # لا ننشئ قيد افتتاحي ولا نصفر opening_balance هنا؛ الحساب
-        # موجود أصلًا في الشجرة وقد يحتوي على سحبات/قيود فعلية.
+        # يتم ترحيل opening_balance لاحقًا بعد اكتمال ربط العميل؛
+        # لا نلمس parent_id أو code أو level أثناء المزامنة.
         existing_by_account[account.id] = customer
         existing_rep_names.add(normalized_name)
         created.append({
@@ -359,6 +378,34 @@ async def import_rep_customers_from_tree(
             "account_code": account.code,
             "name_ar": account.name_ar,
         })
+
+    # ترحيل الرصيد الموجود في account.opening_balance إلى قيد فعلي
+    # بعد التأكد من وجود سجل عميل مرتبط. العملية idempotent ولا تمس
+    # parent_id أو code أو level أو أي حركة سابقة.
+    for account in customer_accounts:
+        customer = existing_by_account.get(account.id)
+        amount = Decimal(str(account.opening_balance or 0)).quantize(Decimal("0.01"))
+        if not customer or amount == 0:
+            continue
+        existing_entry = (await db.execute(
+            select(JournalEntry.id)
+            .join(JournalEntryLine, JournalEntryLine.entry_id == JournalEntry.id)
+            .where(
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.source == "customer_opening_balance",
+                JournalEntry.reference == customer.customer_number,
+                JournalEntryLine.account_id == account.id,
+            ).limit(1)
+        )).scalar_one_or_none()
+        if existing_entry:
+            account.opening_balance = Decimal("0")
+            opening_already_journaled += 1
+            continue
+        await _create_customer_opening_journal(
+            db, tenant_id, actor_user_id, customer, account, amount,
+        )
+        account.opening_balance = Decimal("0")
+        opening_repaired += 1
 
     await db.commit()
     return {
@@ -369,6 +416,8 @@ async def import_rep_customers_from_tree(
         "total_accounts": len(customer_accounts),
         "created": len(created),
         "linked": linked,
+        "opening_repaired": opening_repaired,
+        "opening_already_journaled": opening_already_journaled,
         "skipped": skipped,
         "items": created,
     }
