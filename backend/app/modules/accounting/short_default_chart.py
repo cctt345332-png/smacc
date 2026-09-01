@@ -183,7 +183,7 @@ SHORT_DEFAULT_CHART = [
     ('0224', 'التزامات طويلة الأجل أخرى', 'التزامات طويلة الأجل أخرى', AccountType.LIABILITY, AccountNature.CREDIT, '022', True, True),
     ('03', 'حقوق الملكية', 'حقوق الملكية', AccountType.EQUITY, AccountNature.CREDIT, None, False, False),
     ('031', 'رأس المال', 'رأس المال', AccountType.EQUITY, AccountNature.CREDIT, '03', False, False),
-    ('0311', 'رأس المال المدفوع', 'رأس المال المدفوع', AccountType.EQUITY, AccountNature.CREDIT, '031', True, True),
+    ('0311', 'أرصدة مرحلة من النظام السابق', 'Opening balances carried forward', AccountType.EQUITY, AccountNature.CREDIT, '031', True, True),
     ('0312', 'زيادات رأس المال', 'زيادات رأس المال', AccountType.EQUITY, AccountNature.CREDIT, '031', True, True),
     ('032', 'الاحتياطيات', 'الاحتياطيات', AccountType.EQUITY, AccountNature.CREDIT, '03', False, False),
     ('0321', 'الاحتياطي النظامي', 'الاحتياطي النظامي', AccountType.EQUITY, AccountNature.CREDIT, '032', True, True),

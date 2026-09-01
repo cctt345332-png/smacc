@@ -45,6 +45,8 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
       setCostCenters(c.data);
       setCustomers(Array.isArray(customersRes.data) ? customersRes.data : []);
       if (f.data.length > 0) setForm(prev => ({ ...prev, fiscal_year_id: f.data[0].id }));
+      const openingAccount = a.data.find((account: any) => account.code === "0311");
+      if (openingAccount) setOpeningOffsetAccount(openingAccount.id);
     });
   }, []);
 
