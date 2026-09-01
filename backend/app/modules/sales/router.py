@@ -13,7 +13,7 @@ from app.modules.accounting.schemas import AccountOut
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, CustomerOut,
     InvoiceCreate, InvoiceOut, InvoiceReject,
-    PaymentCreate, PaymentOut,
+    PaymentCreate, PaymentUpdate, PaymentOut,
     QuotationCreate, QuotationOut,
     CreditNoteCreate, RefundRequestCreate, RefundRequestDecision,
 )
@@ -220,9 +220,31 @@ async def list_payments(
     return await service.get_payments(db, user["tenant_id"], invoice_id, rep_id)
 
 
+@router.get("/payments/{payment_id}", response_model=PaymentOut)
+async def get_payment_detail(
+    payment_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rep_id = None
+    if user["role"] == "sales_rep":
+        rep_id = await get_rep_id_for_user(db, user["user_id"])
+    return await service.get_payment(db, user["tenant_id"], payment_id, rep_id)
+
+
 @router.post("/payments", response_model=PaymentOut, status_code=201)
 async def create_payment(data: PaymentCreate, user=Depends(require_role(["manager","accountant","sales","sales_rep"])), db: AsyncSession = Depends(get_db)):
     return await service.create_payment(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.patch("/payments/{payment_id}", response_model=PaymentOut)
+async def update_payment(
+    payment_id: str,
+    data: PaymentUpdate,
+    user=Depends(require_role(["manager", "accountant", "sales"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.update_payment(db, user["tenant_id"], user["user_id"], payment_id, data)
 
 
 # ─── Quotations ──────────────────────────────────────────────────────

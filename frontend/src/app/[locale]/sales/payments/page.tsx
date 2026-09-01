@@ -179,6 +179,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                   <th>{ar ? "طريقة الدفع" : "Method"}</th>
                   <th>{ar ? "المرجع" : "Reference"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "المبلغ" : "Amount"}</th>
+                  <th>{ar ? "إجراءات" : "Actions"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -214,12 +215,25 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                     <td style={{ textAlign: "end", fontWeight: 700, color: "#6F4A84" }}>
                       {fmt(p.amount)} SAR
                     </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <Link href={`/${locale}/sales/payments/${p.id}`} className="btn btn-secondary btn-sm" style={{ textDecoration: "none", padding: "5px 8px", fontSize: 11 }}>
+                          {ar ? "عرض" : "View"}
+                        </Link>
+                        <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/sales/payments/${p.id}/print`, "_blank")} style={{ padding: "5px 8px", fontSize: 11 }}>
+                          {ar ? "طباعة" : "Print"}
+                        </button>
+                        <Link href={`/${locale}/sales/payments/${p.id}/edit`} className="btn btn-primary btn-sm" style={{ textDecoration: "none", padding: "5px 8px", fontSize: 11 }}>
+                          {ar ? "تعديل" : "Edit"}
+                        </Link>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-                  <td colSpan={7} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                  <td colSpan={8} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                     {fmt(total)} SAR
                   </td>

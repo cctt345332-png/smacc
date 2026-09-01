@@ -28,6 +28,8 @@ export const getPayments = (params?: string | { invoice_id?: string; rep_id?: st
   return api.get("/sales/payments", { params: query });
 };
 export const createPayment = (data: any) => api.post("/sales/payments", data);
+export const getPayment = (id: string) => api.get(`/sales/payments/${id}`);
+export const updatePayment = (id: string, data: any) => api.patch(`/sales/payments/${id}`, data);
 
 // Quotations
 export const getQuotations = () => api.get("/sales/quotations");

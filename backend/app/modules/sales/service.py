@@ -966,11 +966,146 @@ async def get_payments(
             "amount": payment.amount,
             "payment_method": payment.payment_method,
             "reference": payment.reference,
+            "bank_account_id": payment.bank_account_id,
+            "journal_entry_id": payment.journal_entry_id,
             "created_at": payment.created_at,
             "notes": payment.notes,
         }
         for payment, customer_name, linked_rep_id, linked_rep_code, rep_name, invoice_number in rows
     ]
+
+
+async def get_payment(
+    db: AsyncSession,
+    tenant_id: str,
+    payment_id: str,
+    rep_id: str | None = None,
+):
+    """جلب سند قبض واحد، مع منع المندوب من رؤية سند خارج نطاقه."""
+    rows = await get_payments(db, tenant_id)
+    payment = next((item for item in rows if item["id"] == payment_id), None)
+    if not payment:
+        raise HTTPException(404, "سند القبض غير موجود")
+    if rep_id and payment.get("rep_id") != rep_id:
+        raise HTTPException(403, "لا يمكنك عرض سند قبض لمندوب آخر")
+    return payment
+
+
+async def update_payment(
+    db: AsyncSession,
+    tenant_id: str,
+    user_id: str,
+    payment_id: str,
+    data,
+):
+    """تعديل سند قبض من الإدارة مع إبقاء الفاتورة والقيد متطابقين."""
+    payment = await db.scalar(
+        select(Payment).where(Payment.id == payment_id, Payment.tenant_id == tenant_id)
+    )
+    if not payment:
+        raise HTTPException(404, "سند القبض غير موجود")
+
+    customer = await db.scalar(
+        select(Customer).where(Customer.id == payment.customer_id, Customer.tenant_id == tenant_id)
+    )
+    if not customer:
+        raise HTTPException(409, "العميل المرتبط بالسند غير موجود")
+    invoice = None
+    if payment.invoice_id:
+        invoice = await db.scalar(
+            select(Invoice).where(Invoice.id == payment.invoice_id, Invoice.tenant_id == tenant_id)
+        )
+        if not invoice:
+            raise HTTPException(409, "الفاتورة المرتبطة بالسند غير موجودة")
+
+    changes = data.model_dump(exclude_unset=True)
+    old_amount = Decimal(str(payment.amount or 0))
+    new_amount = Decimal(str(changes.get("amount", old_amount)))
+    if new_amount <= Decimal("0"):
+        raise HTTPException(400, "يجب أن يكون مبلغ السند أكبر من صفر")
+
+    new_date = changes.get("payment_date", payment.payment_date)
+    if new_date:
+        new_date = new_date.replace(tzinfo=None)
+
+    new_method = changes.get("payment_method", payment.payment_method)
+    if payment.journal_entry_id and new_method != payment.payment_method:
+        raise HTTPException(409, "لا يمكن تغيير طريقة الدفع بعد ترحيل القيد المحاسبي")
+
+    if invoice:
+        paid_without_current = Decimal(str(invoice.paid_amount or 0)) - old_amount
+        if paid_without_current < Decimal("0"):
+            paid_without_current = Decimal("0")
+        if new_amount > Decimal(str(invoice.total or 0)) - paid_without_current + Decimal("0.01"):
+            raise HTTPException(400, "المبلغ أكبر من المتبقي على الفاتورة")
+    else:
+        from app.modules.sales.orders_service import get_customer_statement
+        statement = await get_customer_statement(
+            db, tenant_id, customer.id,
+            datetime(1970, 1, 1),
+            max(payment.payment_date, new_date),
+        )
+        available = Decimal(str(statement["summary"].get("closing_balance") or 0)) + old_amount
+        if new_amount > available + Decimal("0.01"):
+            raise HTTPException(400, "المبلغ أكبر من رصيد العميل المتاح")
+
+    payment.amount = new_amount
+    payment.payment_date = new_date
+    if "payment_method" in changes:
+        payment.payment_method = new_method
+    if "reference" in changes:
+        payment.reference = changes["reference"]
+    if "notes" in changes:
+        payment.notes = changes["notes"]
+
+    if invoice:
+        invoice.paid_amount = Decimal(str(invoice.paid_amount or 0)) - old_amount + new_amount
+        if invoice.paid_amount >= Decimal(str(invoice.total or 0)) - Decimal("0.01"):
+            invoice.status = InvoiceStatus.PAID
+        elif invoice.paid_amount > Decimal("0"):
+            invoice.status = InvoiceStatus.PARTIAL
+        else:
+            invoice.status = InvoiceStatus.CONFIRMED
+
+    if payment.journal_entry_id:
+        entry = await db.scalar(
+            select(JournalEntry).where(
+                JournalEntry.id == payment.journal_entry_id,
+                JournalEntry.tenant_id == tenant_id,
+            )
+        )
+        if not entry:
+            raise HTTPException(409, "القيد المحاسبي المرتبط بالسند غير موجود")
+        entry.entry_date = new_date
+        entry.total_debit = new_amount
+        entry.total_credit = new_amount
+        line_result = await db.execute(
+            select(JournalEntryLine)
+            .where(JournalEntryLine.entry_id == entry.id)
+            .order_by(JournalEntryLine.line_order.asc())
+        )
+        lines = line_result.scalars().all()
+        if len(lines) < 2:
+            raise HTTPException(409, "القيد المحاسبي المرتبط بالسند غير مكتمل")
+        lines[0].debit = new_amount
+        lines[0].credit = Decimal("0")
+        lines[1].debit = Decimal("0")
+        lines[1].credit = new_amount
+
+        from app.models.treasury import Voucher, VoucherStatus
+        voucher = await db.scalar(
+            select(Voucher).where(
+                Voucher.tenant_id == tenant_id,
+                Voucher.reference == payment.payment_number,
+                Voucher.status != VoucherStatus.CANCELLED,
+            )
+        )
+        if voucher:
+            voucher.voucher_date = new_date
+            voucher.amount = new_amount
+
+    await db.commit()
+    return await get_payment(db, tenant_id, payment_id)
 
 
 async def _get_open_fiscal_year_id(db: AsyncSession, tenant_id: str, payment_date: datetime) -> str | None:

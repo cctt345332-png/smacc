@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
+import Link from "next/link";
 import { getMyPayments, getMyInvoices } from "@/lib/reps";
 import { createPayment, getCustomers, getCustomerStatement } from "@/lib/sales";
 
@@ -195,6 +196,14 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     ) : (
                       <>{ar ? "تحصيل من رصيد العميل:" : "Customer balance:"}{" "}<span style={{ color:"#3E0865" }}>{p.customer_name_ar || p.customer_id}</span></>
                     )}
+                  </div>
+                  <div style={{ display:"flex", gap:7, marginTop:9 }}>
+                    <Link href={`/${locale}/reps/me/payments/${p.id}`} style={{ fontSize:11, padding:"4px 9px", borderRadius:6, background:"#F4EFF7", color:"#3E0865", textDecoration:"none", fontWeight:700 }}>
+                      {ar ? "عرض" : "View"}
+                    </Link>
+                    <button onClick={() => window.open(`/${locale}/reps/me/payments/${p.id}/print`, "_blank")} style={{ fontSize:11, padding:"4px 9px", borderRadius:6, border:"1px solid #D5C8DD", background:"transparent", color:"#6F4A84", cursor:"pointer", fontWeight:700 }}>
+                      {ar ? "طباعة" : "Print"}
+                    </button>
                   </div>
                 </div>
               </div>

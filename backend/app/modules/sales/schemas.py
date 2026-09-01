@@ -233,6 +233,14 @@ class PaymentCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class PaymentUpdate(BaseModel):
+    payment_date: Optional[datetime] = None
+    amount: Optional[Decimal] = None
+    payment_method: Optional[PaymentMethod] = None
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class PaymentOut(BaseModel):
     id: str
     payment_number: str
@@ -243,6 +251,9 @@ class PaymentOut(BaseModel):
     rep_name: Optional[str] = None
     rep_code: Optional[str] = None
     invoice_number: Optional[str] = None
+    bank_account_id: Optional[str] = None
+    journal_entry_id: Optional[str] = None
+    notes: Optional[str] = None
     payment_date: datetime
     amount: Decimal
     payment_method: PaymentMethod
