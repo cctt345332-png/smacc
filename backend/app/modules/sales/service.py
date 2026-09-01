@@ -936,18 +936,19 @@ async def get_payments(
     rep_id: str | None = None,
 ):
     """جلب سندات القبض مع اسم العميل والمندوب ورقم الفاتورة إن وجد."""
+    linked_rep_id = func.coalesce(Payment.rep_id, Invoice.rep_id, Customer.rep_id)
     q = (
-        select(Payment, Customer.name_ar, SalesRep.id, SalesRep.rep_code, User.full_name, Invoice.invoice_number)
+        select(Payment, Customer.name_ar, linked_rep_id, SalesRep.rep_code, User.full_name, Invoice.invoice_number)
         .join(Customer, Customer.id == Payment.customer_id)
-        .outerjoin(SalesRep, SalesRep.id == Payment.rep_id)
-        .outerjoin(User, User.id == SalesRep.user_id)
         .outerjoin(Invoice, Invoice.id == Payment.invoice_id)
+        .outerjoin(SalesRep, SalesRep.id == linked_rep_id)
+        .outerjoin(User, User.id == SalesRep.user_id)
         .where(Payment.tenant_id == tenant_id)
     )
     if invoice_id:
         q = q.where(Payment.invoice_id == invoice_id)
     if rep_id:
-        q = q.where(Payment.rep_id == rep_id)
+        q = q.where(linked_rep_id == rep_id)
     q = q.order_by(Payment.payment_date.desc(), Payment.payment_number.desc())
     rows = (await db.execute(q)).all()
     return [

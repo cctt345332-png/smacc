@@ -737,7 +737,12 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
     # المقبوضات
     pay_r = await db.execute(
         select(func.sum(Payment.amount))
-        .where(Payment.tenant_id == tenant_id, Payment.rep_id == rep.id)
+        .outerjoin(Invoice, Invoice.id == Payment.invoice_id)
+        .join(Customer, Customer.id == Payment.customer_id)
+        .where(
+            Payment.tenant_id == tenant_id,
+            (Payment.rep_id == rep.id) | (Invoice.rep_id == rep.id) | (Customer.rep_id == rep.id),
+        )
     )
     total_collected = pay_r.scalar() or Decimal("0")
     opening_balance = await _get_rep_opening_balance(db, tenant_id, rep.id)
@@ -815,11 +820,12 @@ async def get_my_payments(db: AsyncSession, tenant_id: str, user_id: str) -> lis
     if not rep:
         raise HTTPException(403, "هذا الحساب ليس مندوباً")
 
+    linked_rep_id = func.coalesce(Payment.rep_id, Invoice.rep_id, Customer.rep_id)
     pay_r = await db.execute(
         select(Payment, Customer.name_ar, Invoice.invoice_number)
         .join(Customer, Customer.id == Payment.customer_id)
         .outerjoin(Invoice, Invoice.id == Payment.invoice_id)
-        .where(Payment.tenant_id == tenant_id, Payment.rep_id == rep.id)
+        .where(Payment.tenant_id == tenant_id, linked_rep_id == rep.id)
         .order_by(Payment.created_at.desc())
     )
     return [
@@ -923,7 +929,12 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
     # إجمالي المقبوضات
     pay_r = await db.execute(
         select(func.sum(Payment.amount))
-        .where(Payment.tenant_id == tenant_id, Payment.rep_id == rep_id)
+        .outerjoin(Invoice, Invoice.id == Payment.invoice_id)
+        .join(Customer, Customer.id == Payment.customer_id)
+        .where(
+            Payment.tenant_id == tenant_id,
+            (Payment.rep_id == rep_id) | (Invoice.rep_id == rep_id) | (Customer.rep_id == rep_id),
+        )
     )
     total_collected = pay_r.scalar() or Decimal("0")
     opening_balance = await _get_rep_opening_balance(db, tenant_id, rep_id)

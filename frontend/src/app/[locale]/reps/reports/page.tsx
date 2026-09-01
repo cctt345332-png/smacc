@@ -181,11 +181,12 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
       customer: inv.buyer_name_ar, reference: inv.invoice_number, debit: Number(inv.total || 0), credit: 0,
       status: inv.status,
     })),
-    ...payments.map((payment: any) => {
+        ...payments.map((payment: any) => {
       const invoice = invoiceById[payment.invoice_id];
-      return { id: `payment-${payment.id}`, type: "payment", date: payment.payment_date, rep_id: invoice?.rep_id,
-        customer: invoice?.buyer_name_ar || payment.customer_id, reference: payment.payment_number, debit: 0,
-        credit: Number(payment.amount || 0), status: payment.payment_method };
+      return { id: `payment-${payment.id}`, type: "payment", date: payment.payment_date,
+        rep_id: payment.rep_id || invoice?.rep_id,
+        customer: payment.customer_name_ar || invoice?.buyer_name_ar || payment.customer_id,
+        reference: payment.payment_number, debit: 0, credit: Number(payment.amount || 0), status: payment.payment_method };
     }),
     ...creditNotes.map((note: any) => {
       const invoice = invoiceById[note.original_invoice_id];
