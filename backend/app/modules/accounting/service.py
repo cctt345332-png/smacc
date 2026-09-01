@@ -52,6 +52,36 @@ async def get_accounts(db: AsyncSession, tenant_id: str):
     if not accounts:
         return []
 
+    # لا يكفي ترتيب الكود وحده: قد يكون كود الفرع (مثل 01131137)
+    # أصغر من كود حساب المندوب (مثل 011311003). نبني القائمة أبًا ثم
+    # أبناءه حتى يظهر كل حساب رئيسي قبل فروعه مهما كانت صيغة الكود.
+    account_by_id = {account.id: account for account in accounts}
+    children_by_parent: dict[str | None, list[Account]] = {}
+    for account in accounts:
+        parent_id = account.parent_id if account.parent_id in account_by_id else None
+        children_by_parent.setdefault(parent_id, []).append(account)
+    for children in children_by_parent.values():
+        children.sort(key=lambda account: (account.code, account.name_ar))
+
+    ordered_accounts: list[Account] = []
+    visited: set[str] = set()
+
+    def append_branch(account: Account):
+        if account.id in visited:
+            return
+        visited.add(account.id)
+        ordered_accounts.append(account)
+        for child in children_by_parent.get(account.id, []):
+            append_branch(child)
+
+    for root in children_by_parent.get(None, []):
+        append_branch(root)
+    # لا نخفي الحسابات اليتيمة أو الدورات القديمة؛ نلحقها في النهاية
+    # مع الاستمرار في منع التكرار.
+    for account in accounts:
+        append_branch(account)
+    accounts = ordered_accounts
+
     account_ids = [account.id for account in accounts]
     lines_result = await db.execute(
         select(
