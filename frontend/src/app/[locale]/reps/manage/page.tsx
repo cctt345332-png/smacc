@@ -13,7 +13,7 @@ const EMPTY_FORM = {
   // بيانات الحساب
   full_name: "", email: "", password: "",
   // بيانات التواصل والحساب
-  phone: "", zone: "", notes: "", customer_account_parent_id: "",
+  phone: "", zone: "", notes: "", customer_account_parent_id: "", customer_account_id: "",
   // بيانات الهوية
   id_number: "", id_expiry: "", license_expiry: "",
   // بيانات السيارة
@@ -94,6 +94,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
       phone: rep.phone || "", zone: rep.zone || "", notes: rep.notes || "",
       id_number: rep.id_number || "", id_expiry: rep.id_expiry || "", license_expiry: rep.license_expiry || "",
       customer_account_parent_id: rep.customer_account_parent_id || "",
+      customer_account_id: rep.customer_account_id || "",
       vehicle_plate: rep.vehicle_plate || "", vehicle_type: rep.vehicle_type || "", vehicle_color: rep.vehicle_color || "",
       target_monthly: rep.target_monthly || "", commission_pct: rep.commission_pct || "",
     });
@@ -113,7 +114,9 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
         full_name: form.full_name, email: form.email,
         phone: form.phone || undefined, zone: form.zone || undefined, notes: form.notes || undefined,
         id_number: form.id_number || undefined, id_expiry: form.id_expiry || undefined,
-        customer_account_parent_id: form.customer_account_parent_id || undefined,
+        ...(editRep
+          ? { customer_account_id: form.customer_account_id || undefined }
+          : { customer_account_parent_id: form.customer_account_parent_id || undefined }),
         license_expiry: form.license_expiry || undefined,
         vehicle_plate: form.vehicle_plate || undefined, vehicle_type: form.vehicle_type || undefined,
         vehicle_color: form.vehicle_color || undefined,
@@ -383,15 +386,24 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                 {ar ? "ربط الحسابات والعملاء" : "Accounting & customer assignment"}
               </div>
               <div className="form-group" style={{ marginBottom: 20 }}>
-                <label className="form-label">{ar ? "فرع المدينة تحت حساب العملاء *" : "City branch under Customers *"}</label>
-                <select className="form-input form-select" required={!editRep} value={form.customer_account_parent_id} onChange={e => setForm(p => ({ ...p, customer_account_parent_id: e.target.value }))}>
-                  <option value="">{ar ? "— اختر فرع المدينة —" : "— Select city branch —"}</option>
-                  {accounts.filter(a => a.is_active && a.account_type === "asset" && a.nature === "debit").map(a => {
-                    const indent = "　".repeat(Math.max(0, Number(a.level || 1) - 1));
-                    return <option key={a.id} value={a.id}>{indent}{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>;
-                  })}
-                </select>
-                <p className="form-hint">{ar ? "اختر فرع المدينة داخل حساب العملاء. سيُنشأ حساب للمندوب تحته، ثم تُنشأ حسابات عملائه تحت حساب المندوب." : "Choose the city branch inside Customers. A rep account will be created below it, and the rep's customers below that account."}</p>
+                <label className="form-label">{editRep ? (ar ? "الحساب المحاسبي المرتبط بالمندوب *" : "Rep linked accounting account *") : (ar ? "فرع المدينة تحت حساب العملاء *" : "City branch under Customers *")}</label>
+                {editRep ? (
+                  <select className="form-input form-select" required value={form.customer_account_id} onChange={e => setForm(p => ({ ...p, customer_account_id: e.target.value }))}>
+                    <option value="">{ar ? "— اختر حساب المندوب —" : "— Select rep account —"}</option>
+                    {accounts.filter(a => a.is_active && a.is_customer_account && !a.is_posting).map(a => (
+                      <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <select className="form-input form-select" required value={form.customer_account_parent_id} onChange={e => setForm(p => ({ ...p, customer_account_parent_id: e.target.value }))}>
+                    <option value="">{ar ? "— اختر فرع المدينة —" : "— Select city branch —"}</option>
+                    {accounts.filter(a => a.is_active && a.account_type === "asset" && a.nature === "debit").map(a => {
+                      const indent = "　".repeat(Math.max(0, Number(a.level || 1) - 1));
+                      return <option key={a.id} value={a.id}>{indent}{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>;
+                    })}
+                  </select>
+                )}
+                <p className="form-hint">{editRep ? (ar ? "اختر حساب المندوب الموجود فقط. حفظ بيانات المندوب لن ينقل الحساب أو يفصل فروعه من الشجرة." : "Choose the existing rep account. Saving rep details will not move the account or detach its branches.") : (ar ? "اختر فرع المدينة داخل حساب العملاء. سيُنشأ حساب للمندوب تحته." : "Choose the city branch inside Customers. A rep account will be created below it.")}</p>
               </div>
               {/* بيانات الهوية */}
               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>

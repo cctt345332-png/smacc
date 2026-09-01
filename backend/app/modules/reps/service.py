@@ -308,16 +308,26 @@ async def import_rep_customers_from_tree(
         if customer.rep_id == rep_id
     }
 
-    from app.modules.sales.service import _create_customer_opening_journal
-
     next_number = (await db.execute(
         select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id)
     )).scalar() or 0
     created = []
+    linked = 0
     skipped = 0
     for account in customer_accounts:
         normalized_name = _normalize_rep_customer_name(account.name_ar)
-        if account.id in existing_by_account or normalized_name in existing_rep_names:
+        existing_customer = existing_by_account.get(account.id)
+        if existing_customer:
+            # المزامنة لا تغيّر الشجرة أو الكود أو الرصيد؛ تصلح فقط
+            # ربط سجل العميل بالمندوب الذي يملك الحساب الأب.
+            if existing_customer.rep_id != rep_id:
+                existing_customer.rep_id = rep_id
+                linked += 1
+            else:
+                skipped += 1
+            existing_rep_names.add(normalized_name)
+            continue
+        if normalized_name in existing_rep_names:
             skipped += 1
             continue
 
@@ -339,13 +349,8 @@ async def import_rep_customers_from_tree(
         )
         db.add(customer)
         await db.flush()
-        if account.opening_balance and Decimal(str(account.opening_balance)) != 0:
-            await _create_customer_opening_journal(
-                db, tenant_id, actor_user_id, customer, account,
-                Decimal(str(account.opening_balance)),
-            )
-            account.opening_balance = Decimal("0")
-
+        # لا ننشئ قيد افتتاحي ولا نصفر opening_balance هنا؛ الحساب
+        # موجود أصلًا في الشجرة وقد يحتوي على سحبات/قيود فعلية.
         existing_by_account[account.id] = customer
         existing_rep_names.add(normalized_name)
         created.append({
@@ -363,6 +368,7 @@ async def import_rep_customers_from_tree(
         "account_name": rep_account.name_ar,
         "total_accounts": len(customer_accounts),
         "created": len(created),
+        "linked": linked,
         "skipped": skipped,
         "items": created,
     }
@@ -404,33 +410,20 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
             wh_r = await db.execute(select(Warehouse).where(Warehouse.id == rep.warehouse_id))
             wh = wh_r.scalar_one_or_none()
             if wh: wh.name_ar = f"مستودع المندوب — {data['full_name']}"
-    if "customer_account_parent_id" in data:
-        parent_account = await _validate_rep_account_parent(
-            db, tenant_id, data.get("customer_account_parent_id")
-        )
-        if parent_account:
-            if rep.customer_account_id:
-                rep_account = await db.get(Account, rep.customer_account_id)
-                if rep_account and rep_account.tenant_id == tenant_id:
-                    rep_account.parent_id = parent_account.id
-                    rep_account.level = parent_account.level + 1
-            else:
-                rep_account = Account(
-                    id=str(uuid.uuid4()), tenant_id=tenant_id,
-                    code=await _next_rep_account_code(db, tenant_id, parent_account),
-                    name_ar=f"عملاء المندوب — {data.get('full_name') or rep.rep_code}",
-                    name_en=f"Rep Customers — {data.get('full_name') or rep.rep_code}",
-                    account_type=AccountType.ASSET, nature=AccountNature.DEBIT,
-                    parent_id=parent_account.id, level=parent_account.level + 1,
-                    is_active=True, is_posting=False, allow_direct_posting=False,
-                    is_customer_account=True, opening_balance=Decimal("0"),
-                    notes=f"حساب عملاء المندوب {rep.rep_code}",
-                )
-                db.add(rep_account)
-                rep.customer_account_id = rep_account.id
-        else:
-            if rep.customer_account_id:
-                raise HTTPException(400, "لا يمكن إزالة حساب المندوب؛ اختر فرع مدينة آخر بدلاً من ذلك")
+    # عند تعديل مندوب موجود لا نلمس parent_id لحسابه المحاسبي؛
+    # اختيار فرع المدينة كان يسبب نقل الحساب وفصل الشجرة عن ترتيبها.
+    # إنشاء الحساب الجديد يتم في create_rep فقط. هنا نسمح بتغيير الرابط
+    # إلى حساب مندوب موجود بشكل صريح، بدون إعادة ربطه أو نقل فروعه.
+    if "customer_account_id" in data:
+        account_id = data.get("customer_account_id")
+        if not account_id:
+            raise HTTPException(400, "لا يمكن إزالة حساب المندوب")
+        linked_account = await db.get(Account, account_id)
+        if not linked_account or linked_account.tenant_id != tenant_id:
+            raise HTTPException(400, "حساب المندوب غير موجود لهذه الشركة")
+        if not linked_account.is_active or not linked_account.is_customer_account:
+            raise HTTPException(400, "يجب اختيار حساب مندوب نشط من شجرة الحسابات")
+        rep.customer_account_id = linked_account.id
 
     # حقول جديدة
     for field in ["id_number", "id_expiry", "license_expiry",
