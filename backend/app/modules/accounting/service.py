@@ -468,7 +468,10 @@ async def get_journal_entries(db: AsyncSession, tenant_id: str, status: str | No
 async def get_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
     from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(JournalEntry).options(selectinload(JournalEntry.lines)).where(JournalEntry.id == entry_id)
+        select(JournalEntry).options(selectinload(JournalEntry.lines)).where(
+            JournalEntry.id == entry_id,
+            JournalEntry.tenant_id == tenant_id,
+        )
     )
     entry = result.scalar_one_or_none()
     if not entry or entry.tenant_id != tenant_id:
@@ -480,23 +483,23 @@ async def get_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
         "entry_number": entry.entry_number,
         "entry_date": entry.entry_date,
         "fiscal_year_id": entry.fiscal_year_id,
-        "description_ar": entry.description_ar,
+        "description_ar": entry.description_ar or "",
         "description_en": entry.description_en,
-        "status": entry.status,
+        "status": entry.status.value if hasattr(entry.status, "value") else entry.status,
         "reference": entry.reference,
         "source": entry.source,
-        "total_debit": entry.total_debit,
-        "total_credit": entry.total_credit,
+        "total_debit": entry.total_debit or Decimal("0"),
+        "total_credit": entry.total_credit or Decimal("0"),
         "notes": entry.notes,
-        "created_at": entry.created_at,
+        "created_at": entry.created_at or entry.entry_date,
         "lines": [
             {
                 "id": line.id,
                 "account_id": line.account_id,
                 "cost_center_id": line.cost_center_id,
                 "description": line.description,
-                "debit": line.debit,
-                "credit": line.credit,
+                "debit": line.debit or Decimal("0"),
+                "credit": line.credit or Decimal("0"),
                 "line_order": line.line_order,
             }
             for line in sorted(entry.lines, key=lambda item: item.line_order or 0)
