@@ -182,6 +182,27 @@ async def update_account(db: AsyncSession, tenant_id: str, account_id: str, data
         acc.parent_id = new_parent_id
         acc.level = (account_by_id[new_parent_id].level + 1) if new_parent_id else 1
 
+        # Customer accounts must sort under their selected parent as well as
+        # point to it. Generate the next three-digit child suffix when a
+        # customer account is moved from a city/branch to a rep account.
+        if acc.is_customer_account and new_parent_id:
+            sibling_codes_result = await db.execute(
+                select(Account.code).where(
+                    Account.tenant_id == tenant_id,
+                    Account.parent_id == new_parent_id,
+                    Account.id != account_id,
+                )
+            )
+            numeric_codes = [
+                str(code) for code in sibling_codes_result.scalars().all()
+                if str(code).isdigit()
+            ]
+            if numeric_codes:
+                width = max(len(code) for code in numeric_codes)
+                acc.code = str(max(int(code) for code in numeric_codes) + 1).zfill(width)
+            else:
+                acc.code = f"{new_parent.code}001"
+
         # Preserve the subtree structure while recalculating each descendant's
         # level after the move.
         children_by_parent: dict[str, list[Account]] = {}

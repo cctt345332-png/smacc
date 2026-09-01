@@ -267,16 +267,29 @@ async def _validate_customer_ar_account(
     return account
 
 
-async def _next_customer_account_code(db: AsyncSession, tenant_id: str, parent: Account) -> str:
-    """ينشئ رمزاً فرعياً متسلسلاً تحت الحساب الرئيسي المختار."""
-    result = await db.execute(
-        select(Account.code).where(Account.tenant_id == tenant_id, Account.parent_id == parent.id)
+async def _next_customer_account_code(
+    db: AsyncSession, tenant_id: str, parent: Account, exclude_account_id: str | None = None,
+) -> str:
+    """يعيد الرقم التالي من تسلسل الحسابات الموجودة تحت الأب المختار.
+
+    أكواد العملاء في الشجرة الحالية تسلسل مسطح تحت فرع المدينة/المندوب، مثل
+    01131136 ثم 01131137؛ لذلك لا نركب الكود من parent.code.
+    """
+    query = select(Account.code).where(
+        Account.tenant_id == tenant_id,
+        Account.parent_id == parent.id,
     )
-    used = {str(code) for code in result.scalars().all()}
-    suffix = 1
-    while f"{parent.code}{suffix:03d}" in used:
-        suffix += 1
-    return f"{parent.code}{suffix:03d}"
+    if exclude_account_id:
+        query = query.where(Account.id != exclude_account_id)
+    result = await db.execute(query)
+    numeric_codes = [str(code) for code in result.scalars().all() if str(code).isdigit()]
+    if numeric_codes:
+        width = max(len(code) for code in numeric_codes)
+        return str(max(int(code) for code in numeric_codes) + 1).zfill(width)
+
+    # لا نغيّر قاعدة الفروع القديمة عند عدم وجود أبناء بعد؛ هذا fallback
+    # يحافظ على كود الأب كجذر تسلسلي إلى أن يتوفر أول كود فعلي.
+    return f"{parent.code}001"
 
 
 async def _create_customer_opening_journal(
@@ -445,7 +458,9 @@ async def update_customer(
             if customer_account and new_parent:
                 customer_account.parent_id = new_parent.id
                 customer_account.level = new_parent.level + 1
-                customer_account.code = await _next_customer_account_code(db, tenant_id, new_parent)
+                customer_account.code = await _next_customer_account_code(
+                    db, tenant_id, new_parent, exclude_account_id=customer_account.id,
+                )
                 customer_account.name_ar = c.name_ar
                 customer_account.name_en = c.name_en or c.name_ar
         updates["ar_account_id"] = data.ar_account_id
