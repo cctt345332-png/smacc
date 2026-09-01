@@ -446,7 +446,9 @@ async def update_customer(
     c = await get_customer(db, tenant_id, customer_id)
     opening_balance_requested = "opening_balance" in data.model_fields_set
     opening_balance = Decimal(str(data.opening_balance or 0)).quantize(Decimal("0.01")) if opening_balance_requested else None
-    updates = data.model_dump(exclude_none=True)
+    # نستخدم exclude_unset بدل exclude_none حتى تُحفظ None المرسلة صراحة لمسح
+    # الرقم الضريبي أو الموقع أو أي حقل اختياري من سجل العميل.
+    updates = data.model_dump(exclude_unset=True)
     # الرصيد الافتتاحي ليس حقلاً يُخزن على العميل؛ بل يُترجم إلى قيد محاسبي.
     updates.pop("opening_balance", None)
     # عند تغيير الحساب الرئيسي ننقل حساب العميل المحاسبي نفسه، لا سجل العميل فقط.
