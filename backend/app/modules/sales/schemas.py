@@ -69,6 +69,8 @@ class CustomerUpdate(BaseModel):
     opening_balance: Optional[Decimal] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
+    latitude: Optional[Decimal] = None
+    longitude: Optional[Decimal] = None
 
 
 class CustomerOut(BaseModel):
@@ -99,6 +101,8 @@ class CustomerOut(BaseModel):
     ar_account_id: Optional[str]
     is_active: bool
     notes: Optional[str]
+    latitude: Optional[Decimal]
+    longitude: Optional[Decimal]
     created_at: datetime
     model_config = {"from_attributes": True}
 
