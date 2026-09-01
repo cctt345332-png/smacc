@@ -539,6 +539,7 @@ async def create_journal_entry(db: AsyncSession, tenant_id: str, user_id: str, d
         description_ar=data.description_ar,
         description_en=data.description_en,
         reference=data.reference,
+        source=data.source,
         currency_id=data.currency_id,
         exchange_rate=data.exchange_rate,
         notes=data.notes,

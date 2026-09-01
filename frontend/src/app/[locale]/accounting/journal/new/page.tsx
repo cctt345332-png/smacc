@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getAccounts, getFiscalYears, getCostCenters, createJournalEntry } from "@/lib/accounting";
+import { getCustomers } from "@/lib/sales";
 import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 
 interface Line { account_id: string; cost_center_id: string; description: string; debit: string; credit: string; }
@@ -21,6 +22,11 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
   const [accounts, setAccounts] = useState<any[]>([]);
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);
   const [costCenters, setCostCenters] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [entryKind, setEntryKind] = useState<"manual" | "opening">("manual");
+  const [openingCustomerId, setOpeningCustomerId] = useState("");
+  const [openingAmount, setOpeningAmount] = useState("");
+  const [openingOffsetAccount, setOpeningOffsetAccount] = useState("");
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     entry_date: new Date().toISOString().split("T")[0],
@@ -33,10 +39,11 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
   const [lines, setLines] = useState<Line[]>([emptyLine(), emptyLine()]);
 
   useEffect(() => {
-    Promise.all([getAccounts(), getFiscalYears(), getCostCenters()]).then(([a, f, c]) => {
+    Promise.all([getAccounts(), getFiscalYears(), getCostCenters(), getCustomers()]).then(([a, f, c, customersRes]) => {
       setAccounts(a.data);
       setFiscalYears(f.data);
       setCostCenters(c.data);
+      setCustomers(Array.isArray(customersRes.data) ? customersRes.data : []);
       if (f.data.length > 0) setForm(prev => ({ ...prev, fiscal_year_id: f.data[0].id }));
     });
   }, []);
@@ -55,9 +62,17 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
   const handleSave = async (post = false) => {
     if (!form.description_ar) return alert(ar ? "أدخل البيان" : "Enter description");
     if (!form.fiscal_year_id) return alert(ar ? "اختر السنة المالية" : "Select fiscal year");
-    if (!isBalanced) return alert(ar ? "القيد غير متوازن" : "Entry is not balanced");
+    if (!isBalanced && entryKind === "manual") return alert(ar ? "القيد غير متوازن" : "Entry is not balanced");
 
-    const validLines = lines.filter(l => l.account_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
+    let validLines = lines.filter(l => l.account_id && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
+    if (entryKind === "opening") {
+      const customer = customers.find(c => c.id === openingCustomerId);
+      const amount = parseFloat(openingAmount) || 0;
+      if (!customer?.ar_account_id) return alert(ar ? "العميل غير مربوط بحساب ذمم مدينة" : "Customer has no receivable account");
+      if (!openingOffsetAccount) return alert(ar ? "اختر الحساب المقابل" : "Select the offset account");
+      if (amount <= 0) return alert(ar ? "أدخل مبلغًا أكبر من صفر" : "Enter an amount greater than zero");
+      validLines = [{ account_id: customer.ar_account_id, cost_center_id: "", description: ar ? `رصيد افتتاحي - ${customer.name_ar}` : `Opening balance - ${customer.name_en || customer.name_ar}`, debit: String(amount), credit: "" }, { account_id: openingOffsetAccount, cost_center_id: "", description: ar ? "الحساب المقابل للرصيد الافتتاحي" : "Opening balance offset", debit: "", credit: String(amount) }];
+    }
     if (validLines.length < 2) return alert(ar ? "أضف سطرين على الأقل" : "Add at least 2 lines");
 
     setSaving(true);
@@ -65,7 +80,8 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
       const { data } = await createJournalEntry({
         ...form,
         entry_date: new Date(form.entry_date).toISOString(),
-        lines: validLines.map((l, i) => ({
+          source: entryKind === "opening" ? "customer_opening_balance" : "manual",
+          lines: validLines.map((l, i) => ({
           account_id: l.account_id,
           cost_center_id: l.cost_center_id || null,
           description: l.description || null,
@@ -112,6 +128,20 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header"><span className="card-title">{ar ? "بيانات القيد" : "Entry Details"}</span></div>
         <div className="card-body">
+          <div className="form-group" style={{ marginBottom: 16, maxWidth: 320 }}>
+            <label className="form-label">{ar ? "نوع القيد" : "Entry type"}</label>
+            <select className="form-input form-select" value={entryKind} onChange={e => setEntryKind(e.target.value as "manual" | "opening")}>
+              <option value="manual">{ar ? "قيد يومية عادي" : "General journal entry"}</option>
+              <option value="opening">{ar ? "قيد رصيد افتتاحي للعميل" : "Customer opening balance"}</option>
+            </select>
+          </div>
+          {entryKind === "opening" && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, padding: 14, marginBottom: 16, border: "1px solid #E9DDF0", borderRadius: 12, background: "#FBF9FC" }}>
+              <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "العميل" : "Customer"}</label><select className="form-input form-select" value={openingCustomerId} onChange={e => { const id = e.target.value; setOpeningCustomerId(id); const customer = customers.find(c => c.id === id); if (customer) setForm(f => ({ ...f, description_ar: `رصيد افتتاحي - ${customer.name_ar}`, description_en: `Opening balance - ${customer.name_en || customer.name_ar}` })); }}><option value="">{ar ? "اختر العميل" : "Select customer"}</option>{customers.map(c => <option key={c.id} value={c.id}>{c.customer_number} — {c.name_ar}</option>)}</select></div>
+              <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "المبلغ" : "Amount"}</label><input className="form-input" type="number" min="0.01" step="0.01" value={openingAmount} onChange={e => setOpeningAmount(e.target.value)} placeholder="0.00" /></div>
+              <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "الحساب المقابل" : "Offset account"}</label><SearchableAccountSelect accounts={accounts} value={openingOffsetAccount} onChange={setOpeningOffsetAccount} locale={locale} allowGroups placeholder={ar ? "اختر الحساب المقابل" : "Select offset account"} /></div>
+            </div>
+          )}
           <div className="grid-3">
             <div className="form-group">
               <label className="form-label">{ar ? "تاريخ القيد" : "Entry Date"} <span className="required">*</span></label>
@@ -143,7 +173,7 @@ export default function NewJournalPage(props: { params: Promise<{ locale: string
       </div>
 
       {/* Lines */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16, display: entryKind === "opening" ? "none" : undefined }}>
         <div className="card-header">
           <span className="card-title">{ar ? "سطور القيد" : "Entry Lines"}</span>
           <button className="btn btn-secondary btn-sm" onClick={addLine}>+ {ar ? "إضافة سطر" : "Add Line"}</button>

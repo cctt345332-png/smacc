@@ -130,6 +130,7 @@ class JournalEntryCreate(BaseModel):
     currency_id: Optional[str] = None
     exchange_rate: Decimal = Decimal("1")
     notes: Optional[str] = None
+    source: Optional[str] = None
     lines: List[JournalLineCreate] = Field(min_length=2)
 
 
