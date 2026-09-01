@@ -146,13 +146,18 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
 
   const handleDelete = async (rep: any) => {
     const confirmed = window.confirm(ar
-      ? `سيتم حذف المندوب «${rep.full_name}» مع تعطيل حسابه ومستودعه والإبقاء على الفواتير والقيود. هل تريد المتابعة؟`
-      : `Delete ${rep.full_name}? The user and warehouse will be deactivated while historical invoices and journals are preserved.`
+      ? `تحذير خطير: سيتم حذف المندوب «${rep.full_name}» وعملائه وفواتيره ومخزونه وقيوده الافتتاحية نهائيًا. لا يمكن التراجع. هل تريد المتابعة؟`
+      : `WARNING: This permanently deletes ${rep.full_name}, their customers, invoices, inventory and opening journals. This cannot be undone. Continue?`
     );
     if (!confirmed) return;
+    const secondConfirm = window.confirm(ar
+      ? `تأكيد أخير: حذف «${rep.full_name}» وجميع توابعه نهائيًا؟`
+      : `Final confirmation: permanently delete ${rep.full_name} and all related data?`
+    );
+    if (!secondConfirm) return;
     try {
       await deleteRep(rep.id);
-      setSuccess(ar ? "تم حذف المندوب بأمان" : "Rep deleted safely");
+      setSuccess(ar ? "تم حذف المندوب وجميع توابعه نهائيًا" : "Rep and related data permanently deleted");
       await load();
     } catch (e: any) {
       setError(e?.response?.data?.detail || (ar ? "تعذر حذف المندوب" : "Could not delete rep"));

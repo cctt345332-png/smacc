@@ -8,7 +8,7 @@ from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, select, func
+from sqlalchemy import and_, select, func, delete
 from fastapi import HTTPException
 
 from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, RepLocation, SalesRep
@@ -478,22 +478,114 @@ async def get_rep_by_user(db: AsyncSession, user_id: str) -> SalesRep | None:
 # ─── تحديث مندوب ─────────────────────────────────────────────────────
 
 async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
-    """حذف آمن للمندوب: تعطيل الحساب والمستودع دون حذف الفواتير أو القيود التاريخية."""
+    """حذف فعلي لبيانات المندوب التجريبية مع حذف القيود التابعة وتعطيل مستخدمه."""
+    from app.models.reps import RepAttendance, RepGeoZone, RepGeoEvent, RepLocation, SupervisorRep
+    from app.models.sales import InvoiceLine, CreditNote, CreditNoteLine, RefundRequest, Quotation, QuotationLine
+    from app.models.sales_orders import SalesOrder, SalesOrderLine
+    from app.models.inventory import InventoryStock, SerialItem, BatchItem
+
     rep = (await db.execute(
         select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id)
     )).scalar_one_or_none()
     if not rep:
         raise HTTPException(404, "المندوب غير موجود")
-    rep.is_active = False
+
+    customer_rows = await db.execute(
+        select(Customer.id, Customer.ar_account_id).where(
+            Customer.tenant_id == tenant_id, Customer.rep_id == rep_id
+        )
+    )
+    customer_data = customer_rows.all()
+    customer_ids = [row[0] for row in customer_data]
+    account_ids = [row[1] for row in customer_data if row[1]]
+
+    invoice_ids = list((await db.execute(
+        select(Invoice.id).where(Invoice.tenant_id == tenant_id, Invoice.rep_id == rep_id)
+    )).scalars().all())
+    credit_note_ids = list((await db.execute(
+        select(CreditNote.id).where(
+            CreditNote.tenant_id == tenant_id,
+            CreditNote.customer_id.in_(customer_ids) if customer_ids else False,
+        )
+    )).scalars().all())
+
+    # حذف المستندات التابعة قبل حذف العملاء والفواتير احترامًا للـ FK.
+    quotation_ids = list((await db.execute(
+        select(Quotation.id).where(
+            Quotation.tenant_id == tenant_id,
+            Quotation.customer_id.in_(customer_ids) if customer_ids else False,
+        )
+    )).scalars().all())
+    order_ids = list((await db.execute(
+        select(SalesOrder.id).where(
+            SalesOrder.tenant_id == tenant_id,
+            SalesOrder.customer_id.in_(customer_ids) if customer_ids else False,
+        )
+    )).scalars().all())
+    if quotation_ids:
+        await db.execute(delete(QuotationLine).where(QuotationLine.quotation_id.in_(quotation_ids)))
+        await db.execute(delete(Quotation).where(Quotation.id.in_(quotation_ids)))
+    if order_ids:
+        await db.execute(delete(SalesOrderLine).where(SalesOrderLine.order_id.in_(order_ids)))
+        await db.execute(delete(SalesOrder).where(SalesOrder.id.in_(order_ids)))
+    if credit_note_ids:
+        await db.execute(delete(RefundRequest).where(RefundRequest.credit_note_id.in_(credit_note_ids)))
+        await db.execute(delete(CreditNoteLine).where(CreditNoteLine.credit_note_id.in_(credit_note_ids)))
+        await db.execute(delete(CreditNote).where(CreditNote.id.in_(credit_note_ids)))
+    if invoice_ids:
+        await db.execute(delete(RefundRequest).where(RefundRequest.original_invoice_id.in_(invoice_ids)))
+        await db.execute(delete(Payment).where(Payment.invoice_id.in_(invoice_ids)))
+        await db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id.in_(invoice_ids)))
+        await db.execute(delete(Invoice).where(Invoice.id.in_(invoice_ids)))
+    if customer_ids:
+        await db.execute(delete(Payment).where(Payment.customer_id.in_(customer_ids)))
+        await db.execute(delete(RefundRequest).where(RefundRequest.customer_id.in_(customer_ids)))
+
+    # حذف قيود الرصيد الافتتاحي المرتبطة بحسابات العملاء ثم سطورها.
+    journal_ids: list[str] = []
+    if account_ids:
+        journal_ids = list((await db.execute(
+            select(JournalEntryLine.entry_id).where(JournalEntryLine.account_id.in_(account_ids))
+        )).scalars().all())
+        if journal_ids:
+            await db.execute(delete(JournalEntryLine).where(JournalEntryLine.entry_id.in_(journal_ids)))
+            await db.execute(delete(JournalEntry).where(JournalEntry.id.in_(journal_ids)))
+        await db.execute(delete(Account).where(Account.id.in_(account_ids), Account.tenant_id == tenant_id))
+    if customer_ids:
+        await db.execute(delete(Customer).where(Customer.id.in_(customer_ids), Customer.tenant_id == tenant_id))
+
+    # حذف بيانات المستودع التابعة للمندوب.
+    if rep.warehouse_id:
+        wid = rep.warehouse_id
+        await db.execute(delete(StockMovement).where(
+            (StockMovement.warehouse_id == wid) | (StockMovement.to_warehouse_id == wid)
+        ))
+        await db.execute(delete(InventoryStock).where(InventoryStock.warehouse_id == wid))
+        await db.execute(delete(SerialItem).where(SerialItem.warehouse_id == wid))
+        await db.execute(delete(BatchItem).where(BatchItem.warehouse_id == wid))
+        await db.execute(delete(Warehouse).where(Warehouse.id == wid, Warehouse.tenant_id == tenant_id))
+
+    await db.execute(delete(SupervisorRep).where(SupervisorRep.rep_id == rep_id))
+    await db.execute(delete(RepAttendance).where(RepAttendance.rep_id == rep_id))
+    await db.execute(delete(RepGeoZone).where(RepGeoZone.rep_id == rep_id))
+    await db.execute(delete(RepGeoEvent).where(RepGeoEvent.rep_id == rep_id))
+    await db.execute(delete(RepLocation).where(RepLocation.rep_id == rep_id))
     user = await db.get(User, rep.user_id)
+    await db.delete(rep)
+    # تعطيل حساب الدخول بدل حذفه حتى لا تنكسر سجلات التدقيق العامة.
     if user:
         user.is_active = False
-    if rep.warehouse_id:
-        warehouse = await db.get(Warehouse, rep.warehouse_id)
-        if warehouse:
-            warehouse.is_active = False
     await db.commit()
-    return {"id": rep_id, "deleted": True, "message": "تم حذف المندوب بأمان مع الاحتفاظ بالسجلات التاريخية"}
+    return {
+        "id": rep_id,
+        "deleted": True,
+        "customers_deleted": len(customer_ids),
+        "invoices_deleted": len(invoice_ids),
+        "journals_deleted": len(journal_ids),
+        "quotations_deleted": len(quotation_ids),
+        "orders_deleted": len(order_ids),
+        "message": "تم حذف توابع المندوب والقيود التابعة وتعطيل حساب الدخول",
+    }
 
 
 async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) -> dict:
@@ -636,15 +728,8 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
     opening_balance = await _get_rep_opening_balance(db, tenant_id, rep.id)
     operational_outstanding = (total_sales or 0) - total_collected
 
-    # كمية المخزون
-    stock_r = await db.execute(
-        select(func.sum(InventoryStock.quantity))
-        .where(
-            InventoryStock.tenant_id == tenant_id,
-            InventoryStock.warehouse_id == rep.warehouse_id,
-        )
-    )
-    stock_qty = stock_r.scalar() or Decimal("0")
+    # إجمالي المخزون من المصدر الموحد، ويشمل الكميات والسريالات
+    stock_qty = await _get_rep_stock_quantity(db, tenant_id, rep.warehouse_id)
 
     return {
         "rep_id": rep.id,
