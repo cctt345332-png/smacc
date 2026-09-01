@@ -29,6 +29,11 @@ class AccountUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class BulkAccountUpdate(BaseModel):
+    account_ids: List[str] = Field(min_length=1)
+    parent_id: Optional[str] = None
+
+
 class AccountOut(BaseModel):
     id: str
     code: str

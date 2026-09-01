@@ -4,6 +4,8 @@ import api from "./api";
 export const getAccounts = () => api.get("/accounting/accounts");
 export const createAccount = (data: any) => api.post("/accounting/accounts", data);
 export const updateAccount = (id: string, data: any) => api.patch(`/accounting/accounts/${id}`, data);
+export const bulkReparentAccounts = (account_ids: string[], parent_id: string | null) =>
+  api.post("/accounting/accounts/bulk-reparent", { account_ids, parent_id });
 export const deleteAccount = (id: string) => api.delete(`/accounting/accounts/${id}`);
 
 // Fiscal Years

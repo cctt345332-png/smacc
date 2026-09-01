@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import {
-  getAccounts, createAccount, updateAccount, deleteAccount,
+  getAccounts, createAccount, updateAccount, deleteAccount, bulkReparentAccounts,
   getAccountingReadiness, initializeDefaultChart,
   applyDefaultPartyMappings,
   getOperationalAccountMappings, updateOperationalAccountMapping,
@@ -51,6 +51,9 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   const [filterType, setFilterType] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkParentId, setBulkParentId] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
@@ -98,6 +101,27 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } catch (e: any) {
       alert(e?.response?.data?.detail || "Error");
     } finally { setSaving(false); }
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds(ids => ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]);
+  };
+
+  const handleBulkReparent = async () => {
+    if (!selectedIds.length) return;
+    if (!bulkParentId) return alert(ar ? "اختر الحساب الأب الجديد" : "Choose the new parent account");
+    if (selectedIds.includes(bulkParentId)) return alert(ar ? "لا يمكن اختيار حساب محدد كأب لنفسه" : "A selected account cannot be its own parent");
+    if (!confirm(ar ? `سيتم نقل ${selectedIds.length} حساب إلى الحساب الأب المختار. هل تريد المتابعة؟` : `Move ${selectedIds.length} accounts under the selected parent?`)) return;
+    setBulkSaving(true);
+    try {
+      await bulkReparentAccounts(selectedIds, bulkParentId);
+      setSelectedIds([]);
+      setBulkParentId("");
+      await load();
+      alert(ar ? "تم نقل الحسابات بنجاح" : "Accounts moved successfully");
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر نقل الحسابات" : "Unable to move accounts"));
+    } finally { setBulkSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -291,6 +315,23 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
           <span style={{ fontSize: 13, color: "var(--text-secondary)", marginInlineStart: "auto" }}>
             {filtered.length} {ar ? "حساب" : "accounts"}
           </span>
+          {selectedIds.length > 0 && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%", paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+              <strong style={{ fontSize: 13 }}>{selectedIds.length} {ar ? "محدد" : "selected"}</strong>
+              <select className="form-input form-select" style={{ minWidth: 260 }} value={bulkParentId} onChange={e => setBulkParentId(e.target.value)}>
+                <option value="">{ar ? "اختر الحساب الأب الجديد" : "Choose new parent account"}</option>
+                {accounts
+                  .filter(a => !selectedIds.includes(a.id) && !selectedIds.some(id => isDescendantOf(a.id, id)))
+                  .map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en}</option>)}
+              </select>
+              <button className="btn btn-primary btn-sm" onClick={handleBulkReparent} disabled={bulkSaving}>
+                {bulkSaving ? (ar ? "جاري النقل..." : "Moving...") : (ar ? "نقل المحدد" : "Move selected")}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedIds([]); setBulkParentId(""); }}>
+                {ar ? "إلغاء التحديد" : "Clear selection"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -329,6 +370,11 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
             <table>
               <thead>
                 <tr>
+                  <th style={{ width: 42 }}>
+                    <input type="checkbox" aria-label={ar ? "تحديد الحسابات الظاهرة" : "Select visible accounts"}
+                      checked={filtered.length > 0 && filtered.every(a => selectedIds.includes(a.id))}
+                      onChange={e => setSelectedIds(e.target.checked ? Array.from(new Set([...selectedIds, ...filtered.map(a => a.id)])) : selectedIds.filter(id => !filtered.some(a => a.id === id)))} />
+                  </th>
                   <th>{ar ? "الكود" : "Code"}</th>
                   <th>{ar ? "اسم الحساب" : "Account Name"}</th>
                   <th>{ar ? "النوع" : "Type"}</th>
@@ -344,6 +390,9 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   const t = typeInfo(acc.account_type);
                   return (
                     <tr key={acc.id}>
+                      <td>
+                        <input type="checkbox" aria-label={`${ar ? "تحديد " : "Select "}${ar ? acc.name_ar : acc.name_en}`} checked={selectedIds.includes(acc.id)} onChange={() => toggleSelected(acc.id)} />
+                      </td>
                       <td><code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>{acc.code}</code></td>
                       <td style={{ paddingInlineStart: `${(acc.level - 1) * 20 + 16}px` }}>
                         {acc.level > 1 && <span style={{ color: "var(--text-muted)", marginInlineEnd: 6 }}>└</span>}

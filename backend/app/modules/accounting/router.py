@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.tenant import get_current_user, get_tenant_id, require_role
 from app.modules.accounting import service
 from app.modules.accounting.schemas import (
-    AccountCreate, AccountUpdate, AccountOut,
+    AccountCreate, AccountUpdate, BulkAccountUpdate, AccountOut,
     FiscalYearCreate, FiscalYearOut,
     CostCenterCreate, CostCenterOut,
     CurrencyCreate, CurrencyOut,
@@ -37,6 +37,11 @@ async def create_account(data: AccountCreate, user=Depends(require_role(["manage
 @router.patch("/accounts/{account_id}", response_model=AccountOut)
 async def update_account(account_id: str, data: AccountUpdate, user=Depends(require_role(["manager","accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.update_account(db, user["tenant_id"], account_id, data)
+
+
+@router.post("/accounts/bulk-reparent")
+async def bulk_reparent_accounts(data: BulkAccountUpdate, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.bulk_reparent_accounts(db, user["tenant_id"], data.account_ids, data.parent_id)
 
 
 @router.delete("/accounts/{account_id}", status_code=204)

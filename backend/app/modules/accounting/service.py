@@ -268,6 +268,97 @@ async def update_account(db: AsyncSession, tenant_id: str, account_id: str, data
     return acc
 
 
+async def bulk_reparent_accounts(
+    db: AsyncSession, tenant_id: str, account_ids: list[str], new_parent_id: str | None,
+):
+    """ينقل عدة حسابات دفعة واحدة تحت أب واحد مع الحفاظ على سلامة الشجرة."""
+    unique_ids = list(dict.fromkeys(account_ids))
+    if len(unique_ids) != len(account_ids):
+        raise HTTPException(400, "Duplicate account ids are not allowed")
+
+    result = await db.execute(select(Account).where(Account.tenant_id == tenant_id))
+    accounts = result.scalars().all()
+    account_by_id = {account.id: account for account in accounts}
+    selected = [account_by_id.get(account_id) for account_id in unique_ids]
+    if any(account is None for account in selected):
+        raise HTTPException(404, "One or more accounts were not found")
+    selected_accounts = [account for account in selected if account is not None]
+    selected_set = set(unique_ids)
+
+    new_parent = account_by_id.get(new_parent_id) if new_parent_id else None
+    if new_parent_id and not new_parent:
+        raise HTTPException(404, "Parent account not found")
+    if new_parent_id in selected_set:
+        raise HTTPException(400, "An account cannot be its own parent")
+
+    # لا ننقل أبًا وفرعًا له في نفس العملية لأن النتيجة ستكون ملتبسة.
+    for account in selected_accounts:
+        current_id = account.parent_id
+        visited: set[str] = set()
+        while current_id:
+            if current_id in selected_set:
+                raise HTTPException(400, "Select either a parent or its descendants, not both")
+            if current_id in visited:
+                raise HTTPException(400, "Account hierarchy contains a cycle")
+            visited.add(current_id)
+            current = account_by_id.get(current_id)
+            current_id = current.parent_id if current else None
+
+    # تحقق من أن الأب الجديد ليس داخل شجرة أي حساب محدد.
+    if new_parent:
+        current_id = new_parent.id
+        visited: set[str] = set()
+        while current_id:
+            if current_id in selected_set:
+                raise HTTPException(400, "Cannot move accounts below one of their descendants")
+            if current_id in visited:
+                raise HTTPException(400, "Account hierarchy contains a cycle")
+            visited.add(current_id)
+            current = account_by_id.get(current_id)
+            current_id = current.parent_id if current else None
+
+    children_by_parent: dict[str, list[Account]] = {}
+    for account in accounts:
+        if account.parent_id:
+            children_by_parent.setdefault(account.parent_id, []).append(account)
+
+    used_codes_by_parent: dict[str, set[str]] = {}
+    for account in accounts:
+        if account.parent_id:
+            used_codes_by_parent.setdefault(account.parent_id, set()).add(str(account.code))
+
+    for account in selected_accounts:
+        if account.is_customer_account and new_parent:
+            used_codes = used_codes_by_parent.setdefault(new_parent.id, set())
+            numeric_codes = [code for code in used_codes if code.isdigit() and code != account.code]
+            if numeric_codes:
+                width = max(len(code) for code in numeric_codes)
+                next_code = str(max(int(code) for code in numeric_codes) + 1).zfill(width)
+            else:
+                next_code = f"{new_parent.code}001"
+            while next_code in used_codes:
+                next_code = str(int(next_code) + 1).zfill(len(next_code))
+            used_codes.discard(str(account.code))
+            used_codes.add(next_code)
+            account.code = next_code
+        elif account.parent_id:
+            used_codes_by_parent.setdefault(account.parent_id, set()).discard(str(account.code))
+        account.parent_id = new_parent.id if new_parent else None
+        account.level = new_parent.level + 1 if new_parent else 1
+
+    # تحديث مستويات فروع الحسابات المنقولة دون تغيير بنيتها الداخلية.
+    pending = [(child, account.level + 1) for account in selected_accounts for child in children_by_parent.get(account.id, [])]
+    while pending:
+        child, level = pending.pop(0)
+        child.level = level
+        pending.extend((grandchild, level + 1) for grandchild in children_by_parent.get(child.id, []))
+
+    await db.commit()
+    for account in selected_accounts:
+        await db.refresh(account)
+    return {"updated": len(selected_accounts), "account_ids": unique_ids}
+
+
 async def delete_account(db: AsyncSession, tenant_id: str, account_id: str):
     acc = await db.get(Account, account_id)
     if not acc or acc.tenant_id != tenant_id:
