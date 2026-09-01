@@ -323,7 +323,9 @@ async def import_rep_customers_from_tree(
     linked = 0
     opening_repaired = 0
     opening_already_journaled = 0
+    opening_without_source_balance = 0
     skipped = 0
+    details = []
     for account in customer_accounts:
         normalized_name = _normalize_rep_customer_name(account.name_ar)
         existing_customer = existing_by_account.get(account.id)
@@ -335,6 +337,11 @@ async def import_rep_customers_from_tree(
                 linked += 1
             else:
                 skipped += 1
+            details.append({
+                "account_id": account.id, "account_code": account.code,
+                "name_ar": account.name_ar, "status": "already_linked",
+                "customer_id": existing_customer.id,
+            })
             existing_rep_names.add(normalized_name)
             continue
         legacy_matches = unlinked_by_name.get(normalized_name, [])
@@ -346,6 +353,11 @@ async def import_rep_customers_from_tree(
             existing_rep_names.add(normalized_name)
             unlinked_by_name.pop(normalized_name, None)
             linked += 1
+            details.append({
+                "account_id": account.id, "account_code": account.code,
+                "name_ar": account.name_ar, "status": "legacy_linked",
+                "customer_id": legacy_customer.id,
+            })
             continue
         if len(legacy_matches) > 1 or normalized_name in existing_rep_names:
             skipped += 1
@@ -378,6 +390,11 @@ async def import_rep_customers_from_tree(
             "account_code": account.code,
             "name_ar": account.name_ar,
         })
+        details.append({
+            "account_id": account.id, "account_code": account.code,
+            "name_ar": account.name_ar, "status": "created",
+            "customer_id": customer.id,
+        })
 
     # ترحيل الرصيد الموجود في account.opening_balance إلى قيد فعلي
     # بعد التأكد من وجود سجل عميل مرتبط. العملية idempotent ولا تمس
@@ -385,7 +402,11 @@ async def import_rep_customers_from_tree(
     for account in customer_accounts:
         customer = existing_by_account.get(account.id)
         amount = Decimal(str(account.opening_balance or 0)).quantize(Decimal("0.01"))
-        if not customer or amount == 0:
+        if not customer:
+            details.append({
+                "account_id": account.id, "account_code": account.code,
+                "name_ar": account.name_ar, "status": "no_customer_record",
+            })
             continue
         existing_entry = (await db.execute(
             select(JournalEntry.id)
@@ -398,14 +419,33 @@ async def import_rep_customers_from_tree(
             ).limit(1)
         )).scalar_one_or_none()
         if existing_entry:
-            account.opening_balance = Decimal("0")
+            if amount != 0:
+                account.opening_balance = Decimal("0")
             opening_already_journaled += 1
+            details.append({
+                "account_id": account.id, "account_code": account.code,
+                "name_ar": account.name_ar, "status": "opening_journal_exists",
+                "customer_id": customer.id,
+            })
+            continue
+        if amount == 0:
+            opening_without_source_balance += 1
+            details.append({
+                "account_id": account.id, "account_code": account.code,
+                "name_ar": account.name_ar, "status": "no_opening_balance_source",
+                "customer_id": customer.id,
+            })
             continue
         await _create_customer_opening_journal(
             db, tenant_id, actor_user_id, customer, account, amount,
         )
         account.opening_balance = Decimal("0")
         opening_repaired += 1
+        details.append({
+            "account_id": account.id, "account_code": account.code,
+            "name_ar": account.name_ar, "status": "opening_journal_created",
+            "customer_id": customer.id,
+        })
 
     await db.commit()
     return {
@@ -418,8 +458,10 @@ async def import_rep_customers_from_tree(
         "linked": linked,
         "opening_repaired": opening_repaired,
         "opening_already_journaled": opening_already_journaled,
+        "opening_without_source_balance": opening_without_source_balance,
         "skipped": skipped,
         "items": created,
+        "details": details,
     }
 
 
