@@ -74,7 +74,7 @@ export default function SearchableAccountSelect({
     <div ref={containerRef} style={{ position: "relative", width: "100%" }}>
       <input
         className={className}
-        style={style}
+        style={{ ...style, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
         value={text}
         placeholder={placeholder || (ar ? "اكتب كود أو اسم الحساب..." : "Type account code or name...")}
         autoComplete="off"
@@ -105,10 +105,10 @@ export default function SearchableAccountSelect({
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose(account)}
-              style={{ display: "block", width: "100%", border: 0, background: account.id === value ? "#F3E8FF" : "#fff", padding: "9px 12px", textAlign: ar ? "right" : "left", cursor: "pointer", fontSize: 12 }}
+              style={{ display: "block", width: "100%", border: 0, background: account.id === value ? "#F3E8FF" : "#fff", padding: "9px 12px", textAlign: ar ? "right" : "left", cursor: "pointer", fontSize: 12, whiteSpace: "normal", overflowWrap: "anywhere", wordBreak: "break-word", lineHeight: 1.6 }}
             >
               <strong>{account.code || "—"}</strong>
-              <span style={{ marginInlineStart: 8 }}>{ar ? account.name_ar || account.name_en : account.name_en || account.name_ar}</span>
+              <span style={{ marginInlineStart: 8, overflowWrap: "anywhere", wordBreak: "break-word" }}>{ar ? account.name_ar || account.name_en : account.name_en || account.name_ar}</span>
               {allowGroups && <span style={{ marginInlineStart: 8, color: "var(--text-secondary)" }}>{account.allow_direct_posting === false ? (ar ? "(رئيسي)" : "(Group)") : (ar ? "(نهائي)" : "(Posting)")}</span>}
             </button>
           ))}

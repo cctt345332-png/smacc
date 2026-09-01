@@ -144,7 +144,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
             <StructuredReportPrintButton locale={locale} title={ar ? "كشف حساب العملاء" : "Customer Account Statement"} subtitle={ar ? `الحساب: ${accountId ? (accounts.find(a => a.id === accountId)?.name_ar || accountId) : "كل الحسابات"}` : `Account: ${accountId ? (accounts.find(a => a.id === accountId)?.name_en || accounts.find(a => a.id === accountId)?.name_ar || accountId) : "All accounts"}`} period={`${fromDate} — ${toDate}`} reportCode={`CUS-ST-ALL-${fromDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "عدد العملاء" : "Customers", value: String(data.customerCount), tone: "neutral" }, { label: ar ? "الرصيد الافتتاحي" : "Opening balance", value: `${fmt(data.summary.opening_balance)} SAR`, tone: "neutral" }, { label: ar ? "إجمالي الفواتير" : "Total invoiced", value: `${fmt(data.summary.total_invoiced)} SAR`, tone: "blue" }, { label: ar ? "الرصيد المستحق" : "Closing balance", value: `${fmt(data.summary.closing_balance)} SAR`, tone: data.summary.closing_balance > 0 ? "red" : "green" }]} tables={[{ title: ar ? "أرصدة العملاء" : "Customer balances", headers: [ar ? "العميل" : "Customer", ar ? "المدينة" : "City", ar ? "الرصيد الافتتاحي" : "Opening", ar ? "الفواتير" : "Invoiced", ar ? "المدفوع" : "Paid", ar ? "المستحق" : "Outstanding"], rows: data.rows.map((row: any) => [row.customer.name_ar || row.customer.name_en || row.customer.customer_number, row.customer.address_city || "—", fmt(row.summary.opening_balance), fmt(row.summary.total_invoiced), fmt(row.summary.total_paid), fmt(row.summary.closing_balance)]), totals: [ar ? "الإجمالي" : "Total", "", fmt(data.summary.opening_balance), fmt(data.summary.total_invoiced), fmt(data.summary.total_paid), fmt(data.summary.closing_balance)] }]} />
           </div>
           <div className="card-body">
-            <div className="grid-3" style={{ marginBottom: 16 }}>
+            <div className="grid-4" style={{ marginBottom: 16, alignItems: "stretch" }}>
               <div><strong>{ar ? "عدد العملاء" : "Customers"}</strong><div>{data.customerCount}</div></div>
               <div><strong>{ar ? "الرصيد الافتتاحي" : "Opening balance"}</strong><div>{fmt(data.summary.opening_balance)} SAR</div></div>
               <div><strong>{ar ? "إجمالي الفواتير" : "Total invoiced"}</strong><div>{fmt(data.summary.total_invoiced)} SAR</div></div>
@@ -175,7 +175,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
           </div>
 
           {/* Summary */}
-          <div className="grid-3" style={{ marginBottom: 20 }}>
+          <div className="grid-4" style={{ marginBottom: 20, alignItems: "stretch" }}>
             {[
               { label: ar ? "الرصيد الافتتاحي" : "Opening Balance", value: data.summary.opening_balance, color: "#64748B" },
               { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: data.summary.total_invoiced, color: "#5A187E" },
