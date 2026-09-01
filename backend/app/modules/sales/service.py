@@ -1876,13 +1876,53 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
         select(func.count(Customer.id)).where(Customer.tenant_id == tenant_id)
     )
 
-    outstanding_r = await db.execute(
-        select(func.coalesce(func.sum(Invoice.total - Invoice.paid_amount), 0)).where(
+    # ذمم العملاء الفعلية = أرصدة افتتاحية العملاء + الفواتير المؤكدة - كل سندات القبض.
+    # لا نعتمد على Invoice.paid_amount وحده حتى تدخل السندات المباشرة على رصيد العميل.
+    from app.models.accounting import JournalEntryStatus
+    customer_accounts_r = await db.execute(
+        select(Customer.ar_account_id, Account.opening_balance)
+        .join(Account, Account.id == Customer.ar_account_id)
+        .where(
+            Customer.tenant_id == tenant_id,
+            Customer.ar_account_id.is_not(None),
+        )
+    )
+    customer_account_rows = customer_accounts_r.all()
+    customer_account_ids = [account_id for account_id, _ in customer_account_rows]
+    account_opening_total = sum(
+        (opening_balance or Decimal("0")) for _, opening_balance in customer_account_rows
+    )
+    opening_journal_total = Decimal("0")
+    if customer_account_ids:
+        opening_journal_r = await db.execute(
+            select(func.coalesce(func.sum(JournalEntryLine.debit - JournalEntryLine.credit), 0))
+            .join(JournalEntry, JournalEntry.id == JournalEntryLine.entry_id)
+            .where(
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.status == JournalEntryStatus.POSTED,
+                JournalEntry.source == "customer_opening_balance",
+                JournalEntryLine.account_id.in_(customer_account_ids),
+            )
+        )
+        opening_journal_total = Decimal(str(opening_journal_r.scalar() or 0))
+
+    payments_r = await db.execute(
+        select(func.coalesce(func.sum(Payment.amount), 0)).where(
+            Payment.tenant_id == tenant_id,
+        )
+    )
+    total_customer_payments = Decimal(str(payments_r.scalar() or 0))
+    opening_total = account_opening_total + opening_journal_total
+    confirmed_customer_invoices_r = await db.execute(
+        select(Invoice.total).where(
             Invoice.tenant_id == tenant_id,
             Invoice.status.in_(confirmed_statuses),
         )
     )
-    outstanding_total = Decimal(str(outstanding_r.scalar() or 0))
+    confirmed_invoice_total = sum(
+        (total or Decimal("0")) for (total,) in confirmed_customer_invoices_r.all()
+    )
+    outstanding_total = confirmed_invoice_total - total_customer_payments + opening_total
 
     margin = float(estimated_gross_profit / sales_before_vat * 100) if sales_before_vat else 0.0
     return {
@@ -1895,6 +1935,9 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
         "gross_margin_pct": round(margin, 1),
         "new_customers": int(new_customers_r.scalar() or 0),
         "total_customers": int(total_customers_r.scalar() or 0),
+        "opening_balance": float(opening_total),
+        "total_collected": float(total_customer_payments),
+        "operational_outstanding": float(confirmed_invoice_total - total_customer_payments),
         "outstanding_total": float(outstanding_total),
     }
 
