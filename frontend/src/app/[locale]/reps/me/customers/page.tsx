@@ -3,7 +3,7 @@ import { getMapboxTileUrl } from "@/lib/mapConfig";
 import { useEffect, useRef, useState, use } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getCustomers, createCustomer, updateCustomer, deleteCustomer } from "@/lib/sales";
+import { getCustomers, createCustomer, updateCustomer } from "@/lib/sales";
 
 const emptyForm = {
   customer_type: "individual",
@@ -189,28 +189,28 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
     setForm({ customer_type: customer.customer_type || "individual", name_ar: customer.name_ar || "", name_en: customer.name_en || "", phone: customer.phone || "", email: customer.email || "", address_city: customer.address_city || "", vat_number: customer.vat_number || "", cr_number: customer.cr_number || "", national_id: customer.national_id || "", payment_terms_days: String(customer.payment_terms_days ?? 30), credit_limit: String(customer.credit_limit ?? 0), notes: customer.notes || "", latitude: customer.latitude ? String(customer.latitude) : "", longitude: customer.longitude ? String(customer.longitude) : "" });
     setError(""); setShowModal(true);
   };
-  const handleDelete = async (customer: any) => {
-    if (!window.confirm(ar ? `حذف العميل «${customer.name_ar}»؟` : `Delete ${customer.name_ar}?`)) return;
-    try { await deleteCustomer(customer.id); load(); }
-    catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف العميل" : "Could not delete customer")); }
-  };
 
   const handleSave = async () => {
     if (!form.name_ar.trim()) { setError(ar ? "الاسم بالعربي مطلوب" : "Arabic name is required"); return; }
     setSaving(true); setError("");
     try {
-      const payload = {
-        ...form,
-        payment_terms_days: parseInt(form.payment_terms_days) || 30,
-        credit_limit: parseFloat(form.credit_limit) || 0,
-        vat_number: form.vat_number || null,
-        cr_number: form.cr_number || null,
-        national_id: form.national_id || null,
-        name_en: form.name_en || null,
-        notes: form.notes || null,
-        latitude: form.latitude ? parseFloat(form.latitude) : null,
-        longitude: form.longitude ? parseFloat(form.longitude) : null,
-      } as any;
+      const payload = editingCustomer
+        ? {
+            latitude: form.latitude ? parseFloat(form.latitude) : null,
+            longitude: form.longitude ? parseFloat(form.longitude) : null,
+          }
+        : {
+            ...form,
+            payment_terms_days: parseInt(form.payment_terms_days) || 30,
+            credit_limit: parseFloat(form.credit_limit) || 0,
+            vat_number: form.vat_number || null,
+            cr_number: form.cr_number || null,
+            national_id: form.national_id || null,
+            name_en: form.name_en || null,
+            notes: form.notes || null,
+            latitude: form.latitude ? parseFloat(form.latitude) : null,
+            longitude: form.longitude ? parseFloat(form.longitude) : null,
+          } as any;
       if (editingCustomer) await updateCustomer(editingCustomer.id, payload);
       else await createCustomer(payload);
       setShowModal(false);
@@ -279,8 +279,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                   <div className="rep-customer-mobile-meta"><span>{ar ? "الجوال" : "Phone"}: <b>{c.phone || "—"}</b></span><span>{ar ? "المدينة" : "City"}: <b>{c.address_city || "—"}</b></span></div>
                   <div className="rep-customer-mobile-actions">
                     <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`}>{ar ? "فاتورة" : "Invoice"}</Link>
-                    <button onClick={() => openEdit(c)}>{ar ? "تعديل" : "Edit"}</button>
-                    <button className="danger" onClick={() => handleDelete(c)}>{ar ? "حذف" : "Delete"}</button>
+                    <button onClick={() => openEdit(c)}>{ar ? "تعديل الموقع" : "Edit Location"}</button>
                   </div>
                 </article>
               ))}
@@ -314,8 +313,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                     <td style={{ padding: "12px 16px" }}>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                         <Link href={`/${locale}/reps/me/invoices/new?customer=${c.id}`} style={{ fontSize: 12, color: "#3E0865", fontWeight: 700, textDecoration: "none", padding: "4px 9px", border: "1px solid #CDBED6", background: "#F4EFF7" }}>{ar ? "فاتورة" : "Invoice"}</Link>
-                        <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#3E0865", fontWeight: 700, padding: "4px 9px", border: "1px solid #CDBED6", background: "#FAF8FB", cursor: "pointer" }}>{ar ? "تعديل" : "Edit"}</button>
-                        <button onClick={() => handleDelete(c)} style={{ fontSize: 12, color: "#B42318", fontWeight: 700, padding: "4px 9px", border: "1px solid #FECACA", background: "#FEF2F2", cursor: "pointer" }}>{ar ? "حذف" : "Delete"}</button>
+                        <button onClick={() => openEdit(c)} style={{ fontSize: 12, color: "#3E0865", fontWeight: 700, padding: "4px 9px", border: "1px solid #CDBED6", background: "#FAF8FB", cursor: "pointer" }}>{ar ? "تعديل الموقع" : "Edit Location"}</button>
                       </div>
                     </td>
                   </tr>
@@ -335,7 +333,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             <div style={{ width: 40, height: 4, background: "var(--border)", borderRadius: 2, margin: "0 auto 20px" }} />
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>{editingCustomer ? (ar ? "تعديل العميل" : "Edit Customer") : (ar ? "عميل جديد" : "New Customer")}</h2>
+              <h2 style={{ fontSize: 17, fontWeight: 800, margin: 0 }}>{editingCustomer ? (ar ? "تحديث موقع العميل" : "Update Customer Location") : (ar ? "عميل جديد" : "New Customer")}</h2>
               <button onClick={() => setShowModal(false)}
                 style={{ width: 32, height: 32, borderRadius: 8, border: "1px solid var(--border)", background: "transparent", cursor: "pointer", fontSize: 18, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
             </div>
@@ -349,7 +347,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
               <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 6 }}>{ar ? "نوع العميل" : "Customer Type"}</label>
               <div style={{ display: "flex", gap: 8 }}>
                 {[{ v: "individual", ar: "فرد", en: "Individual" }, { v: "company", ar: "شركة", en: "Company" }].map(t => (
-                  <button key={t.v} type="button" onClick={() => upd("customer_type", t.v)}
+                  <button key={t.v} type="button" disabled={!!editingCustomer} onClick={() => upd("customer_type", t.v)}
                     style={{ flex: 1, padding: "8px", borderRadius: 8, border: "2px solid", borderColor: form.customer_type === t.v ? "#3E0865" : "var(--border)", background: form.customer_type === t.v ? "#F4EFF7" : "var(--surface)", color: form.customer_type === t.v ? "#3E0865" : "var(--text-primary)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     {ar ? t.ar : t.en}
                   </button>
@@ -361,11 +359,11 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "الاسم بالعربي *" : "Arabic Name *"}</label>
-                <input className="form-input" value={form.name_ar} onChange={e => upd("name_ar", e.target.value)} placeholder={ar ? "الاسم..." : "Name..."} />
+                <input className="form-input" disabled={!!editingCustomer} value={form.name_ar} onChange={e => upd("name_ar", e.target.value)} placeholder={ar ? "الاسم..." : "Name..."} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "الاسم بالإنجليزي" : "English Name"}</label>
-                <input className="form-input" value={form.name_en} onChange={e => upd("name_en", e.target.value)} placeholder="Name..." dir="ltr" />
+                <input className="form-input" disabled={!!editingCustomer} value={form.name_en} onChange={e => upd("name_en", e.target.value)} placeholder="Name..." dir="ltr" />
               </div>
             </div>
 
@@ -373,11 +371,11 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "الجوال" : "Phone"}</label>
-                <input className="form-input" value={form.phone} onChange={e => upd("phone", e.target.value)} placeholder="05xxxxxxxx" dir="ltr" />
+                <input className="form-input" disabled={!!editingCustomer} value={form.phone} onChange={e => upd("phone", e.target.value)} placeholder="05xxxxxxxx" dir="ltr" />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "المدينة" : "City"}</label>
-                <input className="form-input" value={form.address_city} onChange={e => upd("address_city", e.target.value)} placeholder={ar ? "الرياض" : "Riyadh"} />
+                <input className="form-input" disabled={!!editingCustomer} value={form.address_city} onChange={e => upd("address_city", e.target.value)} placeholder={ar ? "الرياض" : "Riyadh"} />
               </div>
             </div>
 
@@ -387,13 +385,13 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>
                   {form.customer_type === "company" ? (ar ? "الرقم الضريبي" : "VAT Number") : (ar ? "رقم الهوية" : "ID Number")}
                 </label>
-                <input className="form-input" dir="ltr"
+                <input className="form-input" disabled={!!editingCustomer} dir="ltr"
                   value={form.customer_type === "company" ? form.vat_number : form.national_id}
                   onChange={e => upd(form.customer_type === "company" ? "vat_number" : "national_id", e.target.value)} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "مدة السداد (يوم)" : "Payment Terms (days)"}</label>
-                <select className="form-input form-select" value={form.payment_terms_days} onChange={e => upd("payment_terms_days", e.target.value)}>
+                <select className="form-input form-select" disabled={!!editingCustomer} value={form.payment_terms_days} onChange={e => upd("payment_terms_days", e.target.value)}>
                   {[0, 15, 30, 45, 60, 90].map(d => <option key={d} value={d}>{d === 0 ? (ar ? "نقدي فوري" : "Cash") : `${d} ${ar ? "يوم" : "days"}`}</option>)}
                 </select>
               </div>
@@ -402,7 +400,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
             {/* ملاحظات */}
             <div style={{ marginBottom: 20 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: 4 }}>{ar ? "ملاحظات" : "Notes"}</label>
-              <textarea className="form-input" rows={2} value={form.notes} onChange={e => upd("notes", e.target.value)} placeholder={ar ? "ملاحظات اختيارية..." : "Optional..."} />
+              <textarea className="form-input" disabled={!!editingCustomer} rows={2} value={form.notes} onChange={e => upd("notes", e.target.value)} placeholder={ar ? "ملاحظات اختيارية..." : "Optional..."} />
             </div>
 
             {/* موقع العميل */}
@@ -452,7 +450,7 @@ export default function RepCustomersPage(props: { params: Promise<{ locale: stri
               </button>
               <button onClick={handleSave} disabled={saving}
                 style={{ flex: 2, padding: "12px", borderRadius: 10, border: "none", background: "#3E0865", color: "white", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editingCustomer ? (ar ? "حفظ التعديل" : "Save Changes") : (ar ? "حفظ العميل" : "Save Customer"))}
+                {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editingCustomer ? (ar ? "حفظ الموقع" : "Save Location") : (ar ? "حفظ العميل" : "Save Customer"))}
               </button>
             </div>
           </div>

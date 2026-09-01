@@ -227,7 +227,7 @@ export default function RepDashboard(props: { params: Promise<{ locale: string }
         <StatCard
           label={ar ? "رصيد المخزون" : "Stock Items"}
           value={Number(summary?.stock_qty || 0).toLocaleString("en-US")}
-          color="#D97706"
+          color="#15803D"
           sub={ar ? "قطعة" : "units"}
         />
       </div>

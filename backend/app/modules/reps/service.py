@@ -477,6 +477,25 @@ async def get_rep_by_user(db: AsyncSession, user_id: str) -> SalesRep | None:
 
 # ─── تحديث مندوب ─────────────────────────────────────────────────────
 
+async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
+    """حذف آمن للمندوب: تعطيل الحساب والمستودع دون حذف الفواتير أو القيود التاريخية."""
+    rep = (await db.execute(
+        select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id)
+    )).scalar_one_or_none()
+    if not rep:
+        raise HTTPException(404, "المندوب غير موجود")
+    rep.is_active = False
+    user = await db.get(User, rep.user_id)
+    if user:
+        user.is_active = False
+    if rep.warehouse_id:
+        warehouse = await db.get(Warehouse, rep.warehouse_id)
+        if warehouse:
+            warehouse.is_active = False
+    await db.commit()
+    return {"id": rep_id, "deleted": True, "message": "تم حذف المندوب بأمان مع الاحتفاظ بالسجلات التاريخية"}
+
+
 async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) -> dict:
     r = await db.execute(
         select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id)
@@ -528,6 +547,15 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
 
 
 # ─── مخزون المندوب ────────────────────────────────────────────────────
+
+async def _get_rep_stock_quantity(db: AsyncSession, tenant_id: str, warehouse_id: str | None) -> Decimal:
+    """إجمالي الكمية الفعلية، بما فيها السريالات، من نفس مصدر قائمة المخزون."""
+    if not warehouse_id:
+        return Decimal("0")
+    from app.modules.inventory.service import get_stock_by_warehouse
+    rows = await get_stock_by_warehouse(db, tenant_id, warehouse_id)
+    return sum((Decimal(str(row.get("quantity", 0))) for row in rows), Decimal("0"))
+
 
 async def get_rep_stock(db: AsyncSession, tenant_id: str, rep_id: str) -> list:
     """جلب مخزون المندوب من مستودعه الخاص"""
@@ -782,16 +810,9 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
     total_collected = pay_r.scalar() or Decimal("0")
     opening_balance = await _get_rep_opening_balance(db, tenant_id, rep_id)
     operational_outstanding = (total_sales or 0) - total_collected
-    # كمية المخزون الحالية
+    # إجمالي المخزون من مصدر المخزون الموحد، ويشمل السريالات
+    stock_qty = await _get_rep_stock_quantity(db, tenant_id, rep.warehouse_id)
 
-    stock_r = await db.execute(
-        select(func.sum(InventoryStock.quantity))
-        .where(
-            InventoryStock.tenant_id == tenant_id,
-            InventoryStock.warehouse_id == rep.warehouse_id,
-        )
-    )
-    stock_qty = stock_r.scalar() or Decimal("0")
 
     return {
         "rep_id": rep_id,

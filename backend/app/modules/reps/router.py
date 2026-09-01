@@ -331,6 +331,16 @@ async def get_rep(
     return await service.get_rep(db, user["tenant_id"], rep_id)
 
 
+@router.delete("/{rep_id}")
+async def delete_rep(
+    rep_id: str,
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """تعطيل مندوب مع الحفاظ على الفواتير والقيود التاريخية."""
+    return await service.delete_rep(db, user["tenant_id"], rep_id)
+
+
 @router.patch("/{rep_id}")
 async def update_rep(
     rep_id: str,

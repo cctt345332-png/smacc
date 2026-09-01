@@ -25,6 +25,8 @@ export const createRep = (data: {
 export const updateRep = (repId: string, data: object) =>
   api.patch(`/reps/${repId}`, data);
 
+export const deleteRep = (repId: string) => api.delete(`/reps/${repId}`);
+
 export const getRep = (repId: string) => api.get(`/reps/${repId}`);
 
 export const importRepCustomersFromTree = (repId: string) =>

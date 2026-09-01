@@ -208,7 +208,7 @@ export default function RepDetailPage(props: { params: Promise<{ locale: string;
             { label: ar ? "عدد الفواتير" : "Invoices",       value: summary.invoice_count,             color: "#75617F" },
             { label: ar ? "المحصّل" : "Collected",            value: fmt(summary.total_collected) + " SAR", color: "#6F4A84" },
             { label: ar ? "المستحق" : "Outstanding",          value: fmt(summary.outstanding) + " SAR",     color: Number(summary.outstanding) > 0 ? "#DC2626" : "#6F4A84" },
-            { label: ar ? "المخزون" : "Stock Qty",            value: Number(summary.stock_qty || 0).toLocaleString("en-US"), color: "#D97706" },
+            { label: ar ? "المخزون" : "Stock Qty",            value: Number(summary.stock_qty || 0).toLocaleString("en-US"), color: "#15803D" },
           ].map(s => (
             <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
               <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>

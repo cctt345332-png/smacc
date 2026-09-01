@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getReps, createRep, updateRep, getRepSummary, getRepImpersonationToken } from "@/lib/reps";
+import { getReps, createRep, updateRep, deleteRep, getRepSummary, getRepImpersonationToken } from "@/lib/reps";
 import { getAccounts } from "@/lib/accounting";
 import { useAuthStore } from "@/store/authStore";
 
@@ -142,6 +142,21 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
   const toggleActive = async (rep: any) => {
     await updateRep(rep.id, { is_active: !rep.is_active });
     load();
+  };
+
+  const handleDelete = async (rep: any) => {
+    const confirmed = window.confirm(ar
+      ? `سيتم حذف المندوب «${rep.full_name}» مع تعطيل حسابه ومستودعه والإبقاء على الفواتير والقيود. هل تريد المتابعة؟`
+      : `Delete ${rep.full_name}? The user and warehouse will be deactivated while historical invoices and journals are preserved.`
+    );
+    if (!confirmed) return;
+    try {
+      await deleteRep(rep.id);
+      setSuccess(ar ? "تم حذف المندوب بأمان" : "Rep deleted safely");
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || (ar ? "تعذر حذف المندوب" : "Could not delete rep"));
+    }
   };
 
   const filtered = reps.filter(r => {
@@ -323,6 +338,10 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                               ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="8" y1="8" x2="16" y2="16"/><line x1="16" y1="8" x2="8" y2="16"/></svg>
                               : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
                             }
+                          </button>
+                          <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "حذف المندوب" : "Delete rep"}
+                            onClick={() => handleDelete(rep)} style={{ color: "#B42318" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                           </button>
                         </div>
                       </td>

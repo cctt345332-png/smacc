@@ -85,6 +85,9 @@ async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(g
         if not rep_id or customer.rep_id != rep_id:
             from fastapi import HTTPException
             raise HTTPException(403, "لا يمكنك تعديل عميل مندوب آخر")
+        if not data.model_fields_set.issubset({"latitude", "longitude"}):
+            from fastapi import HTTPException
+            raise HTTPException(403, "المندوب يستطيع تحديث موقع العميل فقط")
     return await service.update_customer(db, user["tenant_id"], customer_id, data, user["user_id"])
 
 
@@ -92,10 +95,8 @@ async def update_customer(customer_id: str, data: CustomerUpdate, user=Depends(g
 async def delete_customer(customer_id: str, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     customer = await service.get_customer(db, user["tenant_id"], customer_id)
     if user["role"] == "sales_rep":
-        rep_id = await get_rep_id_for_user(db, user["user_id"])
-        if not rep_id or customer.rep_id != rep_id:
-            from fastapi import HTTPException
-            raise HTTPException(403, "لا يمكنك حذف عميل مندوب آخر")
+        from fastapi import HTTPException
+        raise HTTPException(403, "المندوب لا يستطيع حذف العملاء")
     return await service.delete_customer(db, user["tenant_id"], customer_id, user["user_id"])
 
 
