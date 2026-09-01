@@ -15,7 +15,7 @@ from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, RepLocation,
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Customer, Invoice, Payment
-from app.models.accounting import Account, AccountType, AccountNature
+from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine
 from app.models.notifications import Notification, NotificationSeverity, NotificationType
 
 
