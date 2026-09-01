@@ -221,7 +221,10 @@ class InvoiceReject(BaseModel):
 
 # ─── Payment ─────────────────────────────────────────────────────────
 class PaymentCreate(BaseModel):
-    invoice_id: str
+    # يكون invoice_id موجودًا عند التحصيل على فاتورة، وفارغًا عند التحصيل
+    # من الرصيد الافتتاحي/رصيد العميل مباشرة.
+    invoice_id: Optional[str] = None
+    customer_id: Optional[str] = None
     payment_date: datetime
     amount: Decimal
     payment_method: PaymentMethod
@@ -233,8 +236,13 @@ class PaymentCreate(BaseModel):
 class PaymentOut(BaseModel):
     id: str
     payment_number: str
-    invoice_id: str
+    invoice_id: Optional[str] = None
     customer_id: str
+    customer_name_ar: Optional[str] = None
+    rep_id: Optional[str] = None
+    rep_name: Optional[str] = None
+    rep_code: Optional[str] = None
+    invoice_number: Optional[str] = None
     payment_date: datetime
     amount: Decimal
     payment_method: PaymentMethod

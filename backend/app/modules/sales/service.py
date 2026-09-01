@@ -929,48 +929,142 @@ async def cancel_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
 
 
 # ─── Payments ────────────────────────────────────────────────────────
-async def get_payments(db: AsyncSession, tenant_id: str, invoice_id: str | None = None, rep_id: str | None = None):
-    q = select(Payment).where(Payment.tenant_id == tenant_id)
+async def get_payments(
+    db: AsyncSession,
+    tenant_id: str,
+    invoice_id: str | None = None,
+    rep_id: str | None = None,
+):
+    """جلب سندات القبض مع اسم العميل والمندوب ورقم الفاتورة إن وجد."""
+    q = (
+        select(Payment, Customer.name_ar, SalesRep.id, SalesRep.rep_code, User.full_name, Invoice.invoice_number)
+        .join(Customer, Customer.id == Payment.customer_id)
+        .outerjoin(SalesRep, SalesRep.id == Payment.rep_id)
+        .outerjoin(User, User.id == SalesRep.user_id)
+        .outerjoin(Invoice, Invoice.id == Payment.invoice_id)
+        .where(Payment.tenant_id == tenant_id)
+    )
     if invoice_id:
         q = q.where(Payment.invoice_id == invoice_id)
     if rep_id:
         q = q.where(Payment.rep_id == rep_id)
-    q = q.order_by(Payment.payment_date.desc())
-    r = await db.execute(q)
-    return r.scalars().all()
+    q = q.order_by(Payment.payment_date.desc(), Payment.payment_number.desc())
+    rows = (await db.execute(q)).all()
+    return [
+        {
+            "id": payment.id,
+            "payment_number": payment.payment_number,
+            "invoice_id": payment.invoice_id,
+            "customer_id": payment.customer_id,
+            "customer_name_ar": customer_name,
+            "rep_id": linked_rep_id,
+            "rep_code": linked_rep_code,
+            "rep_name": rep_name,
+            "invoice_number": invoice_number,
+            "payment_date": payment.payment_date,
+            "amount": payment.amount,
+            "payment_method": payment.payment_method,
+            "reference": payment.reference,
+            "created_at": payment.created_at,
+            "notes": payment.notes,
+        }
+        for payment, customer_name, linked_rep_id, linked_rep_code, rep_name, invoice_number in rows
+    ]
+
+
+async def _get_open_fiscal_year_id(db: AsyncSession, tenant_id: str, payment_date: datetime) -> str | None:
+    from app.models.accounting import FiscalYear, FiscalYearStatus
+    result = await db.execute(
+        select(FiscalYear.id)
+        .where(
+            FiscalYear.tenant_id == tenant_id,
+            FiscalYear.status == FiscalYearStatus.OPEN,
+            FiscalYear.start_date <= payment_date,
+            FiscalYear.end_date >= payment_date,
+        )
+        .order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
 
 
 async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: PaymentCreate):
-    invoice = await get_invoice(db, tenant_id, data.invoice_id)
-    if invoice.status == InvoiceStatus.CANCELLED:
-        raise HTTPException(400, "Cannot pay a cancelled invoice")
+    if not data.invoice_id and not data.customer_id:
+        raise HTTPException(400, "يجب اختيار فاتورة أو عميل لتحصيل الرصيد")
+    if data.amount <= Decimal("0"):
+        raise HTTPException(400, "يجب أن يكون مبلغ السند أكبر من صفر")
+
+    invoice = await get_invoice(db, tenant_id, data.invoice_id) if data.invoice_id else None
+    customer_id = data.customer_id or (invoice.customer_id if invoice else None)
+    if not customer_id:
+        raise HTTPException(400, "يجب اختيار عميل صالح")
+    customer = await get_customer(db, tenant_id, customer_id)
+    if invoice and invoice.status == InvoiceStatus.CANCELLED:
+        raise HTTPException(400, "لا يمكن التحصيل من فاتورة ملغاة")
+    if invoice and data.customer_id and data.customer_id != invoice.customer_id:
+        raise HTTPException(400, "العميل لا يطابق العميل الموجود في الفاتورة")
+
+    # المندوب لا يستطيع التحصيل إلا من عملائه، ويرث السند رقم المندوب.
+    rep = await db.scalar(select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.user_id == user_id))
+    if rep:
+        expected_rep_id = (invoice.rep_id if invoice and invoice.rep_id else customer.rep_id)
+        if expected_rep_id != rep.id:
+            raise HTTPException(403, "لا يمكنك إنشاء سند لهذا العميل أو لهذه الفاتورة")
+        payment_rep_id = rep.id
+    else:
+        payment_rep_id = invoice.rep_id if invoice else customer.rep_id
 
     payment_date = data.payment_date.replace(tzinfo=None)
+    if invoice:
+        remaining = Decimal(str(invoice.total or 0)) - Decimal(str(invoice.paid_amount or 0))
+        if data.amount > remaining + Decimal("0.01"):
+            raise HTTPException(400, f"المبلغ أكبر من المتبقي على الفاتورة ({remaining:.2f})")
+    else:
+        # السند المباشر لا يُسمح به إلا مقابل رصيد قائم، بما فيه الرصيد الافتتاحي
+        # والقيود المرحّلة والفواتير السابقة ناقص سندات القبض.
+        from app.modules.sales.orders_service import get_customer_statement
+        statement = await get_customer_statement(
+            db, tenant_id, customer.id,
+            datetime(1970, 1, 1), payment_date,
+        )
+        balance_due = Decimal(str(statement["summary"].get("closing_balance") or 0))
+        if balance_due <= Decimal("0.01"):
+            raise HTTPException(400, "لا يوجد رصيد مستحق على هذا العميل")
+        if data.amount > balance_due + Decimal("0.01"):
+            raise HTTPException(400, f"المبلغ أكبر من رصيد العميل ({balance_due:.2f})")
+    fiscal_year_id = invoice.fiscal_year_id if invoice else await _get_open_fiscal_year_id(db, tenant_id, payment_date)
     payment = Payment(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
         payment_number=await _next_payment_number(db, tenant_id),
-        customer_id=invoice.customer_id,
-        rep_id=invoice.rep_id,   # يرث rep_id من الفاتورة تلقائياً
+        invoice_id=invoice.id if invoice else None,
+        customer_id=customer.id,
+        rep_id=payment_rep_id,
         payment_date=payment_date,
+        amount=data.amount,
+        payment_method=data.payment_method,
+        reference=data.reference,
+        bank_account_id=data.bank_account_id,
+        notes=data.notes,
         created_by=user_id,
-        **{k: v for k, v in data.model_dump().items() if k != "payment_date"},
     )
     db.add(payment)
 
-    # تحديث المبلغ المدفوع
-    invoice.paid_amount += data.amount
-    remaining = invoice.total - invoice.paid_amount
-    if remaining <= Decimal("0.01"):
-        invoice.status = InvoiceStatus.PAID
-    elif invoice.paid_amount > 0:
-        invoice.status = InvoiceStatus.PARTIAL
+    if invoice:
+        invoice.paid_amount += data.amount
+        remaining = invoice.total - invoice.paid_amount
+        if remaining <= Decimal("0.01"):
+            invoice.status = InvoiceStatus.PAID
+        elif invoice.paid_amount > 0:
+            invoice.status = InvoiceStatus.PARTIAL
 
-    # ── قيد سند القبض التلقائي ──────────────────────────────────────
-    if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
+    # قيد سند القبض يخصم من حساب العميل سواء كان التحصيل على فاتورة أو على الرصيد المباشر.
+    if fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
         journal_id = await _create_payment_journal(
-            db, tenant_id, user_id, payment, invoice, data.bank_account_id
+            db, tenant_id, user_id, payment, customer, invoice, fiscal_year_id, data.bank_account_id
         )
+        if not journal_id:
+            raise HTTPException(409, "تعذر ترحيل سند القبض: تحقق من ربط حساب العميل وحساب الصندوق/البنك")
         payment.journal_entry_id = journal_id
 
     await db.commit()
@@ -979,36 +1073,48 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
 
 
 async def _create_payment_journal(
-    db: AsyncSession, tenant_id: str, user_id: str,
-    payment: Payment, invoice: Invoice, bank_account_id: str | None
+    db: AsyncSession,
+    tenant_id: str,
+    user_id: str,
+    payment: Payment,
+    customer: Customer,
+    invoice: Invoice | None,
+    fiscal_year_id: str,
+    bank_account_id: str | None,
 ) -> str | None:
-    """
-    قيد سند القبض:
-    مدين: البنك أو الصندوق (حسب طريقة الدفع)
-    دائن: حسابات القبض
-    """
+    """قيد سند القبض: مدين نقد/بنك، دائن حساب العميل، بفاتورة أو بدونها."""
     from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
-    from app.modules.accounting.service import _next_entry_number
-    from app.models.sales import Customer
+    from app.modules.accounting.service import _next_entry_number, get_operational_account
 
-    # حساب القبض من العميل
-    customer = await db.get(Customer, invoice.customer_id)
-    ar_account_id = customer.ar_account_id if customer else None
+    ar_account_id = customer.ar_account_id
     if not ar_account_id:
-        return None  # لا قيد بدون حساب القبض
+        return None
 
-    # حساب البنك/الصندوق — من الحساب البنكي المختار أو نبحث عن حساب الصندوق
     debit_account_id = None
     if bank_account_id:
         from app.models.accounting import BankAccount
         bank = await db.get(BankAccount, bank_account_id)
-        if bank and bank.gl_account_id:
+        if bank and bank.tenant_id == tenant_id and bank.gl_account_id:
             debit_account_id = bank.gl_account_id
 
+    # المندوب لا يختار حساب الصندوق من الشاشة؛ استخدم خريطة الحسابات التشغيلية.
     if not debit_account_id:
-        return None  # لا قيد بدون حساب البنك/الصندوق
+        method_key = payment.payment_method.value if hasattr(payment.payment_method, "value") else str(payment.payment_method)
+        mapping_key = {
+            "cash": "default_cash",
+            "bank_transfer": "default_bank",
+            "cheque": "default_bank",
+            "credit_card": "default_card",
+            "mada": "default_card",
+            "stc_pay": "default_wallet",
+        }.get(method_key, "default_cash")
+        try:
+            debit_account = await get_operational_account(db, tenant_id, mapping_key)
+            debit_account_id = debit_account.id
+        except HTTPException:
+            # إذا لم يوجد ربط للطريقة المحددة، لا ننشئ قيدًا غير متوازن.
+            return None
 
-    # وصف طريقة الدفع
     method_ar = {
         "cash": "نقداً",
         "bank_transfer": "تحويل بنكي",
@@ -1016,82 +1122,61 @@ async def _create_payment_journal(
         "mada": "مدى",
         "stc_pay": "STC Pay",
         "credit_card": "بطاقة ائتمان",
-    }.get(payment.payment_method.value if hasattr(payment.payment_method, 'value') else str(payment.payment_method), "دفع")
+    }.get(payment.payment_method.value if hasattr(payment.payment_method, "value") else str(payment.payment_method), "دفع")
+    customer_name = customer.name_ar
+    invoice_label = f"فاتورة {invoice.invoice_number}" if invoice else "الرصيد الافتتاحي/رصيد العميل"
 
     entry_number = await _next_entry_number(db, tenant_id)
     entry = JournalEntry(
-        id=str(uuid.uuid4()),
-        tenant_id=tenant_id,
-        entry_number=entry_number,
-        entry_date=payment.payment_date,
-        fiscal_year_id=invoice.fiscal_year_id,
-        description_ar=f"سند قبض {payment.payment_number} - {invoice.buyer_name_ar} - {method_ar}",
-        description_en=f"Payment Receipt {payment.payment_number}",
-        status=JournalEntryStatus.POSTED,
-        source="payment_receipt",
-        reference=payment.payment_number,
-        total_debit=payment.amount,
-        total_credit=payment.amount,
-        created_by=user_id,
-        posted_by=user_id,
-        posted_at=datetime.utcnow(),
+        id=str(uuid.uuid4()), tenant_id=tenant_id, entry_number=entry_number,
+        entry_date=payment.payment_date, fiscal_year_id=fiscal_year_id,
+        description_ar=f"سند قبض {payment.payment_number} - {customer_name} - {invoice_label} - {method_ar}",
+        description_en=f"Payment Receipt {payment.payment_number} - {invoice_label}",
+        status=JournalEntryStatus.POSTED, source="payment_receipt",
+        reference=payment.payment_number, total_debit=payment.amount, total_credit=payment.amount,
+        created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow(),
     )
     db.add(entry)
-
-    # مدين: البنك / الصندوق
     db.add(JournalEntryLine(
-        id=str(uuid.uuid4()), entry_id=entry.id,
-        account_id=debit_account_id,
-        description=f"استلام دفعة - {method_ar}",
-        debit=payment.amount, credit=Decimal("0"), line_order=0,
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=debit_account_id,
+        description=f"استلام دفعة - {method_ar}", debit=payment.amount,
+        credit=Decimal("0"), line_order=0,
+    ))
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=ar_account_id,
+        description=f"تسوية {invoice_label}", debit=Decimal("0"),
+        credit=payment.amount, line_order=1,
     ))
 
-    # دائن: حسابات القبض
-    db.add(JournalEntryLine(
-        id=str(uuid.uuid4()), entry_id=entry.id,
-        account_id=ar_account_id,
-        description=f"تسوية فاتورة {invoice.invoice_number}",
-        debit=Decimal("0"), credit=payment.amount, line_order=1,
-    ))
-
-    # ── إنشاء سند قبض في الخزينة أيضاً ──────────────────────────
-    await _create_receipt_voucher(db, tenant_id, user_id, payment, invoice, bank_account_id, ar_account_id, debit_account_id, method_ar)
-
+    await _create_receipt_voucher(
+        db, tenant_id, user_id, payment, customer, invoice, bank_account_id,
+        ar_account_id, debit_account_id, fiscal_year_id, method_ar,
+    )
     return entry.id
 
 
 async def _create_receipt_voucher(
-    db, tenant_id, user_id, payment, invoice, bank_account_id, ar_account_id, debit_account_id, method_ar
+    db, tenant_id, user_id, payment, customer, invoice, bank_account_id,
+    ar_account_id, debit_account_id, fiscal_year_id, method_ar,
 ):
-    """إنشاء سند قبض في الخزينة مرتبط بفاتورة المبيعات"""
+    """إنشاء سند قبض خزينة، مع ربط اختياري بفاتورة."""
     from app.models.treasury import Voucher, VoucherType, VoucherStatus
     from app.modules.treasury.service import _next_number
 
     voucher_num = await _next_number(db, tenant_id, VoucherType.RECEIPT)
+    invoice_label = f"فاتورة {invoice.invoice_number}" if invoice else "الرصيد الافتتاحي/رصيد العميل"
     voucher = Voucher(
-        id=str(uuid.uuid4()),
-        tenant_id=tenant_id,
-        voucher_number=voucher_num,
-        voucher_type=VoucherType.RECEIPT,
-        status=VoucherStatus.POSTED,
-        voucher_date=payment.payment_date,
-        amount=payment.amount,
-        vat_amount=Decimal("0"),
-        currency_code="SAR",
-        payment_method=payment.payment_method,
-        bank_account_id=bank_account_id,
-        party_type="customer",
-        party_id=str(invoice.customer_id),
-        party_name=invoice.buyer_name_ar,
-        invoice_id=str(invoice.id),
-        debit_account_id=debit_account_id,
-        credit_account_id=ar_account_id,
-        fiscal_year_id=invoice.fiscal_year_id,
-        description_ar=f"سند قبض — {invoice.buyer_name_ar} — فاتورة {invoice.invoice_number} — {method_ar}",
-        reference=payment.payment_number,
-        created_by=user_id,
-        posted_by=user_id,
-        posted_at=datetime.utcnow(),
+        id=str(uuid.uuid4()), tenant_id=tenant_id, voucher_number=voucher_num,
+        voucher_type=VoucherType.RECEIPT, status=VoucherStatus.POSTED,
+        voucher_date=payment.payment_date, amount=payment.amount, vat_amount=Decimal("0"),
+        currency_code="SAR", payment_method=payment.payment_method,
+        bank_account_id=bank_account_id, party_type="customer", party_id=str(customer.id),
+        party_name=customer.name_ar, invoice_id=str(invoice.id) if invoice else None,
+        debit_account_id=debit_account_id, credit_account_id=ar_account_id,
+        fiscal_year_id=fiscal_year_id,
+        description_ar=f"سند قبض — {customer.name_ar} — {invoice_label} — {method_ar}",
+        reference=payment.payment_number, created_by=user_id,
+        posted_by=user_id, posted_at=datetime.utcnow(),
     )
     db.add(voucher)
 

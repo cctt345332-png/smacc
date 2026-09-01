@@ -810,17 +810,35 @@ async def get_my_invoices(db: AsyncSession, tenant_id: str, user_id: str) -> lis
 # ─── سندات القبض للمندوب ─────────────────────────────────────────────
 
 async def get_my_payments(db: AsyncSession, tenant_id: str, user_id: str) -> list:
-    """جلب سندات قبض المندوب الحالي"""
+    """جلب سندات قبض المندوب الحالي، مع تمييز سند الرصيد المباشر."""
     rep = await get_rep_by_user(db, user_id)
     if not rep:
         raise HTTPException(403, "هذا الحساب ليس مندوباً")
 
     pay_r = await db.execute(
-        select(Payment)
+        select(Payment, Customer.name_ar, Invoice.invoice_number)
+        .join(Customer, Customer.id == Payment.customer_id)
+        .outerjoin(Invoice, Invoice.id == Payment.invoice_id)
         .where(Payment.tenant_id == tenant_id, Payment.rep_id == rep.id)
         .order_by(Payment.created_at.desc())
     )
-    return pay_r.scalars().all()
+    return [
+        {
+            "id": payment.id,
+            "payment_number": payment.payment_number,
+            "invoice_id": payment.invoice_id,
+            "invoice_number": invoice_number,
+            "customer_id": payment.customer_id,
+            "customer_name_ar": customer_name,
+            "payment_date": payment.payment_date,
+            "amount": payment.amount,
+            "payment_method": payment.payment_method,
+            "reference": payment.reference,
+            "notes": payment.notes,
+            "created_at": payment.created_at,
+        }
+        for payment, customer_name, invoice_number in pay_r.all()
+    ]
 
 
 # ─── تحويل مخزون للمندوب ─────────────────────────────────────────────

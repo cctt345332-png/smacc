@@ -23,7 +23,10 @@ export const updateInvoice = (id: string, data: any) => api.patch(`/sales/invoic
 export const deleteInvoiceDraft = (id: string) => api.delete(`/sales/invoices/${id}`);
 
 // Payments
-export const getPayments = (invoice_id?: string) => api.get("/sales/payments", { params: invoice_id ? { invoice_id } : {} });
+export const getPayments = (params?: string | { invoice_id?: string; rep_id?: string }) => {
+  const query = typeof params === "string" ? { invoice_id: params } : (params || {});
+  return api.get("/sales/payments", { params: query });
+};
 export const createPayment = (data: any) => api.post("/sales/payments", data);
 
 // Quotations

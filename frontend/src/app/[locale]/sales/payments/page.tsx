@@ -2,6 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getPayments, createPayment, getInvoices } from "@/lib/sales";
+import { getReps } from "@/lib/reps";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -34,6 +35,9 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   const ar = locale === "ar";
   const [payments, setPayments] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [reps, setReps] = useState<any[]>([]);
+  const [filterRep, setFilterRep] = useState("");
+  const [filterMonth, setFilterMonth] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -41,8 +45,9 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
 
   const load = async () => {
     try {
-      const { data } = await getPayments();
+      const [{ data }, repsResponse] = await Promise.all([getPayments(), getReps().catch(() => ({ data: [] }))]);
       setPayments(Array.isArray(data) ? data : []);
+      setReps(Array.isArray(repsResponse.data) ? repsResponse.data : []);
     } catch {} finally { setLoading(false); }
   };
 
@@ -81,7 +86,12 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
     } finally { setSaving(false); }
   };
 
-  const total = payments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const filteredPayments = payments.filter((p: any) => {
+    const matchesRep = !filterRep || p.rep_id === filterRep;
+    const matchesMonth = !filterMonth || String(p.payment_date || "").slice(0, 7) === filterMonth;
+    return matchesRep && matchesMonth;
+  });
+  const total = filteredPayments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
 
   return (
     <>
@@ -93,7 +103,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
             <span>{ar ? "سندات القبض" : "Receipts"}</span>
           </div>
           <h1 className="page-title">{ar ? "سندات القبض" : "Receipt Payments"}</h1>
-          <p className="page-subtitle">{ar ? "المبالغ المقبوضة من العملاء مقابل الفواتير" : "Payments collected from customers against invoices"}</p>
+          <p className="page-subtitle">{ar ? "المبالغ المقبوضة من العملاء مقابل الفواتير أو الأرصدة المباشرة" : "Payments collected against invoices or customer balances"}</p>
         </div>
         <button className="btn btn-primary btn-sm" onClick={openModal}>
           <Icon name="plus" size={14} /> {ar ? "سند قبض جديد" : "New Receipt"}
@@ -104,8 +114,8 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
       <div className="grid-3" style={{ marginBottom: 20 }}>
         {[
           { label: ar ? "إجمالي المقبوض" : "Total Collected", value: `${fmt(total)} SAR`, color: "#6F4A84" },
-          { label: ar ? "عدد السندات" : "Total Receipts", value: payments.length, color: "#5A187E" },
-          { label: ar ? "آخر قبض" : "Latest", value: payments[0] ? new Date(payments[0].payment_date).toLocaleDateString("ar-SA") : "—", color: "#75617F" },
+          { label: ar ? "عدد السندات" : "Total Receipts", value: filteredPayments.length, color: "#5A187E" },
+          { label: ar ? "آخر قبض" : "Latest", value: filteredPayments[0] ? new Date(filteredPayments[0].payment_date).toLocaleDateString("ar-SA") : "—", color: "#75617F" },
         ].map(s => (
           <div key={s.label} className="stat-card">
             <div className="stat-content">
@@ -116,6 +126,33 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
         ))}
       </div>
 
+      {/* فلاتر السندات */}
+      <div className="card" style={{ marginBottom: 16, padding: 16 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+          <div className="form-group" style={{ margin: 0, minWidth: 220 }}>
+            <label className="form-label">{ar ? "المندوب" : "Sales Rep"}</label>
+            <select className="form-input form-select" value={filterRep} onChange={e => setFilterRep(e.target.value)}>
+              <option value="">{ar ? "كل المناديب" : "All reps"}</option>
+              {reps.map((rep: any) => (
+                <option key={rep.id} value={rep.id}>{rep.full_name || rep.name || rep.rep_code}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 170 }}>
+            <label className="form-label">{ar ? "الشهر" : "Month"}</label>
+            <input type="month" className="form-input" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} />
+          </div>
+          {(filterRep || filterMonth) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setFilterRep(""); setFilterMonth(""); }}>
+              {ar ? "مسح الفرز" : "Clear filters"}
+            </button>
+          )}
+          <div style={{ marginInlineStart: "auto", fontSize: 12, color: "var(--text-muted)" }}>
+            {filteredPayments.length} {ar ? "سند معروض" : "receipts shown"}
+          </div>
+        </div>
+      </div>
+
       {/* الجدول */}
       <div className="card">
         <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
@@ -123,9 +160,9 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
             <div className="empty-state">
               <div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>
             </div>
-          ) : payments.length === 0 ? (
+          ) : filteredPayments.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-title">{ar ? "لا توجد سندات قبض" : "No receipts yet"}</div>
+              <div className="empty-state-title">{(filterRep || filterMonth) ? (ar ? "لا توجد سندات بهذا الفرز" : "No receipts match these filters") : (ar ? "لا توجد سندات قبض" : "No receipts yet")}</div>
               <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={openModal}>
                 + {ar ? "سند جديد" : "New Receipt"}
               </button>
@@ -135,8 +172,9 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               <thead>
                 <tr>
                   <th>{ar ? "رقم السند" : "Receipt #"}</th>
-                  <th>{ar ? "رقم الفاتورة" : "Invoice #"}</th>
+                  <th>{ar ? "المصدر" : "Source"}</th>
                   <th>{ar ? "العميل" : "Customer"}</th>
+                  <th>{ar ? "المندوب" : "Sales Rep"}</th>
                   <th>{ar ? "التاريخ" : "Date"}</th>
                   <th>{ar ? "طريقة الدفع" : "Method"}</th>
                   <th>{ar ? "المرجع" : "Reference"}</th>
@@ -144,20 +182,26 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                 </tr>
               </thead>
               <tbody>
-                {payments.map((p: any) => (
+                {filteredPayments.map((p: any) => (
                   <tr key={p.id}>
                     <td>
                       <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#6F4A84" }}>
                         {p.payment_number}
                       </span>
                     </td>
-                    <td>
-                      <Link href={`/${locale}/sales/invoices/${p.invoice_id}`}
-                        style={{ color: "var(--primary)", textDecoration: "none", fontSize: 12 }}>
-                        {p.invoice_id?.slice(-8)}
-                      </Link>
+                    <td style={{ fontSize: 12 }}>
+                      {p.invoice_id ? (
+                        <Link href={`/${locale}/sales/invoices/${p.invoice_id}`} style={{ color: "var(--primary)", textDecoration: "none" }}>
+                          {p.invoice_number || p.invoice_id.slice(-8)}
+                        </Link>
+                      ) : (
+                        <span className="badge badge-warning">{ar ? "رصيد العميل" : "Customer balance"}</span>
+                      )}
                     </td>
-                    <td style={{ fontSize: 13 }}>{p.customer_id?.slice(-8) || "—"}</td>
+                    <td style={{ fontSize: 13 }}>{p.customer_name_ar || p.customer_id?.slice(-8) || "—"}</td>
+                    <td style={{ fontSize: 13 }}>
+                      {p.rep_name || p.rep_code || (p.rep_id ? p.rep_id.slice(-8) : "—")}
+                    </td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                       {new Date(p.payment_date).toLocaleDateString("ar-SA")}
                     </td>
@@ -175,7 +219,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               </tbody>
               <tfoot>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-                  <td colSpan={6} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                  <td colSpan={7} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                     {fmt(total)} SAR
                   </td>

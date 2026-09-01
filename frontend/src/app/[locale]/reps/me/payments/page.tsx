@@ -94,14 +94,19 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    const invoiceId = mode === "invoice" ? form.invoice_id :
-      (customerInvoices.length === 1 ? customerInvoices[0].id : form.invoice_id);
-    if (!invoiceId) { setError(ar ? "اختر الفاتورة" : "Select invoice"); return; }
+    const invoiceId = mode === "invoice" ? form.invoice_id : (form.invoice_id || null);
+    const customerId = mode === "customer" ? form.customer_id : null;
+    if (!invoiceId && !customerId) {
+      setError(ar ? "اختر الفاتورة أو العميل" : "Select an invoice or customer");
+      return;
+    }
     if (!form.amount || Number(form.amount) <= 0) { setError(ar ? "أدخل مبلغاً صحيحاً" : "Enter valid amount"); return; }
     setSaving(true); setError("");
     try {
       await createPayment({
-        invoice_id: invoiceId, amount: Number(form.amount),
+        invoice_id: invoiceId,
+        customer_id: customerId,
+        amount: Number(form.amount),
         payment_method: form.payment_method,
         payment_date: new Date(form.payment_date).toISOString(),
         reference: form.reference || null, notes: form.notes || null,
@@ -184,12 +189,13 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     </span>
                     <span style={{ fontSize:11, color:"var(--text-muted)" }}>{fmtDate(p.payment_date)}</span>
                   </div>
-                  {p.invoice_number && (
-                    <div style={{ fontSize:11, color:"var(--text-secondary)", marginTop:3 }}>
-                      {ar ? "فاتورة:" : "Invoice:"}{" "}
-                      <span style={{ fontFamily:"monospace", color:"#3E0865" }}>{p.invoice_number}</span>
-                    </div>
-                  )}
+                  <div style={{ fontSize:11, color:"var(--text-secondary)", marginTop:3 }}>
+                    {p.invoice_number ? (
+                      <>{ar ? "فاتورة:" : "Invoice:"}{" "}<span style={{ fontFamily:"monospace", color:"#3E0865" }}>{p.invoice_number}</span></>
+                    ) : (
+                      <>{ar ? "تحصيل من رصيد العميل:" : "Customer balance:"}{" "}<span style={{ color:"#3E0865" }}>{p.customer_name_ar || p.customer_id}</span></>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -335,19 +341,19 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     </div>
                   )}
 
-                  {/* فواتير العميل المستحقة */}
-                  {customerInvoices.length > 1 && (
+                  {/* اختيار الفاتورة اختياري: الفارغ يعني التحصيل من رصيد العميل مباشرة */}
+                  {customerInvoices.length > 0 && (
                     <div style={{ marginTop:10 }}>
                       <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", display:"block", marginBottom:6 }}>
-                        {ar ? "اختر الفاتورة *" : "Select Invoice *"}
+                        {ar ? "الفاتورة (اختياري)" : "Invoice (optional)"}
                       </label>
                       <select className="form-input form-select" value={form.invoice_id}
                         onChange={e => {
                           const inv = customerInvoices.find(i => i.id === e.target.value);
-                          const rem = inv ? Number(inv.total||0) - Number(inv.paid_amount||0) : 0;
-                          setForm(f => ({ ...f, invoice_id: e.target.value, amount: rem.toFixed(2) }));
+                          const rem = inv ? Number(inv.total||0) - Number(inv.paid_amount||0) : Number(customerBalance?.total_due || 0);
+                          setForm(f => ({ ...f, invoice_id: e.target.value, amount: rem > 0 ? rem.toFixed(2) : "" }));
                         }}>
-                        <option value="">{ar ? "— اختر —" : "— Select —"}</option>
+                        <option value="">{ar ? "— تحصيل من رصيد العميل / الرصيد الافتتاحي —" : "— Collect from customer/opening balance —"}</option>
                         {customerInvoices.map((inv: any) => {
                           const rem = Number(inv.total||0) - Number(inv.paid_amount||0);
                           return (
@@ -357,6 +363,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                           );
                         })}
                       </select>
+                      {!form.invoice_id && <div style={{ marginTop:6, fontSize:11, color:"#6F4A84" }}>{ar ? "سيتم تسجيل السند على حساب العميل مباشرة." : "The receipt will be posted directly to the customer account."}</div>}
                     </div>
                   )}
 

@@ -282,7 +282,7 @@ class Payment(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
     payment_number: Mapped[str] = mapped_column(String(50), index=True)
-    invoice_id: Mapped[str] = mapped_column(String, ForeignKey("invoices.id"))
+    invoice_id: Mapped[str | None] = mapped_column(String, ForeignKey("invoices.id"), nullable=True)
     customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"))
     payment_date: Mapped[datetime] = mapped_column(DateTime)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
@@ -295,7 +295,7 @@ class Payment(Base):
     created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    invoice: Mapped["Invoice"] = relationship("Invoice", back_populates="payments")
+    invoice: Mapped["Invoice | None"] = relationship("Invoice", back_populates="payments")
 
 
 # ─── Credit Note (إشعار دائن) ────────────────────────────────────────
