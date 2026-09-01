@@ -151,6 +151,21 @@ async def update_account(db: AsyncSession, tenant_id: str, account_id: str, data
 
     # parent_id is intentionally handled separately because a null value means
     # "move to the root", while an omitted value means "leave unchanged".
+    if "code" in data.model_fields_set:
+        new_code = (data.code or "").strip()
+        if not new_code:
+            raise HTTPException(400, "Account code cannot be empty")
+        duplicate_result = await db.execute(
+            select(Account.id).where(
+                Account.tenant_id == tenant_id,
+                Account.code == new_code,
+                Account.id != account_id,
+            )
+        )
+        if duplicate_result.scalar_one_or_none():
+            raise HTTPException(400, "Account code already exists")
+        acc.code = new_code
+
     if "parent_id" in data.model_fields_set:
         accounts_result = await db.execute(
             select(Account).where(Account.tenant_id == tenant_id)
@@ -185,7 +200,7 @@ async def update_account(db: AsyncSession, tenant_id: str, account_id: str, data
         # Customer accounts must sort under their selected parent as well as
         # point to it. Generate the next three-digit child suffix when a
         # customer account is moved from a city/branch to a rep account.
-        if acc.is_customer_account and new_parent_id:
+        if acc.is_customer_account and new_parent_id and "code" not in data.model_fields_set:
             sibling_codes_result = await db.execute(
                 select(Account.code).where(
                     Account.tenant_id == tenant_id,

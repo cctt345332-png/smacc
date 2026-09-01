@@ -20,6 +20,7 @@ class AccountCreate(BaseModel):
 
 
 class AccountUpdate(BaseModel):
+    code: Optional[str] = None
     name_ar: Optional[str] = None
     name_en: Optional[str] = None
     parent_id: Optional[str] = None
