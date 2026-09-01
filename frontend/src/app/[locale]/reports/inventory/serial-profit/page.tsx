@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getSerialProfitReport } from "@/lib/inventory";
-import { getItems } from "@/lib/inventory";
+import { getSerialProfitReport, getItems } from "@/lib/inventory";
+import { getInvoices } from "@/lib/sales";
+import { getReps } from "@/lib/reps";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
@@ -20,21 +21,34 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
   const ar = locale === "ar";
   const now = new Date();
   const [products, setProducts] = useState<any[]>([]);
-  const [productId, setProductId] = useState("");
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [reps, setReps] = useState<any[]>([]);
+  const [filterType, setFilterType] = useState<"product" | "invoice" | "rep">("product");
+  const [filterValue, setFilterValue] = useState("");
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    getItems({ tracking_type: "serial" }).then(({ data }) => setProducts(data)).catch(() => {});
+    Promise.all([
+      getItems({ tracking_type: "serial" }).catch(() => ({ data: [] })),
+      getInvoices().catch(() => ({ data: [] })),
+      getReps().catch(() => ({ data: [] })),
+    ]).then(([itemsRes, invoicesRes, repsRes]) => {
+      setProducts(Array.isArray(itemsRes.data) ? itemsRes.data : []);
+      setInvoices(Array.isArray(invoicesRes.data) ? invoicesRes.data : []);
+      setReps(Array.isArray(repsRes.data) ? repsRes.data : []);
+    });
   }, []);
 
   const load = async () => {
     setLoading(true);
     try {
       const params: any = { from_date: fromDate + "T00:00:00", to_date: toDate + "T23:59:59" };
-      if (productId) params.product_id = productId;
+      if (filterType === "product" && filterValue) params.product_id = filterValue;
+      if (filterType === "invoice" && filterValue) params.invoice_id = filterValue;
+      if (filterType === "rep" && filterValue) params.rep_id = filterValue;
       const { data: res } = await getSerialProfitReport(params);
       setData(res);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
@@ -55,17 +69,27 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
           <h1 className="page-title">{ar ? "تقرير ربح السيريالات" : "Serial Profit Report"}</h1>
           <p className="page-subtitle">{ar ? "الربح الصافي لكل وحدة مباعة بالسيريال" : "Net profit per sold serial unit"}</p>
         </div>
-        {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير ربح السيريالات" : "Serial Profit Report"} subtitle={ar ? "ربحية الوحدات المباعة ذات التتبع التسلسلي" : "Profitability of serial-tracked sold units"} period={`${fromDate} — ${toDate}`} reportCode={`SER-PROFIT-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "الوحدات المباعة" : "Units sold", value: String(data.summary.count || 0), tone: "blue" }, { label: ar ? "إجمالي التكلفة" : "Total cost", value: `${fmt(data.summary.total_cost)} SAR`, tone: "red" }, { label: ar ? "إجمالي الإيرادات" : "Total revenue", value: `${fmt(data.summary.total_revenue)} SAR`, tone: "green" }, { label: ar ? "صافي الربح" : "Net profit", value: `${fmt(data.summary.total_profit)} SAR`, tone: data.summary.total_profit >= 0 ? "green" : "red" }, { label: ar ? "متوسط الهامش" : "Average margin", value: `${fmt(data.summary.avg_profit_pct)}%`, tone: "amber" }]} tables={[{ title: ar ? "تفاصيل ربح السيريالات" : "Serial profit details", headers: [ar ? "رقم السيريال" : "Serial #", ar ? "المنتج" : "Product", ar ? "الحالة" : "Condition", ar ? "تاريخ البيع" : "Sold date", ar ? "التكلفة" : "Cost", ar ? "سعر البيع" : "Sale price", ar ? "الربح" : "Profit", ar ? "هامش الربح" : "Margin"], rows: data.rows.map((row: any) => [row.serial_number || "—", row.product_name || "—", ar ? CONDITION[row.condition] || row.condition : row.condition, row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-GB") : "—", `${fmt(row.cost_price)} SAR`, `${fmt(row.sale_price)} SAR`, `${fmt(row.profit)} SAR`, `${fmt(row.profit_pct)}%`]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", "", `${fmt(data.summary.total_cost)} SAR`, `${fmt(data.summary.total_revenue)} SAR`, `${fmt(data.summary.total_profit)} SAR`, `${fmt(data.summary.avg_profit_pct)}%`] }]} />}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير ربح السيريالات" : "Serial Profit Report"} subtitle={ar ? "ربحية الوحدات المباعة ذات التتبع التسلسلي" : "Profitability of serial-tracked sold units"} period={`${fromDate} — ${toDate}`} reportCode={`SER-PROFIT-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "الوحدات المباعة" : "Units sold", value: String(data.summary.count || 0), tone: "blue" }, { label: ar ? "إجمالي التكلفة" : "Total cost", value: `${fmt(data.summary.total_cost)} SAR`, tone: "red" }, { label: ar ? "إجمالي الإيرادات" : "Total revenue", value: `${fmt(data.summary.total_revenue)} SAR`, tone: "green" }, { label: ar ? "صافي الربح" : "Net profit", value: `${fmt(data.summary.total_profit)} SAR`, tone: data.summary.total_profit >= 0 ? "green" : "red" }, { label: ar ? "متوسط الهامش" : "Average margin", value: `${fmt(data.summary.avg_profit_pct)}%`, tone: "amber" }]} tables={[{ title: ar ? "تفاصيل ربح السيريالات" : "Serial profit details", headers: [ar ? "رقم السيريال" : "Serial #", ar ? "المنتج" : "Product", ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Sales rep", ar ? "الحالة" : "Condition", ar ? "تاريخ البيع" : "Sold date", ar ? "التكلفة" : "Cost", ar ? "سعر البيع" : "Sale price", ar ? "الربح" : "Profit", ar ? "هامش الربح" : "Margin"], rows: data.rows.map((row: any) => [row.serial_number || "—", row.product_name || "—", row.invoice_number || "—", row.rep_name || row.rep_code || "—", ar ? CONDITION[row.condition] || row.condition : row.condition, row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-GB") : "—", `${fmt(row.cost_price)} SAR`, `${fmt(row.sale_price)} SAR`, `${fmt(row.profit)} SAR`, `${fmt(row.profit_pct)}%`]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", "", "", "", `${fmt(data.summary.total_cost)} SAR`, `${fmt(data.summary.total_revenue)} SAR`, `${fmt(data.summary.total_profit)} SAR`, `${fmt(data.summary.avg_profit_pct)}%`] }]} />}
       </div>
 
       {/* Filters */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div className="form-group" style={{ margin: 0, minWidth: 240 }}>
-            <label className="form-label">{ar ? "المنتج (اختياري)" : "Product (optional)"}</label>
-            <select className="form-input form-select" value={productId} onChange={e => setProductId(e.target.value)}>
-              <option value="">{ar ? "— كل المنتجات —" : "— All Products —"}</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name_ar}</option>)}
+          <div className="form-group" style={{ margin: 0, minWidth: 170 }}>
+            <label className="form-label">{ar ? "نوع الفلترة" : "Filter by"}</label>
+            <select className="form-input form-select" value={filterType} onChange={e => { setFilterType(e.target.value as any); setFilterValue(""); }}>
+              <option value="product">{ar ? "المنتج" : "Product"}</option>
+              <option value="invoice">{ar ? "الفاتورة" : "Invoice"}</option>
+              <option value="rep">{ar ? "المندوب" : "Sales rep"}</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 270 }}>
+            <label className="form-label">{ar ? "القيمة (اختياري)" : "Value (optional)"}</label>
+            <select className="form-input form-select" value={filterValue} onChange={e => setFilterValue(e.target.value)}>
+              <option value="">{filterType === "product" ? (ar ? "— كل المنتجات —" : "— All products —") : filterType === "invoice" ? (ar ? "— كل الفواتير —" : "— All invoices —") : (ar ? "— كل المناديب —" : "— All reps —")}</option>
+              {filterType === "product" && products.map(p => <option key={p.id} value={p.id}>{p.name_ar || p.name_en}</option>)}
+              {filterType === "invoice" && invoices.map(inv => <option key={inv.id} value={inv.id}>{inv.invoice_number} — {inv.buyer_name_ar || inv.customer_name_ar || inv.customer_id}</option>)}
+              {filterType === "rep" && reps.map(rep => <option key={rep.id} value={rep.id}>{rep.full_name || rep.name_ar || rep.rep_code}</option>)}
             </select>
           </div>
           <div className="form-group" style={{ margin: 0 }}>
@@ -113,6 +137,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                     <tr>
                       <th>{ar ? "رقم السيريال" : "Serial #"}</th>
                       <th>{ar ? "المنتج" : "Product"}</th>
+                      <th>{ar ? "الفاتورة" : "Invoice"}</th>
+                      <th>{ar ? "المندوب" : "Sales Rep"}</th>
                       <th>{ar ? "الحالة" : "Condition"}</th>
                       <th>{ar ? "تاريخ البيع" : "Sold Date"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "التكلفة" : "Cost"}</th>
@@ -126,6 +152,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                       <tr key={row.serial_id}>
                         <td><code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>{row.serial_number}</code></td>
                         <td style={{ fontWeight: 500 }}>{row.product_name}</td>
+                        <td style={{ fontSize: 12, fontFamily: "monospace" }}>{row.invoice_number || "—"}</td>
+                        <td style={{ fontSize: 12 }}>{row.rep_name || row.rep_code || "—"}</td>
                         <td><span className="badge badge-info">{ar ? CONDITION[row.condition] || row.condition : row.condition}</span></td>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-SA") : "—"}</td>
                         <td style={{ textAlign: "end" }}>{fmt(row.cost_price)}</td>
@@ -139,7 +167,7 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-                      <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                      <td colSpan={6} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#DC2626" }}>{fmt(data.summary.total_cost)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(data.summary.total_revenue)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84", fontSize: 15 }}>{fmt(data.summary.total_profit)}</td>

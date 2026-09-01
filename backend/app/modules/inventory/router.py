@@ -558,12 +558,16 @@ async def low_stock_alerts(tenant_id=Depends(get_tenant_id), db: AsyncSession = 
 @router.get("/reports/serial-profit")
 async def serial_profit_report(
     product_id: Optional[str] = None,
+    invoice_id: Optional[str] = None,
+    rep_id: Optional[str] = None,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
     tenant_id=Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.get_serial_profit_report(db, tenant_id, product_id, from_date, to_date)
+    return await service.get_serial_profit_report(
+        db, tenant_id, product_id, invoice_id, rep_id, from_date, to_date
+    )
 
 # ─── Batch Management (صيدلية فقط) ───────────────────────────────────
 

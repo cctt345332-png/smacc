@@ -16,6 +16,9 @@ from app.models.inventory import (
     TrackingType, SerialStatus, MovementType
 )
 from app.models.purchases import Bill, BillLine
+from app.models.sales import Invoice
+from app.models.reps import SalesRep
+from app.models.user import User
 from sqlalchemy import select
 
 
@@ -667,12 +670,28 @@ async def deduct_stock(
 async def get_serial_profit_report(
     db: AsyncSession, tenant_id: str,
     product_id: str | None = None,
+    invoice_id: str | None = None,
+    rep_id: str | None = None,
     from_date: datetime | None = None,
     to_date: datetime | None = None,
 ):
-    """تقرير الربح لكل سيريال — الميزة الفريدة للجوالات"""
-    q = select(SerialItem).join(
+    """تقرير الربح لكل سيريال مع فلترة المنتج أو الفاتورة أو المندوب."""
+    q = select(
+        SerialItem,
+        Invoice.id.label("invoice_id"),
+        Invoice.invoice_number,
+        Invoice.rep_id,
+        SalesRep.rep_code,
+        User.full_name.label("rep_name"),
+    ).join(
         InventoryItem, SerialItem.product_id == InventoryItem.id
+    ).outerjoin(
+        Invoice,
+        (Invoice.id == SerialItem.sale_invoice_id) & (Invoice.tenant_id == tenant_id),
+    ).outerjoin(
+        SalesRep, SalesRep.id == Invoice.rep_id,
+    ).outerjoin(
+        User, User.id == SalesRep.user_id,
     ).where(
         InventoryItem.tenant_id == tenant_id,
         SerialItem.status == "sold",
@@ -680,19 +699,23 @@ async def get_serial_profit_report(
     )
     if product_id:
         q = q.where(SerialItem.product_id == product_id)
+    if invoice_id:
+        q = q.where(Invoice.id == invoice_id)
+    if rep_id:
+        q = q.where(Invoice.rep_id == rep_id)
     if from_date:
         q = q.where(SerialItem.sold_at >= from_date)
     if to_date:
         q = q.where(SerialItem.sold_at <= to_date)
 
     r = await db.execute(q.options(selectinload(SerialItem.product)))
-    serials = r.scalars().all()
+    serial_rows = r.all()
 
     rows = []
     total_cost = Decimal("0")
     total_revenue = Decimal("0")
 
-    for s in serials:
+    for s, invoice_id_value, invoice_number, serial_rep_id, rep_code, rep_name in serial_rows:
         profit = (s.sale_price or Decimal("0")) - s.cost_price
         total_cost += s.cost_price
         total_revenue += s.sale_price or Decimal("0")
@@ -706,6 +729,11 @@ async def get_serial_profit_report(
             "profit": float(profit),
             "profit_pct": float(profit / s.sale_price * 100) if s.sale_price else 0,
             "sold_at": s.sold_at.isoformat() if s.sold_at else None,
+            "invoice_id": invoice_id_value,
+            "invoice_number": invoice_number,
+            "rep_id": serial_rep_id,
+            "rep_code": rep_code,
+            "rep_name": rep_name,
         })
 
     total_profit = total_revenue - total_cost
