@@ -487,3 +487,10 @@
   .legacy-app-shell .legacy-quickbar-settings-panel { position:fixed; inset-inline:8px; top:89px; width:auto; max-height:calc(100vh - 100px); border-radius:10px; }
 }
 @media print { .legacy-app-shell .legacy-quickbar-config-wrap { display:none; } }
+
+/* Keep the customization menu above page cards and outside the quickbar scroll clip. */
+.legacy-app-shell .header { z-index:10060; }
+.legacy-app-shell .legacy-quickbar { overflow:visible; position:relative; z-index:10060; }
+.legacy-app-shell .legacy-quickbar-items { overflow-x:auto; overflow-y:visible; }
+.legacy-app-shell .legacy-quickbar-config-wrap { z-index:10061; }
+.legacy-app-shell .legacy-quickbar-settings-panel { z-index:10062; }
