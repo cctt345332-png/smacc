@@ -127,6 +127,7 @@ export const assignRepsToSupervisor = (supervisorId: string, repIds: string[]) =
 // ─── واجهة المشرف الحالي ─────────────────────────────────────────────
 
 export const getSupervisorInvoices = () => api.get("/supervisors/me/invoices");
+export const getSupervisorPayments = () => api.get("/supervisors/me/payments");
 export const getSupervisorSummary  = () => api.get("/supervisors/me/summary");
 export const getSupervisorReps     = () => api.get("/supervisors/me/reps");
 
