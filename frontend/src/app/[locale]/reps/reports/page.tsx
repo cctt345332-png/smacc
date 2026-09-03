@@ -374,20 +374,21 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const customerReportMetrics = [
     { label: ar ? "العملاء النشطون" : "Active customers", value: String(customerActivityCustomers), tone: "neutral" as const },
     { label: ar ? "إجمالي الحركة المعروضة" : "Displayed activity total", value: `${fmt(customerActivityTotals.totalDisplayedMovement)} SAR`, tone: "blue" as const },
+    { label: ar ? "إجمالي الفواتير المعروضة" : "Displayed invoices", value: `${fmt(customerActivityTotals.displayedInvoices)} SAR`, tone: "blue" as const },
     { label: ar ? "الفواتير المعتمدة" : "Confirmed invoices", value: `${fmt(customerActivityTotals.confirmedSales)} SAR`, tone: "green" as const },
     { label: ar ? "المحصّل" : "Collected", value: `${fmt(customerActivityTotals.collected)} SAR`, tone: "green" as const },
     { label: ar ? "فواتير تحت المراجعة — عرض فقط" : "Under review — display only", value: `${fmt(customerActivityTotals.pendingDisplay)} SAR`, tone: "amber" as const },
   ];
   const customerReportTable = {
-    headers: [ar ? "النوع" : "Type", ar ? "التاريخ" : "Date", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "المرجع" : "Reference", ar ? "الحالة" : "Status", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الحساب" : "Accounting"],
+    headers: [ar ? "النوع" : "Type", ar ? "التاريخ" : "Date", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "المرجع" : "Reference", ar ? "المبلغ" : "Amount", ar ? "الحالة" : "Status", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الحساب" : "Accounting"],
     rows: customerActivity.map((row: any) => [
       row.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : row.type === "payment" ? (ar ? "سند قبض" : "Receipt") : (ar ? "مرتجع" : "Credit note"),
-      fmtD(row.date), repMap[row.rep_id]?.full_name || "—", row.customer || "—", row.reference || "—",
+      fmtD(row.date), repMap[row.rep_id]?.full_name || "—", row.customer || "—", row.reference || "—", `${fmt(row.amount)} SAR`,
       row.displayOnly ? (ar ? "تحت المراجعة — عرض فقط" : "Under review — display only") : (STATUS_AR[row.status] || row.status || (ar ? "مرحّل" : "Posted")),
       row.debit ? `${fmt(row.debit)} SAR` : "—", row.credit ? `${fmt(row.credit)} SAR` : "—",
       row.displayOnly ? (ar ? "لا يدخل في الحساب" : "Excluded from totals") : (ar ? "يدخل في الحساب" : "Included in totals"),
     ]),
-    totals: [ar ? "الإجمالي" : "Total", "", "", "", "", "", `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.debit || 0), 0))} SAR`, `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.credit || 0), 0))} SAR`, ""],
+    totals: [ar ? "الإجمالي المالي" : "Financial totals", "", "", "", "", `${fmt(customerActivityTotals.totalDisplayedMovement)} SAR`, "", `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.debit || 0), 0))} SAR`, `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.credit || 0), 0))} SAR`, ""],
   };
   const printableReportMetrics = tab === "activity" ? customerReportMetrics : reportMetrics;
   const printableReportTable = tab === "activity" ? customerReportTable : reportTable;
@@ -759,6 +760,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                       <th>{ar ? "المندوب" : "Rep"}</th>
                       <th>{ar ? "العميل" : "Customer"}</th>
                       <th>{ar ? "المرجع" : "Reference"}</th>
+                      <th style={{ textAlign: "end" }}>{ar ? "المبلغ" : "Amount"}</th>
                       <th>{ar ? "الحالة" : "Status"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "مدين" : "Debit"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "دائن" : "Credit"}</th>
@@ -773,6 +775,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                         <td style={{ fontSize: 13 }}>{repMap[row.rep_id]?.full_name || "—"}<div style={{ fontSize: 11, color: "var(--text-muted)" }}>{repMap[row.rep_id]?.rep_code || ""}</div></td>
                         <td style={{ fontSize: 13 }}>{row.customer || "—"}</td>
                         <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--primary)" }}>{row.reference || "—"}</td>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: row.displayOnly ? "#D97706" : "var(--text-primary)" }}>{fmt(row.amount)} SAR</td>
                         <td><span style={{ color: row.displayOnly ? "#D97706" : "var(--text-secondary)", fontSize: 12, fontWeight: row.displayOnly ? 700 : 400 }}>{row.displayOnly ? (ar ? "تحت المراجعة — عرض فقط" : "Under review — display only") : (STATUS_AR[row.status] || row.status || (ar ? "مرحّل" : "Posted"))}</span></td>
                         <td style={{ textAlign: "end", color: row.debit ? "#5A187E" : "var(--text-muted)" }}>{row.debit ? `${fmt(row.debit)} SAR` : "—"}</td>
                         <td style={{ textAlign: "end", color: row.credit ? "#15803D" : "var(--text-muted)" }}>{row.credit ? `${fmt(row.credit)} SAR` : "—"}</td>
@@ -780,10 +783,11 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                       </tr>
                     ))}</tbody>
                     <tfoot><tr style={{ background: "#F8FAFC", fontWeight: 700 }}>
-                      <td colSpan={6}>{ar ? "الإجمالي المالي" : "Financial totals"}</td>
+                      <td colSpan={6}>{ar ? "إجمالي العرض (يشمل تحت المراجعة)" : "Displayed total (includes under review)"}</td>
+                      <td style={{ textAlign: "end", fontWeight: 700, color: "#D97706" }}>{fmt(customerActivityTotals.totalDisplayedMovement)} SAR</td>
                       <td style={{ textAlign: "end", color: "#5A187E" }}>{fmt(customerActivity.reduce((sum, row) => sum + Number(row.debit || 0), 0))} SAR</td>
                       <td style={{ textAlign: "end", color: "#15803D" }}>{fmt(customerActivity.reduce((sum, row) => sum + Number(row.credit || 0), 0))} SAR</td>
-                      <td>{ar ? "لا تشمل الفواتير تحت المراجعة" : "Under-review invoices excluded"}</td>
+                      <td>{ar ? "المدين والدائن الماليان لا يشملان الفواتير تحت المراجعة" : "Financial debit and credit exclude under-review invoices"}</td>
                     </tr></tfoot>
                   </table>
                 )}
