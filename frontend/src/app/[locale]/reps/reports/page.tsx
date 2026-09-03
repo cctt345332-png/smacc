@@ -60,7 +60,6 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const [creditNotes, setCreditNotes] = useState<any[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [customerReports, setCustomerReports] = useState<any[]>([]);
   const [customerReportLoading, setCustomerReportLoading] = useState(false);
   const [customerActivity, setCustomerActivity] = useState<any[]>([]);
   const [customerActivityLoaded, setCustomerActivityLoaded] = useState(false);
@@ -487,7 +486,12 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
       {tab === "customers" && (
         <div className="card no-print" style={{ marginBottom: 16 }}>
           <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>{ar ? "فترة النشاط" : "Activity period"}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>{ar ? "المندوب" : "Rep"}</span>
+            <select className="form-input form-select" style={{ width: 190 }} value={filterRep} onChange={e => { setFilterRep(e.target.value); setCustomerActivityLoaded(false); }}>
+              <option value="">{ar ? "كل المناديب" : "All reps"}</option>
+              {reps.map(r => <option key={r.id} value={r.id}>{r.full_name} ({r.rep_code})</option>)}
+            </select>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>{ar ? "الفترة" : "Period"}</span>
             <select className="form-input form-select" style={{ width: 150 }} value={customerPeriod} onChange={e => setCustomerPeriod(e.target.value as "day" | "week" | "month" | "custom")}>
               <option value="day">{ar ? "يومي" : "Daily"}</option>
               <option value="week">{ar ? "أسبوعي" : "Weekly"}</option>
@@ -511,7 +515,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
             {customerActivityLoaded && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{customerActivity.length} {ar ? "عملية" : "operations"}</span>}
           </div>
           <div style={{ padding: "0 16px 12px", fontSize: 11, color: "var(--text-muted)" }}>
-            {ar ? "فلتر المندوب الموجود أعلى التقرير يطبق على هذا القسم أيضًا. الفواتير تحت المراجعة تظهر للعرض فقط ولا تدخل في المبيعات أو الأرصدة." : "The rep filter above also applies here. Under-review invoices are display-only and excluded from sales and balances."}
+            {ar ? "التقرير مبني على المندوب المختار ويعرض عملاءه داخل دفتر الحركة فقط. الفواتير تحت المراجعة تظهر للعرض فقط ولا تدخل في المبيعات أو الأرصدة." : "The report is driven by the selected rep and shows their customers only as activity rows. Under-review invoices are display-only and excluded from sales and balances."}
           </div>
         </div>
       )}
@@ -733,12 +737,12 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
           {tab === "customers" && (
             <div className="card">
               <div className="card-header">
-                <span className="card-title">{ar ? "نشاط العملاء حسب المندوب والفترة" : "Customer activity by rep and period"}</span>
+                <span className="card-title">{ar ? "دفتر حركة المندوب" : "Rep activity ledger"}</span>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{customerActivityLoaded ? `${customerActivity.length} ${ar ? "عملية" : "operations"}` : (ar ? "اضغط عرض النشاط" : "Choose a period and show activity")}</span>
               </div>
               <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
                 {!customerActivityLoaded ? (
-                  <div className="empty-state"><div className="empty-state-title">{ar ? "حدد الفترة والمندوب ثم اضغط عرض النشاط" : "Select the period and rep, then show activity"}</div></div>
+                  <div className="empty-state"><div className="empty-state-title">{ar ? "حدد المندوب والفترة ثم اضغط عرض النشاط" : "Select the rep and period, then show activity"}</div></div>
                 ) : customerActivity.length === 0 ? (
                   <div className="empty-state"><div className="empty-state-title">{ar ? "لا توجد عمليات في الفترة المحددة" : "No activity in the selected period"}</div></div>
                 ) : (
