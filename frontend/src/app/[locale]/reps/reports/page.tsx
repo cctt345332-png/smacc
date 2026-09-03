@@ -2,6 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getReps, getRepSummary } from "@/lib/reps";
+import { getCustomers } from "@/lib/sales";
 import api from "@/lib/api";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 import {
@@ -24,6 +25,26 @@ const STATUS_COLOR: Record<string, string> = {
 };
 const PAY_AR: Record<string, string> = { cash: "نقد", credit: "آجل", cheque: "شيك", transfer: "تحويل" };
 
+const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
+const startOfWeekIso = (value: string) => {
+  const date = new Date(`${value}T12:00:00`);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + diff);
+  return toIsoDate(date);
+};
+const endOfWeekIso = (value: string) => {
+  const date = new Date(`${startOfWeekIso(value)}T12:00:00`);
+  date.setDate(date.getDate() + 6);
+  return toIsoDate(date);
+};
+const monthBounds = (value: string) => {
+  const [year, month] = value.split("-").map(Number);
+  const start = new Date(year, (month || 1) - 1, 1, 12);
+  const end = new Date(year, month || 1, 0, 12);
+  return { from: toIsoDate(start), to: toIsoDate(end) };
+};
+
 export default function RepsReportsPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
 
@@ -38,8 +59,19 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const [payments, setPayments] = useState<any[]>([]);
   const [creditNotes, setCreditNotes] = useState<any[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customerReports, setCustomerReports] = useState<any[]>([]);
+  const [customerReportLoading, setCustomerReportLoading] = useState(false);
+  const [customerActivity, setCustomerActivity] = useState<any[]>([]);
+  const [customerActivityLoaded, setCustomerActivityLoaded] = useState(false);
+  const [customerPeriod, setCustomerPeriod] = useState<"day" | "week" | "month" | "custom">("day");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [customerAnchorDate, setCustomerAnchorDate] = useState(todayIso);
+  const [customerMonth, setCustomerMonth] = useState(todayIso.slice(0, 7));
+  const [customerFrom, setCustomerFrom] = useState(todayIso);
+  const [customerTo, setCustomerTo] = useState(todayIso);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"performance" | "invoices" | "operations" | "stock">("performance");
+  const [tab, setTab] = useState<"performance" | "invoices" | "operations" | "customers" | "stock">("performance");
   const [filterRep, setFilterRep] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -135,12 +167,13 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         const repsRes = await getReps();
         const list = Array.isArray(repsRes.data) ? repsRes.data : [];
         setReps(list);
-        const [sumResults, invRes, paymentsRes, creditNotesRes, pendingRes] = await Promise.all([
+        const [sumResults, invRes, paymentsRes, creditNotesRes, pendingRes, customersRes] = await Promise.all([
           Promise.allSettled(list.map((r: any) => getRepSummary(r.id))),
           api.get("/sales/invoices"),
           api.get("/sales/payments").catch(() => ({ data: [] })),
           api.get("/sales/credit-notes").catch(() => ({ data: [] })),
           api.get("/sales/invoices-pending").catch(() => ({ data: [] })),
+          getCustomers().catch(() => ({ data: [] })),
         ]);
         const map: Record<string, any> = {};
         sumResults.forEach((r, i) => {
@@ -153,6 +186,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         setPayments(Array.isArray(paymentsRes.data) ? paymentsRes.data : []);
         setCreditNotes(Array.isArray(creditNotesRes.data) ? creditNotesRes.data : []);
         setPendingInvoices(Array.isArray(pendingRes.data) ? pendingRes.data : []);
+        setCustomers(Array.isArray(customersRes.data) ? customersRes.data : []);
       } catch { } finally { setLoading(false); }
     };
     load();
@@ -206,6 +240,74 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     credit: operations.reduce((s: number, op: any) => s + op.credit, 0),
   };
 
+  const customerMap: Record<string, any> = {};
+  customers.forEach((customer: any) => { customerMap[customer.id] = customer; });
+  const allActivityInvoices = [...invoices, ...pendingInvoices].filter((invoice: any, index: number, list: any[]) =>
+    list.findIndex((item: any) => item.id === invoice.id) === index
+  );
+  const customerActivityDateRange = () => {
+    if (customerPeriod === "week") return { from: startOfWeekIso(customerAnchorDate), to: endOfWeekIso(customerAnchorDate) };
+    if (customerPeriod === "month") return monthBounds(customerMonth);
+    if (customerPeriod === "custom") return { from: customerFrom, to: customerTo };
+    return { from: customerAnchorDate, to: customerAnchorDate };
+  };
+  const customerOperationRepId = (item: any, invoice?: any) =>
+    item.rep_id || invoice?.rep_id || customerMap[item.customer_id || invoice?.customer_id]?.rep_id || "";
+  const customerOperationInRange = (date: any, from: string, to: string) => {
+    const value = String(date || "").slice(0, 10);
+    return Boolean(value && value >= from && value <= to);
+  };
+  const loadCustomerActivity = () => {
+    setCustomerReportLoading(true);
+    const { from, to } = customerActivityDateRange();
+    const rows: any[] = [];
+    allActivityInvoices.forEach((invoice: any) => {
+      const repId = customerOperationRepId({}, invoice);
+      if (!repId || (filterRep && repId !== filterRep) || !customerOperationInRange(invoice.issue_date, from, to)) return;
+      const financial = isFinancialInvoiceStatus(invoice.status);
+      rows.push({
+        id: `invoice-${invoice.id}`, type: "invoice", date: invoice.issue_date, rep_id: repId,
+        customer_id: invoice.customer_id, customer: invoice.buyer_name_ar || customerMap[invoice.customer_id]?.name_ar || "—",
+        reference: invoice.invoice_number, status: invoice.status, amount: Number(invoice.total || 0),
+        debit: financial ? Number(invoice.total || 0) : 0, credit: 0, financial,
+        displayOnly: !financial,
+      });
+    });
+    payments.forEach((payment: any) => {
+      const invoice = allActivityInvoices.find((item: any) => item.id === payment.invoice_id);
+      const repId = customerOperationRepId(payment, invoice);
+      if (!repId || (filterRep && repId !== filterRep) || !customerOperationInRange(payment.payment_date, from, to)) return;
+      rows.push({
+        id: `payment-${payment.id}`, type: "payment", date: payment.payment_date, rep_id: repId,
+        customer_id: payment.customer_id || invoice?.customer_id,
+        customer: payment.customer_name_ar || invoice?.buyer_name_ar || customerMap[payment.customer_id]?.name_ar || "—",
+        reference: payment.payment_number, status: payment.payment_method, amount: Number(payment.amount || 0),
+        debit: 0, credit: Number(payment.amount || 0), financial: true, displayOnly: false,
+      });
+    });
+    creditNotes.forEach((note: any) => {
+      const invoice = allActivityInvoices.find((item: any) => item.id === note.original_invoice_id);
+      const repId = customerOperationRepId(note, invoice);
+      if (!repId || (filterRep && repId !== filterRep) || !customerOperationInRange(note.issue_date, from, to)) return;
+      rows.push({
+        id: `credit-${note.id}`, type: "credit_note", date: note.issue_date, rep_id: repId,
+        customer_id: note.customer_id || invoice?.customer_id,
+        customer: customerMap[note.customer_id]?.name_ar || invoice?.buyer_name_ar || "—",
+        reference: note.credit_note_number, status: note.reason, amount: Number(note.total || 0),
+        debit: 0, credit: Number(note.total || 0), financial: true, displayOnly: false,
+      });
+    });
+    setCustomerActivity(rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    setCustomerActivityLoaded(true);
+    setCustomerReportLoading(false);
+  };
+  const customerActivityTotals = {
+    confirmedSales: customerActivity.reduce((sum, row) => sum + (row.financial && row.type === "invoice" ? row.amount : 0), 0),
+    collected: customerActivity.reduce((sum, row) => sum + (row.type === "payment" ? row.amount : 0), 0),
+    pendingDisplay: customerActivity.reduce((sum, row) => sum + (row.displayOnly ? row.amount : 0), 0),
+  };
+  const customerActivityCustomers = new Set(customerActivity.map(row => row.customer_id).filter(Boolean)).size;
+
   const zones = [...new Set(reps.map(r => r.zone).filter(Boolean))] as string[];
 
   const repStats = reps
@@ -226,6 +328,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     { key: "performance", label: ar ? "مقارنة الأداء" : "Performance" },
     { key: "invoices",    label: ar ? "الفواتير التفصيلية" : "Invoices Detail" },
     { key: "operations",  label: ar ? "كل العمليات" : "All Operations" },
+    { key: "customers",   label: ar ? "كل العملاء" : "All Customers" },
     { key: "stock",       label: ar ? "المخزون" : "Stock" },
   ] as const;
 
@@ -240,7 +343,9 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
       ? (ar ? "تقرير فواتير المناديب" : "Sales Rep Invoices Report")
       : tab === "operations"
         ? (ar ? "كشف عمليات المناديب" : "Sales Rep Operations Ledger")
-        : (ar ? "تقرير مخزون المناديب" : "Sales Rep Stock Report");
+        : tab === "customers"
+          ? (ar ? "تقرير كل عمليات العملاء" : "All Customer Operations Report")
+          : (ar ? "تقرير مخزون المناديب" : "Sales Rep Stock Report");
   const reportPeriod = filterMonth || `${dateFrom || (ar ? "بداية البيانات" : "Start")} — ${dateTo || (ar ? "حتى اليوم" : "Today")}`;
   const reportMetrics = tab === "performance" ? [
     { label: ar ? "مبيعات الفريق" : "Team sales", value: `${fmt(totalSales)} SAR`, tone: "blue" as const },
@@ -261,6 +366,26 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     { label: ar ? "كمية مخزون المناديب" : "Rep stock qty", value: String(repStats.reduce((s, r) => s + Number(r.sum.stock_qty || 0), 0)), tone: "amber" as const },
   ];
   const reportTable = tab === "performance" ? { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "الهدف" : "Target", ar ? "المبيعات" : "Sales", ar ? "التحقق" : "Achievement", ar ? "المحصّل" : "Collected", ar ? "المستحق" : "Outstanding", ar ? "العمولة" : "Commission"], rows: repStats.map(({ rep, sum, pct, commission }) => [rep.full_name, rep.zone || "—", rep.target_monthly ? fmt(rep.target_monthly) : "—", fmt(sum.total_sales || 0), pct == null ? "—" : `${pct}%`, fmt(sum.total_collected || 0), fmt(sum.outstanding || 0), fmt(commission)]), totals: [ar ? "الإجمالي" : "Total", "", "", fmt(totalSales), "", fmt(totalCollected), fmt(totalOutstanding), fmt(totalCommission) ] } : tab === "invoices" ? { headers: [ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "الحالة" : "Status", ar ? "التاريخ" : "Date", ar ? "الإجمالي" : "Total", ar ? "المدفوع" : "Paid", ar ? "المتبقي" : "Remaining"], rows: filteredInvoices.map((inv: any) => [inv.invoice_number, repMap[inv.rep_id]?.full_name || "—", inv.buyer_name_ar || "—", STATUS_AR[inv.status] || "حالة غير معروفة", fmtD(inv.issue_date), fmt(inv.total), fmt(inv.paid_amount), fmt(Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0)))]) } : tab === "operations" ? { headers: [ar ? "النوع" : "Type", ar ? "التاريخ" : "Date", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "المرجع" : "Reference", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "البيان" : "Details"], rows: operations.map((op: any) => [op.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : op.type === "payment" ? (ar ? "سند قبض" : "Receipt") : (ar ? "مرتجع" : "Credit Note"), fmtD(op.date), repMap[op.rep_id]?.full_name || "—", op.customer || "—", op.reference || "—", fmt(op.debit), fmt(op.credit), op.status || "—"]), totals: [ar ? "الإجمالي" : "Total", "", "", "", "", fmt(operationTotals.debit), fmt(operationTotals.credit), ""] } : { headers: [ar ? "المندوب" : "Rep", ar ? "المنطقة" : "Zone", ar ? "المركبة" : "Vehicle", ar ? "كمية المخزون" : "Stock qty", ar ? "قيمة المخزون" : "Stock value"], rows: repStats.map(({ rep, sum }) => [rep.full_name, rep.zone || "—", rep.vehicle_plate || "—", String(Number(sum.stock_qty || 0)), fmt(sum.stock_value || 0)]) };
+
+  const customerReportMetrics = [
+    { label: ar ? "العملاء النشطون" : "Active customers", value: String(customerActivityCustomers), tone: "neutral" as const },
+    { label: ar ? "المبيعات المؤكدة" : "Confirmed sales", value: `${fmt(customerActivityTotals.confirmedSales)} SAR`, tone: "blue" as const },
+    { label: ar ? "المحصّل" : "Collected", value: `${fmt(customerActivityTotals.collected)} SAR`, tone: "green" as const },
+    { label: ar ? "فواتير للعرض فقط" : "Display-only invoices", value: `${fmt(customerActivityTotals.pendingDisplay)} SAR`, tone: "amber" as const },
+  ];
+  const customerReportTable = {
+    headers: [ar ? "النوع" : "Type", ar ? "التاريخ" : "Date", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "المرجع" : "Reference", ar ? "الحالة" : "Status", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الحساب" : "Accounting"],
+    rows: customerActivity.map((row: any) => [
+      row.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : row.type === "payment" ? (ar ? "سند قبض" : "Receipt") : (ar ? "مرتجع" : "Credit note"),
+      fmtD(row.date), repMap[row.rep_id]?.full_name || "—", row.customer || "—", row.reference || "—",
+      row.displayOnly ? (ar ? "تحت المراجعة — عرض فقط" : "Under review — display only") : (STATUS_AR[row.status] || row.status || (ar ? "مرحّل" : "Posted")),
+      row.debit ? `${fmt(row.debit)} SAR` : "—", row.credit ? `${fmt(row.credit)} SAR` : "—",
+      row.displayOnly ? (ar ? "لا يدخل في الحساب" : "Excluded from totals") : (ar ? "يدخل في الحساب" : "Included in totals"),
+    ]),
+    totals: [ar ? "الإجمالي" : "Total", "", "", "", "", "", `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.debit || 0), 0))} SAR`, `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.credit || 0), 0))} SAR`, ""],
+  };
+  const printableReportMetrics = tab === "customers" ? customerReportMetrics : reportMetrics;
+  const printableReportTable = tab === "customers" ? customerReportTable : reportTable;
 
   return (
     <>
@@ -303,7 +428,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
             style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #FCA5A5", background: pdfLoading ? "#F1F5F9" : "#FEF2F2", color: "#DC2626", fontSize: 13, fontWeight: 600, cursor: pdfLoading ? "wait" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
             {pdfLoading ? "⏳" : "📥"} {ar ? (pdfLoading ? "جاري..." : "PDF") : (pdfLoading ? "Loading..." : "PDF")}
           </button>
-          <StructuredReportPrintButton locale={locale} title={printTitle} subtitle={ar ? "تقرير تشغيلي للمناديب" : "Operational sales-rep report"} period={reportPeriod} orientation="landscape" reportCode={`REP-${tab.toUpperCase()}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={reportMetrics} tables={[reportTable]} />
+          <StructuredReportPrintButton locale={locale} title={printTitle} subtitle={ar ? "تقرير تشغيلي للمناديب" : "Operational sales-rep report"} period={reportPeriod} orientation="landscape" reportCode={`REP-${tab.toUpperCase()}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={printableReportMetrics} tables={[printableReportTable]} />
         </div>
       </div>
 
@@ -358,6 +483,38 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
           </button>
         ))}
       </div>
+
+      {tab === "customers" && (
+        <div className="card no-print" style={{ marginBottom: 16 }}>
+          <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>{ar ? "فترة النشاط" : "Activity period"}</span>
+            <select className="form-input form-select" style={{ width: 150 }} value={customerPeriod} onChange={e => setCustomerPeriod(e.target.value as "day" | "week" | "month" | "custom")}>
+              <option value="day">{ar ? "يومي" : "Daily"}</option>
+              <option value="week">{ar ? "أسبوعي" : "Weekly"}</option>
+              <option value="month">{ar ? "شهري" : "Monthly"}</option>
+              <option value="custom">{ar ? "تاريخ مخصص" : "Custom dates"}</option>
+            </select>
+            {customerPeriod === "month" ? (
+              <input type="month" className="form-input" style={{ width: 150 }} value={customerMonth} onChange={e => setCustomerMonth(e.target.value)} />
+            ) : customerPeriod === "custom" ? (
+              <>
+                <input type="date" className="form-input" style={{ width: 150 }} value={customerFrom} onChange={e => setCustomerFrom(e.target.value)} />
+                <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{ar ? "إلى" : "to"}</span>
+                <input type="date" className="form-input" style={{ width: 150 }} value={customerTo} onChange={e => setCustomerTo(e.target.value)} />
+              </>
+            ) : (
+              <input type="date" className="form-input" style={{ width: 150 }} value={customerAnchorDate} onChange={e => setCustomerAnchorDate(e.target.value)} />
+            )}
+            <button className="btn btn-primary" onClick={loadCustomerActivity} disabled={customerReportLoading}>
+              {customerReportLoading ? (ar ? "جاري تجهيز التقرير..." : "Preparing...") : (ar ? "عرض النشاط" : "Show activity")}
+            </button>
+            {customerActivityLoaded && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{customerActivity.length} {ar ? "عملية" : "operations"}</span>}
+          </div>
+          <div style={{ padding: "0 16px 12px", fontSize: 11, color: "var(--text-muted)" }}>
+            {ar ? "فلتر المندوب الموجود أعلى التقرير يطبق على هذا القسم أيضًا. الفواتير تحت المراجعة تظهر للعرض فقط ولا تدخل في المبيعات أو الأرصدة." : "The rep filter above also applies here. Under-review invoices are display-only and excluded from sales and balances."}
+          </div>
+        </div>
+      )}
 
       {/* فلاتر إضافية للفواتير */}
       {(tab === "invoices" || tab === "operations") && (
@@ -566,6 +723,58 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                         <td className="no-print" />
                       </tr>
                     </tfoot>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ══ تبويب: كل العملاء ══ */}
+          {tab === "customers" && (
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title">{ar ? "نشاط العملاء حسب المندوب والفترة" : "Customer activity by rep and period"}</span>
+                <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{customerActivityLoaded ? `${customerActivity.length} ${ar ? "عملية" : "operations"}` : (ar ? "اضغط عرض النشاط" : "Choose a period and show activity")}</span>
+              </div>
+              <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
+                {!customerActivityLoaded ? (
+                  <div className="empty-state"><div className="empty-state-title">{ar ? "حدد الفترة والمندوب ثم اضغط عرض النشاط" : "Select the period and rep, then show activity"}</div></div>
+                ) : customerActivity.length === 0 ? (
+                  <div className="empty-state"><div className="empty-state-title">{ar ? "لا توجد عمليات في الفترة المحددة" : "No activity in the selected period"}</div></div>
+                ) : (
+                  <table>
+                    <thead><tr>
+                      <th>{ar ? "النوع" : "Type"}</th>
+                      <th>{ar ? "التاريخ" : "Date"}</th>
+                      <th>{ar ? "المندوب" : "Rep"}</th>
+                      <th>{ar ? "العميل" : "Customer"}</th>
+                      <th>{ar ? "المرجع" : "Reference"}</th>
+                      <th>{ar ? "الحالة" : "Status"}</th>
+                      <th style={{ textAlign: "end" }}>{ar ? "مدين" : "Debit"}</th>
+                      <th style={{ textAlign: "end" }}>{ar ? "دائن" : "Credit"}</th>
+                      <th>{ar ? "الأثر المالي" : "Financial effect"}</th>
+                    </tr></thead>
+                    <tbody>{customerActivity.map((row: any) => (
+                      <tr key={row.id}>
+                        <td><span className="badge" style={{ background: row.type === "invoice" ? (row.displayOnly ? "#FFF7ED" : "#F4EFF7") : row.type === "payment" ? "#ECFDF3" : "#FEF2F2", color: row.type === "invoice" ? (row.displayOnly ? "#D97706" : "#5A187E") : row.type === "payment" ? "#15803D" : "#B42318" }}>
+                          {row.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : row.type === "payment" ? (ar ? "سند قبض" : "Receipt") : (ar ? "مرتجع" : "Credit note")}
+                        </span></td>
+                        <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmtD(row.date)}</td>
+                        <td style={{ fontSize: 13 }}>{repMap[row.rep_id]?.full_name || "—"}<div style={{ fontSize: 11, color: "var(--text-muted)" }}>{repMap[row.rep_id]?.rep_code || ""}</div></td>
+                        <td style={{ fontSize: 13 }}>{row.customer || "—"}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 12, color: "var(--primary)" }}>{row.reference || "—"}</td>
+                        <td><span style={{ color: row.displayOnly ? "#D97706" : "var(--text-secondary)", fontSize: 12, fontWeight: row.displayOnly ? 700 : 400 }}>{row.displayOnly ? (ar ? "تحت المراجعة — عرض فقط" : "Under review — display only") : (STATUS_AR[row.status] || row.status || (ar ? "مرحّل" : "Posted"))}</span></td>
+                        <td style={{ textAlign: "end", color: row.debit ? "#5A187E" : "var(--text-muted)" }}>{row.debit ? `${fmt(row.debit)} SAR` : "—"}</td>
+                        <td style={{ textAlign: "end", color: row.credit ? "#15803D" : "var(--text-muted)" }}>{row.credit ? `${fmt(row.credit)} SAR` : "—"}</td>
+                        <td style={{ fontSize: 12, color: row.displayOnly ? "#D97706" : "#15803D" }}>{row.displayOnly ? (ar ? "لا يدخل في الحساب" : "Excluded") : (ar ? "يدخل في الحساب" : "Included")}</td>
+                      </tr>
+                    ))}</tbody>
+                    <tfoot><tr style={{ background: "#F8FAFC", fontWeight: 700 }}>
+                      <td colSpan={6}>{ar ? "الإجمالي المالي" : "Financial totals"}</td>
+                      <td style={{ textAlign: "end", color: "#5A187E" }}>{fmt(customerActivity.reduce((sum, row) => sum + Number(row.debit || 0), 0))} SAR</td>
+                      <td style={{ textAlign: "end", color: "#15803D" }}>{fmt(customerActivity.reduce((sum, row) => sum + Number(row.credit || 0), 0))} SAR</td>
+                      <td>{ar ? "لا تشمل الفواتير تحت المراجعة" : "Under-review invoices excluded"}</td>
+                    </tr></tfoot>
                   </table>
                 )}
               </div>
