@@ -304,8 +304,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     confirmedSales: customerActivity.reduce((sum, row) => sum + (row.financial && row.type === "invoice" ? row.amount : 0), 0),
     collected: customerActivity.reduce((sum, row) => sum + (row.type === "payment" ? row.amount : 0), 0),
     pendingDisplay: customerActivity.reduce((sum, row) => sum + (row.displayOnly ? row.amount : 0), 0),
-    displayedInvoices: customerActivity.reduce((sum, row) => sum + (row.type === "invoice" ? row.amount : 0), 0),
-    totalDisplayedMovement: customerActivity.reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    totalDisplayedMovement: customerActivity.reduce((sum, row) => sum + (row.type === "invoice" ? Number(row.amount || 0) : 0), 0),
   };
   const customerActivityCustomers = new Set(customerActivity.map(row => row.customer_id).filter(Boolean)).size;
 
@@ -373,10 +372,9 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
 
   const customerReportMetrics = [
     { label: ar ? "العملاء النشطون" : "Active customers", value: String(customerActivityCustomers), tone: "neutral" as const },
-    { label: ar ? "إجمالي الحركة المعروضة" : "Displayed activity total", value: `${fmt(customerActivityTotals.totalDisplayedMovement)} SAR`, tone: "blue" as const },
-    { label: ar ? "إجمالي الفواتير المعروضة" : "Displayed invoices", value: `${fmt(customerActivityTotals.displayedInvoices)} SAR`, tone: "blue" as const },
+    { label: ar ? "إجمالي الفواتير المعروضة" : "Displayed invoice total", value: `${fmt(customerActivityTotals.totalDisplayedMovement)} SAR`, tone: "blue" as const },
     { label: ar ? "الفواتير المعتمدة" : "Confirmed invoices", value: `${fmt(customerActivityTotals.confirmedSales)} SAR`, tone: "green" as const },
-    { label: ar ? "المحصّل" : "Collected", value: `${fmt(customerActivityTotals.collected)} SAR`, tone: "green" as const },
+    { label: ar ? "المحصّل — عرض فقط" : "Collected — display only", value: `${fmt(customerActivityTotals.collected)} SAR`, tone: "green" as const },
     { label: ar ? "فواتير تحت المراجعة — عرض فقط" : "Under review — display only", value: `${fmt(customerActivityTotals.pendingDisplay)} SAR`, tone: "amber" as const },
   ];
   const customerReportTable = {
@@ -783,7 +781,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
                       </tr>
                     ))}</tbody>
                     <tfoot><tr style={{ background: "#F8FAFC", fontWeight: 700 }}>
-                      <td colSpan={6}>{ar ? "إجمالي العرض (يشمل تحت المراجعة)" : "Displayed total (includes under review)"}</td>
+                      <td colSpan={6}>{ar ? "إجمالي الفواتير (يشمل تحت المراجعة)" : "Invoice total (includes under review)"}</td>
                       <td style={{ textAlign: "end", fontWeight: 700, color: "#D97706" }}>{fmt(customerActivityTotals.totalDisplayedMovement)} SAR</td>
                       <td style={{ textAlign: "end", color: "#5A187E" }}>{fmt(customerActivity.reduce((sum, row) => sum + Number(row.debit || 0), 0))} SAR</td>
                       <td style={{ textAlign: "end", color: "#15803D" }}>{fmt(customerActivity.reduce((sum, row) => sum + Number(row.credit || 0), 0))} SAR</td>
