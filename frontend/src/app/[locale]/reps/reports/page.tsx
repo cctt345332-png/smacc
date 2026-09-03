@@ -70,7 +70,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
   const [customerFrom, setCustomerFrom] = useState(todayIso);
   const [customerTo, setCustomerTo] = useState(todayIso);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"performance" | "invoices" | "operations" | "customers" | "stock">("performance");
+  const [tab, setTab] = useState<"performance" | "invoices" | "operations" | "activity" | "stock">("performance");
   const [filterRep, setFilterRep] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -304,6 +304,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     confirmedSales: customerActivity.reduce((sum, row) => sum + (row.financial && row.type === "invoice" ? row.amount : 0), 0),
     collected: customerActivity.reduce((sum, row) => sum + (row.type === "payment" ? row.amount : 0), 0),
     pendingDisplay: customerActivity.reduce((sum, row) => sum + (row.displayOnly ? row.amount : 0), 0),
+    displayedInvoices: customerActivity.reduce((sum, row) => sum + (row.type === "invoice" ? row.amount : 0), 0),
+    totalDisplayedMovement: customerActivity.reduce((sum, row) => sum + Number(row.amount || 0), 0),
   };
   const customerActivityCustomers = new Set(customerActivity.map(row => row.customer_id).filter(Boolean)).size;
 
@@ -327,7 +329,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     { key: "performance", label: ar ? "مقارنة الأداء" : "Performance" },
     { key: "invoices",    label: ar ? "الفواتير التفصيلية" : "Invoices Detail" },
     { key: "operations",  label: ar ? "كل العمليات" : "All Operations" },
-    { key: "customers",   label: ar ? "كل العملاء" : "All Customers" },
+    { key: "activity",   label: ar ? "حركة المندوب" : "Rep Activity" },
     { key: "stock",       label: ar ? "المخزون" : "Stock" },
   ] as const;
 
@@ -342,10 +344,13 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
       ? (ar ? "تقرير فواتير المناديب" : "Sales Rep Invoices Report")
       : tab === "operations"
         ? (ar ? "كشف عمليات المناديب" : "Sales Rep Operations Ledger")
-        : tab === "customers"
-          ? (ar ? "تقرير كل عمليات العملاء" : "All Customer Operations Report")
+        : tab === "activity"
+          ? (ar ? "تقرير حركة المندوب" : "Rep Activity Report")
           : (ar ? "تقرير مخزون المناديب" : "Sales Rep Stock Report");
-  const reportPeriod = filterMonth || `${dateFrom || (ar ? "بداية البيانات" : "Start")} — ${dateTo || (ar ? "حتى اليوم" : "Today")}`;
+  const customerPrintRange = customerActivityDateRange();
+  const reportPeriod = tab === "activity"
+    ? `${customerPrintRange.from} — ${customerPrintRange.to}`
+    : filterMonth || `${dateFrom || (ar ? "بداية البيانات" : "Start")} — ${dateTo || (ar ? "حتى اليوم" : "Today")}`;
   const reportMetrics = tab === "performance" ? [
     { label: ar ? "مبيعات الفريق" : "Team sales", value: `${fmt(totalSales)} SAR`, tone: "blue" as const },
     { label: ar ? "المحصّل" : "Collected", value: `${fmt(totalCollected)} SAR`, tone: "green" as const },
@@ -368,9 +373,10 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
 
   const customerReportMetrics = [
     { label: ar ? "العملاء النشطون" : "Active customers", value: String(customerActivityCustomers), tone: "neutral" as const },
-    { label: ar ? "المبيعات المؤكدة" : "Confirmed sales", value: `${fmt(customerActivityTotals.confirmedSales)} SAR`, tone: "blue" as const },
+    { label: ar ? "إجمالي الحركة المعروضة" : "Displayed activity total", value: `${fmt(customerActivityTotals.totalDisplayedMovement)} SAR`, tone: "blue" as const },
+    { label: ar ? "الفواتير المعتمدة" : "Confirmed invoices", value: `${fmt(customerActivityTotals.confirmedSales)} SAR`, tone: "green" as const },
     { label: ar ? "المحصّل" : "Collected", value: `${fmt(customerActivityTotals.collected)} SAR`, tone: "green" as const },
-    { label: ar ? "فواتير للعرض فقط" : "Display-only invoices", value: `${fmt(customerActivityTotals.pendingDisplay)} SAR`, tone: "amber" as const },
+    { label: ar ? "فواتير تحت المراجعة — عرض فقط" : "Under review — display only", value: `${fmt(customerActivityTotals.pendingDisplay)} SAR`, tone: "amber" as const },
   ];
   const customerReportTable = {
     headers: [ar ? "النوع" : "Type", ar ? "التاريخ" : "Date", ar ? "المندوب" : "Rep", ar ? "العميل" : "Customer", ar ? "المرجع" : "Reference", ar ? "الحالة" : "Status", ar ? "مدين" : "Debit", ar ? "دائن" : "Credit", ar ? "الحساب" : "Accounting"],
@@ -383,8 +389,8 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
     ]),
     totals: [ar ? "الإجمالي" : "Total", "", "", "", "", "", `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.debit || 0), 0))} SAR`, `${fmt(customerActivity.reduce((sum, row) => sum + Number(row.credit || 0), 0))} SAR`, ""],
   };
-  const printableReportMetrics = tab === "customers" ? customerReportMetrics : reportMetrics;
-  const printableReportTable = tab === "customers" ? customerReportTable : reportTable;
+  const printableReportMetrics = tab === "activity" ? customerReportMetrics : reportMetrics;
+  const printableReportTable = tab === "activity" ? customerReportTable : reportTable;
 
   return (
     <>
@@ -483,7 +489,7 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
         ))}
       </div>
 
-      {tab === "customers" && (
+      {tab === "activity" && (
         <div className="card no-print" style={{ marginBottom: 16 }}>
           <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)" }}>{ar ? "المندوب" : "Rep"}</span>
@@ -733,11 +739,11 @@ export default function RepsReportsPage(props: { params: Promise<{ locale: strin
             </div>
           )}
 
-          {/* ══ تبويب: كل العملاء ══ */}
-          {tab === "customers" && (
+          {/* ══ تبويب: حركة المندوب ══ */}
+          {tab === "activity" && (
             <div className="card">
               <div className="card-header">
-                <span className="card-title">{ar ? "دفتر حركة المندوب" : "Rep activity ledger"}</span>
+                <span className="card-title">{ar ? "حركة المندوب" : "Rep Activity"}</span>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{customerActivityLoaded ? `${customerActivity.length} ${ar ? "عملية" : "operations"}` : (ar ? "اضغط عرض النشاط" : "Choose a period and show activity")}</span>
               </div>
               <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
