@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
+import { getCustomers } from "@/lib/sales";
+import { getItems, getSerials } from "@/lib/inventory";
 
 const STATUS = [
   ["new", "جديد"], ["received", "تم الاستلام"], ["inspecting", "قيد الفحص"],
@@ -19,6 +21,9 @@ const emptyForm = {
 export default function MaintenanceWorkspace({ locale, repOnly = false }: { locale: string; repOnly?: boolean }) {
   const ar = locale === "ar";
   const [rows, setRows] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [items, setItems] = useState<any[]>([]);
+  const [serials, setSerials] = useState<any[]>([]);
   const [form, setForm] = useState({ ...emptyForm });
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -30,13 +35,23 @@ export default function MaintenanceWorkspace({ locale, repOnly = false }: { loca
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/maintenance", { params: { status: status || undefined } });
+      const [res, customerRes, itemRes] = await Promise.all([
+        api.get("/maintenance", { params: { status: status || undefined } }),
+        getCustomers(),
+        getItems(),
+      ]);
       setRows(Array.isArray(res.data) ? res.data : []);
+      setCustomers(Array.isArray(customerRes.data) ? customerRes.data : []);
+      setItems(Array.isArray(itemRes.data) ? itemRes.data : []);
     } catch (e: any) {
       setError(e?.response?.data?.detail || (ar ? "تعذر تحميل طلبات الصيانة" : "Could not load maintenance requests"));
     } finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [status]);
+  useEffect(() => {
+    if (!form.product_id) { setSerials([]); return; }
+    getSerials(form.product_id, "in_stock").then(res => setSerials(Array.isArray(res.data) ? res.data : [])).catch(() => setSerials([]));
+  }, [form.product_id]);
 
   const setField = (key: string, value: any) => setForm((f: any) => ({ ...f, [key]: value }));
   const create = async () => {
@@ -92,8 +107,8 @@ export default function MaintenanceWorkspace({ locale, repOnly = false }: { loca
     {showForm && <div className="modal-backdrop" onClick={() => setShowForm(false)}><div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 760 }}>
       <div className="modal-header"><h2>{ar ? "إنشاء طلب صيانة" : "New Maintenance Request"}</h2><button className="btn btn-ghost" onClick={() => setShowForm(false)}>×</button></div>
       <div className="modal-body" style={{ display: "grid", gap: 12 }}>
-        <div className="form-grid-2"><label>{ar ? "معرّف العميل*" : "Customer ID*"}<input className="form-input" value={form.customer_id} onChange={e => setField("customer_id", e.target.value)} /></label><label>{ar ? "معرّف المنتج" : "Product ID"}<input className="form-input" value={form.product_id} onChange={e => setField("product_id", e.target.value)} /></label></div>
-        <div className="form-grid-2"><label>{ar ? "معرّف السيريال" : "Serial item ID"}<input className="form-input" value={form.serial_item_id} onChange={e => setField("serial_item_id", e.target.value)} /></label><label>{ar ? "رقم السيريال" : "Serial number"}<input className="form-input" value={form.serial_number} onChange={e => setField("serial_number", e.target.value)} /></label></div>
+        <div className="form-grid-2"><label>{ar ? "العميل*" : "Customer*"}<select className="form-input form-select" value={form.customer_id} onChange={e => setField("customer_id", e.target.value)}><option value="">{ar ? "اختر العميل" : "Select customer"}</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name_ar || c.name_en} — {c.customer_number}</option>)}</select></label><label>{ar ? "المنتج" : "Product"}<select className="form-input form-select" value={form.product_id} onChange={e => { setField("product_id", e.target.value); setField("serial_item_id", ""); setField("serial_number", ""); }}><option value="">{ar ? "اختر المنتج" : "Select product"}</option>{items.map(i => <option key={i.id} value={i.id}>{i.name_ar || i.name_en}</option>)}</select></label></div>
+        <div className="form-grid-2"><label>{ar ? "السيريال" : "Serial"}<select className="form-input form-select" value={form.serial_item_id} onChange={e => { const s = serials.find(x => x.id === e.target.value); setField("serial_item_id", e.target.value); setField("serial_number", s?.serial_number || ""); }} disabled={!form.product_id}><option value="">{form.product_id ? (ar ? "اختر السيريال" : "Select serial") : (ar ? "اختر المنتج أولاً" : "Select product first")}</option>{serials.map(s => <option key={s.id} value={s.id}>{s.serial_number}</option>)}</select></label><label>{ar ? "رقم الفاتورة" : "Invoice ID"}<input className="form-input" value={form.invoice_id} onChange={e => setField("invoice_id", e.target.value)} /></label></div>
         <div className="form-grid-2"><label>{ar ? "اسم الجهاز" : "Device name"}<input className="form-input" value={form.device_name} onChange={e => setField("device_name", e.target.value)} /></label><label>{ar ? "IMEI 1" : "IMEI 1"}<input className="form-input" value={form.imei_1} onChange={e => setField("imei_1", e.target.value)} /></label></div>
         <label>{ar ? "وصف المشكلة*" : "Reported problem*"}<textarea className="form-input" rows={3} value={form.reported_problem} onChange={e => setField("reported_problem", e.target.value)} /></label>
         <div className="form-grid-2"><label>{ar ? "نوع القفل" : "Lock type"}<select className="form-input form-select" value={form.lock_type} onChange={e => setField("lock_type", e.target.value)}><option value="none">{ar ? "لا يوجد" : "None"}</option><option value="screen_pin">PIN</option><option value="password">{ar ? "كلمة مرور" : "Password"}</option><option value="pattern">{ar ? "نمط" : "Pattern"}</option><option value="user_account">{ar ? "حساب مستخدم" : "User account"}</option></select></label><label>{ar ? "كلمة المرور / الرمز" : "Password / lock"}<input className="form-input" type="password" value={form.lock_secret} onChange={e => setField("lock_secret", e.target.value)} /></label></div>
