@@ -1825,6 +1825,8 @@ async def get_serial_movements_report(
     product_id: str | None = None,
     movement_type: str | None = None,
     serial_status: str | None = None,
+    serial_number: str | None = None,
+    invoice_number: str | None = None,
     from_date: datetime | None = None,
     to_date: datetime | None = None,
     limit: int = 2000,
@@ -1841,6 +1843,7 @@ async def get_serial_movements_report(
         Bill.bill_number,
         Bill.vendor_name_ar,
         Bill.bill_date,
+        Invoice.invoice_number.label("invoice_number"),
     ).join(
         SerialItem, SerialItem.id == StockMovement.serial_item_id
     ).join(
@@ -1854,6 +1857,11 @@ async def get_serial_movements_report(
         (Bill.tenant_id == tenant_id)
         & (Bill.id == StockMovement.reference_id)
         & (StockMovement.reference_type == "bill"),
+    ).outerjoin(
+        Invoice,
+        (Invoice.tenant_id == tenant_id)
+        & (Invoice.id == StockMovement.reference_id)
+        & (StockMovement.reference_type == "invoice"),
     ).where(
         StockMovement.tenant_id == tenant_id,
         StockMovement.serial_item_id.isnot(None),
@@ -1868,6 +1876,11 @@ async def get_serial_movements_report(
         q = q.where(StockMovement.movement_type == movement_type)
     if serial_status:
         q = q.where(SerialItem.status == serial_status)
+    if serial_number:
+        q = q.where(SerialItem.serial_number.ilike(f"%{serial_number.strip()}%"))
+    if invoice_number:
+        invoice_term = invoice_number.strip()
+        q = q.where(or_(Bill.bill_number.ilike(f"%{invoice_term}%"), Invoice.invoice_number.ilike(f"%{invoice_term}%")))
     if from_date:
         q = q.where(StockMovement.created_at >= from_date)
     if to_date:
@@ -1904,7 +1917,7 @@ async def get_serial_movements_report(
     rows = []
     total_in = Decimal("0")
     total_out = Decimal("0")
-    for movement, serial, item, warehouse_name, to_warehouse_name, bill_id_value, bill_number, vendor_name, bill_date in result.all():
+    for movement, serial, item, warehouse_name, to_warehouse_name, bill_id_value, bill_number, vendor_name, bill_date, sales_invoice_number in result.all():
         quantity = Decimal(movement.quantity or 0)
         value = abs(quantity) * Decimal(movement.unit_cost or 0)
         if quantity >= 0:
@@ -1938,6 +1951,7 @@ async def get_serial_movements_report(
             "reference_id": movement.reference_id,
             "bill_id": bill_id_value,
             "bill_number": bill_number,
+            "invoice_number": sales_invoice_number,
             "vendor_name": vendor_name,
             "bill_date": bill_date.isoformat() if bill_date else None,
             "notes": movement.notes,
@@ -1946,11 +1960,8 @@ async def get_serial_movements_report(
     return {
         "rows": rows,
         "summary": {
-            # عدد السجلات الناتجة من تاريخ/نوع الحركة والفلاتر التاريخية.
+            # عدد السجلات الناتجة من تاريخ/نوع الحركة والفلاتر الحالية.
             "count": len(rows),
-            "total_in": float(total_in),
-            "total_out": float(total_out),
-            "net_value": float(total_in - total_out),
             # الرصيد الحالي يعتمد على حالة SerialItem الحالية وموقعه الحالي.
             "current_stock_count": current_by_status.get("in_stock", 0),
             "current_sold_count": current_by_status.get("sold", 0),

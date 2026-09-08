@@ -590,6 +590,8 @@ async def serial_movements_report(
     product_id: Optional[str] = None,
     movement_type: Optional[str] = None,
     serial_status: Optional[str] = None,
+    serial_number: Optional[str] = None,
+    invoice_number: Optional[str] = None,
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
     limit: int = 2000,
@@ -598,7 +600,7 @@ async def serial_movements_report(
 ):
     return await service.get_serial_movements_report(
         db, tenant_id, warehouse_id, bill_id, product_id, movement_type,
-        serial_status, from_date, to_date, limit,
+        serial_status, serial_number, invoice_number, from_date, to_date, limit,
     )
 
 @router.get("/reports/serial-profit")
