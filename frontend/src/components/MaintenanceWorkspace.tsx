@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import api from "@/lib/api";
 import { getCustomers } from "@/lib/sales";
 import { getItems, getSerials } from "@/lib/inventory";
@@ -102,7 +103,7 @@ export default function MaintenanceWorkspace({ locale, repOnly = false }: { loca
       <td style={{ maxWidth: 240 }}>{row.reported_problem}</td>
       <td><select className="form-input form-select" value={row.status} onChange={e => changeStatus(row, e.target.value)}>{STATUS.map(([v, l]) => <option key={v} value={v}>{ar ? l : v}</option>)}</select></td>
       <td>{row.lock_secret_provided ? (row.lock_secret_returned ? (ar ? "أعيدت للعميل" : "Returned") : (ar ? "موجودة" : "Provided")) : (ar ? "لا يوجد" : "None")}</td>
-      <td><button className="btn btn-secondary btn-sm" onClick={() => window.print()}>{ar ? "طباعة" : "Print"}</button></td>
+      <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Link className="btn btn-secondary btn-sm" href={`/${locale}/maintenance/${row.id}/print?copy=rep`}>{ar ? "نسخة المندوب" : "Rep copy"}</Link><Link className="btn btn-ghost btn-sm" href={`/${locale}/maintenance/${row.id}/print?copy=maintenance`}>{ar ? "نسخة الصيانة" : "Technician copy"}</Link></td>
     </tr>)}</tbody></table></div></div>
     {showForm && <div className="modal-backdrop" onClick={() => setShowForm(false)}><div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 760 }}>
       <div className="modal-header"><h2>{ar ? "إنشاء طلب صيانة" : "New Maintenance Request"}</h2><button className="btn btn-ghost" onClick={() => setShowForm(false)}>×</button></div>
