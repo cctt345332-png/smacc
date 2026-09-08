@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.inventory import InventoryItem, SerialItem
+from app.models.inventory import InventoryItem, SerialItem, SerialStatus, StockMovement
 from app.models.maintenance import (
     LockType,
     MaintenanceRequest,
@@ -213,6 +213,45 @@ async def set_replacement(db: AsyncSession, tenant_id: str, user: dict, request_
     request.replacement_approved = data.replacement_approved
     request.resolution = MaintenanceResolution.REPLACED
     request.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(request)
+    return serialize_request(request)
+
+
+async def approve_replacement(db: AsyncSession, tenant_id: str, user: dict, request_id: str):
+    request = await _get_request(db, tenant_id, request_id)
+    if user.get("role") == "sales_rep":
+        raise HTTPException(403, "اعتماد استبدال الجهاز من صلاحية الإدارة أو الصيانة")
+    if not request.replacement_product_id or not request.replacement_serial_item_id:
+        raise HTTPException(400, "يجب تحديد المنتج والسيريال البديل قبل الاعتماد")
+    if request.replacement_approved:
+        return serialize_request(request)
+    old_status = _status_value(request.status)
+    serial = await db.get(SerialItem, request.replacement_serial_item_id)
+    if not serial or serial.product_id != request.replacement_product_id:
+        raise HTTPException(400, "السيريال البديل غير صحيح")
+    if _status_value(serial.status) != SerialStatus.IN_STOCK.value:
+        raise HTTPException(400, "السيريال البديل غير متاح في المخزون")
+    serial.status = SerialStatus.SOLD
+    serial.sold_at = datetime.utcnow()
+    serial.notes = f"استبدال صيانة {request.request_number}"
+    db.add(StockMovement(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
+        warehouse_id=serial.warehouse_id, movement_type="sale", quantity=-1,
+        unit_cost=serial.cost_price, serial_item_id=serial.id,
+        reference_type="maintenance_replacement", reference_id=request.id,
+        created_by=user["user_id"],
+    ))
+    request.replacement_approved = True
+    request.resolution = MaintenanceResolution.REPLACED
+    request.status = MaintenanceStatus.READY
+    request.completed_at = datetime.utcnow()
+    request.updated_at = datetime.utcnow()
+    db.add(MaintenanceStatusLog(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, request_id=request.id,
+        from_status=old_status, to_status=MaintenanceStatus.READY.value,
+        changed_by=user["user_id"], note="اعتماد استبدال الجهاز وخصم السيريال البديل من المخزون",
+    ))
     await db.commit()
     await db.refresh(request)
     return serialize_request(request)

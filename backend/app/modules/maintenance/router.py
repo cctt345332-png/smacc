@@ -77,6 +77,15 @@ async def set_maintenance_replacement(
     return await service.set_replacement(db, user["tenant_id"], user, request_id, data)
 
 
+@router.post("/{request_id}/replacement/approve", response_model=MaintenanceRequestOut)
+async def approve_maintenance_replacement(
+    request_id: str,
+    user=Depends(require_role(["admin", "manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.approve_replacement(db, user["tenant_id"], user, request_id)
+
+
 @router.get("/{request_id}/secret", response_model=MaintenanceSecretOut)
 async def reveal_maintenance_secret(
     request_id: str,
