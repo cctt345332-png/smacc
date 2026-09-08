@@ -14,6 +14,19 @@ from app.models.inventory import InventoryItem, SerialItem
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
 
+@router.post("/serial-reconciliation")
+async def serial_reconciliation(
+    apply: bool = Query(False),
+    max_invoices: int = Query(500, ge=1, le=5000),
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """معاينة أو إصلاح تطابق فواتير السيريالات المؤكدة مع المخزون."""
+    return await service.reconcile_serial_invoice_stock(
+        db, user["tenant_id"], user["user_id"], apply=apply, max_invoices=max_invoices
+    )
+
+
 # ─── Warehouses ──────────────────────────────────────────────────────
 @router.get("/warehouses")
 async def list_warehouses(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):

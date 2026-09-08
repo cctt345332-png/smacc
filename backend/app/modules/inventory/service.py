@@ -16,7 +16,8 @@ from app.models.inventory import (
     TrackingType, SerialStatus, MovementType
 )
 from app.models.purchases import Bill, BillLine
-from app.models.sales import Invoice
+from app.models.sales import Invoice, InvoiceLine
+from app.core.audit import record_audit
 from app.models.reps import SalesRep
 from app.models.user import User
 from sqlalchemy import select
@@ -2231,3 +2232,188 @@ async def get_batch_expiry_report(
             "status": status,
         })
     return rows
+
+
+async def reconcile_serial_invoice_stock(
+    db: AsyncSession,
+    tenant_id: str,
+    user_id: str,
+    apply: bool = False,
+    max_invoices: int = 500,
+) -> dict:
+    """يفحص تطابق الفواتير المؤكدة مع حالة السيريال وحركة البيع.
+
+    الوضع الافتراضي معاينة فقط. الإصلاح يطبق الحالات الواضحة فقط:
+    سيريال فاتورة مؤكدة ما زال in_stock بلا حركة بيع، أو سيريال sold
+    مربوط بالفاتورة دون حركة بيع. أي تعارض يظل للمراجعة اليدوية.
+    """
+    confirmed_statuses = (
+        "confirmed", "sent", "paid", "partial", "overdue",
+        "zatca_pending", "zatca_cleared",
+    )
+    invoices_result = await db.execute(
+        select(Invoice)
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_(confirmed_statuses),
+        )
+        .order_by(Invoice.issue_date, Invoice.invoice_number)
+        .limit(max_invoices)
+    )
+    invoices = invoices_result.scalars().all()
+
+    summary = {
+        "mode": "apply" if apply else "preview",
+        "invoices_checked": len(invoices),
+        "serials_checked": 0,
+        "already_consistent": 0,
+        "repairable": 0,
+        "repaired": 0,
+        "conflicts": 0,
+        "missing": 0,
+        "items": [],
+    }
+
+    for invoice in invoices:
+        lines_result = await db.execute(
+            select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id)
+        )
+        lines = lines_result.scalars().all()
+        serial_ids: list[str] = []
+        serial_prices: dict[str, Decimal] = {}
+        for line in lines:
+            if line.serial_ids_json:
+                try:
+                    line_serial_ids = json.loads(line.serial_ids_json) or []
+                    serial_ids.extend(line_serial_ids)
+                    for line_serial_id in line_serial_ids:
+                        serial_prices[line_serial_id] = Decimal(str(line.unit_price or 0))
+                except (TypeError, ValueError):
+                    summary["conflicts"] += 1
+                    summary["items"].append({
+                        "invoice_id": invoice.id,
+                        "invoice_number": invoice.invoice_number,
+                        "issue": "invalid_serial_ids_json",
+                    })
+            if line.serial_item_id:
+                serial_ids.append(line.serial_item_id)
+                serial_prices[line.serial_item_id] = Decimal(str(line.unit_price or 0))
+
+        for serial_id in dict.fromkeys(serial_ids):
+            summary["serials_checked"] += 1
+            serial = await db.get(SerialItem, serial_id, with_for_update=apply)
+            if not serial:
+                summary["missing"] += 1
+                summary["items"].append({
+                    "invoice_id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "serial_id": serial_id,
+                    "issue": "serial_not_found",
+                })
+                continue
+
+            movements_result = await db.execute(
+                select(StockMovement)
+                .where(
+                    StockMovement.tenant_id == tenant_id,
+                    StockMovement.serial_item_id == serial.id,
+                    StockMovement.reference_type == "invoice",
+                    StockMovement.reference_id == invoice.id,
+                    StockMovement.movement_type == "sale",
+                )
+                .order_by(StockMovement.created_at.desc())
+            )
+            sale_movements = movements_result.scalars().all()
+            status = getattr(serial.status, "value", serial.status)
+            linked_invoice = serial.sale_invoice_id
+
+            if status == "sold" and linked_invoice == invoice.id and sale_movements:
+                summary["already_consistent"] += 1
+                continue
+
+            if status == "sold" and linked_invoice == invoice.id and not sale_movements:
+                issue = "sold_without_sale_movement"
+                repair_kind = "add_sale_movement"
+            elif status == "in_stock" and not linked_invoice and not sale_movements:
+                issue = "confirmed_invoice_serial_still_in_stock"
+                repair_kind = "sell_serial"
+            elif status == "in_stock" and sale_movements:
+                summary["conflicts"] += 1
+                summary["items"].append({
+                    "invoice_id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "serial_id": serial.id,
+                    "serial_number": serial.serial_number,
+                    "issue": "sale_movement_but_serial_in_stock",
+                    "action": "manual_review",
+                })
+                continue
+            else:
+                summary["conflicts"] += 1
+                summary["items"].append({
+                    "invoice_id": invoice.id,
+                    "invoice_number": invoice.invoice_number,
+                    "serial_id": serial.id,
+                    "serial_number": serial.serial_number,
+                    "issue": "serial_link_conflict",
+                    "serial_status": status,
+                    "sale_invoice_id": linked_invoice,
+                    "action": "manual_review",
+                })
+                continue
+
+            summary["repairable"] += 1
+            item = {
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "serial_id": serial.id,
+                "serial_number": serial.serial_number,
+                "issue": issue,
+                "action": repair_kind,
+                "warehouse_id": serial.warehouse_id,
+            }
+            summary["items"].append(item)
+
+            if not apply:
+                continue
+
+            if repair_kind == "sell_serial":
+                serial.status = "sold"
+                serial.sale_invoice_id = invoice.id
+                serial.sale_price = serial.sale_price or serial_prices.get(serial.id) or Decimal("0")
+                serial.sold_at = invoice.issue_date or datetime.utcnow()
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    product_id=serial.product_id,
+                    warehouse_id=serial.warehouse_id,
+                    movement_type="sale", quantity=Decimal("-1"),
+                    unit_cost=serial.cost_price, serial_item_id=serial.id,
+                    reference_type="invoice", reference_id=invoice.id,
+                    created_by=user_id,
+                    notes="إصلاح مصالحة مخزون الفاتورة المؤكدة",
+                ))
+            else:
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    product_id=serial.product_id,
+                    warehouse_id=serial.warehouse_id,
+                    movement_type="sale", quantity=Decimal("-1"),
+                    unit_cost=serial.cost_price, serial_item_id=serial.id,
+                    reference_type="invoice", reference_id=invoice.id,
+                    created_by=user_id,
+                    notes="إضافة حركة بيع مفقودة أثناء مصالحة المخزون",
+                ))
+            summary["repaired"] += 1
+
+    if apply:
+        record_audit(
+            db, tenant_id, user_id, "reconcile_serial_invoice_stock",
+            "inventory_reconciliation", str(uuid.uuid4()),
+            invoices_checked=summary["invoices_checked"],
+            serials_checked=summary["serials_checked"],
+            repaired=summary["repaired"],
+            conflicts=summary["conflicts"],
+        )
+        await db.commit()
+
+    return summary
