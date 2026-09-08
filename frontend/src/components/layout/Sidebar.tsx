@@ -190,6 +190,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "تقرير ضريبة القيمة المضافة" : "VAT Report", href: `${base}/reports/accounting/vat` },
           { label: ar ? "── تقارير المبيعات ──" : "── Sales ──", href: "", divider: true },
           { label: ar ? "تقرير المبيعات" : "Sales Report", href: `${base}/reports/sales` },
+          { label: ar ? "تقرير الصيانة" : "Maintenance Report", href: `${base}/reports/maintenance` },
           { label: ar ? "عمر الديون" : "Aging Report", href: `${base}/reports/sales/aging` },
           { label: ar ? "كشف حساب العميل" : "Customer Statement", href: `${base}/reports/sales/statement` },
           { label: ar ? "── تقارير المشتريات ──" : "── Purchases ──", href: "", divider: true },
