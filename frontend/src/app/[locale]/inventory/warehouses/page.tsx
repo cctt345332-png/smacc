@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getWarehouses, createWarehouse, getStockByWarehouse, transferStockBulk, validateSerials, getItems } from "@/lib/inventory";
+import { getWarehouses, createWarehouse, getStockByWarehouse, transferStockBulk, validateSerials, getItems, getSerialsByWarehouse } from "@/lib/inventory";
+import * as XLSX from "xlsx";
 import { Icon } from "@/components/ui/Icons";
 import api from "@/lib/api";
 
@@ -50,6 +51,8 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [warehouseForm, setWarehouseForm] = useState({ name_ar: "", name_en: "", branch_name: "", is_default: false });
+  const [serialModal, setSerialModal] = useState<{ open: boolean; row: any | null; serials: any[] }>({ open: false, row: null, serials: [] });
+  const [serialsLoading, setSerialsLoading] = useState(false);
 
   // ─── Transfer state ──────────────────────────────────────────────────────────
   const [transferFromWh, setTransferFromWh] = useState("");
@@ -195,6 +198,41 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
     catch {} finally { setLoadingStock(false); }
   };
 
+  const openSerials = async (row: any) => {
+    if (row.item_tracking !== "serial" || !row.warehouse_id) return;
+    setSerialModal({ open: true, row, serials: [] });
+    setSerialsLoading(true);
+    try {
+      const { data } = await getSerialsByWarehouse(row.warehouse_id, row.item_id);
+      setSerialModal(prev => ({ ...prev, serials: Array.isArray(data) ? data : [] }));
+    } catch (e: any) {
+      setSerialModal(prev => ({ ...prev, serials: [] }));
+      alert(e?.response?.data?.detail || (ar ? "تعذر تحميل السيريالات" : "Could not load serials"));
+    } finally { setSerialsLoading(false); }
+  };
+
+  const exportSerials = () => {
+    if (!serialModal.row || !serialModal.serials.length) return;
+    const row = serialModal.row;
+    const exportRows = serialModal.serials.map((s: any, index: number) => ({
+      "#": index + 1,
+      [ar ? "الصنف" : "Item"]: row.item_name,
+      [ar ? "SKU" : "SKU"]: row.item_sku || "",
+      [ar ? "المستودع" : "Warehouse"]: row.warehouse_name || "",
+      [ar ? "رقم السيريال" : "Serial Number"]: s.serial_number || "",
+      [ar ? "الحالة" : "Status"]: s.status ? (TRACKING_AR[s.status] || s.status) : (ar ? "في المخزون" : "In Stock"),
+      [ar ? "الحالة/النوع" : "Condition"]: s.condition || "",
+      [ar ? "التكلفة" : "Cost"]: Number(s.cost_price || 0),
+      [ar ? "سعر البيع" : "Sale Price"]: s.sale_price == null ? "" : Number(s.sale_price),
+    }));
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.json_to_sheet(exportRows);
+    sheet["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(workbook, sheet, "Serials");
+    const safeName = String(row.item_name || "item").replace(/[^\u0600-\u06FFa-zA-Z0-9_-]+/g, "-").slice(0, 40);
+    XLSX.writeFile(workbook, `${safeName}-${row.warehouse_name || "warehouse"}-serials.xlsx`);
+  };
+
   useEffect(() => {
     load(); loadStock();
     getItems({}).then(({ data }) => setItems(data)).catch(() => {});
@@ -319,7 +357,7 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                       {row.item_sku && <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace" }}>{row.item_sku}</div>}
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{row.category_name || "—"}</td>
-                    <td><span className="badge badge-info" style={{ fontSize: 11 }}>{TRACKING_AR[row.item_tracking] || row.item_tracking}</span></td>
+                    <td>{row.item_tracking === "serial" ? <button type="button" className="badge badge-info" style={{ fontSize: 11, cursor: "pointer", border: "1px solid #4F7280", background: "#E8F3F5" }} onClick={() => openSerials(row)} title={ar ? "عرض سيريالات هذا الصنف في هذا المستودع" : "View this item's serials in this warehouse"}>{ar ? "سيريال" : "Serial"}</button> : <span className="badge badge-info" style={{ fontSize: 11 }}>{TRACKING_AR[row.item_tracking] || row.item_tracking}</span>}</td>
                     {!selectedWarehouse && <td style={{ fontSize: 13 }}>{row.warehouse_name}</td>}
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(row.quantity)}</td>
                     <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#6F4A84" : "#DC2626" }}>{fmt(row.available_qty)}</td>
@@ -349,6 +387,36 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
           )}
         </div>
       </div>
+
+      {/* Modal سيريالات الصنف في المستودع */}
+      {serialModal.open && serialModal.row && (
+        <div onClick={() => setSerialModal({ open: false, row: null, serials: [] })} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.48)", zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 980, maxHeight: "90vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(15,23,42,.22)" }} className="animate-slide">
+            <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>{ar ? "سيريالات الصنف" : "Item Serials"}</h2>
+                <div style={{ marginTop: 6, color: "var(--text-secondary)", fontSize: 12 }}>{serialModal.row.item_name} — {serialModal.row.warehouse_name || (ar ? "المستودع المحدد" : "Selected warehouse")}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button className="btn btn-primary btn-sm" onClick={exportSerials} disabled={serialsLoading || !serialModal.serials.length}>{ar ? "تصدير Excel" : "Export Excel"}</button>
+                <button className="btn btn-ghost btn-icon" onClick={() => setSerialModal({ open: false, row: null, serials: [] })}>✕</button>
+              </div>
+            </div>
+            <div style={{ padding: "12px 22px", display: "flex", gap: 18, borderBottom: "1px solid var(--border)", background: "#F8FAFC", fontSize: 12 }}>
+              <span>{ar ? "المستودع" : "Warehouse"}: <strong>{serialModal.row.warehouse_name || "—"}</strong></span>
+              <span>{ar ? "عدد السيريالات" : "Serial count"}: <strong style={{ color: "#6F4A84" }}>{serialsLoading ? "…" : serialModal.serials.length}</strong></span>
+            </div>
+            <div className="table-wrapper" style={{ border: "none", borderRadius: 0, overflow: "auto" }}>
+              {serialsLoading ? <div className="empty-state" style={{ padding: 40 }}>{ar ? "جاري تحميل السيريالات..." : "Loading serials..."}</div> : serialModal.serials.length === 0 ? <div className="empty-state" style={{ padding: 40 }}>{ar ? "لا توجد سيريالات متاحة لهذا الصنف في هذا المستودع" : "No available serials for this item in this warehouse"}</div> : (
+                <table>
+                  <thead><tr><th>#</th><th>{ar ? "رقم السيريال" : "Serial Number"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "النوع" : "Condition"}</th><th style={{ textAlign: "end" }}>{ar ? "التكلفة" : "Cost"}</th><th style={{ textAlign: "end" }}>{ar ? "سعر البيع" : "Sale Price"}</th></tr></thead>
+                  <tbody>{serialModal.serials.map((s: any, index: number) => <tr key={s.id || s.serial_number}><td>{index + 1}</td><td><code style={{ background: "#F1F5F9", padding: "3px 7px", borderRadius: 4, fontWeight: 700 }}>{s.serial_number}</code></td><td><span className="badge badge-success">{ar ? "في المخزون" : "In Stock"}</span></td><td>{s.condition || "—"}</td><td style={{ textAlign: "end", fontFamily: "monospace" }}>{fmt(s.cost_price)}</td><td style={{ textAlign: "end", fontFamily: "monospace" }}>{s.sale_price == null ? "—" : fmt(s.sale_price)}</td></tr>)}</tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal إضافة مستودع */}
       {showAddModal && (
