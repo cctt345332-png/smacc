@@ -20,6 +20,7 @@ from app.modules.hr.router import router as hr_router
 from app.modules.ecommerce.router import router as ecommerce_router
 from app.modules.reps.router import router as reps_router
 from app.modules.supervisor.router import router as supervisor_router
+from app.modules.maintenance.router import router as maintenance_router
 
 app = FastAPI(title="ERP System", version="1.0.0")
 
@@ -95,6 +96,7 @@ app.include_router(hr_router, prefix="/api/v1")
 app.include_router(ecommerce_router, prefix="/api/v1")
 app.include_router(reps_router, prefix="/api/v1")
 app.include_router(supervisor_router, prefix="/api/v1")
+app.include_router(maintenance_router, prefix="/api/v1")
 
 
 @app.get("/health")

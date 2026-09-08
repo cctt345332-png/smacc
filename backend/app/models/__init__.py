@@ -18,4 +18,5 @@ from app.models.system_config import SystemConfig
 from app.models.ecommerce import Store, StoreCategory, StoreProduct, StoreOrder, StoreOrderLine
 from app.models.ai import AITenantSettings, AIUsage, AISystemConfig
 from app.models.reps import SalesRep, RepAttendance, RepGeoZone, RepGeoEvent
+from app.models.maintenance import MaintenanceRequest, MaintenanceStatusLog
 from app.models.audit import AuditLog

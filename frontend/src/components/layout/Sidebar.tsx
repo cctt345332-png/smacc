@@ -50,6 +50,7 @@ const buildRepNav = (base: string, ar: boolean): { section: string; items: NavIt
           { label: ar ? "الفواتير" : "Invoices",          href: `${base}/sales/invoices` },
           { label: ar ? "فاتورة جديدة" : "New Invoice",   href: `${base}/sales/invoices/new` },
           { label: ar ? "سندات القبض" : "Receipts",       href: `${base}/sales/payments` },
+          { label: ar ? "طلبات الصيانة" : "Maintenance",     href: `${base}/maintenance` },
         ],
       },
       {
@@ -156,6 +157,12 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "الجلسات" : "Sessions",         href: `${base}/pos/sessions` },
         ],
       }] : []),
+      {
+        key: "maintenance", label: ar ? "الصيانة" : "Maintenance", icon: IC.assets,
+        children: [
+          { label: ar ? "طلبات الصيانة" : "Maintenance Requests", href: `${base}/maintenance` },
+        ],
+      },
       {
         key: "reps", label: ar ? "المناديب" : "Sales Reps", icon: IC.hr,
         children: [
