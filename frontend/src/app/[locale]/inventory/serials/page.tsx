@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getItems, getSerials, addSerialsBulk, searchSerial, getWarehouses, updateSerial, deleteSerial } from "@/lib/inventory";
+import { getItems, getSerials, addSerialsBulk, searchSerial, getWarehouses, updateSerial, deleteSerial, updateSerialsBulk, deleteSerialsBulk } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -33,6 +33,11 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [serials, setSerials] = useState<any[]>([]);
   const [filterStatus, setFilterStatus] = useState("in_stock");
+  const [filterWarehouse, setFilterWarehouse] = useState("");
+  const [selectedSerialIds, setSelectedSerialIds] = useState<Set<string>>(new Set());
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditForm, setBulkEditForm] = useState({ condition: "", status: "", notes: "" });
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -113,17 +118,19 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
       .catch(() => {});
   }, []);
 
-  const loadSerials = async (productId: string, status?: string) => {
+  const loadSerials = async (productId: string, status?: string, warehouseId?: string) => {
     setLoadingSerials(true);
     try {
-      const { data } = await getSerials(productId, status || undefined);
+      const { data } = await getSerials(productId, status || undefined, warehouseId || undefined);
       setSerials(data);
+      setSelectedSerialIds(new Set());
     } catch {} finally { setLoadingSerials(false); }
   };
 
   const handleSelectProduct = (product: any) => {
     setSelectedProduct(product);
-    loadSerials(product.id, filterStatus);
+    setSelectedSerialIds(new Set());
+    loadSerials(product.id, filterStatus, filterWarehouse);
   };
 
   const handleSearch = async () => {
@@ -155,7 +162,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
         notes: editSerialForm.notes,
       });
       setEditSerial(null);
-      if (selectedProduct) loadSerials(selectedProduct.id, filterStatus);
+      if (selectedProduct) loadSerials(selectedProduct.id, filterStatus, filterWarehouse);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setSaving(false); }
   };
@@ -164,8 +171,53 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
     if (!confirm(ar ? `حذف السيريال ${s.serial_number}؟` : `Delete serial ${s.serial_number}?`)) return;
     try {
       await deleteSerial(s.id);
-      if (selectedProduct) loadSerials(selectedProduct.id, filterStatus);
+      if (selectedProduct) loadSerials(selectedProduct.id, filterStatus, filterWarehouse);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+  };
+
+  const toggleSerialSelection = (id: string) => {
+    setSelectedSerialIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllSerials = () => {
+    setSelectedSerialIds(prev => prev.size === serials.length ? new Set() : new Set(serials.map(s => s.id)));
+  };
+
+  const handleBulkEdit = async () => {
+    if (!selectedSerialIds.size) return alert(ar ? "حدد سيريالًا واحدًا على الأقل" : "Select at least one serial");
+    const changes: any = {};
+    if (bulkEditForm.condition) changes.condition = bulkEditForm.condition;
+    if (bulkEditForm.status) changes.status = bulkEditForm.status;
+    if (bulkEditForm.notes.trim()) changes.notes = bulkEditForm.notes.trim();
+    if (!Object.keys(changes).length) return alert(ar ? "اختر تعديلًا واحدًا على الأقل" : "Choose at least one change");
+    setBulkSaving(true);
+    try {
+      const { data } = await updateSerialsBulk([...selectedSerialIds], changes);
+      alert(ar ? `تم تعديل ${data.updated} سيريال` : `Updated ${data.updated} serials`);
+      setShowBulkEditModal(false);
+      setBulkEditForm({ condition: "", status: "", notes: "" });
+      if (selectedProduct) loadSerials(selectedProduct.id, filterStatus, filterWarehouse);
+    } catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر تعديل السيريالات" : "Could not update serials")); }
+    finally { setBulkSaving(false); }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedSerialIds.size) return alert(ar ? "حدد سيريالًا واحدًا على الأقل" : "Select at least one serial");
+    const confirmed = confirm(ar
+      ? `سيتم حذف ${selectedSerialIds.size} سيريال. لا يمكن حذف السيريالات المباعة أو المحجوزة أو المرتبطة بحركات مخزون. هل تريد المتابعة؟`
+      : `${selectedSerialIds.size} serials will be deleted. Sold, reserved, or moved serials cannot be deleted. Continue?`);
+    if (!confirmed) return;
+    setBulkSaving(true);
+    try {
+      const { data } = await deleteSerialsBulk([...selectedSerialIds]);
+      alert(ar ? `تم حذف ${data.deleted} سيريال` : `Deleted ${data.deleted} serials`);
+      if (selectedProduct) loadSerials(selectedProduct.id, filterStatus, filterWarehouse);
+    } catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف المجموعة؛ قد تحتوي على سيريالات محمية" : "Could not delete the group; it may contain protected serials")); }
+    finally { setBulkSaving(false); }
   };
 
   const handleBulkSave = async () => {
@@ -208,7 +260,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
         setShowBulkModal(false);
         setBulkLines([{ serial_number: "", cost_price: "", sale_price: "" }]);
         setPasteText("");
-        loadSerials(selectedProduct.id, filterStatus);
+        loadSerials(selectedProduct.id, filterStatus, filterWarehouse);
       }
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setSaving(false); }
@@ -329,8 +381,13 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select className="form-input form-select" style={{ width: 170, height: 32, fontSize: 12 }}
+                value={filterWarehouse} onChange={e => { setFilterWarehouse(e.target.value); loadSerials(selectedProduct.id, filterStatus, e.target.value); }}>
+                <option value="">{ar ? "كل المستودعات" : "All Warehouses"}</option>
+                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name_ar}</option>)}
+              </select>
               <select className="form-input form-select" style={{ width: 140, height: 32, fontSize: 12 }}
-                value={filterStatus} onChange={e => { setFilterStatus(e.target.value); loadSerials(selectedProduct.id, e.target.value); }}>
+                value={filterStatus} onChange={e => { setFilterStatus(e.target.value); loadSerials(selectedProduct.id, e.target.value, filterWarehouse); }}>
                 <option value="">{ar ? "الكل" : "All"}</option>
                 <option value="in_stock">{ar ? "متاح" : "In Stock"}</option>
                 <option value="sold">{ar ? "مباع" : "Sold"}</option>
@@ -342,6 +399,17 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
               </button>
             </div>
           </div>
+          {serials.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 16px", borderBottom: "1px solid var(--border)", background: selectedSerialIds.size ? "#F7F2F8" : "#FAFAFC" }}>
+              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{selectedSerialIds.size ? `${selectedSerialIds.size} ${ar ? "محدد" : "selected"}` : (ar ? "حدد السيريالات لتنفيذ إجراء جماعي" : "Select serials for bulk actions")}</span>
+              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedSerialIds(new Set(serials.map(s => s.id)))}>{ar ? "تحديد الكل" : "Select all"}</button>
+              {selectedSerialIds.size > 0 && <>
+                <button className="btn btn-ghost btn-sm" onClick={() => setSelectedSerialIds(new Set())}>{ar ? "إلغاء التحديد" : "Clear selection"}</button>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowBulkEditModal(true)}>{ar ? "تعديل المحدد" : "Edit selected"}</button>
+                <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} onClick={handleBulkDelete} disabled={bulkSaving}>{ar ? "حذف المحدد" : "Delete selected"}</button>
+              </>}
+            </div>
+          )}
           <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
             {loadingSerials ? (
               <div className="empty-state" style={{ padding: "24px" }}><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>
@@ -356,6 +424,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: 42, textAlign: "center" }}><input type="checkbox" checked={serials.length > 0 && selectedSerialIds.size === serials.length} onChange={toggleAllSerials} aria-label={ar ? "تحديد الكل" : "Select all"} /></th>
                     <th>{ar ? "رقم السيريال" : "Serial #"}</th>
                     <th>{ar ? "الحالة" : "Condition"}</th>
                     <th>{ar ? "الوضع" : "Status"}</th>
@@ -372,6 +441,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                     const profit = s.sale_price ? Number(s.sale_price) - Number(s.cost_price) : null;
                     return (
                       <tr key={s.id}>
+                        <td style={{ textAlign: "center" }}><input type="checkbox" checked={selectedSerialIds.has(s.id)} onChange={() => toggleSerialSelection(s.id)} aria-label={ar ? `تحديد ${s.serial_number}` : `Select ${s.serial_number}`} /></td>
                         <td><code style={{ background: "#F1F5F9", padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>{s.serial_number}</code></td>
                         <td><span className={`badge ${COND_BADGE[s.condition] || "badge-gray"}`}>{COND_AR[s.condition] || s.condition}</span></td>
                         <td><span className={`badge ${STATUS_BADGE[s.status] || "badge-gray"}`}>{STATUS_AR[s.status] || s.status}</span></td>
@@ -459,6 +529,53 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                 <button className="btn btn-primary" onClick={handleSaveEditSerial} disabled={saving}>
                   {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ التعديلات" : "Save Changes")}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal تعديل جماعي للسيريالات */}
+      {showBulkEditModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 480 }} className="animate-slide">
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h2 style={{ fontSize: 16, fontWeight: 700 }}>{ar ? "تعديل السيريالات المحددة" : "Edit selected serials"}</h2>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 3 }}>{selectedSerialIds.size} {ar ? "سيريال محدد" : "selected serials"}</div>
+              </div>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowBulkEditModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: 24 }}>
+              <div style={{ padding: "9px 11px", marginBottom: 16, background: "#FFF7ED", border: "1px solid #FED7AA", color: "#9A3412", fontSize: 12, lineHeight: 1.7 }}>
+                {ar ? "اترك الحقل على (بدون تغيير) حتى لا يتم تعديل هذا الحقل في السيريالات المحددة." : "Leave a field as (No change) to keep its current value."}
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "الحالة" : "Condition"}</label>
+                <select className="form-input form-select" value={bulkEditForm.condition} onChange={e => setBulkEditForm(f => ({ ...f, condition: e.target.value }))}>
+                  <option value="">{ar ? "بدون تغيير" : "No change"}</option>
+                  <option value="new">{ar ? "جديد" : "New"}</option>
+                  <option value="used">{ar ? "مستخدم" : "Used"}</option>
+                  <option value="refurbished">{ar ? "مجدد" : "Refurbished"}</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "الوضع" : "Status"}</label>
+                <select className="form-input form-select" value={bulkEditForm.status} onChange={e => setBulkEditForm(f => ({ ...f, status: e.target.value }))}>
+                  <option value="">{ar ? "بدون تغيير" : "No change"}</option>
+                  <option value="in_stock">{ar ? "متاح" : "In Stock"}</option>
+                  <option value="reserved">{ar ? "محجوز" : "Reserved"}</option>
+                  <option value="damaged">{ar ? "تالف" : "Damaged"}</option>
+                  <option value="sold">{ar ? "مباع" : "Sold"}</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "إضافة ملاحظة" : "Add note"}</label>
+                <input className="form-input" value={bulkEditForm.notes} onChange={e => setBulkEditForm(f => ({ ...f, notes: e.target.value }))} placeholder={ar ? "اتركه فارغًا لعدم التغيير" : "Leave blank to keep current notes"} />
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn btn-secondary" onClick={() => setShowBulkEditModal(false)}>{ar ? "إلغاء" : "Cancel"}</button>
+                <button className="btn btn-primary" onClick={handleBulkEdit} disabled={bulkSaving}>{bulkSaving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ التعديل" : "Save changes")}</button>
               </div>
             </div>
           </div>

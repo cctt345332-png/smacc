@@ -324,6 +324,20 @@ async def delete_serial(serial_id: str, user=Depends(require_role(["manager"])),
     """حذف سيريال غير مستخدم — للمدير فقط."""
     return await service.delete_serial(db, user["tenant_id"], serial_id)
 
+@router.post("/serials/bulk-update")
+async def bulk_update_serials(data: dict, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
+    """تعديل مجموعة سيريالات — للمدير فقط."""
+    return await service.update_serials_bulk(
+        db, user["tenant_id"], data.get("serial_ids", []), data.get("changes", data)
+    )
+
+@router.post("/serials/bulk-delete")
+async def bulk_delete_serials(data: dict, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
+    """حذف مجموعة سيريالات متاحة وغير مرتبطة بحركات — للمدير فقط."""
+    return await service.delete_serials_bulk(
+        db, user["tenant_id"], data.get("serial_ids", [])
+    )
+
 @router.get("/items/{product_id}/available-serials")
 async def available_serials_for_invoice(
     product_id: str,

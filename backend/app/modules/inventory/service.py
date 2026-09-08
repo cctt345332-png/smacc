@@ -961,6 +961,76 @@ async def delete_serial(db: AsyncSession, tenant_id: str, serial_id: str):
     return {"message": "تم حذف السيريال"}
 
 
+async def update_serials_bulk(
+    db: AsyncSession, tenant_id: str, serial_ids: list[str], data: dict
+):
+    """تعديل مجموعة سيريالات مع نفس حقول التعديل الفردي، دون تعديل الأسعار."""
+    ids = list(dict.fromkeys(serial_ids or []))
+    if not ids:
+        raise HTTPException(400, "اختر سيريالًا واحدًا على الأقل")
+    result = await db.execute(
+        select(SerialItem).where(SerialItem.id.in_(ids))
+    )
+    serials = result.scalars().all()
+    if len(serials) != len(ids):
+        raise HTTPException(404, "واحد أو أكثر من السيريالات غير موجود")
+
+    # التحقق من ملكية كل السيريالات للمستأجر قبل أي تعديل.
+    for serial in serials:
+        await get_item(db, tenant_id, serial.product_id)
+
+    allowed = ("condition", "status", "notes")
+    changes = {key: data[key] for key in allowed if key in data and data[key] is not None}
+    if not changes:
+        raise HTTPException(400, "لم يتم اختيار تعديل")
+    for serial in serials:
+        for key, value in changes.items():
+            setattr(serial, key, value)
+    await db.commit()
+    return {"updated": len(serials), "ids": ids}
+
+
+async def delete_serials_bulk(
+    db: AsyncSession, tenant_id: str, serial_ids: list[str]
+):
+    """حذف جماعي آمن: لا يحذف سيريالًا مباعًا أو محجوزًا أو له حركة مخزون."""
+    ids = list(dict.fromkeys(serial_ids or []))
+    if not ids:
+        raise HTTPException(400, "اختر سيريالًا واحدًا على الأقل")
+    result = await db.execute(
+        select(SerialItem).where(SerialItem.id.in_(ids))
+    )
+    serials = result.scalars().all()
+    if len(serials) != len(ids):
+        raise HTTPException(404, "واحد أو أكثر من السيريالات غير موجود")
+
+    blocked: list[str] = []
+    for serial in serials:
+        await get_item(db, tenant_id, serial.product_id)
+        status_value = getattr(serial.status, "value", serial.status)
+        movement_count = (
+            await db.execute(
+                select(func.count(StockMovement.id)).where(
+                    StockMovement.serial_item_id == serial.id
+                )
+            )
+        ).scalar() or 0
+        if status_value != "in_stock":
+            blocked.append(f"{serial.serial_number}: الحالة {status_value}")
+        elif movement_count:
+            blocked.append(f"{serial.serial_number}: له {movement_count} حركة مخزون")
+
+    if blocked:
+        raise HTTPException(
+            400,
+            "لا يمكن حذف المجموعة؛ توجد سيريالات محمية:\n" + "\n".join(blocked[:20]),
+        )
+    for serial in serials:
+        await db.delete(serial)
+    await db.commit()
+    return {"deleted": len(serials), "ids": ids}
+
+
 # ─── Inventory Stock (كمية لكل مستودع) ───────────────────────────────
 
 async def _get_or_create_stock(

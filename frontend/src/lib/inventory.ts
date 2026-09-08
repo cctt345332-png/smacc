@@ -52,6 +52,10 @@ export const updateSerial = (serialId: string, data: any) =>
   api.patch(`/inventory/serials/${serialId}`, data);
 export const deleteSerial = (serialId: string) =>
   api.delete(`/inventory/serials/${serialId}`);
+export const updateSerialsBulk = (serialIds: string[], changes: any) =>
+  api.post("/inventory/serials/bulk-update", { serial_ids: serialIds, changes });
+export const deleteSerialsBulk = (serialIds: string[]) =>
+  api.post("/inventory/serials/bulk-delete", { serial_ids: serialIds });
 
 
 
