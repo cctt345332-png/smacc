@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { getWarehouses, createWarehouse, getStockByWarehouse, transferStockBulk, validateSerials, getItems, getSerialsByWarehouse } from "@/lib/inventory";
 import * as XLSX from "xlsx";
@@ -389,8 +390,8 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
       </div>
 
       {/* Modal سيريالات الصنف في المستودع */}
-      {serialModal.open && serialModal.row && (
-        <div onClick={() => setSerialModal({ open: false, row: null, serials: [] })} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.58)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      {typeof document !== "undefined" && serialModal.open && serialModal.row ? createPortal(
+        <div onClick={() => setSerialModal({ open: false, row: null, serials: [] })} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.58)", zIndex: 2147483000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 980, maxHeight: "90vh", position: "relative", zIndex: 10001, display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(15,23,42,.22)" }} className="animate-slide">
             <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
               <div>
@@ -415,8 +416,9 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
               )}
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body
+      ) : null}
 
       {/* Modal إضافة مستودع */}
       {showAddModal && (
