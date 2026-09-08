@@ -1744,6 +1744,7 @@ async def get_serial_movements_report(
     bill_id: str | None = None,
     product_id: str | None = None,
     movement_type: str | None = None,
+    serial_status: str | None = None,
     from_date: datetime | None = None,
     to_date: datetime | None = None,
     limit: int = 2000,
@@ -1785,6 +1786,8 @@ async def get_serial_movements_report(
         q = q.where(StockMovement.product_id == product_id)
     if movement_type:
         q = q.where(StockMovement.movement_type == movement_type)
+    if serial_status:
+        q = q.where(SerialItem.status == serial_status)
     if from_date:
         q = q.where(StockMovement.created_at >= from_date)
     if to_date:
