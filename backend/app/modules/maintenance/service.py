@@ -257,6 +257,51 @@ async def approve_replacement(db: AsyncSession, tenant_id: str, user: dict, requ
     return serialize_request(request)
 
 
+async def get_report(
+    db: AsyncSession,
+    tenant_id: str,
+    user: dict,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    status: str | None = None,
+    rep_id: str | None = None,
+):
+    q = select(MaintenanceRequest).where(MaintenanceRequest.tenant_id == tenant_id)
+    rep = await _resolve_rep(db, user)
+    if rep:
+        q = q.where(MaintenanceRequest.rep_id == rep.id)
+    elif rep_id:
+        q = q.where(MaintenanceRequest.rep_id == rep_id)
+    if status:
+        q = q.where(MaintenanceRequest.status == status)
+    if from_date:
+        q = q.where(MaintenanceRequest.created_at >= datetime.fromisoformat(from_date))
+    if to_date:
+        q = q.where(MaintenanceRequest.created_at < datetime.fromisoformat(to_date) .replace(hour=23, minute=59, second=59))
+    result = await db.execute(q.order_by(MaintenanceRequest.created_at.desc()))
+    requests = result.scalars().all()
+    by_status: dict[str, int] = {}
+    by_product: dict[str, int] = {}
+    replacements = 0
+    warranty = 0
+    for row in requests:
+        status_key = _status_value(row.status)
+        by_status[status_key] = by_status.get(status_key, 0) + 1
+        product_key = row.device_name or row.product_id or "غير محدد"
+        by_product[product_key] = by_product.get(product_key, 0) + 1
+        replacements += 1 if row.resolution == MaintenanceResolution.REPLACED else 0
+        warranty += 1 if row.warranty_case else 0
+    return {
+        "total_requests": len(requests),
+        "open_requests": sum(count for key, count in by_status.items() if key not in {MaintenanceStatus.CLOSED.value, MaintenanceStatus.CANCELLED.value}),
+        "replacements": replacements,
+        "warranty_requests": warranty,
+        "by_status": by_status,
+        "by_product": sorted(({"label": key, "count": value} for key, value in by_product.items()), key=lambda item: item["count"], reverse=True),
+        "requests": [serialize_request(row) for row in requests],
+    }
+
+
 async def reveal_secret(db: AsyncSession, tenant_id: str, user: dict, request_id: str):
     if user.get("role") not in {"admin", "manager", "accountant"}:
         raise HTTPException(403, "لا تملك صلاحية عرض كلمة مرور الجهاز")
