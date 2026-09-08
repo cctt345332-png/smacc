@@ -6,8 +6,8 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload, aliased
 from fastapi import HTTPException
 
 from app.models.inventory import (
@@ -1735,6 +1735,114 @@ async def get_stock_movements(
             "created_at": m.created_at.isoformat(),
         })
     return rows
+
+
+async def get_serial_movements_report(
+    db: AsyncSession,
+    tenant_id: str,
+    warehouse_id: str | None = None,
+    bill_id: str | None = None,
+    product_id: str | None = None,
+    movement_type: str | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    limit: int = 2000,
+):
+    """تقرير كامل لحركات الوحدات ذات السيريال، مع فلاتر المستودع وفاتورة الشراء والصنف."""
+    to_warehouse = aliased(Warehouse)
+    q = select(
+        StockMovement,
+        SerialItem,
+        InventoryItem,
+        Warehouse.name_ar.label("warehouse_name"),
+        to_warehouse.name_ar.label("to_warehouse_name"),
+        Bill.id.label("bill_id"),
+        Bill.bill_number,
+        Bill.vendor_name_ar,
+        Bill.bill_date,
+    ).join(
+        SerialItem, SerialItem.id == StockMovement.serial_item_id
+    ).join(
+        InventoryItem, InventoryItem.id == StockMovement.product_id
+    ).outerjoin(
+        Warehouse, Warehouse.id == StockMovement.warehouse_id
+    ).outerjoin(
+        to_warehouse, to_warehouse.id == StockMovement.to_warehouse_id
+    ).outerjoin(
+        Bill,
+        (Bill.tenant_id == tenant_id)
+        & (Bill.id == StockMovement.reference_id)
+        & (StockMovement.reference_type == "bill"),
+    ).where(
+        StockMovement.tenant_id == tenant_id,
+        StockMovement.serial_item_id.isnot(None),
+    )
+    if warehouse_id:
+        q = q.where(or_(StockMovement.warehouse_id == warehouse_id, StockMovement.to_warehouse_id == warehouse_id))
+    if bill_id:
+        q = q.where(or_(StockMovement.reference_id == bill_id, SerialItem.purchase_bill_id == bill_id))
+    if product_id:
+        q = q.where(StockMovement.product_id == product_id)
+    if movement_type:
+        q = q.where(StockMovement.movement_type == movement_type)
+    if from_date:
+        q = q.where(StockMovement.created_at >= from_date)
+    if to_date:
+        q = q.where(StockMovement.created_at <= to_date)
+    q = q.order_by(StockMovement.created_at.desc()).limit(min(max(limit, 1), 5000))
+
+    result = await db.execute(q)
+    rows = []
+    total_in = Decimal("0")
+    total_out = Decimal("0")
+    for movement, serial, item, warehouse_name, to_warehouse_name, bill_id_value, bill_number, vendor_name, bill_date in result.all():
+        quantity = Decimal(movement.quantity or 0)
+        value = abs(quantity) * Decimal(movement.unit_cost or 0)
+        if quantity >= 0:
+            total_in += value
+        else:
+            total_out += value
+        movement_value = movement.movement_type.value if hasattr(movement.movement_type, "value") else str(movement.movement_type)
+        rows.append({
+            "id": movement.id,
+            "serial_id": serial.id,
+            "serial_number": serial.serial_number,
+            "product_id": item.id,
+            "product_name": item.name_ar,
+            "product_sku": item.sku,
+            "condition": serial.condition.value if hasattr(serial.condition, "value") else str(serial.condition),
+            "serial_status": serial.status.value if hasattr(serial.status, "value") else str(serial.status),
+            "movement_type": movement_value,
+            "movement_type_ar": {
+                "purchase": "شراء", "sale": "بيع", "return_in": "مرتجع وارد",
+                "return_out": "مرتجع صادر", "adjustment": "جرد/تسوية", "transfer": "تحويل",
+                "damage": "تلف", "purchase_edit_rev": "عكس شراء",
+            }.get(movement_value, movement_value),
+            "quantity": float(quantity),
+            "unit_cost": float(movement.unit_cost or 0),
+            "total_value": float(value),
+            "warehouse_id": movement.warehouse_id,
+            "warehouse_name": warehouse_name,
+            "to_warehouse_id": movement.to_warehouse_id,
+            "to_warehouse_name": to_warehouse_name,
+            "reference_type": movement.reference_type,
+            "reference_id": movement.reference_id,
+            "bill_id": bill_id_value,
+            "bill_number": bill_number,
+            "vendor_name": vendor_name,
+            "bill_date": bill_date.isoformat() if bill_date else None,
+            "notes": movement.notes,
+            "created_at": movement.created_at.isoformat() if movement.created_at else None,
+        })
+    return {
+        "rows": rows,
+        "summary": {
+            "count": len(rows),
+            "total_in": float(total_in),
+            "total_out": float(total_out),
+            "net_value": float(total_in - total_out),
+        },
+    }
 
 
 # ─── Batch Management (صيدلية فقط) ───────────────────────────────────

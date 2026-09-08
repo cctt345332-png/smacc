@@ -200,7 +200,10 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "عمر ديون الموردين" : "AP Aging", href: `${base}/reports/purchases/aging` },
           { label: ar ? "── تقارير المخزون ──" : "── Inventory ──", href: "", divider: true },
           { label: ar ? "تقرير المخزون" : "Inventory Report", href: `${base}/reports/inventory` },
-          ...(hasSerial ? [{ label: ar ? "تقرير ربح السيريال" : "Serial Profit", href: `${base}/reports/inventory/serial-profit` }] : []),
+          ...(hasSerial ? [
+            { label: ar ? "تقرير ربح السيريال" : "Serial Profit", href: `${base}/reports/inventory/serial-profit` },
+            { label: ar ? "حركة السيريالات" : "Serial Movements", href: `${base}/reports/inventory/serial-movements` },
+          ] : []),
           ...(hasBatch  ? [{ label: ar ? "انتهاء الصلاحية" : "Expiry Report", href: `${base}/reports/inventory/expiry` }] : []),
           { label: ar ? "── تقارير الأصول الثابتة ──" : "── Fixed Assets ──", href: "", divider: true },
           { label: ar ? "تقارير الأصول الثابتة" : "Fixed Asset Reports", href: `${base}/reports/assets` },

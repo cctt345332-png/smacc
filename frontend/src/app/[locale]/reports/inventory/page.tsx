@@ -56,6 +56,7 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
   const extraReports: { label: string; href: string }[] = [];
   if (["mobile_phones", "spare_parts"].includes(businessType)) {
     extraReports.push({ label: ar ? "تقرير ربح السيريالات" : "Serial Profit Report", href: `/${locale}/reports/inventory/serial-profit` });
+    extraReports.push({ label: ar ? "تقرير حركة السيريالات" : "Serial Movement Report", href: `/${locale}/reports/inventory/serial-movements` });
   }
   if (businessType === "pharmacy") {
     extraReports.push({ label: ar ? "تقرير انتهاء الصلاحية" : "Expiry Report", href: `/${locale}/reports/inventory/expiry` });

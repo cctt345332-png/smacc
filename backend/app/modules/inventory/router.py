@@ -556,6 +556,23 @@ async def count_history(
 async def low_stock_alerts(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await service.get_low_stock_alerts(db, tenant_id)
 
+@router.get("/reports/serial-movements")
+async def serial_movements_report(
+    warehouse_id: Optional[str] = None,
+    bill_id: Optional[str] = None,
+    product_id: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+    limit: int = 2000,
+    tenant_id=Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_serial_movements_report(
+        db, tenant_id, warehouse_id, bill_id, product_id, movement_type,
+        from_date, to_date, limit,
+    )
+
 @router.get("/reports/serial-profit")
 async def serial_profit_report(
     product_id: Optional[str] = None,

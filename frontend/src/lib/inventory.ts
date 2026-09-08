@@ -33,6 +33,8 @@ export const deductStock = (productId: string, data: any) =>
 // Reports
 export const getSerialProfitReport = (params?: any) =>
   api.get("/inventory/reports/serial-profit", { params });
+export const getSerialMovementsReport = (params?: any) =>
+  api.get("/inventory/reports/serial-movements", { params });
 
 // Stock Value Report
 export const getStockValueReport = () => api.get("/inventory/reports/stock-value");
