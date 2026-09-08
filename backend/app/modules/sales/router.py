@@ -203,7 +203,7 @@ async def pending_invoices(rep_id: Optional[str] = None, user=Depends(require_ro
 
 @router.post("/invoices/{invoice_id}/cancel", response_model=InvoiceOut)
 async def cancel_invoice(invoice_id: str, user=Depends(require_role(["manager","accountant"])), db: AsyncSession = Depends(get_db)):
-    return await service.cancel_invoice(db, user["tenant_id"], invoice_id)
+    return await service.cancel_invoice(db, user["tenant_id"], user["user_id"], invoice_id)
 
 
 # ─── Payments ────────────────────────────────────────────────────────

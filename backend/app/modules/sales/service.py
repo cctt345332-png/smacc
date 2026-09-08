@@ -742,7 +742,11 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
         journal_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
         invoice.journal_entry_id = journal_id
 
-    await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
+    try:
+        await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
+    except Exception:
+        await db.rollback()
+        raise
 
     invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
@@ -782,6 +786,9 @@ async def _deduct_inventory_for_invoice(
                         serial_id=sid,
                         sale_price=line.unit_price,
                         invoice_id=invoice.id,
+                        warehouse_id=warehouse_id,
+                        user_id=user_id,
+                        auto_commit=False,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في خصم السيريال {sid}: {e.detail}")
@@ -791,13 +798,18 @@ async def _deduct_inventory_for_invoice(
         if line.serial_item_id:
             try:
                 await sell_serial(
-                    db=db, tenant_id=tenant_id,
+                    db=db,
+                    tenant_id=tenant_id,
                     serial_id=line.serial_item_id,
                     sale_price=line.unit_price,
                     invoice_id=invoice.id,
+                    warehouse_id=warehouse_id,
+                    user_id=user_id,
+                    auto_commit=False,
                 )
             except HTTPException as e:
                 raise HTTPException(400, f"خطأ في خصم السيريال: {e.detail}")
+
         elif line.inventory_item_id:
             item = await db.get(InventoryItem, line.inventory_item_id)
             if item and item.tracking_type == "batch":
@@ -919,10 +931,40 @@ async def _create_invoice_journal(db: AsyncSession, tenant_id: str, user_id: str
     return entry.id
 
 
-async def cancel_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
+async def cancel_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
     invoice = await get_invoice(db, tenant_id, invoice_id)
     if invoice.status in (InvoiceStatus.PAID, InvoiceStatus.CANCELLED):
         raise HTTPException(400, "Cannot cancel this invoice")
+
+    # إرجاع السيريالات التي خصمتها هذه الفاتورة فقط.
+    # الفاتورة تحت المراجعة لم تخصم شيئًا، لذلك لا ينتج عنها إرجاع.
+    lines_r = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))
+    for line in lines_r.scalars().all():
+        serial_ids = []
+        if line.serial_ids_json:
+            serial_ids.extend(json.loads(line.serial_ids_json) or [])
+        if line.serial_item_id:
+            serial_ids.append(line.serial_item_id)
+
+        for serial_id in serial_ids:
+            serial = await db.get(SerialItem, serial_id, with_for_update=True)
+            if not serial or serial.sale_invoice_id != invoice.id:
+                continue
+            if getattr(serial.status, "value", serial.status) != "sold":
+                continue
+            serial.status = "in_stock"
+            serial.sale_invoice_id = None
+            serial.sold_at = None
+            db.add(StockMovement(
+                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                product_id=serial.product_id,
+                warehouse_id=serial.warehouse_id,
+                movement_type="return_in", quantity=Decimal("1"),
+                unit_cost=serial.cost_price, serial_item_id=serial.id,
+                reference_type="invoice_cancel", reference_id=invoice.id,
+                created_by=user_id,
+            ))
+
     invoice.status = InvoiceStatus.CANCELLED
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
@@ -1990,7 +2032,12 @@ async def approve_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
         except Exception:
             pass  # القيد المحاسبي اختياري
 
-    await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
+    try:
+        await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
+    except Exception:
+        await db.rollback()
+        raise
+
     invoice.status = InvoiceStatus.CONFIRMED
     record_audit(db, tenant_id, user_id, "approve_and_confirm", "invoice", invoice.id,
                  invoice_number=invoice.invoice_number, total=invoice.total)

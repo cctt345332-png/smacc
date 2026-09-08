@@ -532,9 +532,15 @@ async def add_serial(
 async def sell_serial(
     db: AsyncSession, tenant_id: str, serial_id: str,
     sale_price: Decimal, invoice_id: str | None = None,
+    warehouse_id: str | None = None,
+    user_id: str | None = None,
+    auto_commit: bool = True,
 ) -> dict:
     """بيع سيريال — يُحسب الربح تلقائياً"""
-    serial = await db.get(SerialItem, serial_id)
+    serial_result = await db.execute(
+        select(SerialItem).where(SerialItem.id == serial_id).with_for_update()
+    )
+    serial = serial_result.scalar_one_or_none()
     if not serial:
         raise HTTPException(404, "السيريال غير موجود")
 
@@ -548,21 +554,24 @@ async def sell_serial(
     serial.sale_invoice_id = invoice_id
     serial.sold_at = datetime.utcnow()
 
-    # حركة مخزون
+    # حركة مخزون: نحفظ مستودع البيع صراحة حتى تكون تقارير المستودعات دقيقة.
     db.add(StockMovement(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
         product_id=serial.product_id,
+        warehouse_id=warehouse_id or serial.warehouse_id,
         movement_type="sale",
         quantity=Decimal("-1"),
         unit_cost=serial.cost_price,
         serial_item_id=serial_id,
         reference_type="invoice",
         reference_id=invoice_id,
+        created_by=user_id,
     ))
 
     profit = sale_price - serial.cost_price
-    await db.commit()
+    if auto_commit:
+        await db.commit()
 
     return {
         "serial_id": serial_id,
