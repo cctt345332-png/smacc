@@ -19,7 +19,7 @@ from app.models.maintenance import (
     MaintenanceStatusLog,
 )
 from app.models.reps import SalesRep
-from app.models.sales import Customer
+from app.models.sales import Customer, Invoice, InvoiceLine, InvoiceStatus
 from app.modules.maintenance.schemas import (
     MaintenanceRequestCreate,
     MaintenanceRequestUpdate,
@@ -84,6 +84,63 @@ def serialize_request(request: MaintenanceRequest) -> dict:
     data.pop("lock_secret_encrypted", None)
     data["lock_secret_provided"] = bool(request.lock_secret_provided)
     return data
+
+
+async def list_customer_devices(db: AsyncSession, tenant_id: str, user: dict, customer_id: str):
+    """الأجهزة التي ظهرت في فواتير العميل المعتمدة، مع السيريال والفاتورة."""
+    await _check_customer_access(db, tenant_id, customer_id, user)
+    excluded = {
+        InvoiceStatus.DRAFT.value,
+        InvoiceStatus.SUBMITTED.value,
+        InvoiceStatus.REJECTED.value,
+        InvoiceStatus.CANCELLED.value,
+    }
+    result = await db.execute(
+        select(InvoiceLine, Invoice, InventoryItem, SerialItem)
+        .join(Invoice, Invoice.id == InvoiceLine.invoice_id)
+        .outerjoin(InventoryItem, InventoryItem.id == InvoiceLine.inventory_item_id)
+        .outerjoin(SerialItem, SerialItem.id == InvoiceLine.serial_item_id)
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.customer_id == customer_id,
+            Invoice.status.notin_(excluded),
+        )
+        .order_by(Invoice.issue_date.desc(), InvoiceLine.line_order.asc())
+    )
+    devices: list[dict] = []
+    seen: set[tuple[str, str | None]] = set()
+    for line, invoice, product, serial in result.all():
+        serial_rows = [serial] if serial else []
+        if line.serial_ids_json:
+            try:
+                serial_ids = json.loads(line.serial_ids_json)
+            except (TypeError, ValueError):
+                serial_ids = []
+            if isinstance(serial_ids, list) and serial_ids:
+                serial_result = await db.execute(select(SerialItem).where(SerialItem.id.in_(serial_ids)))
+                serial_rows = serial_result.scalars().all()
+        if not serial_rows:
+            serial_rows = [None]
+        for serial_row in serial_rows:
+            serial_id = serial_row.id if serial_row else None
+            key = (invoice.id, serial_id or line.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            devices.append({
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "issue_date": invoice.issue_date,
+                "line_id": line.id,
+                "product_id": product.id if product else line.inventory_item_id,
+                "product_name": (product.name_ar or product.name_en) if product else line.description_ar,
+                "serial_item_id": serial_id,
+                "serial_number": serial_row.serial_number if serial_row else None,
+                "imei_1": getattr(serial_row, "imei_1", None) if serial_row else None,
+                "imei_2": getattr(serial_row, "imei_2", None) if serial_row else None,
+                "device_name": (product.name_ar or product.name_en) if product else line.description_ar,
+            })
+    return devices
 
 
 async def list_requests(db: AsyncSession, tenant_id: str, user: dict, status: str | None = None, rep_id: str | None = None):

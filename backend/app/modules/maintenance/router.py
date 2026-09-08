@@ -40,6 +40,15 @@ async def maintenance_report(
     return await service.get_report(db, user["tenant_id"], user, from_date, to_date, status, rep_id)
 
 
+@router.get("/customer-devices")
+async def list_customer_maintenance_devices(
+    customer_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.list_customer_devices(db, user["tenant_id"], user, customer_id)
+
+
 @router.get("/{request_id}", response_model=MaintenanceRequestOut)
 async def get_maintenance_request(
     request_id: str,
