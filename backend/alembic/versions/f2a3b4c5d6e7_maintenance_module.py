@@ -5,6 +5,7 @@ Revises: e1f2a3b4c5d6
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 revision = "f2a3b4c5d6e7"
 down_revision = "e1f2a3b4c5d6"
@@ -13,20 +14,21 @@ depends_on = None
 
 
 def upgrade() -> None:
-    maintenance_status = sa.Enum(
+    maintenance_status = postgresql.ENUM(
         "new", "received", "inspecting", "waiting_customer", "in_repair",
         "waiting_part", "ready", "delivered", "closed", "rejected", "cancelled",
-        name="maintenancestatus",
+        name="maintenancestatus", create_type=False,
     )
-    maintenance_resolution = sa.Enum(
+    maintenance_resolution = postgresql.ENUM(
         "repaired", "replaced", "no_repair", "inspection_only", "returned_unrepaired",
-        name="maintenanceresolution",
+        name="maintenanceresolution", create_type=False,
     )
-    lock_type = sa.Enum(
+    lock_type = postgresql.ENUM(
         "none", "screen_pin", "password", "pattern", "user_account", "other",
-        name="locktype",
+        name="locktype", create_type=False,
     )
     bind = op.get_bind()
+    # Create the PostgreSQL types once; the column definitions must not try to create them again.
     maintenance_status.create(bind, checkfirst=True)
     maintenance_resolution.create(bind, checkfirst=True)
     lock_type.create(bind, checkfirst=True)
