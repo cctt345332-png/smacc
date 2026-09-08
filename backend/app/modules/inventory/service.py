@@ -363,7 +363,7 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
 
 async def get_serials(
     db: AsyncSession, tenant_id: str, product_id: str,
-    status: str | None = None
+    status: str | None = None, warehouse_id: str | None = None
 ):
     """جلب السيريالات مع التحقق من أن المنتج يدعم السيريال"""
     item = await get_item(db, tenant_id, product_id)
@@ -373,6 +373,8 @@ async def get_serials(
     q = select(SerialItem).where(SerialItem.product_id == product_id)
     if status:
         q = q.where(SerialItem.status == status)
+    if warehouse_id:
+        q = q.where(SerialItem.warehouse_id == warehouse_id)
     q = q.order_by(SerialItem.created_at.desc())
     r = await db.execute(q)
     return r.scalars().all()

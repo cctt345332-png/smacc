@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getItem, getSerials, getBatches, addBatch, getWarehouses } from "@/lib/inventory";
+import { getItem, getSerials, getBatches, addBatch, getWarehouses, getItemStockLevels } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 
@@ -39,6 +39,8 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
   const [serials, setSerials] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [stockLevels, setStockLevels] = useState<any[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [businessType, setBusinessType] = useState<string | null>(null); // null = لم يُحمَّل بعد
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("in_stock");
@@ -61,12 +63,14 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
       setWarehouses(whRes.data);
 
       if (itemRes.data.tracking_type === "serial") {
-        const [allRes, filteredRes] = await Promise.all([
+        const [allRes, levelsRes] = await Promise.all([
           getSerials(id),
-          getSerials(id, "in_stock"),
+          getItemStockLevels(id),
         ]);
         setAllSerials(allRes.data);
-        setSerials(filteredRes.data);
+        setStockLevels(Array.isArray(levelsRes.data) ? levelsRes.data : []);
+        setSerials([]);
+        setSelectedWarehouseId("");
       }
       if (itemRes.data.tracking_type === "batch") {
         const batchRes = await getBatches(id, true);
@@ -78,12 +82,12 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
   useEffect(() => { load(); }, [id]);
 
   useEffect(() => {
-    if (item?.tracking_type === "serial") {
-      getSerials(id, filterStatus || undefined)
-        .then(({ data }) => setSerials(data))
-        .catch(() => {});
-    }
-  }, [filterStatus]);
+    if (item?.tracking_type !== "serial") return;
+    if (!selectedWarehouseId) { setSerials([]); return; }
+    getSerials(id, filterStatus || undefined, selectedWarehouseId)
+      .then(({ data }) => setSerials(Array.isArray(data) ? data : []))
+      .catch(() => setSerials([]));
+  }, [filterStatus, selectedWarehouseId, item?.tracking_type, id]);
 
   const handleAddBatch = async () => {
     if (!batchForm.batch_number) return alert(ar ? "رقم التشغيلة مطلوب" : "Batch number required");
@@ -358,12 +362,20 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
             <span className="card-title">
               {ar ? "السيريالات" : "Serial Numbers"}
               <span style={{ fontSize: 12, color: "var(--text-secondary)", marginInlineStart: 8 }}>
-                ({allSerials.length} {ar ? "إجمالي" : "total"})
+                ({selectedWarehouseId ? serials.length : allSerials.length} {selectedWarehouseId ? (ar ? "في المستودع المحدد" : "in selected warehouse") : (ar ? "إجمالي" : "total")})
               </span>
             </span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <select className="form-input form-select" style={{ width: 160, height: 32, fontSize: 12 }}
-                value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <select className="form-input form-select" style={{ width: 230, height: 32, fontSize: 12 }}
+                value={selectedWarehouseId} onChange={e => setSelectedWarehouseId(e.target.value)}>
+                <option value="">{ar ? "اختر المستودع لعرض السيريالات" : "Select warehouse to view serials"}</option>
+                {warehouses.map((w: any) => {
+                  const level = stockLevels.find((x: any) => x.warehouse_id === w.id);
+                  return <option key={w.id} value={w.id}>{w.name_ar} — {Number(level?.quantity || 0).toLocaleString("en-US")} {ar ? "متاح" : "available"}</option>;
+                })}
+              </select>
+              <select className="form-input form-select" style={{ width: 140, height: 32, fontSize: 12 }}
+                value={filterStatus} onChange={e => setFilterStatus(e.target.value)} disabled={!selectedWarehouseId}>
                 <option value="">{ar ? "كل الحالات" : "All"}</option>
                 {Object.entries(SERIAL_STATUS).map(([k, v]) => <option key={k} value={k}>{v.ar}</option>)}
               </select>
@@ -372,13 +384,20 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
               </Link>
             </div>
           </div>
+          <div style={{ padding: "12px 20px 0", display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)" }}>
+            {warehouses.map((w: any) => {
+              const level = stockLevels.find((x: any) => x.warehouse_id === w.id);
+              const count = Number(level?.quantity || 0);
+              return <button key={w.id} type="button" onClick={() => setSelectedWarehouseId(w.id)} style={{ border: selectedWarehouseId === w.id ? "1px solid #6F4A84" : "1px solid var(--border)", background: selectedWarehouseId === w.id ? "#F4EEF8" : "var(--surface)", borderRadius: 8, padding: "8px 12px", cursor: "pointer", textAlign: ar ? "right" : "left" }}><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{w.name_ar}</div><strong style={{ color: count > 0 ? "#6F4A84" : "var(--text-muted)" }}>{count.toLocaleString("en-US")} {ar ? "سيريال متاح" : "available"}</strong></button>;
+            })}
+          </div>
           <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
             {serials.length === 0 ? (
               <div className="empty-state" style={{ padding: "32px 20px" }}>
                 <div className="empty-state-title" style={{ fontSize: 13 }}>
-                  {filterStatus ? (ar ? `لا توجد سيريالات بحالة "${SERIAL_STATUS[filterStatus]?.ar}"` : `No serials with status "${filterStatus}"`) : (ar ? "لا توجد سيريالات" : "No serials")}
+                  {!selectedWarehouseId ? (ar ? "اختر المستودع أولًا لعرض السيريالات" : "Select a warehouse first to view serials") : filterStatus ? (ar ? `لا توجد سيريالات بحالة "${SERIAL_STATUS[filterStatus]?.ar}" في المستودع المحدد` : `No serials with status "${filterStatus}" in selected warehouse`) : (ar ? "لا توجد سيريالات في المستودع المحدد" : "No serials in selected warehouse")}
                 </div>
-                {!filterStatus && (
+                {!filterStatus && selectedWarehouseId && (
                   <Link href={`/${locale}/inventory/serials`} className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>
                     {ar ? "إضافة سيريالات" : "Add Serials"}
                   </Link>

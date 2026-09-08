@@ -230,10 +230,11 @@ async def delete_item(item_id: str, user=Depends(require_role(["manager"])), db:
 async def list_serials(
     product_id: str,
     status: Optional[str] = None,
+    warehouse_id: Optional[str] = None,
     tenant_id=Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.get_serials(db, tenant_id, product_id, status)
+    return await service.get_serials(db, tenant_id, product_id, status, warehouse_id)
 
 @router.post("/items/{product_id}/serials", status_code=201)
 async def add_serial(product_id: str, data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):

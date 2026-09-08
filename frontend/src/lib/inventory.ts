@@ -17,8 +17,8 @@ export const deleteItem = (id: string) => api.delete(`/inventory/items/${id}`);
 export const getStockSummary = () => api.get("/inventory/items/summary");
 
 // Serial Items
-export const getSerials = (productId: string, status?: string) =>
-  api.get(`/inventory/items/${productId}/serials`, { params: status ? { status } : {} });
+export const getSerials = (productId: string, status?: string, warehouseId?: string) =>
+  api.get(`/inventory/items/${productId}/serials`, { params: { ...(status ? { status } : {}), ...(warehouseId ? { warehouse_id: warehouseId } : {}) } });
 export const addSerial = (productId: string, data: any) =>
   api.post(`/inventory/items/${productId}/serials`, data);
 export const sellSerial = (serialId: string, data: any) =>
