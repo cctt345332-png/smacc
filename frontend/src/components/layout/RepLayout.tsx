@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuthStore } from "@/store/authStore";
 import { getUnreadCount } from "@/lib/notifications";
 import PageBackButton from "./PageBackButton";
+import { MAINTENANCE_UI_ENABLED } from "@/lib/featureFlags";
 
 /* ══════════════════════════════════════════════════════════════════
    RepLayout — واجهة المندوب الحصرية
@@ -74,9 +75,9 @@ function MoreDrawer({
 }) {
   const base = `/${locale}`;
   const links = [
-    { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/me/payments`,     color: "#6F4A84" },
-    { label: ar ? "طلبات الصيانة" : "Maintenance", href: `${base}/reps/me/maintenance`, color: "#6F4A84" },
-    { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/me/reports`,      color: "#6F4A84" },
+    { label: ar ? "سندات القبض" : "Receipts",   href: `${base}/reps/me/payments`, color: "#6F4A84" },
+    ...(MAINTENANCE_UI_ENABLED ? [{ label: ar ? "طلبات الصيانة" : "Maintenance", href: `${base}/reps/me/maintenance`, color: "#6F4A84" }] : []),
+    { label: ar ? "تقاريري" : "My Reports",      href: `${base}/reps/me/reports`,  color: "#6F4A84" },
   ];
 
   return (
@@ -408,14 +409,14 @@ export default function RepLayout({
         <Link href={`${base}/reps/me/invoices`} className={pathname.includes("/invoices") ? "active" : ""}>{ar ? "الفواتير" : "Invoices"}</Link>
         <Link href={`${base}/reps/me/customers`} className={pathname.includes("/customers") ? "active" : ""}>{ar ? "العملاء" : "Customers"}</Link>
         <Link href={`${base}/reps/me/stock`} className={pathname.includes("/stock") ? "active" : ""}>{ar ? "المخزون" : "Stock"}</Link>
-        <Link href={`${base}/reps/me/maintenance`} className={pathname.includes("/maintenance") ? "active" : ""}>{ar ? "الصيانة" : "Maintenance"}</Link>
+        {MAINTENANCE_UI_ENABLED && <Link href={`${base}/reps/me/maintenance`} className={pathname.includes("/maintenance") ? "active" : ""}>{ar ? "الصيانة" : "Maintenance"}</Link>}
         <Link href={`${base}/reps/me/reports`} className={pathname.includes("/reports") ? "active" : ""}>{ar ? "تقارير المندوب" : "Rep Reports"}</Link>
       </div>
       <div className="rep-legacy-toolbar">
         <PageBackButton locale={locale} fallbackPath={`${base}/reps/me/dashboard`} className="rep-legacy-back" />
         <Link href={`${base}/reps/me/invoices/new`}>{ar ? "+ فاتورة مبيعات" : "+ Sales Invoice"}</Link>
         <Link href={`${base}/reps/me/payments`}>{ar ? "سند قبض" : "Receipt"}</Link>
-        <Link href={`${base}/reps/me/maintenance`}>{ar ? "طلب صيانة" : "Maintenance"}</Link>
+        {MAINTENANCE_UI_ENABLED && <Link href={`${base}/reps/me/maintenance`}>{ar ? "طلب صيانة" : "Maintenance"}</Link>}
         <Link href={`${base}/reps/me/invoices`}>{ar ? "مرتجع مبيعات" : "Sales Return"}</Link>
         <span>{ar ? "اختر الفاتورة الأصلية لبدء المرتجع، وتُرسل الفواتير للاعتماد قبل الترحيل" : "Choose the original invoice to start a return; invoices are submitted for approval before posting"}</span>
       </div>
