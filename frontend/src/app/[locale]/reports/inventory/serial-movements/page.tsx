@@ -51,7 +51,7 @@ export default function SerialMovementsReportPage(props: { params: Promise<{ loc
   const { locale } = use(props.params);
   const ar = locale === "ar";
   const [rows, setRows] = useState<any[]>([]);
-  const [summary, setSummary] = useState({ count: 0, total_in: 0, total_out: 0, net_value: 0 });
+  const [summary, setSummary] = useState({ count: 0, total_in: 0, total_out: 0, net_value: 0, current_stock_count: 0, current_sold_count: 0, current_reserved_count: 0, current_damaged_count: 0, current_returned_count: 0 });
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
@@ -77,10 +77,10 @@ export default function SerialMovementsReportPage(props: { params: Promise<{ loc
       if (toDate) params.to_date = `${toDate}T23:59:59`;
       const { data } = await getSerialMovementsReport(params);
       setRows(data?.rows || []);
-      setSummary(data?.summary || { count: 0, total_in: 0, total_out: 0, net_value: 0 });
+      setSummary(data?.summary || { count: 0, total_in: 0, total_out: 0, net_value: 0, current_stock_count: 0, current_sold_count: 0, current_reserved_count: 0, current_damaged_count: 0, current_returned_count: 0 });
     } catch {
       setRows([]);
-      setSummary({ count: 0, total_in: 0, total_out: 0, net_value: 0 });
+      setSummary({ count: 0, total_in: 0, total_out: 0, net_value: 0, current_stock_count: 0, current_sold_count: 0, current_reserved_count: 0, current_damaged_count: 0, current_returned_count: 0 });
     } finally { setLoading(false); }
   };
 
@@ -154,10 +154,18 @@ export default function SerialMovementsReportPage(props: { params: Promise<{ loc
 
       <div className="grid-4" style={{ marginBottom: 20 }}>
         {[
-          { label: ar ? "إجمالي الحركات" : "Total movements", value: summary.count, color: "#5A187E" },
+          { label: ar ? "سجلات الحركة المعروضة" : "Movement records", value: summary.count, color: "#5A187E" },
           { label: ar ? "قيمة الوارد" : "Inbound value", value: `${fmt(summary.total_in)} SAR`, color: "#6F4A84" },
           { label: ar ? "قيمة الصادر" : "Outbound value", value: `${fmt(summary.total_out)} SAR`, color: "#DC2626" },
           { label: ar ? "صافي قيمة الحركة" : "Net movement value", value: `${fmt(summary.net_value)} SAR`, color: "#75617F" },
+        ].map(s => <div key={s.label} className="card" style={{ padding: "14px 16px" }}><div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div><div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div></div>)}
+      </div>
+      <div className="grid-4" style={{ marginBottom: 20 }}>
+        {[
+          { label: ar ? "الرصيد الحالي في المخزون" : "Current stock balance", value: summary.current_stock_count, color: "#15803D" },
+          { label: ar ? "الحالي المباع" : "Currently sold", value: summary.current_sold_count, color: "#2563EB" },
+          { label: ar ? "الحالي المحجوز" : "Currently reserved", value: summary.current_reserved_count, color: "#B45309" },
+          { label: ar ? "الحالي التالف/المرتجع" : "Damaged / returned", value: summary.current_damaged_count + summary.current_returned_count, color: "#B91C1C" },
         ].map(s => <div key={s.label} className="card" style={{ padding: "14px 16px" }}><div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div><div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div></div>)}
       </div>
 
@@ -171,7 +179,10 @@ export default function SerialMovementsReportPage(props: { params: Promise<{ loc
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>{ar ? "من" : "From"}<input type="date" className="form-input" value={fromDate} onChange={e => setFromDate(e.target.value)} /></label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>{ar ? "إلى" : "To"}<input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} /></label>
           <button className="btn btn-ghost btn-sm" onClick={clearFilters}>{ar ? "مسح الفلاتر" : "Clear filters"}</button>
-          <span style={{ fontSize: 13, color: "var(--text-secondary)", marginInlineStart: "auto" }}>{rows.length} {ar ? "حركة" : "movements"}</span>
+          <span style={{ fontSize: 12, color: "var(--text-secondary)", marginInlineStart: "auto" }}>{rows.length} {ar ? "سجل حركة" : "movement records"}</span>
+        </div>
+        <div style={{ padding: "0 16px 12px", fontSize: 11, color: "var(--text-muted)" }}>
+          {ar ? "سجلات الحركة = العمليات المطابقة للفلاتر. الرصيد الحالي = حالة السيريالات الآن، وليس عدد عمليات الشراء أو البيع." : "Movement records are filtered operations. Current balance is the serials' current status, not the number of purchases or sales."}
         </div>
       </div>
 

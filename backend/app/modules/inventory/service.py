@@ -1865,6 +1865,32 @@ async def get_serial_movements_report(
     q = q.order_by(StockMovement.created_at.desc()).limit(min(max(limit, 1), 5000))
 
     result = await db.execute(q)
+
+    # هذا ملخص مختلف عن عدد صفوف الحركة: يحسب الوضع الحالي للسيريال نفسه
+    # من SerialItem، وليس عدد عمليات الشراء/البيع الظاهرة في التقرير.
+    current_q = select(
+        SerialItem.status,
+        func.count(SerialItem.id),
+    ).join(
+        InventoryItem, InventoryItem.id == SerialItem.product_id
+    ).where(
+        InventoryItem.tenant_id == tenant_id,
+    )
+    if warehouse_id:
+        current_q = current_q.where(SerialItem.warehouse_id == warehouse_id)
+    if product_id:
+        current_q = current_q.where(SerialItem.product_id == product_id)
+    if bill_id:
+        current_q = current_q.where(SerialItem.purchase_bill_id == bill_id)
+    if serial_status:
+        current_q = current_q.where(SerialItem.status == serial_status)
+    current_q = current_q.group_by(SerialItem.status)
+    current_result = await db.execute(current_q)
+    current_by_status = {
+        (status.value if hasattr(status, "value") else str(status)): int(count or 0)
+        for status, count in current_result.all()
+    }
+
     rows = []
     total_in = Decimal("0")
     total_out = Decimal("0")
@@ -1910,10 +1936,17 @@ async def get_serial_movements_report(
     return {
         "rows": rows,
         "summary": {
+            # عدد السجلات الناتجة من تاريخ/نوع الحركة والفلاتر التاريخية.
             "count": len(rows),
             "total_in": float(total_in),
             "total_out": float(total_out),
             "net_value": float(total_in - total_out),
+            # الرصيد الحالي يعتمد على حالة SerialItem الحالية وموقعه الحالي.
+            "current_stock_count": current_by_status.get("in_stock", 0),
+            "current_sold_count": current_by_status.get("sold", 0),
+            "current_reserved_count": current_by_status.get("reserved", 0),
+            "current_damaged_count": current_by_status.get("damaged", 0),
+            "current_returned_count": current_by_status.get("returned", 0),
         },
     }
 
