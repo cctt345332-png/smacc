@@ -2358,16 +2358,40 @@ async def reconcile_serial_invoice_stock(
                 issue = "confirmed_invoice_serial_still_in_stock"
                 repair_kind = "sell_serial"
             elif status == "in_stock" and sale_movements:
-                summary["conflicts"] += 1
-                summary["items"].append({
-                    "invoice_id": invoice.id,
-                    "invoice_number": invoice.invoice_number,
-                    "serial_id": serial.id,
-                    "serial_number": serial.serial_number,
-                    "issue": "sale_movement_but_serial_in_stock",
-                    "action": "manual_review",
-                })
-                continue
+                # حالة آمنة للإصلاح: توجد حركة بيع واحدة مرتبطة بهذه الفاتورة،
+                # وآخر حركة للسيريال هي حركة البيع نفسها. نزامن حالة السيريال
+                # فقط ولا ننشئ حركة جديدة حتى لا يحدث خصم مزدوج.
+                all_movements_result = await db.execute(
+                    select(StockMovement)
+                    .where(
+                        StockMovement.tenant_id == tenant_id,
+                        StockMovement.serial_item_id == serial.id,
+                    )
+                    .order_by(StockMovement.created_at.desc())
+                )
+                all_movements = all_movements_result.scalars().all()
+                latest_movement = all_movements[0] if all_movements else None
+                latest_is_this_sale = bool(
+                    latest_movement
+                    and latest_movement.id == sale_movements[0].id
+                    and latest_movement.movement_type == "sale"
+                    and latest_movement.reference_type == "invoice"
+                    and latest_movement.reference_id == invoice.id
+                )
+                if len(sale_movements) == 1 and latest_is_this_sale:
+                    issue = "serial_status_out_of_sync_with_existing_sale"
+                    repair_kind = "sync_serial_state"
+                else:
+                    summary["conflicts"] += 1
+                    summary["items"].append({
+                        "invoice_id": invoice.id,
+                        "invoice_number": invoice.invoice_number,
+                        "serial_id": serial.id,
+                        "serial_number": serial.serial_number,
+                        "issue": "sale_movement_but_serial_in_stock",
+                        "action": "manual_review",
+                    })
+                    continue
             else:
                 summary["conflicts"] += 1
                 summary["items"].append({
@@ -2414,6 +2438,11 @@ async def reconcile_serial_invoice_stock(
                 ))
             elif repair_kind == "fill_sale_price":
                 serial.sale_price = serial_prices.get(serial.id) or Decimal("0")
+            elif repair_kind == "sync_serial_state":
+                serial.status = "sold"
+                serial.sale_invoice_id = invoice.id
+                serial.sale_price = serial.sale_price or serial_prices.get(serial.id) or Decimal("0")
+                serial.sold_at = serial.sold_at or sale_movements[0].created_at or invoice.issue_date or datetime.utcnow()
             else:
                 db.add(StockMovement(
                     id=str(uuid.uuid4()), tenant_id=tenant_id,
