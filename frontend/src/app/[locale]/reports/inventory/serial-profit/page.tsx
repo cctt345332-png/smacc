@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getSerialProfitReport, getItems } from "@/lib/inventory";
+import { getSerialProfitReport, getItems, reconcileSerialInvoiceStockPreview, applySerialInvoiceStockReconciliation } from "@/lib/inventory";
 import { getInvoices } from "@/lib/sales";
 import { getReps } from "@/lib/reps";
 import { Icon } from "@/components/ui/Icons";
@@ -29,6 +29,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [reconcileLoading, setReconcileLoading] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<any>(null);
 
   useEffect(() => {
     Promise.all([
@@ -41,6 +43,21 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
       setReps(Array.isArray(repsRes.data) ? repsRes.data : []);
     });
   }, []);
+
+  const runSerialReconciliation = async (apply: boolean) => {
+    if (apply && !window.confirm(ar ? "سيتم تحديث حالة السيريالات وحركات المخزون للفواتير INV-00003 وINV-00005 فقط. هل تريد المتابعة؟" : "This will update serial status and stock movements for INV-00003 and INV-00005 only. Continue?")) return;
+    setReconcileLoading(true);
+    try {
+      const response = apply
+        ? await applySerialInvoiceStockReconciliation(["INV-00003", "INV-00005"])
+        : await reconcileSerialInvoiceStockPreview(["INV-00003", "INV-00005"]);
+      setReconcileResult(response.data);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر تنفيذ المصالحة" : "Reconciliation failed"));
+    } finally {
+      setReconcileLoading(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -104,6 +121,35 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
             {loading ? (ar ? "جاري..." : "Loading...") : (ar ? "عرض التقرير" : "Show Report")}
           </button>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20, border: "1px solid #E9D5FF", background: "#FCF9FF" }}>
+        <div className="card-header">
+          <span className="card-title">{ar ? "مصالحة فواتير السيريالات" : "Serial invoice reconciliation"}</span>
+        </div>
+        <div className="card-body" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ flex: 1, minWidth: 280, color: "var(--text-secondary)", fontSize: 13 }}>
+            {ar ? "معاينة أو إصلاح ربط السيريالات بالفواتير INV-00003 وINV-00005. المعاينة لا تعدل البيانات." : "Preview or repair serial links for INV-00003 and INV-00005. Preview does not change data."}
+          </span>
+          <button className="btn btn-secondary" onClick={() => runSerialReconciliation(false)} disabled={reconcileLoading}>
+            {reconcileLoading ? (ar ? "جاري..." : "Running...") : (ar ? "معاينة المصالحة" : "Preview reconciliation")}
+          </button>
+          <button className="btn btn-primary" onClick={() => runSerialReconciliation(true)} disabled={reconcileLoading}>
+            {ar ? "تطبيق الإصلاح" : "Apply repair"}
+          </button>
+        </div>
+        {reconcileResult && (
+          <div className="card-body" style={{ borderTop: "1px solid #E9D5FF", fontSize: 13 }}>
+            <strong>{ar ? "نتيجة المصالحة" : "Reconciliation result"}</strong>
+            <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+              <div>{ar ? "الفواتير المفحوصة" : "Invoices checked"}: <b>{reconcileResult.invoices_checked ?? "—"}</b></div>
+              <div>{ar ? "السيريالات المفحوصة" : "Serials checked"}: <b>{reconcileResult.serials_checked ?? "—"}</b></div>
+              <div>{ar ? "قابلة للإصلاح" : "Repairable"}: <b>{reconcileResult.repairable ?? reconcileResult.repaired ?? "—"}</b></div>
+              <div>{ar ? "تم إصلاحها" : "Repaired"}: <b>{reconcileResult.repaired ?? "—"}</b></div>
+              <div>{ar ? "تعارضات" : "Conflicts"}: <b>{reconcileResult.conflicts ?? "—"}</b></div>
+            </div>
+          </div>
+        )}
       </div>
 
       {data && (

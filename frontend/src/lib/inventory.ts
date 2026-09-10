@@ -130,3 +130,13 @@ export const getExpiryAlerts = (daysAhead = 90) =>
 
 export const getBatchExpiryReport = (params?: { product_id?: string; days_ahead?: number }) =>
   api.get("/inventory/reports/batch-expiry", { params });
+
+// Serial invoice reconciliation (admin only)
+export const reconcileSerialInvoiceStock = (params: { apply?: boolean; invoice_numbers?: string }) =>
+  api.post("/inventory/serial-reconciliation", null, { params });
+
+export const reconcileSerialInvoiceStockPreview = (invoiceNumbers: string[]) =>
+  reconcileSerialInvoiceStock({ apply: false, invoice_numbers: invoiceNumbers.join(",") });
+
+export const applySerialInvoiceStockReconciliation = (invoiceNumbers: string[]) =>
+  reconcileSerialInvoiceStock({ apply: true, invoice_numbers: invoiceNumbers.join(",") });
