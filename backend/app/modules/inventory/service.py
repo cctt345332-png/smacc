@@ -2335,7 +2335,7 @@ async def reconcile_serial_invoice_stock(
                     StockMovement.reference_id == invoice.id,
                     StockMovement.movement_type == "sale",
                 )
-                .order_by(StockMovement.created_at.desc())
+                .order_by(StockMovement.created_at.desc().nulls_last())
             )
             sale_movements = movements_result.scalars().all()
             status = getattr(serial.status, "value", serial.status)
@@ -2367,7 +2367,7 @@ async def reconcile_serial_invoice_stock(
                         StockMovement.tenant_id == tenant_id,
                         StockMovement.serial_item_id == serial.id,
                     )
-                    .order_by(StockMovement.created_at.desc())
+                    .order_by(StockMovement.created_at.desc().nulls_last())
                 )
                 all_movements = all_movements_result.scalars().all()
                 latest_movement = all_movements[0] if all_movements else None
@@ -2390,6 +2390,10 @@ async def reconcile_serial_invoice_stock(
                         "serial_number": serial.serial_number,
                         "issue": "sale_movement_but_serial_in_stock",
                         "action": "manual_review",
+                        "sale_movement_count": len(sale_movements),
+                        "latest_movement_type": getattr(latest_movement, "movement_type", None),
+                        "latest_reference_type": getattr(latest_movement, "reference_type", None),
+                        "latest_reference_id": getattr(latest_movement, "reference_id", None),
                     })
                     continue
             else:
