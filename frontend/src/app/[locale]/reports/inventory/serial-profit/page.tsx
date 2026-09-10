@@ -10,6 +10,15 @@ import StructuredReportPrintButton from "@/components/documents/StructuredReport
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
 const CONDITION: Record<string, string> = { new: "جديد", used: "مستخدم", refurbished: "مجدد" };
+const RECONCILIATION_ISSUES: Record<string, string> = {
+    invalid_serial_ids_json: "بيانات السيريالات غير صالحة",
+    serial_not_found: "السيريال غير موجود",
+    sold_without_sale_movement: "السيريال مباع بلا حركة بيع",
+    sold_without_sale_price: "السيريال مباع بلا سعر بيع",
+    confirmed_invoice_serial_still_in_stock: "الفاتورة مؤكدة والسيريال ما زال في المخزون",
+    sale_movement_but_serial_in_stock: "توجد حركة بيع لكن حالة السيريال في المخزون",
+    serial_link_conflict: "تعارض في ربط السيريال بالفاتورة",
+};
 
 export default function SerialProfitPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
@@ -148,6 +157,35 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
               <div>{ar ? "تم إصلاحها" : "Repaired"}: <b>{reconcileResult.repaired ?? "—"}</b></div>
               <div>{ar ? "تعارضات" : "Conflicts"}: <b>{reconcileResult.conflicts ?? "—"}</b></div>
             </div>
+            {Array.isArray(reconcileResult.items) && reconcileResult.items.length > 0 && (
+              <div style={{ marginTop: 16, overflowX: "auto" }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>{ar ? "تفاصيل الفحص" : "Check details"}</div>
+                <table style={{ width: "100%", minWidth: 760 }}>
+                  <thead>
+                    <tr>
+                      <th>{ar ? "الفاتورة" : "Invoice"}</th>
+                      <th>{ar ? "السيريال" : "Serial"}</th>
+                      <th>{ar ? "الحالة" : "Issue"}</th>
+                      <th>{ar ? "الحالة الحالية" : "Current status"}</th>
+                      <th>{ar ? "الفاتورة المرتبطة" : "Linked invoice"}</th>
+                      <th>{ar ? "الإجراء" : "Action"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reconcileResult.items.map((item: any, index: number) => (
+                      <tr key={`${item.invoice_id || item.invoice_number}-${item.serial_id || index}`}>
+                        <td style={{ fontFamily: "monospace", fontSize: 12 }}>{item.invoice_number || "—"}</td>
+                        <td><code style={{ fontSize: 12 }}>{item.serial_number || item.serial_id || "—"}</code></td>
+                        <td>{ar ? RECONCILIATION_ISSUES[item.issue] || item.issue || "—" : item.issue || "—"}</td>
+                        <td>{item.serial_status || "—"}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 12 }}>{item.sale_invoice_id || "—"}</td>
+                        <td>{ar ? (item.action === "manual_review" ? "مراجعة يدوية" : item.action || "—") : item.action || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
