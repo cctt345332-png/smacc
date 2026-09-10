@@ -18,12 +18,19 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 async def serial_reconciliation(
     apply: bool = Query(False),
     max_invoices: int = Query(500, ge=1, le=5000),
+    invoice_numbers: Optional[str] = Query(None, description="Comma-separated invoice numbers"),
     user=Depends(require_role(["manager", "accountant"])),
     db: AsyncSession = Depends(get_db),
 ):
     """معاينة أو إصلاح تطابق فواتير السيريالات المؤكدة مع المخزون."""
+    numbers = [value.strip() for value in (invoice_numbers or "").split(",") if value.strip()]
     return await service.reconcile_serial_invoice_stock(
-        db, user["tenant_id"], user["user_id"], apply=apply, max_invoices=max_invoices
+        db,
+        user["tenant_id"],
+        user["user_id"],
+        apply=apply,
+        max_invoices=max_invoices,
+        invoice_numbers=numbers or None,
     )
 
 

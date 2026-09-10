@@ -2251,6 +2251,7 @@ async def reconcile_serial_invoice_stock(
     user_id: str,
     apply: bool = False,
     max_invoices: int = 500,
+    invoice_numbers: list[str] | None = None,
 ) -> dict:
     """يفحص تطابق الفواتير المؤكدة مع حالة السيريال وحركة البيع.
 
@@ -2267,6 +2268,7 @@ async def reconcile_serial_invoice_stock(
         .where(
             Invoice.tenant_id == tenant_id,
             Invoice.status.in_(confirmed_statuses),
+            *([Invoice.invoice_number.in_(invoice_numbers)] if invoice_numbers else []),
         )
         .order_by(Invoice.issue_date, Invoice.invoice_number)
         .limit(max_invoices)
@@ -2338,13 +2340,19 @@ async def reconcile_serial_invoice_stock(
             status = getattr(serial.status, "value", serial.status)
             linked_invoice = serial.sale_invoice_id
 
-            if status == "sold" and linked_invoice == invoice.id and sale_movements:
+            if status == "sold" and linked_invoice == invoice.id and sale_movements and serial.sale_price is not None:
                 summary["already_consistent"] += 1
                 continue
 
             if status == "sold" and linked_invoice == invoice.id and not sale_movements:
                 issue = "sold_without_sale_movement"
                 repair_kind = "add_sale_movement"
+            elif status == "sold" and linked_invoice == invoice.id and serial.sale_price is None and sale_movements:
+                issue = "sold_without_sale_price"
+                repair_kind = "fill_sale_price"
+            elif status == "in_stock" and linked_invoice == invoice.id and not sale_movements:
+                issue = "confirmed_invoice_serial_still_in_stock"
+                repair_kind = "sell_serial"
             elif status == "in_stock" and not linked_invoice and not sale_movements:
                 issue = "confirmed_invoice_serial_still_in_stock"
                 repair_kind = "sell_serial"
@@ -2392,7 +2400,7 @@ async def reconcile_serial_invoice_stock(
                 serial.status = "sold"
                 serial.sale_invoice_id = invoice.id
                 serial.sale_price = serial.sale_price or serial_prices.get(serial.id) or Decimal("0")
-                serial.sold_at = invoice.issue_date or datetime.utcnow()
+                serial.sold_at = serial.sold_at or invoice.issue_date or datetime.utcnow()
                 db.add(StockMovement(
                     id=str(uuid.uuid4()), tenant_id=tenant_id,
                     product_id=serial.product_id,
@@ -2403,6 +2411,8 @@ async def reconcile_serial_invoice_stock(
                     created_by=user_id,
                     notes="إصلاح مصالحة مخزون الفاتورة المؤكدة",
                 ))
+            elif repair_kind == "fill_sale_price":
+                serial.sale_price = serial_prices.get(serial.id) or Decimal("0")
             else:
                 db.add(StockMovement(
                     id=str(uuid.uuid4()), tenant_id=tenant_id,
@@ -2414,6 +2424,8 @@ async def reconcile_serial_invoice_stock(
                     created_by=user_id,
                     notes="إضافة حركة بيع مفقودة أثناء مصالحة المخزون",
                 ))
+                if serial.sale_price is None:
+                    serial.sale_price = serial_prices.get(serial.id) or Decimal("0")
             summary["repaired"] += 1
 
     if apply:
