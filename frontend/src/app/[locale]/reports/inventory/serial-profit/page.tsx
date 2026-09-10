@@ -134,7 +134,7 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20, border: "1px solid #E9D5FF", background: "#FCF9FF" }}>
+      <div style={{ display: "none" }} aria-hidden="true">
         <div className="card-header">
           <span className="card-title">{ar ? "مصالحة فواتير السيريالات" : "Serial invoice reconciliation"}</span>
         </div>
