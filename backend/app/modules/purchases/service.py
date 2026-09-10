@@ -586,6 +586,48 @@ async def _reverse_bill_inventory(
     old_lines = lines_r.scalars().all()
     wh_id = bill.warehouse_id
 
+    # لا نعكس سيريالًا دخل في حركة لاحقة؛ عكسه ثم إعادة إضافته قد يعيده
+    # إلى المخزون رغم أنه بيع أو نُقل. يجب تعديل الفاتورة بعد عكس الحركة
+    # التابعة أولًا، لذلك نوقف التعديل برسالة واضحة بدل إفساد الرصيد.
+    protected_serials: list[str] = []
+    for line in old_lines:
+        if not line.inventory_item_id or not line.new_serial_numbers_json:
+            continue
+        entries: list = json.loads(line.new_serial_numbers_json)
+        for entry in entries:
+            sn = entry if isinstance(entry, str) else entry.get("serial_number", "").strip()
+            if not sn:
+                continue
+            serial_r = await db.execute(
+                select(SerialItem).where(
+                    SerialItem.product_id == line.inventory_item_id,
+                    SerialItem.serial_number == sn,
+                )
+            )
+            serial = serial_r.scalar_one_or_none()
+            if not serial:
+                continue
+            later_movement_r = await db.execute(
+                select(StockMovement.id).where(
+                    StockMovement.serial_item_id == serial.id,
+                    StockMovement.movement_type.notin_(["purchase", "purchase_edit_rev"]),
+                ).limit(1)
+            )
+            has_later_movement = later_movement_r.scalar_one_or_none() is not None
+            serial_status = serial.status.value if hasattr(serial.status, "value") else str(serial.status)
+            if has_later_movement or serial.sale_invoice_id or serial_status not in ("in_stock", "returned"):
+                protected_serials.append(f"{sn} ({serial_status})")
+
+    if protected_serials:
+        preview = ", ".join(protected_serials[:10])
+        more = f" و{len(protected_serials) - 10} أخرى" if len(protected_serials) > 10 else ""
+        raise HTTPException(
+            409,
+            "لا يمكن تعديل أسطر السيريالات المستخدمة بعد الشراء. "
+            f"السيريالات المحمية: {preview}{more}. "
+            "ألغِ/اعكس حركة البيع أو التحويل أولاً، أو عدّل بيانات الرأس فقط.",
+        )
+
     for line in old_lines:
         if not line.inventory_item_id:
             continue
