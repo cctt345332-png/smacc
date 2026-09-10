@@ -168,6 +168,9 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                       <th>{ar ? "الحالة" : "Issue"}</th>
                       <th>{ar ? "الحالة الحالية" : "Current status"}</th>
                       <th>{ar ? "الفاتورة المرتبطة" : "Linked invoice"}</th>
+                      <th>{ar ? "عدد الحركات" : "Movements"}</th>
+                      <th>{ar ? "آخر حركة" : "Latest movement"}</th>
+                      <th>{ar ? "مرجع آخر حركة" : "Latest reference"}</th>
                       <th>{ar ? "الإجراء" : "Action"}</th>
                     </tr>
                   </thead>
@@ -179,6 +182,9 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                         <td>{ar ? RECONCILIATION_ISSUES[item.issue] || item.issue || "—" : item.issue || "—"}</td>
                         <td>{item.serial_status || "—"}</td>
                         <td style={{ fontFamily: "monospace", fontSize: 12 }}>{item.sale_invoice_id || "—"}</td>
+                        <td>{item.all_movement_count ?? item.sale_movement_count ?? "—"}</td>
+                        <td>{item.latest_movement_type || "—"}</td>
+                        <td style={{ fontFamily: "monospace", fontSize: 11 }}>{item.latest_reference_id || "—"}</td>
                         <td>{ar ? (item.action === "manual_review" ? "مراجعة يدوية" : item.action || "—") : item.action || "—"}</td>
                       </tr>
                     ))}
