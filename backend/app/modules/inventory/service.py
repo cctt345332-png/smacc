@@ -2390,7 +2390,20 @@ async def reconcile_serial_invoice_stock(
                         "serial_number": serial.serial_number,
                         "issue": "sale_movement_but_serial_in_stock",
                         "action": "manual_review",
+                        "serial_status": status,
+                        "sale_invoice_id": linked_invoice,
                         "sale_movement_count": len(sale_movements),
+                        "all_movement_count": len(all_movements),
+                        "movement_types": [getattr(m, "movement_type", None) for m in all_movements],
+                        "movement_references": [
+                            {
+                                "type": getattr(m, "reference_type", None),
+                                "id": getattr(m, "reference_id", None),
+                                "quantity": str(getattr(m, "quantity", None)),
+                                "created_at": getattr(m, "created_at", None).isoformat() if getattr(m, "created_at", None) else None,
+                            }
+                            for m in all_movements
+                        ],
                         "latest_movement_type": getattr(latest_movement, "movement_type", None),
                         "latest_reference_type": getattr(latest_movement, "reference_type", None),
                         "latest_reference_id": getattr(latest_movement, "reference_id", None),
