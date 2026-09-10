@@ -2378,7 +2378,25 @@ async def reconcile_serial_invoice_stock(
                     and latest_movement.reference_type == "invoice"
                     and latest_movement.reference_id == invoice.id
                 )
-                if len(sale_movements) == 1 and latest_is_this_sale:
+                latest_sale = sale_movements[0] if sale_movements else None
+                latest_is_purchase_after_sale = bool(
+                    len(sale_movements) == 1
+                    and latest_movement
+                    and latest_movement.movement_type == "purchase"
+                    and latest_sale
+                    and latest_sale.created_at
+                    and latest_movement.created_at
+                    and latest_movement.created_at > latest_sale.created_at
+                )
+                has_purchase_correction = any(
+                    getattr(m, "movement_type", None) in ("purchase_edit_rev", "purchase_edit_reverse")
+                    and getattr(m, "reference_id", None) == getattr(latest_movement, "reference_id", None)
+                    for m in all_movements
+                )
+                if latest_is_purchase_after_sale and not has_purchase_correction:
+                    issue = "purchase_edit_readded_sold_serial"
+                    repair_kind = "reverse_purchase_edit_and_sync_sale"
+                elif len(sale_movements) == 1 and latest_is_this_sale:
                     issue = "serial_status_out_of_sync_with_existing_sale"
                     repair_kind = "sync_serial_state"
                 else:
@@ -2456,6 +2474,24 @@ async def reconcile_serial_invoice_stock(
             elif repair_kind == "fill_sale_price":
                 serial.sale_price = serial_prices.get(serial.id) or Decimal("0")
             elif repair_kind == "sync_serial_state":
+                serial.status = "sold"
+                serial.sale_invoice_id = invoice.id
+                serial.sale_price = serial.sale_price or serial_prices.get(serial.id) or Decimal("0")
+                serial.sold_at = serial.sold_at or sale_movements[0].created_at or invoice.issue_date or datetime.utcnow()
+            elif repair_kind == "reverse_purchase_edit_and_sync_sale":
+                # لا نحذف الحركة التاريخية؛ نسجل حركة عكسية تدقيقًا، ثم نعيد
+                # حالة السيريال إلى البيع المؤكد. هذا يعالج أثر تعديل الشراء
+                # دون إنشاء حركة بيع أو خصم جديد.
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    product_id=serial.product_id,
+                    warehouse_id=serial.warehouse_id,
+                    movement_type="purchase_edit_rev", quantity=Decimal("-1"),
+                    unit_cost=serial.cost_price, serial_item_id=serial.id,
+                    reference_type="bill_edit", reference_id=latest_movement.reference_id,
+                    created_by=user_id,
+                    notes="عكس شراء زائد نتج عن تعديل فاتورة شراء بعد بيع السيريال",
+                ))
                 serial.status = "sold"
                 serial.sale_invoice_id = invoice.id
                 serial.sale_price = serial.sale_price or serial_prices.get(serial.id) or Decimal("0")

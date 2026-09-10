@@ -18,6 +18,8 @@ const RECONCILIATION_ISSUES: Record<string, string> = {
     confirmed_invoice_serial_still_in_stock: "الفاتورة مؤكدة والسيريال ما زال في المخزون",
     sale_movement_but_serial_in_stock: "توجد حركة بيع لكن حالة السيريال في المخزون",
     serial_link_conflict: "تعارض في ربط السيريال بالفاتورة",
+    purchase_edit_readded_sold_serial: "تعديل فاتورة شراء أعاد سيريالًا مباعًا للمخزون",
+    serial_status_out_of_sync_with_existing_sale: "حالة السيريال غير متزامنة مع حركة البيع",
 };
 
 export default function SerialProfitPage(props: { params: Promise<{ locale: string }> }) {
