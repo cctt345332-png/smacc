@@ -171,6 +171,7 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                       <th>{ar ? "عدد الحركات" : "Movements"}</th>
                       <th>{ar ? "آخر حركة" : "Latest movement"}</th>
                       <th>{ar ? "مرجع آخر حركة" : "Latest reference"}</th>
+                      <th>{ar ? "تسلسل الحركات" : "Movement sequence"}</th>
                       <th>{ar ? "الإجراء" : "Action"}</th>
                     </tr>
                   </thead>
@@ -185,6 +186,15 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                         <td>{item.all_movement_count ?? item.sale_movement_count ?? "—"}</td>
                         <td>{item.latest_movement_type || "—"}</td>
                         <td style={{ fontFamily: "monospace", fontSize: 11 }}>{item.latest_reference_id || "—"}</td>
+                        <td style={{ fontSize: 11, whiteSpace: "nowrap" }}>
+                          {Array.isArray(item.movement_references) && item.movement_references.length > 0
+                            ? item.movement_references.map((movement: any, movementIndex: number) => (
+                              <div key={movementIndex}>
+                                <b>{movement.type || "—"}</b> · {movement.reference_type || "—"} · {movement.reference_id || "—"} · {movement.quantity || "—"}
+                              </div>
+                            ))
+                            : (Array.isArray(item.movement_types) ? item.movement_types.join(" → ") : "—")}
+                        </td>
                         <td>{ar ? (item.action === "manual_review" ? "مراجعة يدوية" : item.action || "—") : item.action || "—"}</td>
                       </tr>
                     ))}
