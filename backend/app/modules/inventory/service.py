@@ -2251,7 +2251,7 @@ async def reconcile_serial_invoice_stock(
     tenant_id: str,
     user_id: str,
     apply: bool = False,
-    max_invoices: int = 500,
+    max_invoices: int = 5000,
     invoice_numbers: list[str] | None = None,
 ) -> dict:
     """يفحص تطابق الفواتير المؤكدة مع حالة السيريال وحركة البيع.

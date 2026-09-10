@@ -17,7 +17,7 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 @router.post("/serial-reconciliation")
 async def serial_reconciliation(
     apply: bool = Query(False),
-    max_invoices: int = Query(500, ge=1, le=5000),
+    max_invoices: int = Query(5000, ge=1, le=5000),
     invoice_numbers: Optional[str] = Query(None, description="Comma-separated invoice numbers"),
     user=Depends(require_role(["manager", "accountant"])),
     db: AsyncSession = Depends(get_db),
