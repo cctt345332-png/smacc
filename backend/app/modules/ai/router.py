@@ -23,6 +23,7 @@ from app.modules.ai.service import (
     update_tenant_ai_settings,
     get_tenant_ai_info,
     get_system_config,
+    get_or_create_tenant_settings,
 )
 from app.modules.ai.providers import ALL_MODELS, get_provider
 from app.modules.ai.encryption import decrypt_key
@@ -203,9 +204,39 @@ async def validate_key(
 # Models
 # ══════════════════════════════════════════════════════════════════════
 @router.get("/models")
-async def get_models(_=Depends(get_current_user)):
-    """قائمة الموديلات المتاحة لكل provider"""
-    return ALL_MODELS
+async def get_models(
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """قائمة الموديلات، مع جلب كل نماذج UnoRouter المجانية عند توفر مفتاح الشركة."""
+    models = {key: list(value) for key, value in ALL_MODELS.items()}
+    settings = await get_or_create_tenant_settings(user["tenant_id"], db)
+    if settings.provider == "unorouter" and settings.api_key_encrypted:
+        try:
+            api_key = decrypt_key(settings.api_key_encrypted)
+            provider = get_provider("unorouter", api_key, settings.model or "gpt-oss-120b:free")
+            remote_models = await provider.list_models()
+            free_models = []
+            for item in remote_models:
+                model_id = str(item.get("id") or "")
+                if not model_id.endswith(":free"):
+                    continue
+                supported = item.get("supported_parameters") or item.get("capabilities") or []
+                if isinstance(supported, dict):
+                    supported = [key for key, value in supported.items() if value]
+                free_models.append({
+                    "id": model_id,
+                    "name": f"{item.get('name') or model_id} · مجاني",
+                    "context": item.get("context_length") or item.get("context") or 0,
+                    "free": True,
+                    "supports_tools": "tools" in supported or "tool_choice" in supported,
+                })
+            if free_models:
+                models["unorouter"] = sorted(free_models, key=lambda item: item["id"])
+        except Exception:
+            # إبقاء القائمة المضمنة إذا كان الكتالوج الخارجي غير متاح مؤقتًا.
+            pass
+    return models
 
 
 # ══════════════════════════════════════════════════════════════════════

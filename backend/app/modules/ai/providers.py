@@ -163,6 +163,14 @@ class OpenAIProvider:
                     except (json.JSONDecodeError, KeyError, IndexError):
                         continue
 
+    async def list_models(self) -> list[dict]:
+        """جلب النماذج من OpenAI-compatible /models."""
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(f"{self.BASE_URL}/models", headers=self._headers())
+            self._raise_for_response(resp)
+            payload = resp.json()
+        return payload.get("data", []) if isinstance(payload, dict) else []
+
     async def validate_key(self) -> bool:
         """التحقق من صحة المفتاح"""
         try:
