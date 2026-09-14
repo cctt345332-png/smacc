@@ -68,6 +68,27 @@ class OpenAIProvider:
             "Content-Type": "application/json",
         }
 
+    def _raise_for_response(self, resp: httpx.Response) -> None:
+        """احتفظ بتفاصيل خطأ OpenAI-compatible بدل فقدان body عند raise_for_status."""
+        if resp.is_success:
+            return
+        try:
+            payload = resp.json()
+            error = payload.get("error", {}) if isinstance(payload, dict) else {}
+            message = error.get("message") or payload.get("detail") or resp.reason_phrase
+            code = error.get("code") or error.get("type") or "http_error"
+        except Exception:
+            message = resp.text[:500] or resp.reason_phrase
+            code = "http_error"
+        request_id = resp.headers.get("x-request-id") or resp.headers.get("request-id") or ""
+        retry_after = resp.headers.get("retry-after") or ""
+        details = f"HTTP {resp.status_code} [{code}] {message}"
+        if request_id:
+            details += f" (request id: {request_id})"
+        if retry_after:
+            details += f" (retry-after: {retry_after})"
+        raise RuntimeError(details)
+
     def _build_body(self, messages: list[dict], system_prompt: str | None = None, stream: bool = False) -> dict:
         msgs = []
         if system_prompt:
@@ -96,7 +117,7 @@ class OpenAIProvider:
                 headers=self._headers(),
                 json=body,
             )
-            resp.raise_for_status()
+            self._raise_for_response(resp)
             data = resp.json()
             return {
                 "content": data["choices"][0]["message"]["content"],
@@ -126,7 +147,7 @@ class OpenAIProvider:
                 headers=self._headers(),
                 json=body,
             ) as resp:
-                resp.raise_for_status()
+                self._raise_for_response(resp)
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):
                         continue
