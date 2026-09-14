@@ -180,6 +180,8 @@ async def ai_chat(tenant_id: str, feature: str, messages: list[dict],
     except Exception as e:
         err_str = str(e)
         if "429" in err_str:
+            if provider_name == "unorouter":
+                raise HTTPException(429, "UnoRouter رفض الطلب بسبب حد السرعة أو حد النموذج المجاني. هذا ليس حدًا من لوحة المدير العام؛ جرّب نموذجًا مجانيًا آخر أو انتظر قليلًا.")
             raise HTTPException(429, "تجاوزت حد الطلبات. انتظر قليلاً ثم حاول مرة أخرى.")
         if "401" in err_str or "403" in err_str:
             raise HTTPException(401, "مفتاح API غير صالح أو منتهي الصلاحية.")
@@ -207,6 +209,8 @@ async def ai_stream(tenant_id: str, feature: str, messages: list[dict],
     except Exception as e:
         err_str = str(e)
         if "429" in err_str:
+            if provider_name == "unorouter":
+                raise HTTPException(429, "UnoRouter رفض الطلب بسبب حد السرعة أو حد النموذج المجاني. هذا ليس حدًا من لوحة المدير العام؛ جرّب نموذجًا مجانيًا آخر أو انتظر قليلًا.")
             raise HTTPException(429, "تجاوزت حد الطلبات. انتظر قليلاً ثم حاول مرة أخرى.")
         if "401" in err_str or "403" in err_str:
             raise HTTPException(401, "مفتاح API غير صالح أو منتهي الصلاحية.")
