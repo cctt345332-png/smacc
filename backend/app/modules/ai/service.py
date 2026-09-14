@@ -181,9 +181,13 @@ async def ai_chat(tenant_id: str, feature: str, messages: list[dict],
         err_str = str(e)
         if "429" in err_str:
             if provider_name == "unorouter":
-                raise HTTPException(429, "UnoRouter رفض الطلب بسبب حد السرعة أو حد النموذج المجاني. هذا ليس حدًا من لوحة المدير العام؛ جرّب نموذجًا مجانيًا آخر أو انتظر قليلًا.")
+                raise HTTPException(429, f"UnoRouter: {err_str[:500]}")
             raise HTTPException(429, "تجاوزت حد الطلبات. انتظر قليلاً ثم حاول مرة أخرى.")
+        if provider_name == "unorouter" and "HTTP 400" in err_str:
+            raise HTTPException(400, f"UnoRouter رفض محتوى الطلب: {err_str[:500]}")
         if "401" in err_str or "403" in err_str:
+            if provider_name == "unorouter":
+                raise HTTPException(403 if "403" in err_str else 401, f"UnoRouter: {err_str[:500]}")
             raise HTTPException(401, "مفتاح API غير صالح أو منتهي الصلاحية.")
         if "404" in err_str:
             raise HTTPException(400, f"الموديل '{model}' غير متاح. غيّر الموديل من الإعدادات.")
@@ -210,9 +214,13 @@ async def ai_stream(tenant_id: str, feature: str, messages: list[dict],
         err_str = str(e)
         if "429" in err_str:
             if provider_name == "unorouter":
-                raise HTTPException(429, "UnoRouter رفض الطلب بسبب حد السرعة أو حد النموذج المجاني. هذا ليس حدًا من لوحة المدير العام؛ جرّب نموذجًا مجانيًا آخر أو انتظر قليلًا.")
+                raise HTTPException(429, f"UnoRouter: {err_str[:500]}")
             raise HTTPException(429, "تجاوزت حد الطلبات. انتظر قليلاً ثم حاول مرة أخرى.")
+        if provider_name == "unorouter" and "HTTP 400" in err_str:
+            raise HTTPException(400, f"UnoRouter رفض محتوى الطلب: {err_str[:500]}")
         if "401" in err_str or "403" in err_str:
+            if provider_name == "unorouter":
+                raise HTTPException(403 if "403" in err_str else 401, f"UnoRouter: {err_str[:500]}")
             raise HTTPException(401, "مفتاح API غير صالح أو منتهي الصلاحية.")
         if "404" in err_str:
             raise HTTPException(400, f"الموديل '{model}' غير متاح.")
