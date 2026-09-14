@@ -103,6 +103,8 @@ export default function AISettingsPage() {
     ? (models.openai || [])
     : provider === "gemini"
     ? (models.gemini || [])
+    : provider === "unorouter"
+    ? (models.unorouter || [])
     : [];
 
   if (loading) return (
@@ -167,13 +169,14 @@ export default function AISettingsPage() {
           <div className="card">
             <div className="card-header"><span className="card-title">{ar ? "مزود الخدمة" : "AI Provider"}</span></div>
             <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
                 {[
                   { key: "internal", label: ar ? "الخدمة الداخلية" : "Internal Service", desc: ar ? "مفتاح المنصة — محدود بالباقة" : "Platform key — limited by plan", available: info?.plan_info?.internal_available },
                   { key: "openai",   label: "OpenAI",           desc: ar ? "مفتاحك الخاص — غير محدود" : "Your own key — unlimited", available: true },
                   { key: "gemini",   label: "Google Gemini",    desc: ar ? "مفتاحك الخاص — غير محدود" : "Your own key — unlimited", available: true },
+                  { key: "unorouter", label: "UnoRouter", desc: ar ? "نماذج متعددة — منها المجاني" : "Many models — including free", available: true },
                 ].map(p => (
-                  <button key={p.key} onClick={() => { setProvider(p.key); setModel(p.key === "openai" ? "gpt-5-mini" : p.key === "gemini" ? "gemini-2.5-flash" : "gpt-5-mini"); }}
+                  <button key={p.key} onClick={() => { setProvider(p.key); setModel(p.key === "openai" ? "gpt-5-mini" : p.key === "gemini" ? "gemini-2.5-flash" : p.key === "unorouter" ? "gpt-oss-120b:free" : "gpt-5-mini"); }}
                     style={{
                       padding: "14px 12px", borderRadius: 10, cursor: "pointer", textAlign: "center",
                       border: `2px solid ${provider === p.key ? "var(--primary)" : "var(--border)"}`,
@@ -223,7 +226,7 @@ export default function AISettingsPage() {
                     </button>
                   </div>
                   <p className="form-hint">
-                    {provider === "openai" ? "platform.openai.com → API Keys" : "aistudio.google.com → Get API Key"}
+                    {provider === "unorouter" ? "unorouter.com → Tokens → Create API key" : provider === "openai" ? "platform.openai.com → API Keys" : "aistudio.google.com → Get API Key"}
                   </p>
                   {apiKey.trim() && (
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>

@@ -302,7 +302,7 @@ async def agent_chat(
 
     # ── الخطوة 1: اسأل AI هل يحتاج tool ─────────────────────────────
     try:
-        if provider_name == "openai":
+        if provider_name in ("openai", "unorouter"):
             tool_name, tool_params, direct_response = await _openai_agent_call(
                 provider, messages, system_prompt
             )
@@ -344,7 +344,7 @@ async def agent_chat(
 
     # ── الخطوة 4: AI يصيغ الرد النهائي ──────────────────────────────
     try:
-        if provider_name == "openai":
+        if provider_name in ("openai", "unorouter"):
             final = await provider.chat(messages=messages_with_tool, system_prompt=system_prompt)
         else:
             final = await provider.chat(messages=messages_with_tool, system_prompt=system_prompt)
@@ -391,7 +391,7 @@ async def agent_stream(
 
     # الخطوة 1: تحقق من الـ tool (non-streaming)
     try:
-        if provider_name == "openai":
+        if provider_name in ("openai", "unorouter"):
             tool_name, tool_params, direct_response = await _openai_agent_call(
                 provider, messages, system_prompt
             )

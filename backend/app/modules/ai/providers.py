@@ -27,9 +27,23 @@ GEMINI_MODELS = [
     {"id": "gemini-2.0-flash-lite", "name": "Gemini 2.0 Flash Lite", "context": 1000000},
 ]
 
+# نماذج UnoRouter الشائعة، مع تمييز النماذج المجانية التي تنتهي بـ :free.
+# يمكن تحديث القائمة لاحقًا من /models دون تغيير عقد المحادثة.
+UNOROUTER_MODELS = [
+    {"id": "gpt-oss-120b:free", "name": "GPT OSS 120B · مجاني", "context": 131072, "free": True},
+    {"id": "deepseek-v4-flash-0731:free", "name": "DeepSeek V4 Flash · مجاني", "context": 1000000, "free": True},
+    {"id": "glm-5.3-flash:free", "name": "GLM 5.3 Flash · مجاني", "context": 1000000, "free": True},
+    {"id": "qwen3.8-27b:free", "name": "Qwen 3.8 27B · مجاني", "context": 65536, "free": True},
+    {"id": "gemini-3.6-flash:free", "name": "Gemini 3.6 Flash · مجاني", "context": 1000000, "free": True},
+    {"id": "mistral-small:free", "name": "Mistral Small · مجاني", "context": 32768, "free": True},
+    {"id": "llama-3.3-70b:free", "name": "Llama 3.3 70B · مجاني", "context": 131072, "free": True},
+    {"id": "deepseek-v4.1-flash", "name": "DeepSeek V4.1 Flash", "context": 1000000, "free": False},
+]
+
 ALL_MODELS = {
     "openai": OPENAI_MODELS,
     "gemini": GEMINI_MODELS,
+    "unorouter": UNOROUTER_MODELS,
 }
 
 
@@ -39,12 +53,13 @@ ALL_MODELS = {
 class OpenAIProvider:
     DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
-    def __init__(self, api_key: str, model: str = "gpt-5-mini"):
+    def __init__(self, api_key: str, model: str = "gpt-5-mini", base_url: str | None = None, provider_name: str = "openai"):
         self.api_key = api_key
         self.model = model
+        self.provider_name = provider_name
         # يسمح لمعاينة SMACC باستخدام خدمة النماذج المهيأة في البيئة،
         # ويبقي OpenAI المباشر هو السلوك الافتراضي خارج المعاينة.
-        self.BASE_URL = os.getenv("OPENAI_API_BASE", self.DEFAULT_BASE_URL).rstrip("/")
+        self.BASE_URL = (base_url or os.getenv("OPENAI_API_BASE", self.DEFAULT_BASE_URL)).rstrip("/")
         self._proxy_mode = self.BASE_URL != self.DEFAULT_BASE_URL
 
     def _headers(self) -> dict:
@@ -87,7 +102,7 @@ class OpenAIProvider:
                 "content": data["choices"][0]["message"]["content"],
                 "tokens_used": data.get("usage", {}).get("total_tokens", 0),
                 "model": data.get("model", self.model),
-                "provider": "openai",
+                "provider": self.provider_name,
             }
 
     async def stream(
@@ -138,6 +153,19 @@ class OpenAIProvider:
                 return resp.status_code == 200
         except Exception:
             return False
+
+
+# ══════════════════════════════════════════════════════════════════════
+# UnoRouter Provider
+# ══════════════════════════════════════════════════════════════════════
+class UnoRouterProvider(OpenAIProvider):
+    """UnoRouter عبر واجهة OpenAI-compatible الرسمية."""
+    BASE_URL = "https://api.unorouter.com/v1"
+
+    def __init__(self, api_key: str, model: str = "gpt-oss-120b:free"):
+        super().__init__(api_key=api_key, model=model, base_url=self.BASE_URL, provider_name="unorouter")
+        # UnoRouter يدعم SSE مثل OpenAI، فلا نستخدم fallback النص الكامل.
+        self._proxy_mode = False
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -242,11 +270,13 @@ class GeminiProvider:
 # ══════════════════════════════════════════════════════════════════════
 # Factory
 # ══════════════════════════════════════════════════════════════════════
-def get_provider(provider: str, api_key: str, model: str) -> OpenAIProvider | GeminiProvider:
+def get_provider(provider: str, api_key: str, model: str) -> OpenAIProvider | GeminiProvider | UnoRouterProvider:
     """Factory — يرجع الـ provider الصح"""
     if provider == "openai":
         return OpenAIProvider(api_key=api_key, model=model)
     elif provider == "gemini":
         return GeminiProvider(api_key=api_key, model=model)
+    elif provider == "unorouter":
+        return UnoRouterProvider(api_key=api_key, model=model)
     else:
         raise ValueError(f"Unsupported provider: {provider}")

@@ -43,7 +43,7 @@ class ChatRequest(BaseModel):
 
 
 class AISettingsUpdate(BaseModel):
-    provider: Optional[str] = None       # "internal" | "openai" | "gemini"
+    provider: Optional[str] = None       # "internal" | "openai" | "gemini" | "unorouter"
     api_key: Optional[str] = None        # المفتاح الجديد (يُشفَّر ويُحفظ)
     model: Optional[str] = None
     enabled_features: Optional[list[str]] = None
@@ -166,8 +166,8 @@ async def update_settings(
 ):
     """تحديث إعدادات AI للشركة"""
     # التحقق من صحة الـ provider
-    if data.provider and data.provider not in ("internal", "openai", "gemini"):
-        raise HTTPException(400, "provider غير صالح. الخيارات: internal, openai, gemini")
+    if data.provider and data.provider not in ("internal", "openai", "gemini", "unorouter"):
+        raise HTTPException(400, "provider غير صالح. الخيارات: internal, openai, gemini, unorouter")
 
     # التحقق من صحة الـ features
     valid_features = {"general", "accounting", "inventory", "sales", "pos", "purchases", "reports", "treasury"}

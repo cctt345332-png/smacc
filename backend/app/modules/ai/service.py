@@ -122,7 +122,7 @@ async def check_access(tenant_id: str, feature: str, db: AsyncSession) -> tuple[
     ai_settings = await get_or_create_tenant_settings(tenant_id, db)
 
     # ── External: مفتاح الشركة الخاص ─────────────────────────────────
-    if ai_settings.provider in ("openai", "gemini") and ai_settings.api_key_encrypted:
+    if ai_settings.provider in ("openai", "gemini", "unorouter") and ai_settings.api_key_encrypted:
         api_key = decrypt_key(ai_settings.api_key_encrypted)
         if api_key:
             return ai_settings.provider, api_key, ai_settings.model
@@ -264,7 +264,7 @@ async def get_tenant_ai_info(tenant_id: str, db: AsyncSession) -> dict:
         sys_config and sys_config.internal_enabled and sys_config.internal_api_key_encrypted
     )
     has_external_key = bool(
-        settings.provider in ("openai", "gemini") and settings.api_key_encrypted
+        settings.provider in ("openai", "gemini", "unorouter") and settings.api_key_encrypted
     )
     effective_enabled = internal_available or has_external_key
 
