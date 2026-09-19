@@ -525,12 +525,22 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
             SalesOrder.customer_id.in_(customer_ids) if customer_ids else False,
         )
     )).scalars().all())
+    warehouse_serial_ids: list[str] = []
+    if rep.warehouse_id:
+        warehouse_serial_ids = list((await db.execute(
+            select(SerialItem.id).where(
+                SerialItem.tenant_id == tenant_id,
+                SerialItem.warehouse_id == rep.warehouse_id,
+            )
+        )).scalars().all())
     maintenance_ids = list((await db.execute(
         select(MaintenanceRequest.id).where(
             MaintenanceRequest.tenant_id == tenant_id,
             (MaintenanceRequest.rep_id == rep_id)
             | (MaintenanceRequest.customer_id.in_(customer_ids) if customer_ids else False)
-            | (MaintenanceRequest.invoice_id.in_(invoice_ids) if invoice_ids else False),
+            | (MaintenanceRequest.invoice_id.in_(invoice_ids) if invoice_ids else False)
+            | (MaintenanceRequest.serial_item_id.in_(warehouse_serial_ids) if warehouse_serial_ids else False)
+            | (MaintenanceRequest.replacement_serial_item_id.in_(warehouse_serial_ids) if warehouse_serial_ids else False),
         )
     )).scalars().all())
 
