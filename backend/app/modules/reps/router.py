@@ -3,6 +3,7 @@
 - /reps              → إدارة المناديب (للمدير والمحاسب)
 - /reps/me/*         → واجهة المندوب الحالي (للمندوب نفسه)
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -13,6 +14,7 @@ from app.modules.reps import service
 from app.modules.sales.schemas import CreditNoteCreate
 
 router = APIRouter(prefix="/reps", tags=["reps"])
+logger = logging.getLogger(__name__)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -345,18 +347,21 @@ async def delete_rep(
         raise
     except IntegrityError as exc:
         await db.rollback()
+        logger.exception("Representative deletion blocked by database integrity constraint: rep_id=%s", rep_id)
         raise HTTPException(
             status_code=409,
             detail="تعذر حذف المندوب لأن هناك سجلاً مرتبطاً لم تتم معالجته. لم يتم حذف أي بيانات.",
         ) from exc
     except SQLAlchemyError as exc:
         await db.rollback()
+        logger.exception("Representative deletion failed at database layer: rep_id=%s", rep_id)
         raise HTTPException(
             status_code=500,
             detail="تعذر تنفيذ حذف المندوب بسبب خطأ في قاعدة البيانات. لم يتم حذف أي بيانات.",
         ) from exc
     except Exception as exc:
         await db.rollback()
+        logger.exception("Representative deletion failed unexpectedly: rep_id=%s", rep_id)
         raise HTTPException(
             status_code=500,
             detail="تعذر حذف المندوب. لم يتم حذف أي بيانات.",
