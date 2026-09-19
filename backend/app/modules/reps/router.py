@@ -3,8 +3,9 @@
 - /reps              → إدارة المناديب (للمدير والمحاسب)
 - /reps/me/*         → واجهة المندوب الحالي (للمندوب نفسه)
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
@@ -337,8 +338,29 @@ async def delete_rep(
     user=Depends(require_role(["manager"])),
     db: AsyncSession = Depends(get_db),
 ):
-    """تعطيل مندوب مع الحفاظ على الفواتير والقيود التاريخية."""
-    return await service.delete_rep(db, user["tenant_id"], rep_id)
+    """حذف مندوب تجريبي وجميع توابعه داخل معاملة واحدة."""
+    try:
+        return await service.delete_rep(db, user["tenant_id"], rep_id)
+    except HTTPException:
+        raise
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="تعذر حذف المندوب لأن هناك سجلاً مرتبطاً لم تتم معالجته. لم يتم حذف أي بيانات.",
+        ) from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="تعذر تنفيذ حذف المندوب بسبب خطأ في قاعدة البيانات. لم يتم حذف أي بيانات.",
+        ) from exc
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="تعذر حذف المندوب. لم يتم حذف أي بيانات.",
+        ) from exc
 
 
 @router.patch("/{rep_id}")
