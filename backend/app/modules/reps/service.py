@@ -562,6 +562,9 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         await db.execute(delete(Payment).where(Payment.invoice_id.in_(invoice_ids)))
         await db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id.in_(invoice_ids)))
         await db.execute(delete(Invoice).where(Invoice.id.in_(invoice_ids)))
+    await db.execute(delete(Payment).where(
+        Payment.tenant_id == tenant_id, Payment.rep_id == rep_id,
+    ))
     if customer_ids:
         await db.execute(delete(Payment).where(Payment.customer_id.in_(customer_ids)))
         await db.execute(delete(RefundRequest).where(RefundRequest.customer_id.in_(customer_ids)))
