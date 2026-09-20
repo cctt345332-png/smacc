@@ -529,7 +529,6 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
     if rep.warehouse_id:
         warehouse_serial_ids = list((await db.execute(
             select(SerialItem.id).where(
-                SerialItem.tenant_id == tenant_id,
                 SerialItem.warehouse_id == rep.warehouse_id,
             )
         )).scalars().all())
