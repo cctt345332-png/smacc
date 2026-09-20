@@ -549,10 +549,16 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         )
     )).scalars().all())
     warehouse_serial_ids: list[str] = []
+    warehouse_batch_ids: list[str] = []
     if rep.warehouse_id:
         warehouse_serial_ids = list((await db.execute(
             select(SerialItem.id).where(
                 SerialItem.warehouse_id == rep.warehouse_id,
+            )
+        )).scalars().all())
+        warehouse_batch_ids = list((await db.execute(
+            select(BatchItem.id).where(
+                BatchItem.warehouse_id == rep.warehouse_id,
             )
         )).scalars().all())
     maintenance_ids = list((await db.execute(
@@ -689,7 +695,10 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
             StockCountSession.tenant_id == tenant_id, StockCountSession.warehouse_id == wid,
         ))
         await db.execute(delete(StockMovement).where(
-            (StockMovement.warehouse_id == wid) | (StockMovement.to_warehouse_id == wid)
+            (StockMovement.warehouse_id == wid)
+            | (StockMovement.to_warehouse_id == wid)
+            | (StockMovement.serial_item_id.in_(warehouse_serial_ids) if warehouse_serial_ids else False)
+            | (StockMovement.batch_item_id.in_(warehouse_batch_ids) if warehouse_batch_ids else False)
         ))
         await db.execute(delete(InventoryStock).where(InventoryStock.warehouse_id == wid))
         await db.execute(delete(SerialItem).where(SerialItem.warehouse_id == wid))
