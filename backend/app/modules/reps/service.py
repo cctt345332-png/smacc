@@ -660,6 +660,12 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         await db.execute(delete(InventoryStock).where(InventoryStock.warehouse_id == wid))
         await db.execute(delete(SerialItem).where(SerialItem.warehouse_id == wid))
         await db.execute(delete(BatchItem).where(BatchItem.warehouse_id == wid))
+        # The rep row itself still points to this warehouse. Clear that FK
+        # before deleting the warehouse; the rep row is deleted below.
+        await db.execute(update(SalesRep).where(
+            SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id,
+        ).values(warehouse_id=None))
+        rep.warehouse_id = None
         await db.execute(delete(Warehouse).where(Warehouse.id == wid, Warehouse.tenant_id == tenant_id))
 
     await db.execute(delete(SupervisorRep).where(SupervisorRep.rep_id == rep_id))
