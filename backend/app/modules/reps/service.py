@@ -665,8 +665,19 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
                 Account.id.in_(leaf_ids), Account.tenant_id == tenant_id,
             ))
             remaining_accounts -= leaf_ids
+    await db.execute(delete(SupervisorRep).where(SupervisorRep.rep_id == rep_id))
+    await db.execute(delete(RepAttendance).where(RepAttendance.rep_id == rep_id))
+    await db.execute(delete(RepGeoZone).where(RepGeoZone.rep_id == rep_id))
+    await db.execute(delete(RepGeoEvent).where(RepGeoEvent.rep_id == rep_id))
+    await db.execute(delete(RepLocation).where(RepLocation.rep_id == rep_id))
+    user = await db.get(User, rep.user_id)
+
+    # sales_reps.warehouse_id is NOT NULL. Remove the rep row first, then the
+    # now-unreferenced warehouse; setting the FK to NULL is invalid here.
     if rep.warehouse_id:
         wid = rep.warehouse_id
+        await db.delete(rep)
+        await db.flush()
         # Products and POS terminals may be shared; detach them instead of deleting them.
         await db.execute(update(InventoryItem).where(
             InventoryItem.tenant_id == tenant_id, InventoryItem.default_warehouse_id == wid,
@@ -683,21 +694,9 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         await db.execute(delete(InventoryStock).where(InventoryStock.warehouse_id == wid))
         await db.execute(delete(SerialItem).where(SerialItem.warehouse_id == wid))
         await db.execute(delete(BatchItem).where(BatchItem.warehouse_id == wid))
-        # The rep row itself still points to this warehouse. Clear that FK
-        # before deleting the warehouse; the rep row is deleted below.
-        await db.execute(update(SalesRep).where(
-            SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id,
-        ).values(warehouse_id=None))
-        rep.warehouse_id = None
         await db.execute(delete(Warehouse).where(Warehouse.id == wid, Warehouse.tenant_id == tenant_id))
-
-    await db.execute(delete(SupervisorRep).where(SupervisorRep.rep_id == rep_id))
-    await db.execute(delete(RepAttendance).where(RepAttendance.rep_id == rep_id))
-    await db.execute(delete(RepGeoZone).where(RepGeoZone.rep_id == rep_id))
-    await db.execute(delete(RepGeoEvent).where(RepGeoEvent.rep_id == rep_id))
-    await db.execute(delete(RepLocation).where(RepLocation.rep_id == rep_id))
-    user = await db.get(User, rep.user_id)
-    await db.delete(rep)
+    else:
+        await db.delete(rep)
     if user:
         # Keep the user row for audit-log integrity, but prevent login.
         user.is_active = False
