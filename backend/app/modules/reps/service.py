@@ -495,14 +495,33 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
     if not rep:
         raise HTTPException(404, "المندوب غير موجود")
 
+    rep_account_id = rep.customer_account_id
+    account_rows = (await db.execute(
+        select(Account.id, Account.parent_id).where(Account.tenant_id == tenant_id)
+    )).all()
+    account_children: dict[str, list[str]] = {}
+    for account_id, parent_id in account_rows:
+        if parent_id:
+            account_children.setdefault(parent_id, []).append(account_id)
+    account_ids: set[str] = set()
+    if rep_account_id:
+        pending = [rep_account_id]
+        while pending:
+            account_id = pending.pop()
+            if account_id in account_ids:
+                continue
+            account_ids.add(account_id)
+            pending.extend(account_children.get(account_id, []))
+
     customer_data = (await db.execute(
         select(Customer.id, Customer.ar_account_id).where(
-            Customer.tenant_id == tenant_id, Customer.rep_id == rep_id
+            Customer.tenant_id == tenant_id,
+            (Customer.rep_id == rep_id)
+            | (Customer.ar_account_id.in_(account_ids) if account_ids else False),
         )
     )).all()
     customer_ids = [row[0] for row in customer_data]
-    account_ids = {row[1] for row in customer_data if row[1]}
-    rep_account_id = rep.customer_account_id
+    account_ids.update(row[1] for row in customer_data if row[1])
 
     invoice_ids = list((await db.execute(
         select(Invoice.id).where(
@@ -626,30 +645,26 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         await db.execute(delete(Customer).where(Customer.id.in_(customer_ids), Customer.tenant_id == tenant_id))
     if account_ids:
         # Customer.ar_account_id must be removed before its account can be
-        # deleted; otherwise PostgreSQL correctly rejects the operation.
+        # deleted. Clear the rep link, then delete every account in the
+        # subtree from leaves to root so parent_id FKs remain valid.
+        if rep_account_id:
+            await db.execute(update(SalesRep).where(
+                SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id,
+            ).values(customer_account_id=None))
+            rep.customer_account_id = None
         await db.execute(delete(JournalEntryLine).where(JournalEntryLine.account_id.in_(account_ids)))
-        await db.execute(delete(Account).where(Account.id.in_(account_ids), Account.tenant_id == tenant_id))
-
-    # The representative account can have legacy children that are not yet
-    # represented in customers. Detach it from the rep and delete it only when
-    # the tree is empty; never break unrelated chart-of-accounts branches.
-    if rep_account_id:
-        await db.execute(update(SalesRep).where(
-            SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id,
-        ).values(customer_account_id=None))
-        rep.customer_account_id = None
-        remaining_child = (await db.execute(
-            select(Account.id).where(Account.parent_id == rep_account_id).limit(1)
-        )).scalar_one_or_none()
-        if remaining_child is None:
-            await db.execute(delete(JournalEntryLine).where(JournalEntryLine.account_id == rep_account_id))
+        remaining_accounts = set(account_ids)
+        while remaining_accounts:
+            leaf_ids = {
+                account_id for account_id in remaining_accounts
+                if not any(child_id in remaining_accounts for child_id in account_children.get(account_id, []))
+            }
+            if not leaf_ids:
+                raise HTTPException(409, "تعذر حذف شجرة حسابات المندوب بسبب علاقة دائرية")
             await db.execute(delete(Account).where(
-                Account.id == rep_account_id, Account.tenant_id == tenant_id,
+                Account.id.in_(leaf_ids), Account.tenant_id == tenant_id,
             ))
-        else:
-            await db.execute(update(Account).where(
-                Account.id == rep_account_id, Account.tenant_id == tenant_id,
-            ).values(is_active=False))
+            remaining_accounts -= leaf_ids
     if rep.warehouse_id:
         wid = rep.warehouse_id
         # Products and POS terminals may be shared; detach them instead of deleting them.
