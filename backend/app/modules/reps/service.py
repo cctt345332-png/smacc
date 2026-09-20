@@ -622,16 +622,22 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
         await db.execute(delete(BillLine).where(BillLine.bill_id.in_(bill_ids)))
         await db.execute(delete(Bill).where(Bill.id.in_(bill_ids)))
 
-    if account_ids:
-        await db.execute(delete(JournalEntryLine).where(JournalEntryLine.account_id.in_(account_ids)))
-        await db.execute(delete(Account).where(Account.id.in_(account_ids), Account.tenant_id == tenant_id))
     if customer_ids:
         await db.execute(delete(Customer).where(Customer.id.in_(customer_ids), Customer.tenant_id == tenant_id))
+    if account_ids:
+        # Customer.ar_account_id must be removed before its account can be
+        # deleted; otherwise PostgreSQL correctly rejects the operation.
+        await db.execute(delete(JournalEntryLine).where(JournalEntryLine.account_id.in_(account_ids)))
+        await db.execute(delete(Account).where(Account.id.in_(account_ids), Account.tenant_id == tenant_id))
 
     # The representative account can have legacy children that are not yet
     # represented in customers. Detach it from the rep and delete it only when
     # the tree is empty; never break unrelated chart-of-accounts branches.
     if rep_account_id:
+        await db.execute(update(SalesRep).where(
+            SalesRep.tenant_id == tenant_id, SalesRep.id == rep_id,
+        ).values(customer_account_id=None))
+        rep.customer_account_id = None
         remaining_child = (await db.execute(
             select(Account.id).where(Account.parent_id == rep_account_id).limit(1)
         )).scalar_one_or_none()
@@ -644,8 +650,6 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
             await db.execute(update(Account).where(
                 Account.id == rep_account_id, Account.tenant_id == tenant_id,
             ).values(is_active=False))
-        rep.customer_account_id = None
-
     if rep.warehouse_id:
         wid = rep.warehouse_id
         # Products and POS terminals may be shared; detach them instead of deleting them.
