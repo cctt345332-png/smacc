@@ -505,7 +505,11 @@ async def delete_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> dict:
     rep_account_id = rep.customer_account_id
 
     invoice_ids = list((await db.execute(
-        select(Invoice.id).where(Invoice.tenant_id == tenant_id, Invoice.rep_id == rep_id)
+        select(Invoice.id).where(
+            Invoice.tenant_id == tenant_id,
+            (Invoice.rep_id == rep_id)
+            | (Invoice.customer_id.in_(customer_ids) if customer_ids else False),
+        )
     )).scalars().all())
     credit_note_ids = list((await db.execute(
         select(CreditNote.id).where(
