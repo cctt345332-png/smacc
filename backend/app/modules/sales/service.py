@@ -566,6 +566,46 @@ async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
     inv = result.scalar_one_or_none()
     if not inv or inv.tenant_id != tenant_id:
         raise HTTPException(404, "Invoice not found")
+    serial_ids: set[str] = set()
+    for line in inv.lines or []:
+        if line.serial_item_id:
+            serial_ids.add(str(line.serial_item_id))
+        try:
+            values = json.loads(line.serial_ids_json or "[]")
+            if isinstance(values, list):
+                serial_ids.update(str(value) for value in values if value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    serial_details_by_id: dict[str, dict] = {}
+    if serial_ids:
+        serial_result = await db.execute(
+            select(SerialItem).where(SerialItem.id.in_(serial_ids))
+        )
+        serial_details_by_id = {
+            str(serial.id): {
+                "id": str(serial.id),
+                "serial_number": serial.serial_number,
+                "status": getattr(serial.status, "value", serial.status),
+                "condition": serial.condition,
+                "cost_price": float(serial.cost_price or 0),
+            }
+            for serial in serial_result.scalars().all()
+        }
+    for line in inv.lines or []:
+        line_ids: list[str] = []
+        if line.serial_item_id:
+            line_ids.append(str(line.serial_item_id))
+        try:
+            values = json.loads(line.serial_ids_json or "[]")
+            if isinstance(values, list):
+                line_ids.extend(str(value) for value in values if value)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+        line.__dict__["serial_details"] = [
+            serial_details_by_id[serial_id]
+            for serial_id in dict.fromkeys(line_ids)
+            if serial_id in serial_details_by_id
+        ]
     # نضيف الشعار من بيانات الشركة
     from sqlalchemy import select as sa_select
     from app.models.tenant import Tenant

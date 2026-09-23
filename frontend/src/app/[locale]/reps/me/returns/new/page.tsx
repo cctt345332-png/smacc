@@ -28,6 +28,7 @@ export default function RepReturnPage(props: { params: Promise<{ locale: string 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [serialSearch, setSerialSearch] = useState("");
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("invoice");
@@ -40,6 +41,7 @@ export default function RepReturnPage(props: { params: Promise<{ locale: string 
         return {
           ...line,
           original_serial_ids,
+          serial_details: Array.isArray(line.serial_details) ? line.serial_details : [],
           return_serial_ids: [],
           return_qty: original_serial_ids.length ? 0 : Number(line.quantity || 0),
         };
@@ -134,11 +136,25 @@ export default function RepReturnPage(props: { params: Promise<{ locale: string 
       </div>
 
       <section className="card" style={{ padding: 16 }}>
-        <div style={{ fontWeight: 800, marginBottom: 12 }}>{ar ? "أصناف المرتجع" : "Return items"}</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800 }}>{ar ? "أصناف المرتجع" : "Return items"}</div>
+          {rows.some(row => (row.original_serial_ids || []).length > 0) && (
+            <input
+              className="form-input"
+              value={serialSearch}
+              onChange={e => setSerialSearch(e.target.value)}
+              placeholder={ar ? "ابحث برقم السيريال داخل الفاتورة" : "Search serial number in this invoice"}
+              style={{ maxWidth: 300, fontSize: 12 }}
+            />
+          )}
+        </div>
         <div className="table-wrapper"><table><thead><tr><th>{ar ? "الصنف" : "Item"}</th><th>{ar ? "الكمية المفوترة" : "Invoiced qty"}</th><th>{ar ? "كمية المرتجع" : "Return qty"}</th><th>{ar ? "السيريالات المعادة" : "Returned serials"}</th><th>{ar ? "السعر" : "Price"}</th></tr></thead><tbody>
           {rows.map((row, index) => {
             const serials = row.original_serial_ids || [];
-            return <tr key={row.id || index}><td>{row.description_ar}</td><td>{row.quantity}</td><td><input type="number" min="0" max={row.quantity} step="0.001" className="form-input" value={row.return_qty} disabled={serials.length > 0} onChange={e => updateQty(index, e.target.value)} /></td><td>{serials.length ? <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 170 }}>{serials.map((serialId: string) => <label key={serialId} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(row.return_serial_ids || []).includes(serialId)} onChange={() => toggleSerial(index, serialId)} /><span style={{ fontFamily: "monospace" }}>{serialId}</span></label>)}</div> : <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{ar ? "لا ينطبق" : "N/A"}</span>}</td><td>{fmt(row.unit_price)} SAR</td></tr>;
+            const details = Array.isArray(row.serial_details) ? row.serial_details : [];
+            const serialEntries = serials.map((serialId: string) => details.find((detail: any) => String(detail.id) === String(serialId)) || { id: serialId, serial_number: serialId });
+            const visibleSerials = serialEntries.filter((serial: any) => !serialSearch.trim() || String(serial.serial_number || "").toLowerCase().includes(serialSearch.trim().toLowerCase()) || String(serial.id).toLowerCase().includes(serialSearch.trim().toLowerCase()));
+            return <tr key={row.id || index}><td>{row.description_ar}</td><td>{row.quantity}</td><td><input type="number" min="0" max={row.quantity} step="0.001" className="form-input" value={row.return_qty} disabled={serials.length > 0} onChange={e => updateQty(index, e.target.value)} /></td><td>{serials.length ? <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 170 }}>{visibleSerials.length ? visibleSerials.map((serial: any) => <label key={serial.id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(row.return_serial_ids || []).includes(serial.id)} onChange={() => toggleSerial(index, serial.id)} /><span style={{ fontFamily: "monospace", fontWeight: 700 }}>{serial.serial_number}</span></label>) : <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{ar ? "لا يوجد سيريال مطابق" : "No matching serial"}</span>}</div> : <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{ar ? "لا ينطبق" : "N/A"}</span>}</td><td>{fmt(row.unit_price)} SAR</td></tr>;
           })}
         </tbody></table></div>
       </section>

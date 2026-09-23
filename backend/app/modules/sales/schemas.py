@@ -145,6 +145,7 @@ class InvoiceLineOut(BaseModel):
     inventory_item_id: Optional[str] = None
     serial_item_id: Optional[str] = None
     serial_ids_json: Optional[str] = None
+    serial_details: List[dict] = []
     model_config = {"from_attributes": True}
 
 
