@@ -39,6 +39,7 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
   const [serials, setSerials] = useState<Serial[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>(selectedIds);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     getBillSerials(billId, productId)
@@ -99,7 +100,14 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
                   {ar ? "السيريالات في هذه الفاتورة" : "Serials in this bill"}
                   <span style={{ marginInlineStart: 6, background: "#5A187E", color: "white", borderRadius: 20, padding: "1px 8px", fontSize: 11 }}>{serials.length}</span>
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    className="form-input"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder={ar ? "بحث برقم السيريال" : "Search serial"}
+                    style={{ width: 170, fontSize: 11 }}
+                  />
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setSelected(serials.map(s => s.id))}>
                     {ar ? "الكل" : "All"}
                   </button>
@@ -110,7 +118,7 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
-                {serials.map(s => {
+                {serials.filter(s => !search.trim() || s.serial_number.toLowerCase().includes(search.trim().toLowerCase()) || s.id.toLowerCase().includes(search.trim().toLowerCase())).map(s => {
                   const checked = selected.includes(s.id);
                   const statusStr = s.status === "in_stock"
                     ? (ar ? "في المخزون" : "In Stock")

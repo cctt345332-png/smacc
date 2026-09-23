@@ -15,6 +15,7 @@ interface Line {
   original_invoice_line_id?: string;
   original_serial_ids?: string[];
   return_serial_ids?: string[];
+  serial_details?: { id: string; serial_number: string }[];
 }
 
 const parseSerialIds = (line: any): string[] => {
@@ -52,6 +53,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
   const [loadingLines, setLoadingLines] = useState(false);
   const [form, setForm] = useState({ original_invoice_id: "", issue_date: today(), reason: "" });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
+  const [serialSearch, setSerialSearch] = useState("");
 
   useEffect(() => {
     getInvoices({ status: "confirmed" }).then(({ data }) => setInvoices(data)).catch(() => {});
@@ -70,6 +72,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
           return {
             original_invoice_line_id: l.id,
             original_serial_ids,
+            serial_details: Array.isArray(l.serial_details) ? l.serial_details : [],
             return_serial_ids: [],
             picked: {
               mode: l.inventory_item_id ? (original_serial_ids.length ? "serial" : "item") : "free",
@@ -190,6 +193,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
       <div className="card">
         <div className="card-header">
           <span className="card-title">{ar ? "أسطر المرتجع" : "Return Lines"}</span>
+          {lines.some(line => (line.original_serial_ids || []).length > 0) && <input className="form-input" value={serialSearch} onChange={e => setSerialSearch(e.target.value)} placeholder={ar ? "ابحث برقم السيريال في الفاتورة" : "Search serial in invoice"} style={{ maxWidth: 280, fontSize: 12 }} />}
           <button className="btn btn-secondary btn-sm" onClick={addLine} disabled={Boolean(form.original_invoice_id)} title={form.original_invoice_id ? (ar ? "المرتجع مرتبط بأسطر الفاتورة المختارة" : "Returns must use the selected invoice lines") : undefined}>
             <Icon name="plus" size={14} /> {ar ? "إضافة سطر" : "Add Line"}
           </button>
@@ -212,6 +216,8 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
             <tbody>
               {lines.map((line, i) => {
                 const c = calcLine(line);
+                const serialEntries = (line.original_serial_ids || []).map(serialId => line.serial_details?.find(serial => String(serial.id) === String(serialId)) || { id: serialId, serial_number: serialId });
+                const visibleSerials = serialEntries.filter(serial => !serialSearch.trim() || serial.serial_number.toLowerCase().includes(serialSearch.trim().toLowerCase()) || serial.id.toLowerCase().includes(serialSearch.trim().toLowerCase()));
                 return (
                   <tr key={i}>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
@@ -223,7 +229,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                         onChange={e => setPicked(i, { ...line.picked, quantity: parseFloat(e.target.value) || 0 })} />
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                      {(line.original_serial_ids || []).length ? <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>{line.original_serial_ids!.map(serialId => <label key={serialId} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(line.return_serial_ids || []).includes(serialId)} onChange={() => toggleReturnSerial(i, serialId)} /><span style={{ fontFamily: "monospace" }}>{serialId}</span></label>)}</div> : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "لا ينطبق" : "N/A"}</span>}
+                      {(line.original_serial_ids || []).length ? <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>{visibleSerials.length ? visibleSerials.map(serial => <label key={serial.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(line.return_serial_ids || []).includes(serial.id)} onChange={() => toggleReturnSerial(i, serial.id)} /><span style={{ fontFamily: "monospace", fontWeight: 700 }}>{serial.serial_number}</span></label>) : <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "لا يوجد سيريال مطابق" : "No matching serial"}</span>}</div> : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "لا ينطبق" : "N/A"}</span>}
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 100 }} value={line.picked.unit_price} min="0"
