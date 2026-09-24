@@ -624,7 +624,7 @@ async def cancel_journal_entry(db: AsyncSession, tenant_id: str, entry_id: str):
 async def reverse_journal_entry(db: AsyncSession, tenant_id: str, user_id: str, entry_id: str):
     """Create a reversal entry (swap debit/credit)"""
     original = await get_journal_entry(db, tenant_id, entry_id)
-    if original.status != JournalEntryStatus.POSTED:
+    if original["status"] != JournalEntryStatus.POSTED.value:
         raise HTTPException(400, "Only posted entries can be reversed")
 
     # Load lines
@@ -639,14 +639,14 @@ async def reverse_journal_entry(db: AsyncSession, tenant_id: str, user_id: str, 
         tenant_id=tenant_id,
         entry_number=entry_number,
         entry_date=datetime.utcnow(),
-        fiscal_year_id=original.fiscal_year_id,
-        description_ar=f"عكس قيد: {original.entry_number}",
-        description_en=f"Reversal of: {original.entry_number}",
+        fiscal_year_id=original["fiscal_year_id"],
+        description_ar=f"عكس قيد: {original['entry_number']}",
+        description_en=f"Reversal of: {original['entry_number']}",
         status=JournalEntryStatus.POSTED,
         source="reversal",
-        reference=original.entry_number,
-        total_debit=original.total_credit,
-        total_credit=original.total_debit,
+        reference=original["entry_number"],
+        total_debit=original["total_credit"],
+        total_credit=original["total_debit"],
         created_by=user_id,
         posted_by=user_id,
         posted_at=datetime.utcnow(),
