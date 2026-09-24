@@ -133,13 +133,13 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     if (!form.reason) return alert(ar ? "أدخل سبب الإشعار" : "Enter reason");
     if (returnMode === "customer") {
       if (!customerId) return alert(ar ? "اختر العميل" : "Select customer");
-      if (lines.some(l => !l.picked.inventory_item_id || Number(l.picked.quantity || 0) <= 0)) return alert(ar ? "اختر المادة والكمية لكل سطر" : "Choose an item and quantity for every line");
+      if (lines.some(l => !l.picked.inventory_item_id || Number(l.picked.quantity || 0) <= 0 || Number(l.picked.unit_price || 0) <= 0)) return alert(ar ? "اختر المادة والكمية وأدخل سعر المادة لكل سطر" : "Choose the item and quantity and enter a price for every line");
       const customerLines = lines.map((l, i) => ({
         description_ar: l.picked.description_ar || l.picked.item_name || "مرتجع",
         inventory_item_id: l.picked.inventory_item_id,
         quantity: l.picked.quantity || 0,
         unit_price: l.picked.unit_price || 0,
-        vat_rate: parseFloat(l.vat_rate) || 15,
+        vat_rate: 0,
         serial_ids: Array.from(new Set((l.manual_serials || "").split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))),
         line_order: i,
       }));
@@ -201,8 +201,8 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         <div className="card-header"><span className="card-title">{ar ? "بيانات المرتجع" : "Return Details"}</span></div>
         <div className="card-body">
           <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <button type="button" className={`btn btn-sm ${returnMode === "invoice" ? "btn-primary" : "btn-secondary"}`} onClick={() => setReturnMode("invoice")}>{ar ? "مرتجع من فاتورة" : "Invoice return"}</button>
-            <button type="button" className={`btn btn-sm ${returnMode === "customer" ? "btn-primary" : "btn-secondary"}`} onClick={() => setReturnMode("customer")}>{ar ? "مرتجع عن طريق العميل" : "Customer return"}</button>
+            <button type="button" className={`btn btn-sm ${returnMode === "invoice" ? "btn-primary" : "btn-secondary"}`} onClick={() => { setReturnMode("invoice"); setLines(prev => prev.map(line => ({ ...line, vat_rate: "15" }))); }}>{ar ? "مرتجع من فاتورة" : "Invoice return"}</button>
+            <button type="button" className={`btn btn-sm ${returnMode === "customer" ? "btn-primary" : "btn-secondary"}`} onClick={() => { setReturnMode("customer"); setLines(prev => prev.map(line => ({ ...line, vat_rate: "0" }))); }}>{ar ? "مرتجع عن طريق العميل" : "Customer return"}</button>
           </div>
           <div className="grid-3">
             {returnMode === "invoice" ? <div className="form-group">
@@ -300,11 +300,11 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                       </div> : (line.original_serial_ids || []).length ? <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>{visibleSerials.length ? visibleSerials.map(serial => <label key={serial.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(line.return_serial_ids || []).includes(serial.id)} onChange={() => toggleReturnSerial(i, serial.id)} /><span style={{ fontFamily: "monospace", fontWeight: 700 }}>{serial.serial_number}</span></label>) : <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "لا يوجد سيريال مطابق" : "No matching serial"}</span>}</div> : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "لا ينطبق" : "N/A"}</span>}
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                      <input type="number" className="form-input" style={{ width: 100 }} value={line.picked.unit_price} min="0"
+                      <input type="number" className="form-input" style={{ width: 100 }} value={line.picked.unit_price} min="0.01" required={returnMode === "customer"}
                         onChange={e => setPicked(i, { ...line.picked, unit_price: parseFloat(e.target.value) || 0 })} />
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                      <input type="number" className="form-input" style={{ width: 70 }} value={line.vat_rate} min="0" max="100" onChange={e => setVat(i, e.target.value)} />
+                      <input type="number" className="form-input" style={{ width: 70 }} value={returnMode === "customer" ? "0" : line.vat_rate} min="0" max="100" disabled={returnMode === "customer"} onChange={e => setVat(i, e.target.value)} />
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.taxable)}</td>
                     <td style={{ textAlign: "end", color: "var(--warning)", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.vatAmt)}</td>

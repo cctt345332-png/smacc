@@ -101,9 +101,9 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
   }
 
   // بيانات المشتري من الفاتورة الأصلية
-  const buyerName = originalInvoice?.buyer_name_ar || creditNote.buyer_name || "—";
-  const buyerVat  = originalInvoice?.buyer_vat_number || creditNote.buyer_vat_number;
-  const buyerAddr = originalInvoice?.buyer_address || creditNote.buyer_address;
+  const buyerName = originalInvoice?.buyer_name_ar || creditNote.customer_name_ar || creditNote.buyer_name || "—";
+  const buyerVat  = originalInvoice?.buyer_vat_number || creditNote.customer_vat_number || creditNote.buyer_vat_number;
+  const buyerAddr = originalInvoice?.buyer_address || creditNote.customer_address_city || creditNote.buyer_address;
 
   return (
     <>
@@ -202,8 +202,8 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
             <CustomerBlock customer={originalInvoice?.customer || {
               name_ar: buyerName,
               vat_number: buyerVat,
-              address_city: null,
-              phone: null, email: null,
+              address_city: buyerAddr,
+              phone: creditNote.customer_phone || null, email: null,
             }} ar={ar} />
           </div>
         </div>

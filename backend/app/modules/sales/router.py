@@ -348,6 +348,8 @@ async def get_credit_note(cn_id: str, tenant_id=Depends(get_tenant_id), db: Asyn
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
     from app.models.sales import CreditNote
+    from app.models.sales import Customer
+    from fastapi.encoders import jsonable_encoder
     r = await db.execute(
         select(CreditNote).options(selectinload(CreditNote.lines))
         .where(CreditNote.id == cn_id, CreditNote.tenant_id == tenant_id)
@@ -356,7 +358,13 @@ async def get_credit_note(cn_id: str, tenant_id=Depends(get_tenant_id), db: Asyn
     if not cn:
         from fastapi import HTTPException
         raise HTTPException(404, "Credit note not found")
-    return cn
+    customer = await db.get(Customer, cn.customer_id)
+    payload = jsonable_encoder(cn)
+    payload["customer_name_ar"] = customer.name_ar if customer else None
+    payload["customer_vat_number"] = customer.vat_number if customer else None
+    payload["customer_address_city"] = customer.address_city if customer else None
+    payload["customer_phone"] = customer.phone if customer else None
+    return payload
 
 
 # ─── Sales Orders ────────────────────────────────────────────────────

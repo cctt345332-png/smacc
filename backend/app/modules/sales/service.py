@@ -1710,10 +1710,12 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
                 serials.append(serial)
         elif serial_numbers:
             raise HTTPException(400, f"المادة {item.name_ar} ليست مادة سيريال")
-        if qty <= 0 or price < 0:
-            raise HTTPException(400, "تحقق من الكمية والسعر لكل سطر")
+        if qty <= 0 or price <= 0:
+            raise HTTPException(400, "يجب اختيار الكمية وإدخال سعر المادة أكبر من صفر لكل سطر")
+        # مرتجع العميل ليس إشعاراً ضريبياً؛ لا نضيف ضريبة تلقائية عليه.
+        vat_rate = Decimal("0")
         line_subtotal = (qty * price).quantize(Decimal("0.01"))
-        line_vat = (line_subtotal * vat_rate / 100).quantize(Decimal("0.01"))
+        line_vat = Decimal("0.00")
         subtotal += line_subtotal
         vat_amount += line_vat
         prepared.append((line, item, serials, qty, price, vat_rate, line_subtotal, line_vat))
