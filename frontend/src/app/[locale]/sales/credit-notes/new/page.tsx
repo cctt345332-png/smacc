@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getInvoices, getInvoice, createCreditNote } from "@/lib/sales";
+import { getInvoices, getInvoice, getCustomers, createCreditNote } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
 import InvoiceSerialPicker from "@/components/inventory/InvoiceSerialPicker";
@@ -50,14 +50,19 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
   const ar = locale === "ar";
   const router = useRouter();
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingLines, setLoadingLines] = useState(false);
   const [form, setForm] = useState({ original_invoice_id: "", issue_date: today(), reason: "" });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [serialSearch, setSerialSearch] = useState("");
+  const [returnMode, setReturnMode] = useState<"invoice" | "customer">("invoice");
+  const [customerId, setCustomerId] = useState("");
+  const [manualSerials, setManualSerials] = useState("");
 
   useEffect(() => {
     getInvoices({ status: "confirmed" }).then(({ data }) => setInvoices(data)).catch(() => {});
+    getCustomers().then(({ data }) => setCustomers(data)).catch(() => {});
   }, []);
 
   // عند اختيار الفاتورة الأصلية — جلب أسطرها تلقائياً
@@ -110,8 +115,20 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
   }, { taxable: 0, vat: 0, total: 0 });
 
   const handleSave = async () => {
-    if (!form.original_invoice_id) return alert(ar ? "اختر الفاتورة الأصلية" : "Select original invoice");
     if (!form.reason) return alert(ar ? "أدخل سبب الإشعار" : "Enter reason");
+    if (returnMode === "customer") {
+      if (!customerId) return alert(ar ? "اختر العميل" : "Select customer");
+      const serials = Array.from(new Set(manualSerials.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean)));
+      if (!serials.length) return alert(ar ? "اكتب السيريالات المعادة" : "Enter returned serial numbers");
+      setSaving(true);
+      try {
+        await createCreditNote({ customer_id: customerId, issue_date: new Date(form.issue_date).toISOString(), reason: form.reason, lines: [{ description_ar: "مرتجع سيريالات", quantity: serials.length, unit_price: 0, vat_rate: 15, serial_ids: serials }] });
+        router.push(`/${locale}/sales/credit-notes`);
+      } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+      finally { setSaving(false); }
+      return;
+    }
+    if (!form.original_invoice_id) return alert(ar ? "اختر الفاتورة الأصلية" : "Select original invoice");
     if (lines.some(l => !l.original_invoice_line_id)) return alert(ar ? "اختر فاتورة أصلية ولا تضف أسطرًا خارجها" : "Select an original invoice and use its lines only");
     if (lines.some(l => !l.picked.description_ar || Number(l.picked.quantity || 0) <= 0)) return alert(ar ? "حدد كمية مرتجعة صحيحة لكل سطر مختار" : "Choose a valid return quantity for each selected line");
     setSaving(true);
@@ -159,8 +176,12 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
       <div className="card" style={{ marginBottom: 20 }}>
         <div className="card-header"><span className="card-title">{ar ? "بيانات المرتجع" : "Return Details"}</span></div>
         <div className="card-body">
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button type="button" className={`btn btn-sm ${returnMode === "invoice" ? "btn-primary" : "btn-secondary"}`} onClick={() => setReturnMode("invoice")}>{ar ? "مرتجع من فاتورة" : "Invoice return"}</button>
+            <button type="button" className={`btn btn-sm ${returnMode === "customer" ? "btn-primary" : "btn-secondary"}`} onClick={() => setReturnMode("customer")}>{ar ? "مرتجع عن طريق العميل" : "Customer return"}</button>
+          </div>
           <div className="grid-3">
-            <div className="form-group">
+            {returnMode === "invoice" ? <div className="form-group">
               <label className="form-label">{ar ? "الفاتورة الأصلية" : "Original Invoice"} <span className="required">*</span></label>
               <select className="form-input form-select" value={form.original_invoice_id}
                 onChange={e => handleInvoiceSelect(e.target.value)}>
@@ -172,7 +193,13 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                 ))}
               </select>
               {loadingLines && <p className="form-hint">{ar ? "جاري جلب أسطر الفاتورة..." : "Loading invoice lines..."}</p>}
-            </div>
+            </div> : <div className="form-group">
+              <label className="form-label">{ar ? "العميل" : "Customer"} <span className="required">*</span></label>
+              <select className="form-input form-select" value={customerId} onChange={e => setCustomerId(e.target.value)}>
+                <option value="">{ar ? "— اختر العميل —" : "— Select customer —"}</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.customer_number} — {c.name_ar}</option>)}
+              </select>
+            </div>}
             <div className="form-group">
               <label className="form-label">{ar ? "تاريخ المرتجع" : "Return Date"}</label>
               <input type="date" className="form-input" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} />
@@ -185,13 +212,21 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         </div>
       </div>
 
-      {form.original_invoice_id && (
+      {returnMode === "invoice" && form.original_invoice_id && (
         <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "10px 16px", marginBottom: 20, fontSize: 12, color: "#1E40AF" }}>
           {ar ? "تم جلب أسطر الفاتورة الأصلية — يمكنك تعديل الكميات أو حذف الأسطر غير المُرجَعة." : "Invoice lines loaded — you can adjust quantities or remove lines that are not being returned."}
         </div>
       )}
 
-      <div className="card">
+      {returnMode === "customer" && <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-header"><span className="card-title">{ar ? "السيريالات المعادة" : "Returned serials"}</span></div>
+        <div className="card-body">
+          <p className="form-hint">{ar ? "اكتب سيريالاً في كل سطر أو افصل بينها بفاصلة. يجب أن تكون السيريالات مباعة لهذا العميل." : "Enter one serial per line or separate with commas. Serials must have been sold to this customer."}</p>
+          <textarea className="form-input" rows={8} value={manualSerials} onChange={e => setManualSerials(e.target.value)} placeholder={ar ? "مثال: SN12345" : "Example: SN12345"} />
+        </div>
+      </div>}
+
+      {returnMode === "invoice" && <div className="card">
         <div className="card-header">
           <span className="card-title">{ar ? "أسطر المرتجع" : "Return Lines"}</span>
           {lines.some(line => (line.original_serial_ids || []).length > 0) && <input className="form-input" value={serialSearch} onChange={e => setSerialSearch(e.target.value)} placeholder={ar ? "ابحث برقم السيريال في الفاتورة" : "Search serial in invoice"} style={{ maxWidth: 280, fontSize: 12 }} />}
@@ -278,7 +313,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
             </div>
           </div>
         </div>
-      </div>
+      </div>}
     </>
   );
 }

@@ -306,12 +306,13 @@ class CreditNoteLineCreate(InvoiceLineCreate):
     serial_ids يحدد الوحدات الفعلية المعادة للأصناف المتسلسلة؛ لا يقبل
     الخادم كمية سيريال بلا هذه القائمة.
     """
-    original_invoice_line_id: str
+    original_invoice_line_id: Optional[str] = None
     serial_ids: Optional[list[str]] = None
 
 
 class CreditNoteCreate(BaseModel):
-    original_invoice_id: str
+    original_invoice_id: Optional[str] = None
+    customer_id: Optional[str] = None
     issue_date: datetime
     reason: str
     lines: List[CreditNoteLineCreate]

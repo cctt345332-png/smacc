@@ -1485,6 +1485,8 @@ async def convert_quotation_to_invoice(db: AsyncSession, tenant_id: str, user_id
 # ─── Credit Notes ────────────────────────────────────────────────────
 async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
     """إنشاء إشعار دائن متزن، مرتبط بسطر الفاتورة ووحداته المتسلسلة عند الحاجة."""
+    if not data.original_invoice_id:
+        return await create_customer_serial_credit_note(db, tenant_id, user_id, data)
     original = await get_invoice(db, tenant_id, data.original_invoice_id)
     if not data.lines:
         raise HTTPException(400, "يجب أن يحتوي المرتجع على سطر واحد على الأقل")
@@ -1630,6 +1632,82 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
     return cn
 
 
+async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
+    """مرتجع عميل مستقل عن الفاتورة، مخصص للسيريالات المباعة سابقاً أو المنقولة."""
+    if not data.customer_id:
+        raise HTTPException(400, "اختر العميل عند إنشاء مرتجع بدون فاتورة")
+    customer = await db.get(Customer, data.customer_id)
+    if not customer or customer.tenant_id != tenant_id:
+        raise HTTPException(404, "العميل غير موجود")
+    serial_numbers = []
+    for line in data.lines:
+        serial_numbers.extend([str(value).strip() for value in (line.serial_ids or []) if str(value).strip()])
+    serial_numbers = list(dict.fromkeys(serial_numbers))
+    if not serial_numbers:
+        raise HTTPException(400, "اكتب سيريالاً واحداً على الأقل للمرتجع")
+    sold_rows = (await db.execute(
+        select(SerialItem, Invoice).join(InventoryItem, InventoryItem.id == SerialItem.product_id)
+        .outerjoin(Invoice, Invoice.id == SerialItem.sale_invoice_id).where(
+            SerialItem.serial_number.in_(serial_numbers), SerialItem.status == "sold",
+            InventoryItem.tenant_id == tenant_id,
+            or_(Invoice.id.is_(None), Invoice.customer_id == customer.id),
+        )
+    )).all()
+    by_number = {serial.serial_number: (serial, invoice) for serial, invoice in sold_rows}
+    missing = [number for number in serial_numbers if number not in by_number]
+    if missing:
+        raise HTTPException(400, f"السيريالات غير مباعة لهذا العميل أو غير موجودة: {', '.join(missing[:10])}")
+    existing_rows = (await db.execute(
+        select(CreditNoteLine.serial_ids_json).join(CreditNote).where(CreditNote.tenant_id == tenant_id)
+    )).scalars().all()
+    already_returned = set()
+    for raw in existing_rows:
+        try:
+            already_returned.update(str(value) for value in json.loads(raw or "[]"))
+        except (TypeError, ValueError):
+            continue
+    duplicate = [serial.id for serial, _invoice in by_number.values() if serial.id in already_returned]
+    if duplicate:
+        raise HTTPException(400, "يوجد سيريال سبق إرجاعه")
+    vat_rate = Decimal("15")
+    subtotal = sum((Decimal(str(serial.sale_price or 0)) for serial, _invoice in by_number.values()), Decimal("0"))
+    vat_amount = (subtotal * vat_rate / 100).quantize(Decimal("0.01"))
+    total = subtotal + vat_amount
+    if total <= 0:
+        raise HTTPException(400, "لا يمكن إنشاء مرتجع بقيمة صفر؛ تحقق من أسعار السيريالات")
+    cn = CreditNote(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, credit_note_number=await _next_credit_note_number(db, tenant_id),
+        uuid=str(uuid.uuid4()), original_invoice_id=None, customer_id=customer.id,
+        issue_date=data.issue_date.replace(tzinfo=None), reason=data.reason,
+        subtotal=subtotal, vat_amount=vat_amount, total=total,
+        created_by=user_id,
+    )
+    db.add(cn)
+    db.add(CreditNoteLine(
+        id=str(uuid.uuid4()), credit_note_id=cn.id, original_invoice_line_id=None, line_order=0,
+        description_ar=f"مرتجع سيريالات للعميل: {customer.name_ar}", quantity=Decimal(len(serial_numbers)),
+        unit_price=(subtotal / Decimal(len(serial_numbers))).quantize(Decimal("0.01")), vat_rate=vat_rate,
+        subtotal=subtotal, vat_amount=vat_amount, total=total,
+        serial_ids_json=json.dumps([serial.id for serial, _invoice in by_number.values()]),
+    ))
+    await db.flush()
+    from app.models.inventory import SerialStatus, StockMovement
+    from app.modules.inventory.service import _get_default_warehouse_id
+    default_warehouse_id = await _get_default_warehouse_id(db, tenant_id)
+    for serial, _invoice in by_number.values():
+        serial.status = SerialStatus.IN_STOCK
+        serial.warehouse_id = serial.warehouse_id or default_warehouse_id
+        db.add(StockMovement(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
+            warehouse_id=serial.warehouse_id, movement_type="return_in", quantity=Decimal("1"),
+            unit_cost=serial.cost_price, serial_item_id=serial.id,
+            reference_type="credit_note", reference_id=cn.id, created_by=user_id,
+        ))
+    await _create_credit_note_journal(db, tenant_id, user_id, cn, None)
+    await db.commit()
+    return cn
+
+
 async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, original_invoice, validated_lines):
     """يعيد الكمية أو السيريال إلى مستودع الفاتورة مع حركة return_in داخل معاملة الإشعار."""
     from app.modules.inventory.service import add_stock, get_item, _get_default_warehouse_id
@@ -1678,7 +1756,7 @@ async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, ori
 
 async def _create_credit_note_journal(db, tenant_id, user_id, cn, original_invoice):
     """قيد متزن: مدين الإيراد والضريبة، دائن حساب العميل."""
-    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus, Account, AccountType
+    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus, Account, AccountType, FiscalYear
     from app.modules.accounting.service import _next_entry_number, get_vat_settings
     customer = await db.get(Customer, cn.customer_id)
     if not customer or not customer.ar_account_id:
@@ -1687,8 +1765,14 @@ async def _create_credit_note_journal(db, tenant_id, user_id, cn, original_invoi
     vat_settings = await get_vat_settings(db, tenant_id)
     if not revenue or (cn.vat_amount > 0 and (not vat_settings or not vat_settings.vat_account_id)):
         return None
+    fiscal_year_id = original_invoice.fiscal_year_id if original_invoice else (await db.execute(
+        select(FiscalYear.id).where(FiscalYear.tenant_id == tenant_id).order_by(FiscalYear.start_date.desc()).limit(1)
+    )).scalar_one_or_none()
+    if not fiscal_year_id:
+        return None
+    customer_name = original_invoice.buyer_name_ar if original_invoice else customer.name_ar
     entry = JournalEntry(id=str(uuid.uuid4()), tenant_id=tenant_id, entry_number=await _next_entry_number(db, tenant_id), entry_date=cn.issue_date,
-        fiscal_year_id=original_invoice.fiscal_year_id, description_ar=f"إشعار دائن (مرتجع): {cn.credit_note_number} — {original_invoice.buyer_name_ar}",
+        fiscal_year_id=fiscal_year_id, description_ar=f"إشعار دائن (مرتجع): {cn.credit_note_number} — {customer_name}",
         description_en=f"Credit Note (Return): {cn.credit_note_number}", status=JournalEntryStatus.POSTED, source="credit_note", reference=cn.credit_note_number,
         total_debit=cn.total, total_credit=cn.total, created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow())
     db.add(entry)

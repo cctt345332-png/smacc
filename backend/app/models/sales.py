@@ -306,7 +306,7 @@ class CreditNote(Base):
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
     credit_note_number: Mapped[str] = mapped_column(String(50), index=True)
     uuid: Mapped[str] = mapped_column(String(36), unique=True)
-    original_invoice_id: Mapped[str] = mapped_column(String, ForeignKey("invoices.id"))
+    original_invoice_id: Mapped[str | None] = mapped_column(String, ForeignKey("invoices.id"), nullable=True)
     customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"))
     issue_date: Mapped[datetime] = mapped_column(DateTime)
     reason: Mapped[str] = mapped_column(String(500))
