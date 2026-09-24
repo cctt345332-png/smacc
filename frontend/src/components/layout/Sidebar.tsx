@@ -119,6 +119,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "الأصناف" : "Items", href: `${base}/inventory/items` },
           { label: ar ? "التصنيفات" : "Categories", href: `${base}/inventory/categories` },
           { label: ar ? "المستودعات" : "Warehouses", href: `${base}/inventory/warehouses` },
+          { label: ar ? "سندات المخزون" : "Stock Documents", href: `${base}/inventory/stock-documents` },
           { label: ar ? "حركات المخزون" : "Stock Movements", href: `${base}/inventory/movements` },
           { label: ar ? "جرد المخزون" : "Stock Count", href: `${base}/inventory/adjustments` },
         ],
