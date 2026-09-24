@@ -363,12 +363,38 @@ async def delete_account(db: AsyncSession, tenant_id: str, account_id: str):
     acc = await db.get(Account, account_id)
     if not acc or acc.tenant_id != tenant_id:
         raise HTTPException(404, "Account not found")
-    # Check if used in journal lines
-    used = await db.execute(
-        select(JournalEntryLine).where(JournalEntryLine.account_id == account_id).limit(1)
+    # الحسابات المستخدمة في قيود تشغيلية لا تُحذف. أما قيد الرصيد الافتتاحي
+    # الخاطئ الذي تم عكسه بالكامل فيمكن تنظيفه مع قيده العكسي، لأن صافي أثره صفر.
+    used_result = await db.execute(
+        select(JournalEntry).join(JournalEntryLine, JournalEntryLine.entry_id == JournalEntry.id)
+        .where(JournalEntry.tenant_id == tenant_id, JournalEntryLine.account_id == account_id)
+        .distinct()
     )
-    if used.scalar_one_or_none():
-        raise HTTPException(400, "Cannot delete account with journal entries")
+    used_entries = used_result.scalars().all()
+    if used_entries:
+        opening_entries = [entry for entry in used_entries if entry.source == "customer_opening_balance"]
+        other_entries = [entry for entry in used_entries if entry.source not in {"customer_opening_balance", "reversal"}]
+        reversal_entries = {
+            entry.reference: entry
+            for entry in used_entries
+            if entry.source == "reversal" and entry.reference
+        }
+        cleanup_ids: set[str] = set()
+        for entry in opening_entries:
+            reversal = reversal_entries.get(entry.entry_number)
+            if reversal:
+                cleanup_ids.update((entry.id, reversal.id))
+            else:
+                other_entries.append(entry)
+        matched_reversal_ids = {entry_id for entry_id in cleanup_ids if entry_id in {entry.id for entry in used_entries}}
+        other_entries.extend(
+            entry for entry in used_entries
+            if entry.source == "reversal" and entry.id not in matched_reversal_ids
+        )
+        if other_entries or not opening_entries or len(cleanup_ids) == 0:
+            raise HTTPException(400, "Cannot delete account with journal entries")
+        await db.execute(delete(JournalEntryLine).where(JournalEntryLine.entry_id.in_(cleanup_ids)))
+        await db.execute(delete(JournalEntry).where(JournalEntry.id.in_(cleanup_ids)))
     await db.delete(acc)
     await db.commit()
 
@@ -634,8 +660,8 @@ async def reverse_journal_entry(db: AsyncSession, tenant_id: str, user_id: str, 
         ))
 
     await db.commit()
-    await db.refresh(reversal)
-    return reversal
+    # أعد DTO محمّلًا بالسطور؛ إعادة ORM مباشرة تسبب MissingGreenlet في FastAPI.
+    return await get_journal_entry(db, tenant_id, reversal.id)
 
 
 # ─── Bank Accounts ───────────────────────────────────────────────────
