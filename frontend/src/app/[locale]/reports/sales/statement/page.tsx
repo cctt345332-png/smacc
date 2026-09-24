@@ -73,6 +73,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
           opening_balance: rows.reduce((s, r) => s + Number(r.summary.opening_balance || 0), 0),
           total_invoiced: rows.reduce((s, r) => s + Number(r.summary.total_invoiced || 0), 0),
           total_paid: rows.reduce((s, r) => s + Number(r.summary.total_paid || 0), 0),
+          total_credited: rows.reduce((s, r) => s + Number(r.summary.total_credited || 0), 0),
           closing_balance: rows.reduce((s, r) => s + Number(r.summary.closing_balance || 0), 0),
         }});
       }
@@ -180,6 +181,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
               { label: ar ? "الرصيد الافتتاحي" : "Opening Balance", value: data.summary.opening_balance, color: "#64748B" },
               { label: ar ? "إجمالي الفواتير" : "Total Invoiced", value: data.summary.total_invoiced, color: "#5A187E" },
               { label: ar ? "إجمالي المدفوعات" : "Total Paid", value: data.summary.total_paid, color: "#6F4A84" },
+              { label: ar ? "إجمالي المرتجعات" : "Total Returns", value: data.summary.total_credited || 0, color: "#DC2626" },
               { label: ar ? "الرصيد المستحق" : "Closing Balance", value: data.summary.closing_balance, color: data.summary.closing_balance > 0 ? "#DC2626" : "#6F4A84" },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "16px 20px" }}>
@@ -213,11 +215,11 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                   </thead>
                   <tbody>
                     {data.transactions.map((t: any, i: number) => (
-                      <tr key={i} style={{ background: t.type === "payment" ? "#F7F2F8" : "transparent" }}>
+                      <tr key={i} style={{ background: t.type === "payment" ? "#F7F2F8" : t.type === "credit_note" ? "#FFF1F2" : "transparent" }}>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(t.date).toLocaleDateString("en-SA")}</td>
                         <td>
-                          <span className={`badge ${t.type === "invoice" ? "badge-info" : t.type === "opening_balance" ? "badge-warning" : "badge-success"}`}>
-                            {t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : t.type === "opening_balance" ? (ar ? "رصيد افتتاحي" : "Opening balance") : (ar ? "دفعة" : "Payment")}
+                          <span className={`badge ${t.type === "invoice" ? "badge-info" : t.type === "opening_balance" ? "badge-warning" : t.type === "credit_note" ? "badge-danger" : "badge-success"}`}>
+                            {t.type === "invoice" ? (ar ? "فاتورة" : "Invoice") : t.type === "opening_balance" ? (ar ? "رصيد افتتاحي" : "Opening balance") : t.type === "credit_note" ? (ar ? "مرتجع" : "Sales return") : (ar ? "دفعة" : "Payment")}
                           </span>
                         </td>
                         <td style={{ fontWeight: 600, color: "var(--primary)", fontSize: 12 }}>{t.reference}</td>
@@ -238,7 +240,7 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                       <td colSpan={4} style={{ padding: "12px 16px" }}>{ar ? "الرصيد الختامي" : "Closing Balance"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#5A187E" }}>{fmt(data.summary.total_invoiced)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(data.summary.total_paid)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(Number(data.summary.total_paid || 0) + Number(data.summary.total_credited || 0))}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", fontSize: 15, color: data.summary.closing_balance > 0 ? "#DC2626" : "#6F4A84" }}>
                         {fmt(data.summary.closing_balance)} SAR
                       </td>

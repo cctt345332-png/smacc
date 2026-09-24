@@ -1632,7 +1632,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
 
 async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, original_invoice, validated_lines):
     """يعيد الكمية أو السيريال إلى مستودع الفاتورة مع حركة return_in داخل معاملة الإشعار."""
-    from app.modules.inventory.service import add_stock, get_item
+    from app.modules.inventory.service import add_stock, get_item, _get_default_warehouse_id
     from app.models.inventory import SerialItem, SerialStatus, StockMovement
     from app.models.reps import SalesRep
 
@@ -1658,7 +1658,7 @@ async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, ori
                 if getattr(serial.status, "value", serial.status) != "sold":
                     raise HTTPException(400, f"لا يمكن إرجاع السيريال بحالته الحالية: {serial.status}")
                 serial.status = SerialStatus.IN_STOCK
-                serial.warehouse_id = warehouse_id or serial.warehouse_id
+                serial.warehouse_id = warehouse_id or serial.warehouse_id or await _get_default_warehouse_id(db, tenant_id)
                 db.add(StockMovement(
                     id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
                     warehouse_id=serial.warehouse_id, movement_type="return_in", quantity=Decimal("1"),

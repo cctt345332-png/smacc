@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from fastapi import HTTPException
 
 from app.models.sales_orders import SalesOrder, SalesOrderLine, SalesOrderStatus
-from app.models.sales import Customer, Invoice, InvoiceStatus, Payment
+from app.models.sales import Customer, Invoice, InvoiceStatus, Payment, CreditNote
 from app.models.accounting import Account
 
 
@@ -202,6 +202,11 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
         Payment.payment_date <= to_date,
     ).order_by(Payment.payment_date, Payment.payment_number))
     payments = pay_r.scalars().all()
+    credit_r = await db.execute(select(CreditNote).where(
+        CreditNote.tenant_id == tenant_id, CreditNote.customer_id == customer_id,
+        CreditNote.issue_date <= to_date,
+    ).order_by(CreditNote.issue_date, CreditNote.credit_note_number))
+    credit_notes = credit_r.scalars().all()
 
     prior_balance = opening_balance
     transactions = []
@@ -236,6 +241,17 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
                 "description_ar": f"سند قبض - {pay.payment_method}", "description_en": f"Payment Receipt - {pay.payment_method}",
                 "debit": 0, "credit": float(amount),
             })
+    for credit_note in credit_notes:
+        amount = Decimal(str(credit_note.total or 0))
+        if credit_note.issue_date < from_date:
+            prior_balance -= amount
+        else:
+            transactions.append({
+                "date": credit_note.issue_date, "type": "credit_note", "reference": credit_note.credit_note_number,
+                "description_ar": f"مرتجع مبيعات - {credit_note.reason or credit_note.credit_note_number}",
+                "description_en": f"Sales Return - {credit_note.reason or credit_note.credit_note_number}",
+                "debit": 0, "credit": float(amount),
+            })
 
     transactions.sort(key=lambda x: (x["date"], x["reference"] or ""))
     balance = float(prior_balance)
@@ -246,6 +262,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
 
     total_invoiced = sum(float(i.total or 0) for i in invoices if i.issue_date >= from_date)
     total_paid = sum(float(p.amount or 0) for p in payments if p.payment_date >= from_date)
+    total_credited = sum(float(c.total or 0) for c in credit_notes if c.issue_date >= from_date)
     # الرصيد الافتتاحي هو الرصيد القديم + كل القيود المرحّلة
     # من نوع customer_opening_balance، وليس مستحقًا تشغيليًا.
     opening_journal_total = sum(
@@ -253,7 +270,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
         for _, line in opening_entries
     )
     account_opening_total = opening_balance + opening_journal_total
-    operational_outstanding = Decimal(str(total_invoiced - total_paid))
+    operational_outstanding = Decimal(str(total_invoiced - total_paid - total_credited))
     closing_balance = round(float(account_opening_total + operational_outstanding), 2)
     # قيود الافتتاح تظهر في transactions، لكنها لا تُضاف مرة أخرى
     # إلى closing_balance لأنها محسوبة أصلًا ضمن account_opening_total.
@@ -271,6 +288,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
             "opening_balance": round(float(account_opening_total), 2),
             "total_invoiced": round(total_invoiced, 2),
             "total_paid": round(total_paid, 2),
+            "total_credited": round(total_credited, 2),
             "operational_outstanding": round(float(operational_outstanding), 2),
             "closing_balance": closing_balance,
         },
