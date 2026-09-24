@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getInvoices, getInvoice, createCreditNote } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
+import InvoiceSerialPicker from "@/components/inventory/InvoiceSerialPicker";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const today = () => new Date().toISOString().split("T")[0];
@@ -221,7 +222,17 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                 return (
                   <tr key={i}>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                      <ItemPicker locale={locale} value={line.picked} onChange={p => setPicked(i, p)} purchaseMode={false} />
+                      {line.original_invoice_line_id ? (
+                        <InvoiceSerialPicker
+                          locale={locale}
+                          productName={line.picked.item_name || line.picked.description_ar}
+                          serials={line.serial_details || []}
+                          selectedIds={line.return_serial_ids || []}
+                          onConfirm={selected => setLines(prev => prev.map((current, index) => index === i ? { ...current, return_serial_ids: selected, picked: { ...current.picked, quantity: selected.length } } : current))}
+                        />
+                      ) : (
+                        <ItemPicker locale={locale} value={line.picked} onChange={p => setPicked(i, p)} purchaseMode={false} />
+                      )}
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 70 }} value={line.picked.quantity} min="0"

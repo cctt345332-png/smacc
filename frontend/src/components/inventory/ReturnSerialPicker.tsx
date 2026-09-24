@@ -4,6 +4,7 @@
  * يجلب السيريالات المرتبطة بالفاتورة الأصلية ويتيح اختيار المُرجَع منها
  */
 import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 import { getBillSerials } from "@/lib/purchases";
 
 interface Serial {
@@ -40,6 +41,7 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string[]>(selectedIds);
   const [search, setSearch] = useState("");
+  const [notFound, setNotFound] = useState<string[]>([]);
 
   useEffect(() => {
     getBillSerials(billId, productId)
@@ -53,6 +55,23 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
       .filter(s => selected.includes(s.id))
       .map(s => ({ id: s.id, serial_number: s.serial_number }));
     onConfirm(result);
+  };
+
+  const importExcel = async (file?: File) => {
+    if (!file) return;
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const rows = workbook.SheetNames.flatMap(name => XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: false }) as unknown[][]);
+      const values = Array.from(new Set(rows.flat().map(value => String(value ?? "").trim().toLowerCase()).filter(Boolean)));
+      const byNumber = new Map(serials.map(serial => [serial.serial_number.trim().toLowerCase(), serial.id]));
+      const matched: string[] = [];
+      const missing: string[] = [];
+      values.forEach(value => byNumber.has(value) ? matched.push(byNumber.get(value)!) : missing.push(value));
+      setSelected(current => Array.from(new Set([...current, ...matched])));
+      setNotFound(missing);
+    } catch {
+      setNotFound([ar ? "تعذر قراءة ملف Excel" : "Could not read the Excel file"]);
+    }
   };
 
   return (
@@ -108,6 +127,10 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
                     placeholder={ar ? "بحث برقم السيريال" : "Search serial"}
                     style={{ width: 170, fontSize: 11 }}
                   />
+                  <label className="btn btn-ghost btn-sm" style={{ fontSize: 11, cursor: "pointer" }}>
+                    {ar ? "رفع Excel" : "Upload Excel"}
+                    <input type="file" accept=".xlsx,.xls,.csv" hidden onChange={e => importExcel(e.target.files?.[0])} />
+                  </label>
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setSelected(serials.map(s => s.id))}>
                     {ar ? "الكل" : "All"}
                   </button>
@@ -117,6 +140,7 @@ export default function ReturnSerialPicker({ locale, productId, productName, bil
                 </div>
               </div>
 
+              {notFound.length > 0 && <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", color: "#9A3412", borderRadius: 8, padding: 9, fontSize: 11, marginBottom: 10 }}>{ar ? "غير موجودة في الفاتورة: " : "Not found in this bill: "}{notFound.slice(0, 20).join("، ")}{notFound.length > 20 ? ` (+${notFound.length - 20})` : ""}</div>}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
                 {serials.filter(s => !search.trim() || s.serial_number.toLowerCase().includes(search.trim().toLowerCase()) || s.id.toLowerCase().includes(search.trim().toLowerCase())).map(s => {
                   const checked = selected.includes(s.id);
