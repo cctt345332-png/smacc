@@ -469,11 +469,17 @@ async def create_currency(db: AsyncSession, tenant_id: str, data: CurrencyCreate
 
 # ─── Journal Entries ─────────────────────────────────────────────────
 async def _next_entry_number(db: AsyncSession, tenant_id: str) -> str:
+    # لا تستخدم count؛ حذف قيد تجريبي يترك فجوة وقد يعيد رقمًا موجودًا.
     r = await db.execute(
-        select(func.count(JournalEntry.id)).where(JournalEntry.tenant_id == tenant_id)
+        select(JournalEntry.entry_number).where(JournalEntry.tenant_id == tenant_id)
     )
-    count = r.scalar() or 0
-    return f"JE-{str(count + 1).zfill(5)}"
+    highest = 0
+    for value in r.scalars().all():
+        try:
+            highest = max(highest, int(str(value).rsplit("-", 1)[-1]))
+        except (TypeError, ValueError):
+            continue
+    return f"JE-{str(highest + 1).zfill(5)}"
 
 
 async def get_journal_entries(db: AsyncSession, tenant_id: str, status: str | None = None,
@@ -645,21 +651,25 @@ async def reverse_journal_entry(db: AsyncSession, tenant_id: str, user_id: str, 
         posted_by=user_id,
         posted_at=datetime.utcnow(),
     )
-    db.add(reversal)
-
-    for line in lines:
-        db.add(JournalEntryLine(
-            id=str(uuid.uuid4()),
-            entry_id=reversal.id,
-            account_id=line.account_id,
-            cost_center_id=line.cost_center_id,
-            description=line.description,
-            debit=line.credit,
-            credit=line.debit,
-            line_order=line.line_order,
-        ))
-
-    await db.commit()
+    try:
+        db.add(reversal)
+        for line in lines:
+            db.add(JournalEntryLine(
+                id=str(uuid.uuid4()),
+                entry_id=reversal.id,
+                account_id=line.account_id,
+                cost_center_id=line.cost_center_id,
+                description=line.description,
+                debit=line.credit,
+                credit=line.debit,
+                line_order=line.line_order,
+            ))
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
+            raise HTTPException(400, "تعذر عكس القيد بسبب تعارض في رقم القيد. أعد المحاولة بعد تحديث الصفحة.") from exc
+        raise HTTPException(500, "تعذر حفظ القيد العكسي. لم يتم إنشاء أي بيانات.") from exc
     # أعد DTO محمّلًا بالسطور؛ إعادة ORM مباشرة تسبب MissingGreenlet في FastAPI.
     return await get_journal_entry(db, tenant_id, reversal.id)
 
