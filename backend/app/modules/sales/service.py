@@ -1633,30 +1633,21 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
 
 
 async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
-    """مرتجع عميل مستقل عن الفاتورة، مخصص للسيريالات المباعة سابقاً أو المنقولة."""
+    """مرتجع عميل مستقل عن الفاتورة بنفس أسطر المرتجع العادي."""
     if not data.customer_id:
         raise HTTPException(400, "اختر العميل عند إنشاء مرتجع بدون فاتورة")
     customer = await db.get(Customer, data.customer_id)
     if not customer or customer.tenant_id != tenant_id:
         raise HTTPException(404, "العميل غير موجود")
-    serial_numbers = []
-    for line in data.lines:
-        serial_numbers.extend([str(value).strip() for value in (line.serial_ids or []) if str(value).strip()])
-    serial_numbers = list(dict.fromkeys(serial_numbers))
-    if not serial_numbers:
-        raise HTTPException(400, "اكتب سيريالاً واحداً على الأقل للمرتجع")
-    sold_rows = (await db.execute(
-        select(SerialItem, Invoice).join(InventoryItem, InventoryItem.id == SerialItem.product_id)
-        .outerjoin(Invoice, Invoice.id == SerialItem.sale_invoice_id).where(
-            SerialItem.serial_number.in_(serial_numbers), SerialItem.status == "sold",
-            InventoryItem.tenant_id == tenant_id,
-            or_(Invoice.id.is_(None), Invoice.customer_id == customer.id),
-        )
-    )).all()
-    by_number = {serial.serial_number: (serial, invoice) for serial, invoice in sold_rows}
-    missing = [number for number in serial_numbers if number not in by_number]
-    if missing:
-        raise HTTPException(400, f"السيريالات غير مباعة لهذا العميل أو غير موجودة: {', '.join(missing[:10])}")
+    if not data.lines:
+        raise HTTPException(400, "أضف صنفاً واحداً على الأقل للمرتجع")
+
+    from app.models.inventory import SerialStatus, StockMovement
+    from app.modules.inventory.service import add_stock, get_item, _get_default_warehouse_id
+    from app.models.reps import SalesRep
+    rep = await db.get(SalesRep, customer.rep_id) if customer.rep_id else None
+    warehouse_id = rep.warehouse_id if rep else await _get_default_warehouse_id(db, tenant_id)
+
     existing_rows = (await db.execute(
         select(CreditNoteLine.serial_ids_json).join(CreditNote).where(CreditNote.tenant_id == tenant_id)
     )).scalars().all()
@@ -1666,48 +1657,91 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
             already_returned.update(str(value) for value in json.loads(raw or "[]"))
         except (TypeError, ValueError):
             continue
-    duplicate = [serial.id for serial, _invoice in by_number.values() if serial.id in already_returned]
-    if duplicate:
-        raise HTTPException(400, "يوجد سيريال سبق إرجاعه")
-    vat_rate = Decimal("15")
-    subtotal = sum((Decimal(str(serial.sale_price or 0)) for serial, _invoice in by_number.values()), Decimal("0"))
-    vat_amount = (subtotal * vat_rate / 100).quantize(Decimal("0.01"))
+
+    prepared = []
+    subtotal = Decimal("0")
+    vat_amount = Decimal("0")
+    for line in data.lines:
+        if not line.inventory_item_id:
+            raise HTTPException(400, "اختر المادة لكل سطر مرتجع")
+        item = await get_item(db, tenant_id, line.inventory_item_id)
+        qty = Decimal(str(line.quantity or 0))
+        price = Decimal(str(line.unit_price or 0))
+        vat_rate = Decimal(str(line.vat_rate or 0))
+        serial_numbers = list(dict.fromkeys(str(v).strip() for v in (line.serial_ids or []) if str(v).strip()))
+        tracking_type = getattr(item.tracking_type, "value", item.tracking_type)
+        serials = []
+        if tracking_type == "serial":
+            if not serial_numbers:
+                raise HTTPException(400, f"أدخل سيريالات المادة: {item.name_ar}")
+            if Decimal(len(serial_numbers)) != qty:
+                raise HTTPException(400, f"كمية السيريالات لا تساوي كمية المادة: {item.name_ar}")
+            serial_rows = (await db.execute(
+                select(SerialItem, Invoice).join(InventoryItem, InventoryItem.id == SerialItem.product_id)
+                .outerjoin(Invoice, Invoice.id == SerialItem.sale_invoice_id).where(
+                    InventoryItem.tenant_id == tenant_id, SerialItem.product_id == item.id,
+                    SerialItem.status == "sold",
+                    or_(SerialItem.serial_number.in_(serial_numbers), SerialItem.id.in_(serial_numbers)),
+                )
+            )).all()
+            by_key = {}
+            for serial, invoice in serial_rows:
+                by_key[serial.serial_number] = (serial, invoice)
+                by_key[serial.id] = (serial, invoice)
+            missing = [sn for sn in serial_numbers if sn not in by_key]
+            if missing:
+                raise HTTPException(400, f"السيريالات غير موجودة أو ليست مباعة: {', '.join(missing[:10])}")
+            for sn in serial_numbers:
+                serial, invoice = by_key[sn]
+                if invoice and invoice.customer_id != customer.id:
+                    raise HTTPException(400, f"السيريال {serial.serial_number} تابع لعميل آخر")
+                if serial.id in already_returned or serial.serial_number in already_returned:
+                    raise HTTPException(400, f"السيريال {serial.serial_number} سبق إرجاعه")
+                serials.append(serial)
+        elif serial_numbers:
+            raise HTTPException(400, f"المادة {item.name_ar} ليست مادة سيريال")
+        if qty <= 0 or price < 0:
+            raise HTTPException(400, "تحقق من الكمية والسعر لكل سطر")
+        line_subtotal = (qty * price).quantize(Decimal("0.01"))
+        line_vat = (line_subtotal * vat_rate / 100).quantize(Decimal("0.01"))
+        subtotal += line_subtotal
+        vat_amount += line_vat
+        prepared.append((line, item, serials, qty, price, vat_rate, line_subtotal, line_vat))
+
     total = subtotal + vat_amount
     if total <= 0:
-        raise HTTPException(400, "لا يمكن إنشاء مرتجع بقيمة صفر؛ تحقق من أسعار السيريالات")
+        raise HTTPException(400, "إجمالي المرتجع يجب أن يكون أكبر من صفر")
     cn = CreditNote(
         id=str(uuid.uuid4()), tenant_id=tenant_id, credit_note_number=await _next_credit_note_number(db, tenant_id),
         uuid=str(uuid.uuid4()), original_invoice_id=None, customer_id=customer.id,
         issue_date=data.issue_date.replace(tzinfo=None), reason=data.reason,
-        subtotal=subtotal, vat_amount=vat_amount, total=total,
-        created_by=user_id,
+        subtotal=subtotal, vat_amount=vat_amount, total=total, created_by=user_id,
     )
     db.add(cn)
-    db.add(CreditNoteLine(
-        id=str(uuid.uuid4()), credit_note_id=cn.id, original_invoice_line_id=None, line_order=0,
-        description_ar=f"مرتجع سيريالات للعميل: {customer.name_ar}", quantity=Decimal(len(serial_numbers)),
-        unit_price=(subtotal / Decimal(len(serial_numbers))).quantize(Decimal("0.01")), vat_rate=vat_rate,
-        subtotal=subtotal, vat_amount=vat_amount, total=total,
-        serial_ids_json=json.dumps([serial.id for serial, _invoice in by_number.values()]),
-    ))
     await db.flush()
-    from app.models.inventory import SerialStatus, StockMovement
-    from app.modules.inventory.service import _get_default_warehouse_id
-    default_warehouse_id = await _get_default_warehouse_id(db, tenant_id)
-    for serial, _invoice in by_number.values():
-        serial.status = SerialStatus.IN_STOCK
-        serial.warehouse_id = serial.warehouse_id or default_warehouse_id
-        db.add(StockMovement(
-            id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
-            warehouse_id=serial.warehouse_id, movement_type="return_in", quantity=Decimal("1"),
-            unit_cost=serial.cost_price, serial_item_id=serial.id,
-            reference_type="credit_note", reference_id=cn.id, created_by=user_id,
+    for index, (line, item, serials, qty, price, vat_rate, line_subtotal, line_vat) in enumerate(prepared):
+        db.add(CreditNoteLine(
+            id=str(uuid.uuid4()), credit_note_id=cn.id, original_invoice_line_id=None, line_order=index,
+            description_ar=line.description_ar or item.name_ar, quantity=qty, unit_price=price,
+            vat_rate=vat_rate, subtotal=line_subtotal, vat_amount=line_vat, total=line_subtotal + line_vat,
+            inventory_item_id=item.id, serial_ids_json=json.dumps([serial.id for serial in serials]),
         ))
+        for serial in serials:
+            serial.status = SerialStatus.IN_STOCK
+            serial.warehouse_id = warehouse_id
+            db.add(StockMovement(
+                id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
+                warehouse_id=warehouse_id, movement_type="return_in", quantity=Decimal("1"),
+                unit_cost=serial.cost_price, serial_item_id=serial.id,
+                reference_type="credit_note", reference_id=cn.id, created_by=user_id,
+            ))
+        if not serials:
+            await add_stock(db, tenant_id, item.id, qty, item.cost_price, warehouse_id=warehouse_id,
+                            reference_type="credit_note", reference_id=cn.id, user_id=user_id,
+                            auto_commit=False, movement_type="return_in")
     await _create_credit_note_journal(db, tenant_id, user_id, cn, None)
     await db.commit()
     return cn
-
-
 async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, original_invoice, validated_lines):
     """يعيد الكمية أو السيريال إلى مستودع الفاتورة مع حركة return_in داخل معاملة الإشعار."""
     from app.modules.inventory.service import add_stock, get_item, _get_default_warehouse_id

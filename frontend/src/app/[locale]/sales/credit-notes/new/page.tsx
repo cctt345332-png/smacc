@@ -6,6 +6,7 @@ import { getInvoices, getInvoice, getCustomers, createCreditNote } from "@/lib/s
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
 import InvoiceSerialPicker from "@/components/inventory/InvoiceSerialPicker";
+import * as XLSX from "xlsx";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const today = () => new Date().toISOString().split("T")[0];
@@ -17,6 +18,7 @@ interface Line {
   original_serial_ids?: string[];
   return_serial_ids?: string[];
   serial_details?: { id: string; serial_number: string }[];
+  manual_serials?: string;
 }
 
 const parseSerialIds = (line: any): string[] => {
@@ -29,6 +31,7 @@ const parseSerialIds = (line: any): string[] => {
 const emptyLine = (): Line => ({
   picked: { mode: "free", description_ar: "", unit_price: 0, quantity: 1 },
   vat_rate: "15",
+  manual_serials: "",
 });
 
 function calcLine(l: Line) {
@@ -58,7 +61,6 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
   const [serialSearch, setSerialSearch] = useState("");
   const [returnMode, setReturnMode] = useState<"invoice" | "customer">("invoice");
   const [customerId, setCustomerId] = useState("");
-  const [manualSerials, setManualSerials] = useState("");
 
   useEffect(() => {
     getInvoices({ status: "confirmed" }).then(({ data }) => setInvoices(data)).catch(() => {});
@@ -108,6 +110,19 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     const return_serial_ids = Array.from(selected);
     return { ...line, return_serial_ids, picked: { ...line.picked, quantity: return_serial_ids.length } };
   }));
+  const importCustomerSerials = (index: number, file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = event => {
+      try {
+        const workbook = XLSX.read(event.target?.result, { type: "array" });
+        const rows = XLSX.utils.sheet_to_json<any>(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+        const serials = rows.flat().map(value => String(value ?? "").trim()).filter(Boolean).join("\n");
+        setLines(prev => prev.map((line, i) => i === index ? { ...line, manual_serials: serials } : line));
+      } catch { alert(ar ? "تعذر قراءة ملف السيريالات" : "Could not read serial file"); }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   const totals = lines.reduce((acc, l) => {
     const c = calcLine(l);
@@ -118,11 +133,20 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     if (!form.reason) return alert(ar ? "أدخل سبب الإشعار" : "Enter reason");
     if (returnMode === "customer") {
       if (!customerId) return alert(ar ? "اختر العميل" : "Select customer");
-      const serials = Array.from(new Set(manualSerials.split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean)));
-      if (!serials.length) return alert(ar ? "اكتب السيريالات المعادة" : "Enter returned serial numbers");
+      if (lines.some(l => !l.picked.inventory_item_id || Number(l.picked.quantity || 0) <= 0)) return alert(ar ? "اختر المادة والكمية لكل سطر" : "Choose an item and quantity for every line");
+      const customerLines = lines.map((l, i) => ({
+        description_ar: l.picked.description_ar || l.picked.item_name || "مرتجع",
+        inventory_item_id: l.picked.inventory_item_id,
+        quantity: l.picked.quantity || 0,
+        unit_price: l.picked.unit_price || 0,
+        vat_rate: parseFloat(l.vat_rate) || 15,
+        serial_ids: Array.from(new Set((l.manual_serials || "").split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))),
+        line_order: i,
+      }));
+      if (customerLines.some(l => !l.serial_ids.length && lines.find(x => x.picked.inventory_item_id === l.inventory_item_id)?.picked.mode === "serial")) return alert(ar ? "أدخل سيريالات كل مادة متسلسلة" : "Enter serials for every serial-tracked item");
       setSaving(true);
       try {
-        await createCreditNote({ customer_id: customerId, issue_date: new Date(form.issue_date).toISOString(), reason: form.reason, lines: [{ description_ar: "مرتجع سيريالات", quantity: serials.length, unit_price: 0, vat_rate: 15, serial_ids: serials }] });
+        await createCreditNote({ customer_id: customerId, issue_date: new Date(form.issue_date).toISOString(), reason: form.reason, lines: customerLines });
         router.push(`/${locale}/sales/credit-notes`);
       } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
       finally { setSaving(false); }
@@ -218,15 +242,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         </div>
       )}
 
-      {returnMode === "customer" && <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-header"><span className="card-title">{ar ? "السيريالات المعادة" : "Returned serials"}</span></div>
-        <div className="card-body">
-          <p className="form-hint">{ar ? "اكتب سيريالاً في كل سطر أو افصل بينها بفاصلة. يجب أن تكون السيريالات مباعة لهذا العميل." : "Enter one serial per line or separate with commas. Serials must have been sold to this customer."}</p>
-          <textarea className="form-input" rows={8} value={manualSerials} onChange={e => setManualSerials(e.target.value)} placeholder={ar ? "مثال: SN12345" : "Example: SN12345"} />
-        </div>
-      </div>}
-
-      {returnMode === "invoice" && <div className="card">
+      {(returnMode === "invoice" || returnMode === "customer") && <div className="card">
         <div className="card-header">
           <span className="card-title">{ar ? "أسطر المرتجع" : "Return Lines"}</span>
           {lines.some(line => (line.original_serial_ids || []).length > 0) && <input className="form-input" value={serialSearch} onChange={e => setSerialSearch(e.target.value)} placeholder={ar ? "ابحث برقم السيريال في الفاتورة" : "Search serial in invoice"} style={{ maxWidth: 280, fontSize: 12 }} />}
@@ -275,7 +291,13 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                         onChange={e => setPicked(i, { ...line.picked, quantity: parseFloat(e.target.value) || 0 })} />
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                      {(line.original_serial_ids || []).length ? <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>{visibleSerials.length ? visibleSerials.map(serial => <label key={serial.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(line.return_serial_ids || []).includes(serial.id)} onChange={() => toggleReturnSerial(i, serial.id)} /><span style={{ fontFamily: "monospace", fontWeight: 700 }}>{serial.serial_number}</span></label>) : <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "لا يوجد سيريال مطابق" : "No matching serial"}</span>}</div> : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "لا ينطبق" : "N/A"}</span>}
+                      {returnMode === "customer" ? <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <textarea className="form-input" rows={3} value={line.manual_serials || ""} onChange={e => setLines(prev => prev.map((current, index) => index === i ? { ...current, manual_serials: e.target.value } : current))} placeholder={ar ? "سيريال لكل سطر" : "One serial per line"} />
+                        <label className="btn btn-secondary btn-sm" style={{ textAlign: "center", cursor: "pointer" }}>
+                          {ar ? "رفع Excel للسيريالات" : "Upload serial Excel"}
+                          <input type="file" accept=".xlsx,.xls,.csv,.txt" hidden onChange={e => importCustomerSerials(i, e.target.files?.[0])} />
+                        </label>
+                      </div> : (line.original_serial_ids || []).length ? <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>{visibleSerials.length ? visibleSerials.map(serial => <label key={serial.id} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, cursor: "pointer" }}><input type="checkbox" checked={(line.return_serial_ids || []).includes(serial.id)} onChange={() => toggleReturnSerial(i, serial.id)} /><span style={{ fontFamily: "monospace", fontWeight: 700 }}>{serial.serial_number}</span></label>) : <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "لا يوجد سيريال مطابق" : "No matching serial"}</span>}</div> : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "لا ينطبق" : "N/A"}</span>}
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 100 }} value={line.picked.unit_price} min="0"
