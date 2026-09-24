@@ -52,6 +52,10 @@ export default function InvoiceSerialPicker({ locale, productName, serials, sele
 
   return (
     <div>
+      <div style={{ background: "#F7F2F8", border: "1px solid #C8AED4", borderRadius: 8, padding: "8px 12px", marginBottom: 6 }}>
+        <div style={{ fontWeight: 800, fontSize: 13, color: "#4B2A5A" }}>{productName || (ar ? "المادة" : "Product")}</div>
+        <div style={{ fontSize: 11, color: "#6F4A84", marginTop: 2 }}>{serials.length} {ar ? "سيريال في الفاتورة الأصلية" : "serials in the original invoice"}</div>
+      </div>
       <button type="button" onClick={() => setOpen(true)} style={{ width: "100%", padding: 10, borderRadius: 8, border: "2px dashed #C4B5FD", background: "#F5F3FF", color: "#75617F", fontWeight: 700, fontSize: 12, cursor: "pointer", textAlign: "center" }}>
         📋 {selected.length ? `${selected.length} ${ar ? "سيريال محدد من الفاتورة" : "invoice serials selected"}` : (ar ? "تحديد السيريالات من الفاتورة" : "Select serials from invoice")}
       </button>
@@ -89,4 +93,3 @@ export default function InvoiceSerialPicker({ locale, productName, serials, sele
 }
 
 export type { InvoiceSerial };
-
