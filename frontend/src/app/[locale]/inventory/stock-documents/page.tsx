@@ -76,12 +76,12 @@ export default function StockDocumentsPage(props: { params: Promise<{ locale: st
         </div>
       </div>
 
-      <div className="card" style={{ maxWidth: 900 }}>
+      <div className="card" style={{ width: "100%" }}>
         <div className="card-header"><span className="card-title">{ar ? "إنشاء سند مخزني" : "Create stock document"}</span></div>
         <div className="card-body">
           <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
             <button type="button" className={`btn ${direction === "in" ? "btn-primary" : "btn-secondary"}`} onClick={() => setDirection("in")}><Icon name="plus" size={15} /> {ar ? "إدخال مخزني" : "Stock input"}</button>
-            <button type="button" className={`btn ${direction === "out" ? "btn-danger" : "btn-secondary"}`} onClick={() => setDirection("out")}><Icon name="reverse" size={15} /> {ar ? "إخراج مخزني" : "Stock output"}</button>
+            <button type="button" className="btn" onClick={() => setDirection("out")} style={{ background: direction === "out" ? "#DC2626" : "#FEE2E2", color: direction === "out" ? "#FFFFFF" : "#B91C1C", borderColor: "#DC2626" }}><Icon name="reverse" size={15} /> {ar ? "إخراج مخزني" : "Stock output"}</button>
           </div>
           {message && <div className={`alert ${message.ok ? "alert-success" : "alert-danger"}`} style={{ marginBottom: 16 }}>{message.text}</div>}
           <form onSubmit={submit}>
@@ -97,7 +97,7 @@ export default function StockDocumentsPage(props: { params: Promise<{ locale: st
             )}
             {isSerial && direction === "in" && <label className="form-group"><span className="form-label">{ar ? "تكلفة السيريال" : "Serial cost"}</span><input className="form-input" type="number" min="0" step="0.0001" value={unitCost} onChange={e => setUnitCost(e.target.value)} placeholder={String(selectedItem?.cost_price || 0)} /></label>}
             <label className="form-group"><span className="form-label">{ar ? "سبب / البيان" : "Reason / notes"}</span><textarea className="form-input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder={ar ? "مثال: تسوية زيادة، تلف، استخدام داخلي..." : "e.g. adjustment, damage, internal use..."} /></label>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}><Link href={`/${locale}/inventory`} className="btn btn-secondary">{ar ? "إلغاء" : "Cancel"}</Link><button className={`btn ${direction === "in" ? "btn-primary" : "btn-danger"}`} disabled={busy}>{busy ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? `حفظ سند ${direction === "in" ? "الإدخال" : "الإخراج"}` : `Save ${direction === "in" ? "input" : "output"}`)}</button></div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}><Link href={`/${locale}/inventory`} className="btn btn-secondary">{ar ? "إلغاء" : "Cancel"}</Link><button className="btn" disabled={busy} style={{ background: direction === "in" ? "#5A187E" : "#DC2626", color: "#FFFFFF", borderColor: direction === "in" ? "#5A187E" : "#DC2626" }}>{busy ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? `حفظ سند ${direction === "in" ? "الإدخال" : "الإخراج"}` : `Save ${direction === "in" ? "input" : "output"}`)}</button></div>
           </form>
         </div>
       </div>
