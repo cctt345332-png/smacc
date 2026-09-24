@@ -282,7 +282,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                           onConfirm={selected => setLines(prev => prev.map((current, index) => index === i ? { ...current, return_serial_ids: selected, picked: { ...current.picked, quantity: selected.length } } : current))}
                         />
                       ) : (
-                        <ItemPicker locale={locale} value={line.picked} onChange={p => setPicked(i, p)} purchaseMode={false} />
+                        <ItemPicker locale={locale} value={line.picked} onChange={p => setPicked(i, p)} purchaseMode={false} hideSerialSelector={returnMode === "customer"} />
                       )}
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>

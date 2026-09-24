@@ -55,13 +55,14 @@ interface Props {
   onChange: (v: PickedItem) => void;
   purchaseMode?: boolean;
   warehouseId?: string;
+  hideSerialSelector?: boolean;
 }
 
 const conditionAr: Record<string, string> = {
   new: "جديد", used: "مستعمل", refurbished: "مجدد",
 };
 
-export default function ItemPicker({ locale, value, onChange, purchaseMode = false, warehouseId }: Props) {
+export default function ItemPicker({ locale, value, onChange, purchaseMode = false, warehouseId, hideSerialSelector = false }: Props) {
   const ar = locale === "ar";
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -440,6 +441,10 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
                   {ar ? "أضف أرقام السيريالات لتسجيلها في المخزون عند التأكيد" : "Add serial numbers to register them in inventory on confirm"}
                 </div>
               )}
+            </div>
+          ) : hideSerialSelector ? (
+            <div style={{ fontSize: 11, color: "#75617F", padding: "6px 0" }}>
+              {ar ? "أدخل سيريالات المرتجع في العمود المخصص" : "Enter return serials in the serials column"}
             </div>
           ) : (
             /* ── وضع البيع: تحديد سيريالات متعددة ── */
