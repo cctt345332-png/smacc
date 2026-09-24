@@ -1642,7 +1642,7 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
     if not data.lines:
         raise HTTPException(400, "أضف صنفاً واحداً على الأقل للمرتجع")
 
-    from app.models.inventory import SerialStatus, StockMovement
+    from app.models.inventory import SerialItem, SerialStatus, StockMovement
     from app.modules.inventory.service import add_stock, get_item, _get_default_warehouse_id
     from app.models.reps import SalesRep
     rep = await db.get(SalesRep, customer.rep_id) if customer.rep_id else None
@@ -1680,7 +1680,6 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
                 select(SerialItem, Invoice).join(InventoryItem, InventoryItem.id == SerialItem.product_id)
                 .outerjoin(Invoice, Invoice.id == SerialItem.sale_invoice_id).where(
                     InventoryItem.tenant_id == tenant_id, SerialItem.product_id == item.id,
-                    SerialItem.status == "sold",
                     or_(SerialItem.serial_number.in_(serial_numbers), SerialItem.id.in_(serial_numbers)),
                 )
             )).all()
@@ -1688,11 +1687,22 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
             for serial, invoice in serial_rows:
                 by_key[serial.serial_number] = (serial, invoice)
                 by_key[serial.id] = (serial, invoice)
-            missing = [sn for sn in serial_numbers if sn not in by_key]
-            if missing:
-                raise HTTPException(400, f"السيريالات غير موجودة أو ليست مباعة: {', '.join(missing[:10])}")
             for sn in serial_numbers:
+                if sn not in by_key:
+                    # سيريالات الأرصدة الافتتاحية قد لا تكون موجودة في جدول serial_items.
+                    # ننشئ لها سجل مخزون عند المرتجع بدل رفضها.
+                    serial = SerialItem(
+                        id=str(uuid.uuid4()), product_id=item.id, warehouse_id=warehouse_id,
+                        serial_number=sn, status=SerialStatus.IN_STOCK,
+                        cost_price=item.cost_price, sale_price=price,
+                        notes=f"مرتجع عميل من رصيد افتتاحي — {customer.name_ar}",
+                    )
+                    db.add(serial)
+                    serials.append(serial)
+                    continue
                 serial, invoice = by_key[sn]
+                if getattr(serial.status, "value", serial.status) != "sold":
+                    raise HTTPException(400, f"السيريال {serial.serial_number} موجود وحالته ليست مباعة")
                 if invoice and invoice.customer_id != customer.id:
                     raise HTTPException(400, f"السيريال {serial.serial_number} تابع لعميل آخر")
                 if serial.id in already_returned or serial.serial_number in already_returned:
