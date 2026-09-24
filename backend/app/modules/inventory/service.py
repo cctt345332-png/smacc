@@ -678,6 +678,98 @@ async def deduct_stock(
     return item
 
 
+async def create_stock_document(
+    db: AsyncSession, tenant_id: str, user_id: str, data: dict,
+):
+    """إنشاء سند إدخال/إخراج مخزني مستقل عن فواتير البيع والشراء."""
+    direction = data.get("direction")
+    if direction not in {"in", "out"}:
+        raise HTTPException(400, "نوع السند يجب أن يكون إدخال أو إخراج")
+    item = await get_item(db, tenant_id, data.get("item_id"))
+    warehouse = await db.get(Warehouse, data.get("warehouse_id"))
+    if not warehouse or warehouse.tenant_id != tenant_id or not warehouse.is_active:
+        raise HTTPException(404, "المستودع غير موجود")
+
+    notes = (data.get("notes") or "").strip() or None
+    unit_cost = Decimal(str(data.get("unit_cost") or item.cost_price or 0))
+    serial_numbers = [str(value).strip() for value in (data.get("serial_numbers") or []) if str(value).strip()]
+    tracking = _tracking_value(item.tracking_type)
+
+    if tracking == TrackingType.SERIAL.value:
+        if not serial_numbers:
+            raise HTTPException(400, "يجب إدخال سيريال واحد على الأقل")
+        if direction == "in":
+            for serial_number in serial_numbers:
+                duplicate = (await db.execute(
+                    select(SerialItem).where(
+                        SerialItem.product_id == item.id,
+                        SerialItem.serial_number == serial_number,
+                    )
+                )).scalar_one_or_none()
+                if duplicate:
+                    raise HTTPException(400, f"السيريال {serial_number} موجود مسبقًا")
+                serial = SerialItem(
+                    id=str(uuid.uuid4()), product_id=item.id, warehouse_id=warehouse.id,
+                    serial_number=serial_number, status=SerialStatus.IN_STOCK,
+                    condition="new", cost_price=unit_cost,
+                    sale_price=item.sale_price,
+                )
+                db.add(serial)
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+                    warehouse_id=warehouse.id, movement_type=MovementType.ADJUSTMENT,
+                    quantity=Decimal("1"), unit_cost=unit_cost, serial_item_id=serial.id,
+                    reference_type="stock_document", notes=notes, created_by=user_id,
+                ))
+        else:
+            rows = (await db.execute(
+                select(SerialItem).where(
+                    SerialItem.product_id == item.id,
+                    SerialItem.warehouse_id == warehouse.id,
+                    SerialItem.serial_number.in_(serial_numbers),
+                    SerialItem.status == SerialStatus.IN_STOCK,
+                )
+            )).scalars().all()
+            found = {row.serial_number for row in rows}
+            missing = [number for number in serial_numbers if number not in found]
+            if missing:
+                raise HTTPException(400, f"السيريالات غير متاحة في هذا المستودع: {', '.join(missing)}")
+            for serial in rows:
+                serial.status = SerialStatus.DAMAGED
+                serial.warehouse_id = None
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+                    warehouse_id=warehouse.id, movement_type=MovementType.ADJUSTMENT,
+                    quantity=Decimal("-1"), unit_cost=serial.cost_price, serial_item_id=serial.id,
+                    reference_type="stock_document", notes=notes, created_by=user_id,
+                ))
+        await db.commit()
+        return {"direction": direction, "item_id": item.id, "item_name": item.name_ar, "warehouse_id": warehouse.id, "quantity": len(serial_numbers), "serial_count": len(serial_numbers)}
+
+    quantity = Decimal(str(data.get("quantity") or 0))
+    if quantity <= 0:
+        raise HTTPException(400, "يجب إدخال كمية أكبر من صفر")
+    stock = await _get_or_create_stock(db, tenant_id, item.id, warehouse.id)
+    if direction == "out" and stock.quantity < quantity:
+        raise HTTPException(400, f"الكمية المتاحة في المستودع {stock.quantity} أقل من المطلوب {quantity}")
+    signed_quantity = quantity if direction == "in" else -quantity
+    previous_qty = stock.quantity
+    stock.quantity += signed_quantity
+    stock.updated_at = datetime.utcnow()
+    item.quantity_on_hand += signed_quantity
+    if direction == "in" and item.quantity_on_hand > 0:
+        total_value = (item.quantity_on_hand - quantity) * item.cost_price + quantity * unit_cost
+        item.cost_price = (total_value / item.quantity_on_hand).quantize(Decimal("0.0001"))
+    db.add(StockMovement(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+        warehouse_id=warehouse.id, movement_type=MovementType.ADJUSTMENT,
+        quantity=signed_quantity, unit_cost=unit_cost if direction == "in" else item.cost_price,
+        reference_type="stock_document", notes=notes, created_by=user_id,
+    ))
+    await db.commit()
+    return {"direction": direction, "item_id": item.id, "item_name": item.name_ar, "warehouse_id": warehouse.id, "quantity": float(quantity), "previous_quantity": float(previous_qty), "new_quantity": float(stock.quantity)}
+
+
 # ─── Reports ─────────────────────────────────────────────────────────
 
 async def get_serial_profit_report(

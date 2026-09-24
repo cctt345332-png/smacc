@@ -95,6 +95,17 @@ export const getSerialsByWarehouse = (warehouseId: string, productId?: string) =
 // Stock Movements
 export const getMovements = (params?: any) => api.get("/inventory/movements", { params });
 
+// Manual stock documents
+export const createStockDocument = (data: {
+  direction: "in" | "out";
+  item_id: string;
+  warehouse_id: string;
+  quantity?: number;
+  unit_cost?: number;
+  serial_numbers?: string[];
+  notes?: string;
+}) => api.post("/inventory/stock-documents", data);
+
 // Stock Count (جرد)
 export const createStockCount = (data: any) => api.post("/inventory/stock-count", data);
 

@@ -446,6 +446,12 @@ async def deduct_stock(product_id: str, data: dict, user=Depends(get_current_use
     )
 
 
+@router.post("/stock-documents", status_code=201)
+async def create_stock_document(data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """سند إدخال أو إخراج مخزني مستقل عن الفواتير."""
+    return await service.create_stock_document(db, user["tenant_id"], user["user_id"], data)
+
+
 # ─── Reports ─────────────────────────────────────────────────────────
 @router.get("/reports/stock-value")
 async def stock_value_report(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):

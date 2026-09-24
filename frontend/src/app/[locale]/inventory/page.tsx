@@ -27,6 +27,7 @@ export default function InventoryPage(props: { params: Promise<{ locale: string 
     { label: ar ? "التصنيفات" : "Categories", href: `/${locale}/inventory/categories`, icon: <Icon name="box" size={24} />, color: "#6366F1", desc: ar ? "تنظيم الأصناف في تصنيفات" : "Organize items into categories" },
     { label: ar ? "المستودعات" : "Warehouses", href: `/${locale}/inventory/warehouses`, icon: <Icon name="bank" size={24} />, color: "#75617F", desc: ar ? "إدارة المستودعات والفروع" : "Manage warehouses and branches" },
     { label: ar ? "حركات المخزون" : "Stock Movements", href: `/${locale}/inventory/movements`, icon: <Icon name="trending" size={24} />, color: "#6F4A84", desc: ar ? "سجل جميع حركات المخزون" : "All stock movement history" },
+    { label: ar ? "سندات المخزون" : "Stock Documents", href: `/${locale}/inventory/stock-documents`, icon: <Icon name="inventory" size={24} />, color: "#2563EB", desc: ar ? "إدخال وإخراج مخزني مستقل" : "Manual stock input and output" },
     { label: ar ? "جرد المخزون" : "Stock Count", href: `/${locale}/inventory/adjustments`, icon: <Icon name="check" size={24} />, color: "#D97706", desc: ar ? "عدّ الكميات ومراجعة السيريالات" : "Count quantities and review serials" },
   ];
 
