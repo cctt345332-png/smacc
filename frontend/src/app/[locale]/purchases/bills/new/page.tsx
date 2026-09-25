@@ -7,6 +7,7 @@ import { getFiscalYears } from "@/lib/accounting";
 import { getWarehouses } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 // ── مساعدات ──────────────────────────────────────────────────────────
 const fmt = (n: number) =>
@@ -314,16 +315,9 @@ export default function NewBillPage(props: { params: Promise<{ locale: string }>
                   {ar ? "(اختياري)" : "(optional)"}
                 </span>
               </label>
-              <select
-                className="form-input form-select"
-                value={form.vendor_id}
-                onChange={e => setForm(f => ({ ...f, vendor_id: e.target.value }))}
-              >
-                <option value="">{ar ? "— بدون مورد —" : "— No vendor —"}</option>
-                {vendors.map(v => (
-                  <option key={v.id} value={v.id}>{v.name_ar}</option>
-                ))}
-              </select>
+              <SearchableSelect locale={locale} value={form.vendor_id} onChange={value => setForm(f => ({ ...f, vendor_id: value }))}
+                placeholder={ar ? "اكتب اسم أو رقم المورد..." : "Search vendor..."}
+                options={[{ value: "", label: ar ? "— بدون مورد —" : "— No vendor —" }, ...vendors.map(v => ({ value: v.id, label: `${v.vendor_number ? `${v.vendor_number} — ` : ""}${v.name_ar}`, searchText: `${v.vendor_number || ""} ${v.name_ar || ""} ${v.name_en || ""}` }))]} />
             </div>
 
             {/* المستودع — مطلوب */}

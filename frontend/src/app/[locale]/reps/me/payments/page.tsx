@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getMyPayments, getMyInvoices } from "@/lib/reps";
 import { createPayment, getCustomers, getCustomerStatement } from "@/lib/sales";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) =>
@@ -320,13 +321,9 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                   <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", display:"block", marginBottom:6 }}>
                     {ar ? "العميل *" : "Customer *"}
                   </label>
-                  <select className="form-input form-select" value={form.customer_id}
-                    onChange={e => onSelectCustomer(e.target.value)}>
-                    <option value="">{ar ? "— اختر العميل —" : "— Select Customer —"}</option>
-                    {customers.map((c: any) => (
-                      <option key={c.id} value={c.id}>{c.name_ar}</option>
-                    ))}
-                  </select>
+                  <SearchableSelect locale={locale} value={form.customer_id} required onChange={onSelectCustomer}
+                    placeholder={ar ? "اكتب رقم العميل أو اسمه..." : "Search customer..."}
+                    options={customers.map((c: any) => ({ value: c.id, label: `${c.customer_number ? `${c.customer_number} — ` : ""}${c.name_ar}`, searchText: `${c.customer_number || ""} ${c.name_ar || ""} ${c.name_en || ""}` }))} />
 
                   {loadingBalance && (
                     <div style={{ fontSize:12, color:"var(--text-muted)", marginTop:8, textAlign:"center" }}>

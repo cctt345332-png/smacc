@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getCustomers, createInvoice, confirmInvoice } from "@/lib/sales";
 import { getFiscalYears } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import ItemPicker, { PickedItem, LineMode } from "@/components/inventory/ItemPicker";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -212,12 +213,10 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
           <div className="card-body">
             <div className="form-group">
               <label className="form-label">{ar ? "العميل" : "Customer"} <span className="required">*</span></label>
-              <select className="form-input form-select" value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}>
-                <option value="">{ar ? "— اختر العميل —" : "— Select Customer —"}</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name_ar}{c.name_en ? ` / ${c.name_en}` : ""}</option>
-                ))}
-              </select>
+              <SearchableSelect locale={locale} value={form.customer_id} required
+                onChange={value => setForm(f => ({ ...f, customer_id: value }))}
+                placeholder={ar ? "اكتب رقم العميل أو اسمه للبحث..." : "Search customer number or name..."}
+                options={customers.map(c => ({ value: c.id, label: `${c.customer_number ? `${c.customer_number} — ` : ""}${c.name_ar}${c.name_en ? ` / ${c.name_en}` : ""}`, searchText: `${c.customer_number || ""} ${c.name_ar || ""} ${c.name_en || ""}` }))} />
             </div>
             <div className="form-group">
               <label className="form-label">{ar ? "نوع الفاتورة" : "Invoice Type"}</label>

@@ -13,6 +13,7 @@ import { getCustomers, createInvoice, getInvoice, updateInvoice, submitInvoice }
 import { getMyStock } from "@/lib/reps";
 import api from "@/lib/api";
 import RepStockItemPicker, { RepPickedItem } from "@/components/inventory/RepStockItemPicker";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const today = () => new Date().toISOString().split("T")[0];
@@ -288,14 +289,10 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
               {ar ? "العميل" : "Customer"} <span style={{ color: "#DC2626" }}>*</span>
             </label>
             <div style={{ display: "flex", gap: 8 }}>
-              <select className="form-input form-select" style={{ flex: 1 }}
-                value={form.customer_id}
-                onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))}>
-                <option value="">{ar ? "— اختر العميل —" : "— Select Customer —"}</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name_ar}{c.name_en ? ` / ${c.name_en}` : ""}</option>
-                ))}
-              </select>
+              <SearchableSelect locale={locale} value={form.customer_id} required style={{ flex: 1 }}
+                onChange={value => setForm(f => ({ ...f, customer_id: value }))}
+                placeholder={ar ? "اكتب رقم العميل أو اسمه..." : "Search customer..."}
+                options={customers.map(c => ({ value: c.id, label: `${c.customer_number ? `${c.customer_number} — ` : ""}${c.name_ar}${c.name_en ? ` / ${c.name_en}` : ""}`, searchText: `${c.customer_number || ""} ${c.name_ar || ""} ${c.name_en || ""}` }))} />
               <Link href={`${base}/reps/me/customers?action=new`}
                 style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg)", fontSize: 12, color: "#3E0865", fontWeight: 700, textDecoration: "none", whiteSpace: "nowrap", display: "flex", alignItems: "center" }}>
                 + {ar ? "عميل جديد" : "New"}

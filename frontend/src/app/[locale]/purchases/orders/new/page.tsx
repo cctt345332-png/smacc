@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getVendors, createPurchaseOrder } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const today = () => new Date().toISOString().split("T")[0];
@@ -115,10 +116,9 @@ export default function NewPurchaseOrderPage(props: { params: Promise<{ locale: 
           <div className="card-body">
             <div className="form-group">
               <label className="form-label">{ar ? "المورد" : "Vendor"} <span className="required">*</span></label>
-              <select className="form-input form-select" value={form.vendor_id} onChange={e => setForm(f => ({ ...f, vendor_id: e.target.value }))}>
-                <option value="">{ar ? "— اختر —" : "— Select —"}</option>
-                {vendors.map(v => <option key={v.id} value={v.id}>{v.name_ar}</option>)}
-              </select>
+              <SearchableSelect locale={locale} value={form.vendor_id} required onChange={value => setForm(f => ({ ...f, vendor_id: value }))}
+                placeholder={ar ? "اكتب اسم أو رقم المورد..." : "Search vendor..."}
+                options={vendors.map(v => ({ value: v.id, label: `${v.vendor_number ? `${v.vendor_number} — ` : ""}${v.name_ar}`, searchText: `${v.vendor_number || ""} ${v.name_ar || ""} ${v.name_en || ""}` }))} />
             </div>
             <div className="grid-2">
               <div className="form-group">

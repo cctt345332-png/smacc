@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getInvoices, getInvoice, getCustomers, createCreditNote } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
 import InvoiceSerialPicker from "@/components/inventory/InvoiceSerialPicker";
 import * as XLSX from "xlsx";
@@ -207,22 +208,15 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
           <div className="grid-3">
             {returnMode === "invoice" ? <div className="form-group">
               <label className="form-label">{ar ? "الفاتورة الأصلية" : "Original Invoice"} <span className="required">*</span></label>
-              <select className="form-input form-select" value={form.original_invoice_id}
-                onChange={e => handleInvoiceSelect(e.target.value)}>
-                <option value="">{ar ? "— اختر الفاتورة —" : "— Select Invoice —"}</option>
-                {invoices.map(inv => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.invoice_number} — {inv.buyer_name_ar} ({fmt(inv.total)} SAR)
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect locale={locale} value={form.original_invoice_id} onChange={handleInvoiceSelect}
+                placeholder={ar ? "اكتب رقم الفاتورة أو اسم العميل..." : "Search invoice number or customer..."}
+                options={invoices.map(inv => ({ value: inv.id, label: `${inv.invoice_number} — ${inv.buyer_name_ar} (${fmt(inv.total)} SAR)`, searchText: `${inv.invoice_number} ${inv.buyer_name_ar || ""} ${inv.buyer_name_en || ""}` }))} />
               {loadingLines && <p className="form-hint">{ar ? "جاري جلب أسطر الفاتورة..." : "Loading invoice lines..."}</p>}
             </div> : <div className="form-group">
               <label className="form-label">{ar ? "العميل" : "Customer"} <span className="required">*</span></label>
-              <select className="form-input form-select" value={customerId} onChange={e => setCustomerId(e.target.value)}>
-                <option value="">{ar ? "— اختر العميل —" : "— Select customer —"}</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.customer_number} — {c.name_ar}</option>)}
-              </select>
+              <SearchableSelect locale={locale} value={customerId} onChange={setCustomerId} required
+                placeholder={ar ? "اكتب رقم العميل أو اسمه للبحث..." : "Search customer number or name..."}
+                options={customers.map(c => ({ value: c.id, label: `${c.customer_number} — ${c.name_ar}`, searchText: `${c.customer_number} ${c.name_ar || ""} ${c.name_en || ""}` }))} />
             </div>}
             <div className="form-group">
               <label className="form-label">{ar ? "تاريخ المرتجع" : "Return Date"}</label>
