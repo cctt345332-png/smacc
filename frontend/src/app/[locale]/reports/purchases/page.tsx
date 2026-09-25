@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getBills, getVendors } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -92,10 +93,7 @@ export default function PurchasesReportPage(props: { params: Promise<{ locale: s
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 220 }}>
             <label className="form-label">{ar ? "المورد (اختياري)" : "Vendor (optional)"}</label>
-            <select className="form-input form-select" value={vendorId} onChange={e => setVendorId(e.target.value)}>
-              <option value="">{ar ? "— كل الموردين —" : "— All Vendors —"}</option>
-              {vendors.map(v => <option key={v.id} value={v.id}>{v.name_ar}</option>)}
-            </select>
+            <SearchableSelect locale={locale} value={vendorId} onChange={setVendorId} placeholder={ar ? "ابحث عن المورد..." : "Search vendor..."} options={[{ value: "", label: ar ? "— كل الموردين —" : "— All Vendors —" }, ...vendors.map(v => ({ value: v.id, label: `${v.vendor_number ? `${v.vendor_number} — ` : ""}${v.name_ar}`, searchText: `${v.vendor_number || ""} ${v.name_ar || ""} ${v.name_en || ""}` }))]} />
           </div>
           <button className="btn btn-primary" onClick={load} disabled={loading}>
             {loading ? (ar ? "جاري..." : "Loading...") : (ar ? "عرض التقرير" : "Show Report")}

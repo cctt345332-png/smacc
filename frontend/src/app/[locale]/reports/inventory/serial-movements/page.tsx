@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { getSerialMovementsReport, getWarehouses, getItems } from "@/lib/inventory";
 import { getBills } from "@/lib/purchases";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -160,9 +161,9 @@ export default function SerialMovementsReportPage(props: { params: Promise<{ loc
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ padding: "14px 16px", display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <select className="form-input form-select" style={{ width: 190 }} value={warehouseId} onChange={e => setWarehouseId(e.target.value)}><option value="">{ar ? "كل المستودعات" : "All Warehouses"}</option>{warehouses.map(w => <option key={w.id} value={w.id}>{w.name_ar}</option>)}</select>
-          <select className="form-input form-select" style={{ width: 230 }} value={billId} onChange={e => setBillId(e.target.value)}><option value="">{ar ? "كل فواتير المشتريات" : "All Purchase Bills"}</option>{bills.map(b => <option key={b.id} value={b.id}>{b.bill_number}{b.vendor_name_ar ? ` — ${b.vendor_name_ar}` : ""}</option>)}</select>
-          <select className="form-input form-select" style={{ width: 220 }} value={productId} onChange={e => setProductId(e.target.value)}><option value="">{ar ? "كل الأصناف" : "All Products"}</option>{items.filter(i => i.tracking_type === "serial").map(i => <option key={i.id} value={i.id}>{i.name_ar}</option>)}</select>
+          <SearchableSelect locale={locale} style={{ width: 190 }} value={warehouseId} onChange={setWarehouseId} placeholder={ar ? "ابحث عن المستودع..." : "Search warehouse..."} options={[{ value: "", label: ar ? "كل المستودعات" : "All Warehouses" }, ...warehouses.map(w => ({ value: w.id, label: w.name_ar, searchText: `${w.name_ar || ""} ${w.name_en || ""}` }))]} />
+          <SearchableSelect locale={locale} style={{ width: 230 }} value={billId} onChange={setBillId} placeholder={ar ? "ابحث عن الفاتورة..." : "Search bill..."} options={[{ value: "", label: ar ? "كل فواتير المشتريات" : "All Purchase Bills" }, ...bills.map(b => ({ value: b.id, label: `${b.bill_number}${b.vendor_name_ar ? ` — ${b.vendor_name_ar}` : ""}`, searchText: `${b.bill_number || ""} ${b.vendor_name_ar || ""}` }))]} />
+          <SearchableSelect locale={locale} style={{ width: 220 }} value={productId} onChange={setProductId} placeholder={ar ? "ابحث عن الصنف..." : "Search product..."} options={[{ value: "", label: ar ? "كل الأصناف" : "All Products" }, ...items.filter(i => i.tracking_type === "serial").map(i => ({ value: i.id, label: i.name_ar, searchText: `${i.sku || ""} ${i.name_ar || ""}` }))]} />
           <select className="form-input form-select" style={{ width: 160 }} value={movementType} onChange={e => setMovementType(e.target.value)}><option value="">{ar ? "كل الحركات" : "All Movements"}</option>{TYPES.map(t => <option key={t.value} value={t.value}>{ar ? t.ar : t.en}</option>)}</select>
           <select className="form-input form-select" style={{ width: 170 }} value={serialStatus} onChange={e => setSerialStatus(e.target.value)}><option value="">{ar ? "كل حالات السيريال" : "All Serial Statuses"}</option>{STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{ar ? s.ar : s.en}</option>)}</select>
           <input className="form-input" style={{ width: 190 }} value={serialNumber} onChange={e => setSerialNumber(e.target.value)} placeholder={ar ? "ابحث برقم السيريال" : "Search serial number"} />

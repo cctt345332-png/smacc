@@ -6,6 +6,7 @@ import { getCustomers, getCustomerStatement } from "@/lib/sales";
 import { getAccounts } from "@/lib/accounting";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -101,17 +102,11 @@ export default function CustomerStatementPage(props: { params: Promise<{ locale:
         <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
             <label className="form-label">{ar ? "العميل (اختياري)" : "Customer (optional)"}</label>
-            <select className="form-input form-select" value={customerId} onChange={e => setCustomerId(e.target.value)}>
-              <option value="">{ar ? "— كل العملاء —" : "— All customers —"}</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.customer_number} — {c.name_ar}</option>)}
-            </select>
+            <SearchableSelect locale={locale} value={customerId} onChange={setCustomerId} placeholder={ar ? "ابحث عن العميل..." : "Search customer..."} options={[{ value: "", label: ar ? "— كل العملاء —" : "— All customers —" }, ...customers.map(c => ({ value: c.id, label: `${c.customer_number} — ${c.name_ar}`, searchText: `${c.customer_number || ""} ${c.name_ar || ""} ${c.name_en || ""}` }))]} />
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 190 }}>
             <label className="form-label">{ar ? "المنطقة / المدينة (اختياري)" : "Zone / City (optional)"}</label>
-            <select className="form-input form-select" value={customerCity} onChange={e => setCustomerCity(e.target.value)}>
-              <option value="">{ar ? "— كل المناطق —" : "— All zones —"}</option>
-              {cities.map(city => <option key={city} value={city}>{city}</option>)}
-            </select>
+            <SearchableSelect locale={locale} value={customerCity} onChange={setCustomerCity} placeholder={ar ? "ابحث عن المنطقة..." : "Search city..."} options={[{ value: "", label: ar ? "— كل المناطق —" : "— All zones —" }, ...cities.map(city => ({ value: city, label: city }))]} />
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
             <label className="form-label">{ar ? "فرع الحساب (اختياري)" : "Account branch (optional)"}</label>

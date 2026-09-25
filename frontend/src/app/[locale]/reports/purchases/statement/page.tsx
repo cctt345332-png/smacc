@@ -6,6 +6,8 @@ import { getVendors, getVendorStatement } from "@/lib/purchases";
 import { getAccounts } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import SearchableSelect from "@/components/ui/SearchableSelect";
+import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -73,19 +75,11 @@ export default function VendorStatementPage(props: { params: Promise<{ locale: s
         <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
             <label className="form-label">{ar ? "المورد" : "Vendor"} <span className="required">*</span></label>
-            <select className="form-input form-select" value={vendorId} onChange={e => setVendorId(e.target.value)}>
-              <option value="">{ar ? "— اختر المورد —" : "— Select Vendor —"}</option>
-              {vendors.map(v => (
-                <option key={v.id} value={v.id}>{v.vendor_number} — {v.name_ar}</option>
-              ))}
-            </select>
+            <SearchableSelect locale={locale} value={vendorId} onChange={setVendorId} required placeholder={ar ? "ابحث عن المورد..." : "Search vendor..."} options={vendors.map(v => ({ value: v.id, label: `${v.vendor_number} — ${v.name_ar}`, searchText: `${v.vendor_number || ""} ${v.name_ar || ""} ${v.name_en || ""}` }))} />
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
             <label className="form-label">{ar ? "الحساب (اختياري)" : "Account (optional)"}</label>
-            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
-              <option value="">{ar ? "— كل حسابات المورد —" : "— All vendor accounts —"}</option>
-              {accounts.filter(a => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)).map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>)}
-            </select>
+            <SearchableAccountSelect accounts={accounts} value={accountId} onChange={setAccountId} locale={locale} allowGroups={false} placeholder={ar ? "ابحث عن الحساب..." : "Search account..."} />
           </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">{ar ? "من" : "From"}</label>

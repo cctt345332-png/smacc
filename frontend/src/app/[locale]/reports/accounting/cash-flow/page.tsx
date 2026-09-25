@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getTrialBalance, getAccounts } from "@/lib/accounting";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 
 export default function CashFlowPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
@@ -68,10 +69,7 @@ export default function CashFlowPage(props: { params: Promise<{ locale: string }
         <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div className="form-group" style={{ margin: 0, minWidth: 260 }}>
             <label className="form-label">{ar ? "الحساب (اختياري)" : "Account (optional)"}</label>
-            <select className="form-input form-select" value={accountId} onChange={e => setAccountId(e.target.value)}>
-              <option value="">{ar ? "— كل الحسابات —" : "— All accounts —"}</option>
-              {accounts.filter(a => a.is_active && a.is_posting && (a.allow_direct_posting ?? true)).map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en || a.name_ar}</option>)}
-            </select>
+            <SearchableAccountSelect accounts={accounts} value={accountId} onChange={setAccountId} locale={locale} placeholder={ar ? "ابحث عن الحساب..." : "Search account..."} />
           </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">{ar ? "من" : "From"}</label>
