@@ -6,6 +6,7 @@ import { getInvoices } from "@/lib/sales";
 import { getReps } from "@/lib/reps";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -113,12 +114,12 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 270 }}>
             <label className="form-label">{ar ? "القيمة (اختياري)" : "Value (optional)"}</label>
-            <select className="form-input form-select" value={filterValue} onChange={e => setFilterValue(e.target.value)}>
-              <option value="">{filterType === "product" ? (ar ? "— كل المنتجات —" : "— All products —") : filterType === "invoice" ? (ar ? "— كل الفواتير —" : "— All invoices —") : (ar ? "— كل المناديب —" : "— All reps —")}</option>
-              {filterType === "product" && products.map(p => <option key={p.id} value={p.id}>{p.name_ar || p.name_en}</option>)}
-              {filterType === "invoice" && invoices.map(inv => <option key={inv.id} value={inv.id}>{inv.invoice_number} — {inv.buyer_name_ar || inv.customer_name_ar || inv.customer_id}</option>)}
-              {filterType === "rep" && reps.map(rep => <option key={rep.id} value={rep.id}>{rep.full_name || rep.name_ar || rep.rep_code}</option>)}
-            </select>
+            <SearchableSelect locale={locale} value={filterValue} onChange={setFilterValue}
+              placeholder={filterType === "product" ? (ar ? "ابحث عن المنتج..." : "Search product...") : filterType === "invoice" ? (ar ? "ابحث عن الفاتورة..." : "Search invoice...") : (ar ? "ابحث عن المندوب..." : "Search rep...")}
+              options={[
+                { value: "", label: filterType === "product" ? (ar ? "— كل المنتجات —" : "— All products —") : filterType === "invoice" ? (ar ? "— كل الفواتير —" : "— All invoices —") : (ar ? "— كل المناديب —" : "— All reps —") },
+                ...(filterType === "product" ? products.map(p => ({ value: p.id, label: p.name_ar || p.name_en || "—", searchText: `${p.sku || ""} ${p.name_ar || ""} ${p.name_en || ""}` })) : filterType === "invoice" ? invoices.map(inv => ({ value: inv.id, label: `${inv.invoice_number} — ${inv.buyer_name_ar || inv.customer_name_ar || inv.customer_id}`, searchText: `${inv.invoice_number} ${inv.buyer_name_ar || ""} ${inv.customer_name_ar || ""}` })) : reps.map(rep => ({ value: rep.id, label: rep.full_name || rep.name_ar || rep.rep_code, searchText: `${rep.rep_code || ""} ${rep.full_name || ""} ${rep.name_ar || ""}` }))),
+              ]} />
           </div>
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">{ar ? "من" : "From"}</label>

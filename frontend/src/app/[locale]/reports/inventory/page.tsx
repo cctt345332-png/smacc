@@ -5,6 +5,7 @@ import { getStockValueReport, getStockByWarehouse, getWarehouses, getItems } fro
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -141,8 +142,8 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
             <option value="warehouse">{ar ? "حسب المستودع" : "By Warehouse"}</option>
             <option value="item">{ar ? "حسب الصنف" : "By Item"}</option>
           </select>
-          {reportMode === "warehouse" && <select className="form-input form-select" style={{ width: 190 }} value={selectedWarehouse} onChange={e => { setSelectedWarehouse(e.target.value); setData(null); }}><option value="">{ar ? "كل المستودعات" : "All Warehouses"}</option>{warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name_ar || w.name_en}</option>)}</select>}
-          {reportMode === "item" && <select className="form-input form-select" style={{ width: 210 }} value={selectedItem} onChange={e => { setSelectedItem(e.target.value); setData(null); }}><option value="">{ar ? "كل الأصناف" : "All Items"}</option>{items.map((item: any) => <option key={item.id} value={item.id}>{item.name_ar || item.name_en}</option>)}</select>}
+          {reportMode === "warehouse" && <SearchableSelect locale={locale} style={{ width: 190 }} value={selectedWarehouse} onChange={value => { setSelectedWarehouse(value); setData(null); }} placeholder={ar ? "ابحث عن المستودع..." : "Search warehouse..."} options={[{ value: "", label: ar ? "كل المستودعات" : "All Warehouses" }, ...warehouses.map((w: any) => ({ value: w.id, label: w.name_ar || w.name_en, searchText: `${w.name_ar || ""} ${w.name_en || ""}` }))]} />}
+          {reportMode === "item" && <SearchableSelect locale={locale} style={{ width: 210 }} value={selectedItem} onChange={value => { setSelectedItem(value); setData(null); }} placeholder={ar ? "ابحث عن الصنف..." : "Search item..."} options={[{ value: "", label: ar ? "كل الأصناف" : "All Items" }, ...items.map((item: any) => ({ value: item.id, label: item.name_ar || item.name_en, searchText: `${item.sku || ""} ${item.name_ar || ""} ${item.name_en || ""}` }))]} />}
           <select className="form-input form-select" style={{ width: 160 }} value={sortBy} onChange={e => setSortBy(e.target.value as any)}><option value="name">{ar ? "فرز حسب الصنف" : "Sort by Item"}</option><option value="warehouse">{ar ? "فرز حسب المستودع" : "Sort by Warehouse"}</option><option value="quantity">{ar ? "الأعلى كمية" : "Highest Quantity"}</option><option value="value">{ar ? "الأعلى قيمة" : "Highest Value"}</option></select>
           <select className="form-input form-select" style={{ width: 180 }} value={filterTracking} onChange={e => setFilterTracking(e.target.value)}><option value="">{ar ? "كل أنواع التتبع" : "All Tracking Types"}</option>{Object.entries(TRACKING_AR).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}><input type="checkbox" checked={filterLowStock} onChange={e => setFilterLowStock(e.target.checked)} />{ar ? "منخفض المخزون فقط" : "Low stock only"}{data && reportSummary.low_stock_count > 0 && <span className="badge badge-danger" style={{ marginInlineStart: 4 }}>{reportSummary.low_stock_count}</span>}</label>
