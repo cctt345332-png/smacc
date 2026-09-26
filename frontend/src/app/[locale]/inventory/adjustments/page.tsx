@@ -25,6 +25,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [itemSearch, setItemSearch] = useState("");
   const [quantityFilter, setQuantityFilter] = useState("all");
+  const [quantitySort, setQuantitySort] = useState("none");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -71,6 +72,10 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       || (quantityFilter === "available" && qty > 0)
       || (quantityFilter === "low" && qty > 0 && qty <= reorder);
     return matchesSearch && matchesQuantity;
+  }).sort((a: any, b: any) => {
+    if (quantitySort === "high") return Number(b.quantity_on_hand || 0) - Number(a.quantity_on_hand || 0);
+    if (quantitySort === "low") return Number(a.quantity_on_hand || 0) - Number(b.quantity_on_hand || 0);
+    return 0;
   });
 
   const handleOpenHistory = async () => {
@@ -202,6 +207,14 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
               <option value="available">{ar ? "متوفر أكبر من صفر" : "Available > 0"}</option>
               <option value="zero">{ar ? "صفر" : "Zero"}</option>
               <option value="low">{ar ? "منخفض حسب حد إعادة الطلب" : "Low / reorder point"}</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 190 }}>
+            <label className="form-label">{ar ? "ترتيب الكمية" : "Quantity sort"}</label>
+            <select className="form-input form-select" value={quantitySort} onChange={e => setQuantitySort(e.target.value)}>
+              <option value="none">{ar ? "بدون ترتيب" : "Default order"}</option>
+              <option value="high">{ar ? "الأعلى كمية أولاً" : "Highest quantity first"}</option>
+              <option value="low">{ar ? "الأقل كمية أولاً" : "Lowest quantity first"}</option>
             </select>
           </div>
           <div className="form-group" style={{ margin: 0, flex: 1 }}>
