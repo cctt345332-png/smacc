@@ -4,7 +4,6 @@ import Link from "next/link";
 import { getInvoices } from "@/lib/sales";
 import { getCustomers } from "@/lib/sales";
 import { getAccounts } from "@/lib/accounting";
-import { getReps } from "@/lib/reps";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
@@ -33,7 +32,6 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const [invoices, setInvoices] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [reps, setReps] = useState<any[]>([]);
   const [rows, setRows] = useState<AgingRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -41,14 +39,13 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
   const [asOf, setAsOf] = useState(now.toISOString().split("T")[0]);
   const [accountId, setAccountId] = useState("");
-  const [repId, setRepId] = useState("");
+  const [customerId, setCustomerId] = useState("");
 
   useEffect(() => {
-    Promise.all([getInvoices(), getCustomers(), getAccounts(), getReps()]).then(([i, c, a, r]) => {
+    Promise.all([getInvoices(), getCustomers(), getAccounts()]).then(([i, c, a]) => {
       setInvoices(Array.isArray(i.data) ? i.data : []);
       setCustomers(Array.isArray(c.data) ? c.data : []);
       setAccounts(Array.isArray(a.data) ? a.data : []);
-      setReps(Array.isArray(r.data) ? r.data : []);
     }).catch(() => {});
   }, []);
 
@@ -80,7 +77,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
       const issueDate = new Date(inv.issue_date || inv.invoice_date || inv.created_at);
       if (!Number.isFinite(issueDate.getTime()) || issueDate < start || issueDate > end) continue;
       if (!(balance > 0.01) || !["confirmed", "partial", "overdue"].includes(status)) continue;
-      if (inv.rep_id && repId && inv.rep_id !== repId) continue;
+      if (customerId && inv.customer_id !== customerId) continue;
       const customer = customerById.get(inv.customer_id);
       if (accountScope && !accountScope.has(customer?.ar_account_id)) continue;
       const due = new Date(inv.due_date || inv.issue_date || inv.invoice_date || inv.created_at);
@@ -96,7 +93,6 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
         paid,
         balance,
         days,
-        rep: reps.find(r => r.id === inv.rep_id)?.full_name || reps.find(r => r.id === inv.rep_id)?.name_ar || "—",
       });
     }
     setRows(result.sort((a, b) => b.days - a.days || b.balance - a.balance));
@@ -107,7 +103,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const totals = rows.reduce((a, r) => ({ sold: a.sold + r.sold, paid: a.paid + r.paid, balance: a.balance + r.balance }), { sold: 0, paid: 0, balance: 0 });
   const overdue = rows.filter(r => r.days > 21);
   const date = (value: string) => new Date(value).toLocaleDateString(ar ? "ar-SA" : "en-GB");
-  const repOptions = reps.map(r => ({ value: r.id, label: r.full_name || r.name_ar || r.rep_code, searchText: `${r.rep_code || ""} ${r.full_name || ""} ${r.name_ar || ""}` }));
+  const customerOptions = customers.map(c => ({ value: c.id, label: c.name_ar || c.name_en || c.customer_number || c.id, searchText: `${c.customer_number || ""} ${c.name_ar || ""} ${c.name_en || ""}` }));
 
   return <>
     <div className="page-header">
@@ -124,7 +120,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
       <div className="form-group" style={{ margin: 0, minWidth: 220 }}><label className="form-label">{ar ? "إلى تاريخ الفاتورة" : "Invoice to"}</label><input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} /></div>
       <div className="form-group" style={{ margin: 0, minWidth: 180 }}><label className="form-label">{ar ? "حساب حتى تاريخ" : "Age as of"}</label><input type="date" className="form-input" value={asOf} onChange={e => setAsOf(e.target.value)} /></div>
       <div className="form-group" style={{ margin: 0, minWidth: 260 }}><label className="form-label">{ar ? "فرع الحساب" : "Account branch"}</label><SearchableAccountSelect accounts={accounts} value={accountId} onChange={setAccountId} locale={locale} placeholder={ar ? "ابحث في شجرة الحسابات..." : "Search account tree..."} /></div>
-      <div className="form-group" style={{ margin: 0, minWidth: 240 }}><label className="form-label">{ar ? "المندوب" : "Sales rep"}</label><SearchableSelect locale={locale} value={repId} onChange={setRepId} placeholder={ar ? "ابحث عن المندوب..." : "Search rep..."} options={[{ value: "", label: ar ? "كل المناديب" : "All reps" }, ...repOptions]} /></div>
+      <div className="form-group" style={{ margin: 0, minWidth: 280 }}><label className="form-label">{ar ? "العميل" : "Customer"}</label><SearchableSelect locale={locale} value={customerId} onChange={setCustomerId} placeholder={ar ? "ابحث عن العميل..." : "Search customer..."} options={[{ value: "", label: ar ? "كل العملاء" : "All customers" }, ...customerOptions]} /></div>
       <button className="btn btn-primary" onClick={load} disabled={loading}>{loading ? (ar ? "جاري..." : "Loading...") : (ar ? "عرض التقرير" : "Show Report")}</button>
     </div></div>
 
