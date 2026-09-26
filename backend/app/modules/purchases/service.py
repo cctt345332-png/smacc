@@ -379,7 +379,8 @@ async def confirm_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: 
 
 
 async def _add_inventory_for_bill(
-    db: AsyncSession, tenant_id: str, user_id: str, bill: Bill
+    db: AsyncSession, tenant_id: str, user_id: str, bill: Bill,
+    skip_serial_keys: set[tuple[str, str]] | None = None,
 ):
     """
     إضافة المخزون عند تأكيد فاتورة المشتريات.
@@ -396,6 +397,7 @@ async def _add_inventory_for_bill(
     from app.models.inventory import InventoryItem
 
     wh_id = bill.warehouse_id or None
+    skip_serial_keys = skip_serial_keys or set()
 
     lines_r = await db.execute(
         select(BillLine).where(BillLine.bill_id == bill.id)
@@ -420,6 +422,10 @@ async def _add_inventory_for_bill(
                     sale_price_raw = entry.get("sale_price")
 
                 if not sn:
+                    continue
+
+                if (line.inventory_item_id, sn) in skip_serial_keys:
+                    # لا نكرر شراء سيريال له حركة لاحقة مثل البيع أو التحويل.
                     continue
 
                 sale_price = (
@@ -568,7 +574,8 @@ async def _create_bill_journal(db, tenant_id, user_id, bill: Bill):
 
 
 async def _reverse_bill_inventory(
-    db: AsyncSession, tenant_id: str, user_id: str, bill: Bill
+    db: AsyncSession, tenant_id: str, user_id: str, bill: Bill,
+    preserved_serial_keys: set[tuple[str, str]] | None = None,
 ):
     """
     عكس المخزون لفاتورة مؤكدة قبل تعديل أسطرها.
@@ -586,10 +593,11 @@ async def _reverse_bill_inventory(
     old_lines = lines_r.scalars().all()
     wh_id = bill.warehouse_id
 
-    # لا نعكس سيريالًا دخل في حركة لاحقة؛ عكسه ثم إعادة إضافته قد يعيده
-    # إلى المخزون رغم أنه بيع أو نُقل. يجب تعديل الفاتورة بعد عكس الحركة
-    # التابعة أولًا، لذلك نوقف التعديل برسالة واضحة بدل إفساد الرصيد.
-    protected_serials: list[str] = []
+    # السيريال الذي دخل في حركة لاحقة (بيع/تحويل/مرتجع...) ليس جزءاً من
+    # رصيد الشراء القابل للعكس. يبقى سجله التاريخي كما هو حتى لا تعيده
+    # عملية تعديل الفاتورة إلى المخزون أو تنشئ له شراءً مكرراً.
+    if preserved_serial_keys is None:
+        preserved_serial_keys = set()
     for line in old_lines:
         if not line.inventory_item_id or not line.new_serial_numbers_json:
             continue
@@ -617,17 +625,7 @@ async def _reverse_bill_inventory(
             has_later_movement = later_movement_r.scalar_one_or_none() is not None
             serial_status = serial.status.value if hasattr(serial.status, "value") else str(serial.status)
             if has_later_movement or serial.sale_invoice_id or serial_status not in ("in_stock", "returned"):
-                protected_serials.append(f"{sn} ({serial_status})")
-
-    if protected_serials:
-        preview = ", ".join(protected_serials[:10])
-        more = f" و{len(protected_serials) - 10} أخرى" if len(protected_serials) > 10 else ""
-        raise HTTPException(
-            409,
-            "لا يمكن تعديل أسطر السيريالات المستخدمة بعد الشراء. "
-            f"السيريالات المحمية: {preview}{more}. "
-            "ألغِ/اعكس حركة البيع أو التحويل أولاً، أو عدّل بيانات الرأس فقط.",
-        )
+                preserved_serial_keys.add((line.inventory_item_id, sn))
 
     for line in old_lines:
         if not line.inventory_item_id:
@@ -650,6 +648,10 @@ async def _reverse_bill_inventory(
                 )
                 serial = serial_r.scalar_one_or_none()
                 if serial:
+                    if (line.inventory_item_id, sn) in preserved_serial_keys:
+                        # السيريال المباع/المنقول يبقى مرتبطاً بتاريخه؛ لا
+                        # ننقصه ولا نضع له حركة شراء جديدة عند حفظ التعديل.
+                        continue
                     db.add(StockMovement(
                         id=str(uuid.uuid4()), tenant_id=tenant_id,
                         product_id=line.inventory_item_id,
@@ -657,6 +659,7 @@ async def _reverse_bill_inventory(
                         movement_type=MovementType.PURCHASE_EDIT_REV,
                         quantity=Decimal("-1"),
                         unit_cost=line.unit_price,
+                        serial_item_id=serial.id,
                         reference_type="bill_edit",
                         reference_id=bill.id,
                         notes=f"عكس عند تعديل الفاتورة — سيريال {sn}",
@@ -788,7 +791,15 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
 
         # 1) عكس المخزون القديم للفواتير المؤكدة
         if is_confirmed:
-            await _reverse_bill_inventory(db, tenant_id, user_id, bill)
+            # نعرف السيريالات التي سيبقى لها أثر لاحق قبل حذف الأسطر القديمة.
+            # هذه السيريالات لا تُعكس ولا تُعاد إضافتها؛ التعديل يغيّر فقط
+            # السيريالات غير المستخدمة ويضيف السيريالات الجديدة.
+            preserved_serial_keys: set[tuple[str, str]] = set()
+            await _reverse_bill_inventory(
+                db, tenant_id, user_id, bill, preserved_serial_keys
+            )
+            # لا نعرف من مجموعة السيريالات المطلوبة وحدها هل السيريال مباع؛
+            # الدالة نفسها أضافت السيريالات المستخدمة إلى preserved_serial_keys.
 
         # 2) حذف الأسطر القديمة وإنشاء الجديدة
         await db.execute(sql_delete(BillLine).where(BillLine.bill_id == bill_id))
@@ -842,7 +853,10 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
             # خدمة المخزون تعيد جلب السطور الجديدة باستعلام صريح،
             # لذلك لا نلمس bill.lines غير المحمّلة حتى لا يحدث MissingGreenlet.
             await db.flush()
-            await _add_inventory_for_bill(db, tenant_id, user_id, bill)
+            await _add_inventory_for_bill(
+                db, tenant_id, user_id, bill,
+                skip_serial_keys=preserved_serial_keys,
+            )
 
     # نلتقط القيم قبل commit لأن AsyncSession قد يفرغ خصائص ORM بعده،
     # وقراءتها لاحقًا قد تسبب MissingGreenlet أثناء بناء الاستجابة.
