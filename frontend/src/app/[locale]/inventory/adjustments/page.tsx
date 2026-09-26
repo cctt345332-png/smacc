@@ -23,6 +23,8 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   const [items, setItems] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
+  const [itemSearch, setItemSearch] = useState("");
+  const [quantityFilter, setQuantityFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -41,15 +43,35 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   const [serialChanges, setSerialChanges] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    Promise.all([getItems(), getWarehouses()])
-      .then(([i, w]) => {
-        setItems(i.data);
-        setWarehouses(w.data);
-        if (w.data.length > 0) setSelectedWarehouse(w.data[0].id);
+    getWarehouses()
+      .then(({ data }) => {
+        setWarehouses(data);
+        if (data.length > 0) setSelectedWarehouse((current: string) => current || data[0].id);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedWarehouse) return;
+    setLoading(true);
+    getItems({ warehouse_id: selectedWarehouse })
+      .then(({ data }) => setItems(data))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [selectedWarehouse]);
+
+  const visibleItems = items.filter((item: any) => {
+    const q = itemSearch.trim().toLowerCase();
+    const qty = Number(item.quantity_on_hand || 0);
+    const reorder = Number(item.reorder_point || 0);
+    const matchesSearch = !q || [item.name_ar, item.name_en, item.sku, item.barcode].some(v => String(v || "").toLowerCase().includes(q));
+    const matchesQuantity = quantityFilter === "all"
+      || (quantityFilter === "zero" && qty === 0)
+      || (quantityFilter === "available" && qty > 0)
+      || (quantityFilter === "low" && qty > 0 && qty <= reorder);
+    return matchesSearch && matchesQuantity;
+  });
 
   const handleOpenHistory = async () => {
     setShowHistory(h => !h);
@@ -169,6 +191,19 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
               {warehouses.map(w => <option key={w.id} value={w.id}>{w.name_ar}</option>)}
             </select>
           </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 240 }}>
+            <label className="form-label">{ar ? "بحث في الأصناف" : "Search items"}</label>
+            <input className="form-input" value={itemSearch} onChange={e => setItemSearch(e.target.value)} placeholder={ar ? "اسم الصنف أو SKU..." : "Name or SKU..."} />
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 180 }}>
+            <label className="form-label">{ar ? "فلتر الكمية" : "Quantity filter"}</label>
+            <select className="form-input form-select" value={quantityFilter} onChange={e => setQuantityFilter(e.target.value)}>
+              <option value="all">{ar ? "كل الكميات" : "All quantities"}</option>
+              <option value="available">{ar ? "متوفر أكبر من صفر" : "Available > 0"}</option>
+              <option value="zero">{ar ? "صفر" : "Zero"}</option>
+              <option value="low">{ar ? "منخفض حسب حد إعادة الطلب" : "Low / reorder point"}</option>
+            </select>
+          </div>
           <div className="form-group" style={{ margin: 0, flex: 1 }}>
             <label className="form-label">{ar ? "ملاحظات الجرد (اختياري)" : "Count Notes (optional)"}</label>
             <input className="form-input" value={notes} onChange={e => setNotes(e.target.value)}
@@ -244,7 +279,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       <div className="card">
         <div className="card-header">
           <span className="card-title">{ar ? "أصناف المخزون" : "Inventory Items"}</span>
-          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{items.length} {ar ? "صنف" : "items"}</span>
+          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{visibleItems.length} / {items.length} {ar ? "صنف" : "items"}</span>
         </div>
         <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
           <table>
@@ -259,7 +294,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
               </tr>
             </thead>
             <tbody>
-              {items.map(item => {
+                {visibleItems.map(item => {
                 const isSerial = item.tracking_type === "serial";
                 const systemQty = Number(isSerial ? (item.serial_count ?? item.quantity_on_hand ?? 0) : (item.quantity_on_hand ?? 0));
                 const countedVal = countMap[item.id];

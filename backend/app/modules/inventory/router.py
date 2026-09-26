@@ -9,7 +9,7 @@ from app.core.database import get_db
 from app.core.tenant import get_current_user, get_tenant_id, require_role
 from app.core.plan_limits import check_plan_limit
 from app.modules.inventory import service
-from app.models.inventory import InventoryItem, SerialItem
+from app.models.inventory import InventoryItem, InventoryStock, SerialItem
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
@@ -66,6 +66,7 @@ async def list_items(
     category_id: Optional[str] = None,
     tracking_type: Optional[str] = None,
     low_stock: bool = False,
+    warehouse_id: Optional[str] = None,
     tenant_id=Depends(get_tenant_id),
     db: AsyncSession = Depends(get_db),
 ):
@@ -78,10 +79,21 @@ async def list_items(
             .where(
                 SerialItem.product_id.in_(serial_item_ids),
                 SerialItem.status == "in_stock",
+                *( [SerialItem.warehouse_id == warehouse_id] if warehouse_id else [] ),
             )
             .group_by(SerialItem.product_id)
         )
         serial_counts = {row.product_id: int(row.count) for row in serial_rows}
+
+    quantity_by_item: dict[str, float] = {}
+    if warehouse_id:
+        stock_rows = await db.execute(
+            select(InventoryStock.item_id, InventoryStock.quantity).where(
+                InventoryStock.tenant_id == tenant_id,
+                InventoryStock.warehouse_id == warehouse_id,
+            )
+        )
+        quantity_by_item = {row.item_id: float(row.quantity or 0) for row in stock_rows}
 
     return [
         {
@@ -95,7 +107,7 @@ async def list_items(
             "sale_price": float(item.sale_price or 0),
             "cost_price": float(item.cost_price or 0),
             "vat_rate": float(item.vat_rate or 0),
-            "quantity_on_hand": float(serial_counts.get(item.id, 0) if getattr(item.tracking_type, "value", item.tracking_type) == "serial" else item.quantity_on_hand or 0),
+            "quantity_on_hand": float(serial_counts.get(item.id, 0) if getattr(item.tracking_type, "value", item.tracking_type) == "serial" else (quantity_by_item.get(item.id, 0) if warehouse_id else item.quantity_on_hand or 0)),
             "serial_count": serial_counts.get(item.id, 0) if getattr(item.tracking_type, "value", item.tracking_type) == "serial" else None,
             "reorder_point": float(item.reorder_point or 0),
             "is_active": item.is_active,

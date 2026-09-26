@@ -43,6 +43,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [filterCity, setFilterCity] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
   const [saving, setSaving] = useState(false);
@@ -208,8 +209,13 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
     const q = search.toLowerCase();
     const matchSearch = !q || c.name_ar.includes(q) || c.customer_number.toLowerCase().includes(q) || (c.vat_number || "").includes(q);
     const matchType = !filterType || c.customer_type === filterType;
-    return matchSearch && matchType;
+    const matchCity = !filterCity || (c.address_city || "") === filterCity;
+    return matchSearch && matchType && matchCity;
   });
+
+  const customerCities = Array.from(new Set(
+    customers.map(c => String(c.address_city || "").trim()).filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, ar ? "ar" : "en"));
 
   const typeInfo = (t: string) => CUSTOMER_TYPES.find(x => x.value === t);
 
@@ -251,6 +257,10 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
           <select className="form-input form-select" style={{ width: 160 }} value={filterType} onChange={e => setFilterType(e.target.value)}>
             <option value="">{ar ? "كل الأنواع" : "All Types"}</option>
             {CUSTOMER_TYPES.map(t => <option key={t.value} value={t.value}>{ar ? t.ar : t.en}</option>)}
+          </select>
+          <select className="form-input form-select" style={{ width: 180 }} value={filterCity} onChange={e => setFilterCity(e.target.value)}>
+            <option value="">{ar ? "كل المدن" : "All cities"}</option>
+            {customerCities.map(city => <option key={city} value={city}>{city}</option>)}
           </select>
           <button className="btn btn-secondary btn-sm" onClick={load}>{ar ? "بحث" : "Search"}</button>
           <span style={{ fontSize: 13, color: "var(--text-secondary)", marginInlineStart: "auto" }}>
