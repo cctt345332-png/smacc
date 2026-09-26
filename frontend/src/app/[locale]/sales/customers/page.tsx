@@ -5,6 +5,7 @@ import { getCustomers, createCustomer, updateCustomer, deleteCustomer, getCustom
 import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
 import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
+import * as XLSX from "xlsx";
 
 const CUSTOMER_TYPES = [
   { value: "company",    ar: "شركة",   en: "Company",    badge: "badge-info" },
@@ -138,12 +139,13 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
       const t = typeInfo(c.customer_type);
       return [c.customer_number, c.name_ar || c.name_en || "", ar ? t?.ar : t?.en, c.vat_number || "", c.phone || c.phone2 || "", c.address_city || "", c.is_active !== false ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")];
     });
-    const csv = "\uFEFF" + [headers, ...rows].map(row => row.map(value => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-    link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    worksheet["!cols"] = [{ wch: 16 }, { wch: 30 }, { wch: 16 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 14 }];
+    worksheet["!autofilter"] = { ref: `A1:G${rows.length + 1}` };
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, ar ? "العملاء" : "Customers");
+    XLSX.writeFile(workbook, `customers-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const handleSave = async () => {
@@ -233,9 +235,6 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
         <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn btn-secondary" onClick={exportCustomers}>{ar ? "تصدير العملاء" : "Export customers"}</button>
           <button className="btn btn-secondary" onClick={() => window.print()}>{ar ? "طباعة العملاء" : "Print customers"}</button>
-          <button className="btn btn-secondary" onClick={handleChartImport} disabled={chartImporting}>
-            {chartImporting ? (ar ? "جاري الاستيراد..." : "Importing...") : (ar ? "استيراد العملاء من الشجرة" : "Import customers from chart")}
-          </button>
           <button className="btn btn-primary" onClick={openNew}>
             <Icon name="plus" size={16} /> {ar ? "+ عميل جديد" : "+ New Customer"}
           </button>
@@ -258,6 +257,12 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
             {filtered.length} {ar ? "عميل" : "customers"}
           </span>
         </div>
+      </div>
+
+      <div className="customer-print-header">
+        <h1>{ar ? "كشف العملاء" : "Customer List"}</h1>
+        <div>{ar ? "قائمة العملاء المسجلين في النظام" : "Registered customer list"}</div>
+        <div className="customer-print-meta">{ar ? `عدد العملاء: ${filtered.length} — تاريخ الطباعة: ${new Date().toLocaleDateString("ar-SA")}` : `Customers: ${filtered.length} — Printed: ${new Date().toLocaleDateString("en-GB")}`}</div>
       </div>
 
       {/* Table */}
@@ -283,7 +288,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                   <th>{ar ? "الهاتف" : "Phone"}</th>
                   <th>{ar ? "المدينة" : "City"}</th>
                   <th>{ar ? "الحالة" : "Status"}</th>
-                  <th>{ar ? "الإجراءات" : "Actions"}</th>
+                  <th className="no-print">{ar ? "الإجراءات" : "Actions"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -301,7 +306,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                       <td style={{ fontSize: 12 }}>{c.phone || "—"}</td>
                       <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{c.address_city || "—"}</td>
                       <td><span className={`badge ${c.is_active !== false ? "badge-success" : "badge-gray"}`}>{c.is_active !== false ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}</span></td>
-                      <td>
+                      <td className="no-print">
                         <div style={{ display: "flex", gap: 4 }}>
                           <button className="btn btn-ghost btn-sm" title={ar ? "فتح واتساب" : "Open WhatsApp"} onClick={() => openWhatsApp(c)} style={{ color: "#16803C", fontWeight: 700 }}>WhatsApp</button>
                           <Link href={`/${locale}/sales/customers/${c.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "عرض العميل" : "View customer"}><Icon name="view" size={14} /></Link>
@@ -318,7 +323,22 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
         </div>
       </div>
 
-      <style jsx global>{`@media print { .no-print { display: none !important; } body { background: #fff !important; } .card { box-shadow: none !important; border: 1px solid #ddd !important; } }`}</style>
+      <style jsx global>{`
+        .customer-print-header { display: none; }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: #fff !important; color: #1F2937 !important; }
+          .customer-print-header { display: block; text-align: center; padding: 8px 0 18px; border-bottom: 2px solid #3E0865; margin-bottom: 16px; }
+          .customer-print-header h1 { margin: 0 0 5px; color: #3E0865; font-size: 24px; }
+          .customer-print-header > div { color: #64748B; font-size: 13px; }
+          .customer-print-meta { margin-top: 10px; color: #3E0865 !important; font-weight: 700; }
+          .card { box-shadow: none !important; border: 1px solid #D8DDE6 !important; }
+          table { width: 100% !important; border-collapse: collapse !important; font-size: 11px !important; }
+          th { background: #EEE8F4 !important; color: #3E0865 !important; }
+          th, td { border: 1px solid #D8DDE6 !important; padding: 7px 8px !important; }
+          tr:nth-child(even) td { background: #FAF8FC !important; }
+        }
+      `}</style>
 
       {/* Modal */}
       {showModal && (
