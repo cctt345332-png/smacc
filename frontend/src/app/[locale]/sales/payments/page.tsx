@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getPayments, createPayment, getInvoices } from "@/lib/sales";
+import { getPayments, createPayment, getInvoices, getCustomers, getCustomerStatement } from "@/lib/sales";
 import { getReps } from "@/lib/reps";
 import { Icon } from "@/components/ui/Icons";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -18,6 +19,7 @@ const METHODS: Record<string, { ar: string; en: string }> = {
 
 const emptyForm = {
   invoice_id: "",
+  customer_id: "",
   payment_date: new Date().toISOString().split("T")[0],
   amount: "",
   payment_method: "cash",
@@ -35,6 +37,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   const ar = locale === "ar";
   const [payments, setPayments] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [reps, setReps] = useState<any[]>([]);
   const [filterRep, setFilterRep] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
@@ -53,9 +56,12 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
 
   const loadInvoices = async () => {
     try {
-      // جلب الفواتير المؤكدة وغير المدفوعة بالكامل
-      const { data } = await getInvoices({ status: "confirmed" });
-      setInvoices(Array.isArray(data) ? data : []);
+      const [{ data: invoiceData }, { data: customerData }] = await Promise.all([
+        getInvoices({ status: "confirmed" }),
+        getCustomers(),
+      ]);
+      setInvoices(Array.isArray(invoiceData) ? invoiceData : []);
+      setCustomers(Array.isArray(customerData) ? customerData : []);
     } catch {}
   };
 
@@ -68,7 +74,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   };
 
   const handleCreate = async () => {
-    if (!form.invoice_id) return alert(ar ? "اختر الفاتورة" : "Select an invoice");
+    if (!form.invoice_id && !form.customer_id) return alert(ar ? "اختر فاتورة أو عميلاً لتحصيل رصيد العميل" : "Select an invoice or customer balance");
     if (!form.amount || Number(form.amount) <= 0) return alert(ar ? "أدخل مبلغاً صحيحاً" : "Enter valid amount");
     setSaving(true);
     try {
@@ -84,6 +90,19 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
     } catch (e: any) {
       alert(e?.response?.data?.detail || "Error");
     } finally { setSaving(false); }
+  };
+
+  const selectCustomer = async (customerId: string) => {
+    if (!customerId) {
+      setForm(f => ({ ...f, customer_id: "", invoice_id: "", amount: "" }));
+      return;
+    }
+    setForm(f => ({ ...f, customer_id: customerId, invoice_id: "", amount: "" }));
+    try {
+      const { data } = await getCustomerStatement(customerId, "1970-01-01", form.payment_date);
+      const balance = Number(data?.summary?.closing_balance ?? data?.closing_balance ?? 0);
+      if (balance > 0) setForm(f => ({ ...f, customer_id: customerId, invoice_id: "", amount: balance.toFixed(2) }));
+    } catch {}
   };
 
   const filteredPayments = payments.filter((p: any) => {
@@ -253,25 +272,39 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               <button className="btn btn-ghost btn-icon" onClick={() => setShowModal(false)}>✕</button>
             </div>
             <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* الفاتورة */}
+              {/* العميل أو الفاتورة */}
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">{ar ? "الفاتورة" : "Invoice"} <span className="required">*</span></label>
-                <select className="form-input form-select" value={form.invoice_id}
-                  onChange={e => {
-                    const inv = invoices.find((i: any) => i.id === e.target.value);
-                    setForm(f => ({
-                      ...f,
-                      invoice_id: e.target.value,
-                      amount: inv ? String(Number(inv.total) - Number(inv.paid_amount)) : f.amount,
-                    }));
-                  }}>
-                  <option value="">{ar ? "— اختر الفاتورة —" : "— Select Invoice —"}</option>
-                  {invoices.map((inv: any) => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.invoice_number} — {inv.buyer_name_ar} — {fmt(Number(inv.total) - Number(inv.paid_amount))} SAR
-                    </option>
-                  ))}
-                </select>
+                <label className="form-label">{ar ? "العميل (تحصيل من الرصيد)" : "Customer (collect from balance)"} <span className="required">*</span></label>
+                <SearchableSelect
+                  value={form.customer_id}
+                  onChange={selectCustomer}
+                  locale={locale}
+                  placeholder={ar ? "اكتب اسم العميل أو رقمه للبحث..." : "Search customer by name or number..."}
+                  options={customers.map((customer: any) => ({
+                    value: customer.id,
+                    label: `${customer.customer_number || ""} — ${customer.name_ar || customer.name_en || ""}`,
+                    searchText: `${customer.name_ar || ""} ${customer.name_en || ""} ${customer.customer_number || ""} ${customer.phone || ""}`,
+                  }))}
+                />
+                <div className="form-hint">{ar ? "يمكنك ترك الفاتورة فارغة وسيُسجل السند على رصيد العميل العام." : "Leave the invoice empty to record the receipt against the customer's general balance."}</div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">{ar ? "الفاتورة (اختياري)" : "Invoice (optional)"}</label>
+                <SearchableSelect
+                  value={form.invoice_id}
+                  onChange={(invoiceId) => {
+                    const inv = invoices.find((item: any) => item.id === invoiceId);
+                    setForm(f => ({ ...f, invoice_id: invoiceId, customer_id: inv?.customer_id || f.customer_id, amount: inv ? String(Math.max(0, Number(inv.total) - Number(inv.paid_amount || 0))) : f.amount }));
+                  }}
+                  locale={locale}
+                  placeholder={ar ? "اكتب رقم الفاتورة أو اسم العميل للبحث..." : "Search invoice or customer..."}
+                  options={invoices.map((inv: any) => ({
+                    value: inv.id,
+                    label: `${inv.invoice_number} — ${inv.buyer_name_ar || ""} — ${fmt(Math.max(0, Number(inv.total) - Number(inv.paid_amount || 0)))} SAR`,
+                    searchText: `${inv.invoice_number || ""} ${inv.buyer_name_ar || ""} ${inv.buyer_name_en || ""}`,
+                  }))}
+                />
               </div>
 
               {/* التاريخ والمبلغ */}
