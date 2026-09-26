@@ -550,6 +550,8 @@ async def sell_serial(
 
     if serial.status != "in_stock":
         raise HTTPException(400, f"السيريال غير متاح — الحالة: {serial.status}")
+    if warehouse_id and serial.warehouse_id != warehouse_id:
+        raise HTTPException(400, "السيريال غير موجود في مخزون مستودع الفاتورة")
 
     serial.status = "sold"
     serial.sale_price = sale_price
