@@ -861,6 +861,7 @@ async def _deduct_inventory_for_invoice(
                         reference_type="invoice",
                         reference_id=invoice.id,
                         user_id=user_id,
+                        auto_commit=False,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في خصم التشغيلة: {e.detail}")
@@ -872,6 +873,12 @@ async def _deduct_inventory_for_invoice(
                         raise HTTPException(400, f"الكمية المتاحة للمتغير {variant.quantity} أقل من المطلوب")
                     variant.quantity -= line.quantity
                     item.quantity_on_hand -= line.quantity
+                    db.add(StockMovement(
+                        id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+                        warehouse_id=warehouse_id, movement_type="sale", quantity=-line.quantity,
+                        unit_cost=variant.cost_price, variant_id=variant.id,
+                        reference_type="invoice", reference_id=invoice.id, created_by=user_id,
+                    ))
             else:
                 try:
                     await deduct_stock(
@@ -882,6 +889,7 @@ async def _deduct_inventory_for_invoice(
                         reference_type="invoice",
                         reference_id=invoice.id,
                         user_id=user_id,
+                        auto_commit=False,
                     )
                 except HTTPException as e:
                     raise HTTPException(400, f"خطأ في خصم المخزون: {e.detail}")
@@ -971,46 +979,125 @@ async def _create_invoice_journal(db: AsyncSession, tenant_id: str, user_id: str
     return entry.id
 
 
+async def _reverse_invoice_inventory(db: AsyncSession, tenant_id: str, user_id: str, invoice: Invoice):
+    """عكس أثر خصم فاتورة واحدة داخل نفس المعاملة، مرة واحدة فقط."""
+    from app.models.inventory import SerialStatus
+    from app.modules.inventory.service import add_stock
+
+    movements = (await db.execute(select(StockMovement).where(
+        StockMovement.tenant_id == tenant_id,
+        StockMovement.reference_type == "invoice",
+        StockMovement.reference_id == invoice.id,
+        StockMovement.movement_type == "sale",
+    ).order_by(StockMovement.created_at.asc()))).scalars().all()
+    if not movements:
+        return
+
+    for movement in movements:
+        qty = abs(Decimal(str(movement.quantity or 0)))
+        if qty <= 0:
+            continue
+        if movement.serial_item_id:
+            serial = await db.get(SerialItem, movement.serial_item_id, with_for_update=True)
+            if serial and serial.sale_invoice_id == invoice.id and getattr(serial.status, "value", serial.status) == "sold":
+                serial.status = SerialStatus.IN_STOCK
+                serial.sale_invoice_id = None
+                serial.sold_at = None
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
+                    warehouse_id=movement.warehouse_id or serial.warehouse_id,
+                    movement_type="return_in", quantity=qty, unit_cost=serial.cost_price,
+                    serial_item_id=serial.id, reference_type="invoice_cancel", reference_id=invoice.id,
+                    created_by=user_id, notes="عكس حركة بيع عند تعديل/إلغاء الفاتورة",
+                ))
+        elif movement.batch_item_id:
+            batch = await db.get(BatchItem, movement.batch_item_id, with_for_update=True)
+            item = await db.get(InventoryItem, movement.product_id, with_for_update=True)
+            if batch and item:
+                batch.quantity += qty
+                item.quantity_on_hand += qty
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+                    warehouse_id=movement.warehouse_id or batch.warehouse_id,
+                    movement_type="return_in", quantity=qty, unit_cost=batch.cost_price,
+                    batch_item_id=batch.id, reference_type="invoice_cancel", reference_id=invoice.id,
+                    created_by=user_id, notes="عكس حركة تشغيلة عند تعديل/إلغاء الفاتورة",
+                ))
+        elif movement.variant_id:
+            variant = await db.get(ProductVariant, movement.variant_id, with_for_update=True)
+            item = await db.get(InventoryItem, movement.product_id, with_for_update=True)
+            if variant and item:
+                variant.quantity += qty
+                item.quantity_on_hand += qty
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+                    warehouse_id=movement.warehouse_id, movement_type="return_in", quantity=qty,
+                    unit_cost=variant.cost_price, variant_id=variant.id,
+                    reference_type="invoice_cancel", reference_id=invoice.id,
+                    created_by=user_id, notes="عكس حركة متغير عند تعديل/إلغاء الفاتورة",
+                ))
+        else:
+            await add_stock(
+                db, tenant_id, movement.product_id, qty, movement.unit_cost or Decimal("0"),
+                warehouse_id=movement.warehouse_id, reference_type="invoice_cancel",
+                reference_id=invoice.id, user_id=user_id, auto_commit=False, movement_type="return_in",
+            )
+
+
+async def _reverse_invoice_journal(db: AsyncSession, tenant_id: str, user_id: str, invoice: Invoice):
+    """يعكس قيد المبيعات السابق بدون commit داخلي."""
+    if not invoice.journal_entry_id:
+        return
+    from app.models.accounting import JournalEntryStatus
+    entry = await db.get(JournalEntry, invoice.journal_entry_id, with_for_update=True)
+    if not entry or entry.status != JournalEntryStatus.POSTED:
+        return
+    lines = (await db.execute(select(JournalEntryLine).where(
+        JournalEntryLine.entry_id == entry.id
+    ))).scalars().all()
+    entry.status = JournalEntryStatus.CANCELLED
+    reversal = JournalEntry(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        entry_number=await _next_sales_reversal_number(db, tenant_id),
+        entry_date=datetime.utcnow(), fiscal_year_id=entry.fiscal_year_id,
+        description_ar=f"عكس فاتورة مبيعات: {invoice.invoice_number}",
+        description_en=f"Reversal of sales invoice: {invoice.invoice_number}",
+        status=JournalEntryStatus.POSTED, source="reversal",
+        reference=invoice.invoice_number, total_debit=entry.total_credit,
+        total_credit=entry.total_debit, created_by=user_id, posted_by=user_id,
+        posted_at=datetime.utcnow(),
+    )
+    db.add(reversal)
+    for line in lines:
+        db.add(JournalEntryLine(
+            id=str(uuid.uuid4()), entry_id=reversal.id, account_id=line.account_id,
+            cost_center_id=line.cost_center_id, description=f"عكس: {line.description or ''}",
+            debit=line.credit, credit=line.debit, line_order=line.line_order,
+        ))
+
+
+async def _next_sales_reversal_number(db: AsyncSession, tenant_id: str) -> str:
+    from app.modules.accounting.service import _next_entry_number
+    return await _next_entry_number(db, tenant_id)
+
+
 async def cancel_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
     invoice = await get_invoice(db, tenant_id, invoice_id)
-    if invoice.status in (InvoiceStatus.PAID, InvoiceStatus.CANCELLED):
-        raise HTTPException(400, "Cannot cancel this invoice")
-
-    # إرجاع السيريالات التي خصمتها هذه الفاتورة فقط.
-    # الفاتورة تحت المراجعة لم تخصم شيئًا، لذلك لا ينتج عنها إرجاع.
-    lines_r = await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))
-    for line in lines_r.scalars().all():
-        serial_ids = []
-        if line.serial_ids_json:
-            serial_ids.extend(json.loads(line.serial_ids_json) or [])
-        if line.serial_item_id:
-            serial_ids.append(line.serial_item_id)
-
-        for serial_id in serial_ids:
-            serial = await db.get(SerialItem, serial_id, with_for_update=True)
-            if not serial or serial.sale_invoice_id != invoice.id:
-                continue
-            if getattr(serial.status, "value", serial.status) != "sold":
-                continue
-            serial.status = "in_stock"
-            serial.sale_invoice_id = None
-            serial.sold_at = None
-            db.add(StockMovement(
-                id=str(uuid.uuid4()), tenant_id=tenant_id,
-                product_id=serial.product_id,
-                warehouse_id=serial.warehouse_id,
-                movement_type="return_in", quantity=Decimal("1"),
-                unit_cost=serial.cost_price, serial_item_id=serial.id,
-                reference_type="invoice_cancel", reference_id=invoice.id,
-                created_by=user_id,
-            ))
-
+    previous_status = invoice.status.value if hasattr(invoice.status, "value") else str(invoice.status)
+    if invoice.status in (InvoiceStatus.PAID, InvoiceStatus.CANCELLED, InvoiceStatus.PARTIAL):
+        raise HTTPException(400, "لا يمكن إلغاء فاتورة عليها سداد؛ استخدم مرتجعاً أو عكساً محاسبياً")
+    if invoice.status not in (InvoiceStatus.CONFIRMED, InvoiceStatus.DRAFT, InvoiceStatus.SUBMITTED, InvoiceStatus.APPROVED):
+        raise HTTPException(400, "لا يمكن إلغاء الفاتورة بهذه الحالة")
+    if invoice.status in (InvoiceStatus.CONFIRMED, InvoiceStatus.APPROVED):
+        await _reverse_invoice_inventory(db, tenant_id, user_id, invoice)
+        await _reverse_invoice_journal(db, tenant_id, user_id, invoice)
     invoice.status = InvoiceStatus.CANCELLED
+    record_audit(db, tenant_id, user_id, "cancel", "invoice", invoice.id,
+                 invoice_number=invoice.invoice_number, previous_status=previous_status)
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
 
-# ─── Payments ────────────────────────────────────────────────────────
 async def get_payments(
     db: AsyncSession,
     tenant_id: str,
@@ -2292,90 +2379,79 @@ async def _assert_rep_owns_invoice(db: AsyncSession, user_id: str, invoice: Invo
 
 
 async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, data: dict):
-    """تحديث كامل لمسودة أو فاتورة مرفوضة، بما يشمل خطوطها وإجمالياتها."""
+    """تعديل مسودة/مرفوضة، أو تعديل مؤكدة غير مسددة بعكس أثرها ثم تطبيق الجديد."""
     invoice = await get_invoice(db, tenant_id, invoice_id)
     await _assert_rep_owns_invoice(db, user_id, invoice)
-    if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED):
-        raise HTTPException(400, "لا يمكن تعديل فاتورة بعد إرسالها أو اعتمادها")
-
+    confirmed_edit = invoice.status == InvoiceStatus.CONFIRMED
+    if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED, InvoiceStatus.CONFIRMED):
+        raise HTTPException(400, "لا يمكن تعديل الفاتورة بعد إرسالها أو سدادها")
+    if confirmed_edit:
+        paid = Decimal(str(invoice.paid_amount or 0))
+        payment_count = (await db.execute(select(func.count(Payment.id)).where(Payment.invoice_id == invoice.id))).scalar() or 0
+        credit_count = (await db.execute(select(func.count(CreditNote.id)).where(CreditNote.original_invoice_id == invoice.id))).scalar() or 0
+        if paid > 0 or payment_count or credit_count:
+            raise HTTPException(409, "لا يمكن تعديل فاتورة مؤكدة عليها سندات قبض أو مرتجعات")
+        await _reverse_invoice_inventory(db, tenant_id, user_id, invoice)
+        await _reverse_invoice_journal(db, tenant_id, user_id, invoice)
+        invoice.journal_entry_id = None
     def as_datetime(value):
-        if value is None or value == "":
-            return None
-        if isinstance(value, datetime):
-            return value.replace(tzinfo=None)
+        if value is None or value == "": return None
+        if isinstance(value, datetime): return value.replace(tzinfo=None)
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
-
     if data.get("customer_id"):
         customer = await get_customer(db, tenant_id, data["customer_id"])
         invoice.customer_id = customer.id
         invoice.buyer_name_ar = customer.name_ar
         invoice.buyer_vat_number = customer.vat_number
         invoice.buyer_address = "، ".join(p for p in [customer.address_street, customer.address_district, customer.address_city, customer.address_postal] if p)
-
     allowed = {"notes", "terms", "invoice_payment_method", "credit_days", "cheque_number", "cheque_date", "bank_name", "invoice_type"}
     for key in allowed:
-        if key in data:
-            setattr(invoice, key, data[key])
+        if key in data: setattr(invoice, key, data[key])
     for key in ("issue_date", "supply_date", "due_date"):
-        if key in data:
-            setattr(invoice, key, as_datetime(data[key]))
-
+        if key in data: setattr(invoice, key, as_datetime(data[key]))
     if "lines" in data:
         rows = data.get("lines") or []
-        if not rows:
-            raise HTTPException(400, "يجب أن تحتوي الفاتورة على صنف واحد على الأقل")
+        if not rows: raise HTTPException(400, "يجب أن تحتوي الفاتورة على صنف واحد على الأقل")
         await db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))
-        subtotal = Decimal("0")
-        total_discount = Decimal("0")
-        total_vat = Decimal("0")
-        total = Decimal("0")
+        subtotal = total_discount = total_vat = total = Decimal("0")
         for i, raw in enumerate(rows):
-            quantity = Decimal(str(raw.get("quantity", 1)))
-            unit_price = Decimal(str(raw.get("unit_price", 0)))
-            discount_pct = Decimal(str(raw.get("discount_pct", 0)))
-            vat_rate = Decimal(str(raw.get("vat_rate", 15)))
+            quantity = Decimal(str(raw.get("quantity", 1))); unit_price = Decimal(str(raw.get("unit_price", 0)))
+            discount_pct = Decimal(str(raw.get("discount_pct", 0))); vat_rate = Decimal(str(raw.get("vat_rate", 15)))
             sub, disc, taxable, vat, tot = _calc_line(quantity, unit_price, discount_pct, vat_rate)
-            subtotal += sub
-            total_discount += disc
-            total_vat += vat
-            total += tot
-            serial_ids = raw.get("serial_ids")
-            db.add(InvoiceLine(
-                id=str(uuid.uuid4()), invoice_id=invoice.id, line_order=i,
-                description_ar=raw.get("description_ar") or "صنف",
-                description_en=raw.get("description_en"), quantity=quantity,
-                unit=raw.get("unit"), unit_price=unit_price,
-                discount_pct=discount_pct, discount_amount=disc,
-                vat_rate=vat_rate, vat_category=raw.get("vat_category") or "S",
-                subtotal=sub, vat_amount=vat, total=tot,
-                inventory_item_id=raw.get("inventory_item_id"),
-                serial_item_id=raw.get("serial_item_id"),
-                serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
-                variant_id=raw.get("variant_id"),
-            ))
-        invoice.subtotal = subtotal
-        invoice.discount_amount = total_discount
-        invoice.taxable_amount = subtotal - total_discount
-        invoice.vat_amount = total_vat
-        invoice.total = total
-
-    # المسودة المرفوضة تعود قابلة للتعديل، لكن لا تُرسل إلا بإجراء submit صريح.
-    if invoice.status == InvoiceStatus.REJECTED:
-        invoice.rejection_note = invoice.rejection_note
+            subtotal += sub; total_discount += disc; total_vat += vat; total += tot
+            serial_ids = raw.get("serial_ids") or None
+            db.add(InvoiceLine(id=str(uuid.uuid4()), invoice_id=invoice.id, line_order=i,
+                description_ar=raw.get("description_ar") or "صنف", description_en=raw.get("description_en"),
+                quantity=quantity, unit=raw.get("unit"), unit_price=unit_price, discount_pct=discount_pct,
+                discount_amount=disc, vat_rate=vat_rate, vat_category=raw.get("vat_category") or "S",
+                subtotal=sub, vat_amount=vat, total=tot, inventory_item_id=raw.get("inventory_item_id"),
+                serial_item_id=raw.get("serial_item_id"), serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
+                variant_id=raw.get("variant_id")))
+        invoice.subtotal = subtotal; invoice.discount_amount = total_discount
+        invoice.taxable_amount = subtotal - total_discount; invoice.vat_amount = total_vat; invoice.total = total
+    if confirmed_edit:
+        await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
+        invoice.status = InvoiceStatus.CONFIRMED
+        if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
+            invoice.journal_entry_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
     record_audit(db, tenant_id, user_id, "update", "invoice", invoice.id,
-                 invoice_number=invoice.invoice_number, changed_fields=list(data.keys()))
+                 invoice_number=invoice.invoice_number, confirmed_edit=confirmed_edit, changed_fields=list(data.keys()))
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
 
 async def delete_invoice_draft(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
-    """حذف المسودة فقط؛ لا تمس المستندات التي دخلت دورة اعتماد أو ترحيل."""
+    """حذف المسودة أو المرفوضة فقط؛ المؤكدة تستخدم الإلغاء/العكس."""
     invoice = await get_invoice(db, tenant_id, invoice_id)
     await _assert_rep_owns_invoice(db, user_id, invoice)
-    if invoice.status != InvoiceStatus.DRAFT:
-        raise HTTPException(400, "يمكن حذف المسودات فقط؛ الفاتورة المرفوضة تعدّل ثم تعاد للإرسال")
-    record_audit(db, tenant_id, user_id, "delete_draft", "invoice", invoice.id,
-                 invoice_number=invoice.invoice_number)
+    if invoice.status == InvoiceStatus.CANCELLED:
+        payment_count = (await db.execute(select(func.count(Payment.id)).where(Payment.invoice_id == invoice.id))).scalar() or 0
+        credit_count = (await db.execute(select(func.count(CreditNote.id)).where(CreditNote.original_invoice_id == invoice.id))).scalar() or 0
+        if payment_count or credit_count:
+            raise HTTPException(409, "لا يمكن حذف فاتورة ملغاة مرتبطة بسداد أو مرتجع")
+    elif invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED):
+        raise HTTPException(400, "يمكن حذف المسودة أو المرفوضة أو الملغاة فقط")
+    record_audit(db, tenant_id, user_id, "delete", "invoice", invoice.id, invoice_number=invoice.invoice_number)
     await db.delete(invoice)
     await db.commit()
-    return {"message": "تم حذف المسودة", "id": invoice_id}
+    return {"message": "تم حذف الفاتورة", "id": invoice_id}

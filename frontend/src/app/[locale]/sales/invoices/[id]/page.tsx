@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
-import { getInvoice, confirmInvoice, createPayment, getPayments } from "@/lib/sales";
+import { getInvoice, confirmInvoice, createPayment, getPayments, deleteInvoiceDraft } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import SellerBlock from "@/components/documents/SellerBlock";
 import CustomerBlock from "@/components/documents/CustomerBlock";
@@ -116,6 +116,13 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
     finally { setActing(false); }
   };
 
+  const handleDelete = async () => {
+    if (!confirm(ar ? "هل أنت متأكد من حذف الفاتورة؟ لا يمكن التراجع." : "Delete this invoice? This cannot be undone.")) return;
+    setActing(true);
+    try { await deleteInvoiceDraft(id); window.location.href = `/${locale}/sales/invoices`; }
+    catch (e: any) { alert(e?.response?.data?.detail || "Error"); setActing(false); }
+  };
+
   const handleAddPayment = async () => {
     if (!payForm.amount || parseFloat(payForm.amount) <= 0) {
       return alert(ar ? "يرجى إدخال مبلغ صحيح" : "Please enter a valid amount");
@@ -197,6 +204,16 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
             <button className="btn btn-primary btn-sm" onClick={() => setShowPayModal(true)}>
               <Icon name="wallet" size={14} />
               {ar ? "إضافة دفعة" : "Add Payment"}
+            </button>
+          )}
+          {(invoice.status === "draft" || invoice.status === "rejected" || invoice.status === "confirmed") && Number(invoice.paid_amount || 0) === 0 && (
+            <Link className="btn btn-secondary btn-sm" href={`/${locale}/sales/invoices/${id}/edit`}>
+              <Icon name="edit" size={14} /> {ar ? "تعديل" : "Edit"}
+            </Link>
+          )}
+          {(invoice.status === "draft" || invoice.status === "rejected" || invoice.status === "cancelled") && (
+            <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} onClick={handleDelete} disabled={acting} title={ar ? "حذف" : "Delete"}>
+              <Icon name="trash" size={14} /> {ar ? "حذف" : "Delete"}
             </button>
           )}
         </div>

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getInvoices, getSalesSummary, confirmInvoice, cancelInvoice } from "@/lib/sales";
+import { getInvoices, getSalesSummary, confirmInvoice, cancelInvoice, deleteInvoiceDraft } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import {
   FINANCIAL_INVOICE_STATUSES,
@@ -54,6 +54,14 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
     if (!confirm(ar ? "إلغاء الفاتورة؟" : "Cancel this invoice?")) return;
     setActing(id);
     try { await cancelInvoice(id); load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+    finally { setActing(null); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(ar ? "حذف الفاتورة؟ لا يمكن التراجع." : "Delete this invoice? This cannot be undone.")) return;
+    setActing(id);
+    try { await deleteInvoiceDraft(id); load(); }
     catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setActing(null); }
   };
@@ -248,6 +256,16 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                               title={ar ? "إلغاء" : "Cancel"}
                             >
                               <Icon name="cancel" size={14} />
+                            </button>
+                          )}
+                          {(inv.status === "draft" || inv.status === "rejected" || inv.status === "confirmed") && Number(inv.paid_amount || 0) === 0 && (
+                            <Link href={`/${locale}/sales/invoices/${inv.id}/edit`} className="btn btn-ghost btn-sm" title={ar ? "تعديل" : "Edit"}>
+                              <Icon name="edit" size={14} />
+                            </Link>
+                          )}
+                          {(inv.status === "draft" || inv.status === "rejected" || inv.status === "cancelled") && (
+                            <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} onClick={() => handleDelete(inv.id)} disabled={acting === inv.id} title={ar ? "حذف" : "Delete"}>
+                              <Icon name="trash" size={14} />
                             </button>
                           )}
                         </div>

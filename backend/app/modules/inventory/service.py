@@ -642,6 +642,7 @@ async def deduct_stock(
     reference_type: str | None = None,
     reference_id: str | None = None,
     user_id: str | None = None,
+    auto_commit: bool = True,
 ):
     """خصم كمية من المخزون"""
     item = await get_item(db, tenant_id, product_id)
@@ -2184,6 +2185,7 @@ async def deduct_batch_fefo(
     reference_type: str | None = None,
     reference_id: str | None = None,
     user_id: str | None = None,
+    auto_commit: bool = True,
 ) -> list:
     """خصم كمية من التشغيلات — FEFO (First Expired First Out)"""
     item = await get_item(db, tenant_id, product_id)
@@ -2231,7 +2233,8 @@ async def deduct_batch_fefo(
         ))
 
     item.quantity_on_hand -= quantity
-    await db.commit()
+    if auto_commit:
+        await db.commit()
     return deducted
 
 
