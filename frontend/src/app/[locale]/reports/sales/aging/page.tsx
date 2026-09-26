@@ -43,12 +43,13 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const [customerId, setCustomerId] = useState("");
 
   useEffect(() => {
-    Promise.all([getInvoices(), getPayments(), getCustomers(), getAccounts()]).then(([i, p, c, a]) => {
-      setInvoices(Array.isArray(i.data) ? i.data : []);
-      setPayments(Array.isArray(p.data) ? p.data : []);
-      setCustomers(Array.isArray(c.data) ? c.data : []);
-      setAccounts(Array.isArray(a.data) ? a.data : []);
-    }).catch(() => {});
+    // لا نجعل فشل جلب السندات يمنع ظهور الفواتير؛ السداد المباشر إضافة للتقرير.
+    Promise.allSettled([getInvoices(), getPayments(), getCustomers(), getAccounts()]).then(([i, p, c, a]) => {
+      if (i.status === "fulfilled") setInvoices(Array.isArray(i.value.data) ? i.value.data : []);
+      if (p.status === "fulfilled") setPayments(Array.isArray(p.value.data) ? p.value.data : []);
+      if (c.status === "fulfilled") setCustomers(Array.isArray(c.value.data) ? c.value.data : []);
+      if (a.status === "fulfilled") setAccounts(Array.isArray(a.value.data) ? a.value.data : []);
+    });
   }, []);
 
   const customerById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
