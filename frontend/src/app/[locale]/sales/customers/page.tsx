@@ -135,14 +135,13 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   };
 
   const exportCustomers = () => {
-    const headers = ar ? ["رقم العميل", "الاسم", "النوع", "الرقم الضريبي", "الهاتف", "المدينة", "الحالة"] : ["Customer #", "Name", "Type", "VAT", "Phone", "City", "Status"];
+    const headers = ar ? ["رقم العميل", "الاسم", "الرقم الضريبي", "الهاتف", "المدينة", "الحالة"] : ["Customer #", "Name", "VAT", "Phone", "City", "Status"];
     const rows = filtered.map(c => {
-      const t = typeInfo(c.customer_type);
-      return [c.customer_number, c.name_ar || c.name_en || "", ar ? t?.ar : t?.en, c.vat_number || "", c.phone || c.phone2 || "", c.address_city || "", c.is_active !== false ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")];
+      return [c.customer_number, c.name_ar || c.name_en || "", c.vat_number || "", c.phone || c.phone2 || "", c.address_city || "", c.is_active !== false ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")];
     });
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    worksheet["!cols"] = [{ wch: 16 }, { wch: 30 }, { wch: 16 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 14 }];
-    worksheet["!autofilter"] = { ref: `A1:G${rows.length + 1}` };
+    worksheet["!cols"] = [{ wch: 16 }, { wch: 30 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 14 }];
+    worksheet["!autofilter"] = { ref: `A1:F${rows.length + 1}` };
     worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, ar ? "العملاء" : "Customers");
@@ -216,8 +215,6 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
   const customerCities = Array.from(new Set(
     customers.map(c => String(c.address_city || "").trim()).filter(Boolean)
   )).sort((a, b) => a.localeCompare(b, ar ? "ar" : "en"));
-
-  const typeInfo = (t: string) => CUSTOMER_TYPES.find(x => x.value === t);
 
   // الحقول حسب نوع العميل
   const isCompany = form.customer_type === "company";
@@ -293,7 +290,6 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                 <tr>
                   <th>{ar ? "رقم العميل" : "Customer #"}</th>
                   <th>{ar ? "الاسم" : "Name"}</th>
-                  <th>{ar ? "النوع" : "Type"}</th>
                   <th>{ar ? "الرقم الضريبي" : "VAT"}</th>
                   <th>{ar ? "الهاتف" : "Phone"}</th>
                   <th>{ar ? "المدينة" : "City"}</th>
@@ -303,7 +299,6 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
               </thead>
               <tbody>
                 {filtered.map(c => {
-                  const t = typeInfo(c.customer_type);
                   return (
                     <tr key={c.id}>
                       <td><code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>{c.customer_number}</code></td>
@@ -311,7 +306,6 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                         <div style={{ fontWeight: 600 }}>{c.name_ar}</div>
                         {c.name_en && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{c.name_en}</div>}
                       </td>
-                      <td><span className={`badge ${t?.badge || "badge-gray"}`}>{ar ? t?.ar : t?.en}</span></td>
                       <td style={{ fontFamily: "monospace", fontSize: 12 }}>{c.vat_number || "—"}</td>
                       <td style={{ fontSize: 12 }}>{c.phone || "—"}</td>
                       <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{c.address_city || "—"}</td>
