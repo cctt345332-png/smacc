@@ -88,7 +88,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     setSerialChanges({});
     setLoadingSerials(true);
     try {
-      const { data } = await getSerials(itemId);
+      const { data } = await getSerials(itemId, "in_stock", selectedWarehouse);
       setSerialsData(data);
     } catch {} finally { setLoadingSerials(false); }
   };
