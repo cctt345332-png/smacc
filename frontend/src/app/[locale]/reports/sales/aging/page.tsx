@@ -75,20 +75,28 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
     const eligible = invoices.filter((inv: any) => {
       const status = String(inv.status || "").toLowerCase();
       const sold = Number(inv.total || 0);
-      const paid = Number(inv.paid_amount || 0);
-      const balance = sold - paid;
       const issueDate = new Date(inv.issue_date || inv.invoice_date || inv.created_at);
-      return Number.isFinite(issueDate.getTime()) && issueDate >= start && issueDate <= end && balance > 0.01 && ["confirmed", "partial", "overdue"].includes(status) && (!customerId || inv.customer_id === customerId);
+      return Number.isFinite(issueDate.getTime()) && issueDate >= start && issueDate <= end && sold > 0.01 && !["draft", "submitted", "rejected", "cancelled"].includes(status) && (!customerId || inv.customer_id === customerId);
     }).sort((a: any, b: any) => new Date(a.due_date || a.issue_date).getTime() - new Date(b.due_date || b.issue_date).getTime());
     const directPayments = payments.filter((p: any) => !p.invoice_id && (!customerId || p.customer_id === customerId) && new Date(p.payment_date).getTime() <= asOfDate.getTime()).sort((a: any, b: any) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
-    let unallocatedDirect = directPayments.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    const remainingDirectByCustomer = new Map<string, number>();
+    for (const payment of directPayments) {
+      const key = String(payment.customer_id || "");
+      remainingDirectByCustomer.set(key, (remainingDirectByCustomer.get(key) || 0) + Number(payment.amount || 0));
+    }
     for (const inv of eligible) {
       const status = String(inv.status || "").toLowerCase();
       const sold = Number(inv.total || 0);
-      const invoicePaid = Number(inv.paid_amount || 0);
+      const invoiceReceipts = payments.filter((p: any) => p.invoice_id === inv.id && new Date(p.payment_date).getTime() <= asOfDate.getTime());
+      // سندات الفاتورة هي المصدر الدقيق. نستخدم paid_amount القديم فقط عند تعذر جلب السندات.
+      const invoicePaid = payments.length > 0
+        ? invoiceReceipts.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+        : Number(inv.paid_amount || 0);
       const issueDate = new Date(inv.issue_date || inv.invoice_date || inv.created_at);
+      const customerKey = String(inv.customer_id || "");
+      const unallocatedDirect = remainingDirectByCustomer.get(customerKey) || 0;
       const directApplied = Math.min(Math.max(0, sold - invoicePaid), unallocatedDirect);
-      unallocatedDirect -= directApplied;
+      remainingDirectByCustomer.set(customerKey, unallocatedDirect - directApplied);
       const paid = invoicePaid + directApplied;
       const balance = sold - paid;
       const customer = customerById.get(inv.customer_id);
