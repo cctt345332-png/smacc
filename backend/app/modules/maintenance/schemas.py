@@ -9,6 +9,7 @@ from app.models.maintenance import LockType, MaintenanceResolution, MaintenanceS
 
 class MaintenanceRequestCreate(BaseModel):
     customer_id: str
+    replacement: bool = False
     product_id: Optional[str] = None
     serial_item_id: Optional[str] = None
     invoice_id: Optional[str] = None

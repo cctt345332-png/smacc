@@ -136,6 +136,7 @@ async def list_customer_devices(db: AsyncSession, tenant_id: str, user: dict, cu
                 "product_name": (product.name_ar or product.name_en) if product else line.description_ar,
                 "serial_item_id": serial_id,
                 "serial_number": serial_row.serial_number if serial_row else None,
+                "serial_status": _status_value(serial_row.status) if serial_row else None,
                 "imei_1": getattr(serial_row, "imei_1", None) if serial_row else None,
                 "imei_2": getattr(serial_row, "imei_2", None) if serial_row else None,
                 "device_name": (product.name_ar or product.name_en) if product else line.description_ar,
@@ -177,10 +178,16 @@ async def create_request(db: AsyncSession, tenant_id: str, user: dict, data: Mai
     serial = None
     if data.serial_item_id:
         serial = await db.get(SerialItem, data.serial_item_id)
-        if not serial or (product and serial.product_id != product.id):
+        if not serial or serial.product_id != (product.id if product else data.product_id):
             raise HTTPException(400, "السيريال لا يطابق المنتج المحدد")
         if data.serial_number and data.serial_number != serial.serial_number:
             raise HTTPException(400, "رقم السيريال لا يطابق السجل")
+        if data.replacement:
+            if _status_value(serial.status) != SerialStatus.SOLD.value or not serial.sale_invoice_id:
+                raise HTTPException(400, "سيريال الجهاز السابق يجب أن يكون مبيعاً ومسجلاً على فاتورة")
+            sold_invoice = await db.get(Invoice, serial.sale_invoice_id)
+            if not sold_invoice or sold_invoice.tenant_id != tenant_id or sold_invoice.customer_id != customer.id:
+                raise HTTPException(400, "السيريال السابق لا يخص العميل المحدد")
 
     now = datetime.utcnow()
     request = MaintenanceRequest(
@@ -253,8 +260,6 @@ async def update_request(db: AsyncSession, tenant_id: str, user: dict, request_i
 
 async def set_replacement(db: AsyncSession, tenant_id: str, user: dict, request_id: str, data: MaintenanceReplacement):
     request = await _get_request(db, tenant_id, request_id)
-    if user.get("role") == "sales_rep":
-        raise HTTPException(403, "اعتماد استبدال الجهاز من صلاحية الإدارة أو الصيانة")
     product = await db.get(InventoryItem, data.replacement_product_id)
     if not product or product.tenant_id != tenant_id:
         raise HTTPException(404, "المنتج البديل غير موجود")
@@ -262,6 +267,8 @@ async def set_replacement(db: AsyncSession, tenant_id: str, user: dict, request_
         serial = await db.get(SerialItem, data.replacement_serial_item_id)
         if not serial or serial.product_id != product.id:
             raise HTTPException(400, "السيريال البديل لا يطابق المنتج البديل")
+        if _status_value(serial.status) != SerialStatus.IN_STOCK.value:
+            raise HTTPException(400, "السيريال البديل غير متاح في المخزون")
         request.replacement_serial_number = serial.serial_number
     request.replacement_product_id = product.id
     request.replacement_serial_item_id = data.replacement_serial_item_id

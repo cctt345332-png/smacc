@@ -92,7 +92,7 @@ async def change_maintenance_status(
 async def set_maintenance_replacement(
     request_id: str,
     data: MaintenanceReplacement,
-    user=Depends(require_role(["admin", "manager", "accountant"])),
+    user=Depends(require_role(["admin", "manager", "accountant", "sales_rep", "sales"])),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.set_replacement(db, user["tenant_id"], user, request_id, data)
