@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getBill, confirmBill, createBillPayment, getBillPayments, getVendor } from "@/lib/purchases";
+import { useRouter } from "next/navigation";
+import { getBill, confirmBill, deleteBill, createBillPayment, getBillPayments, getVendor } from "@/lib/purchases";
 import { getCompany } from "@/lib/settings";
 import { getAccounts, getBankAccounts } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
@@ -44,6 +45,7 @@ export default function BillDetailPage(props: { params: Promise<{ locale: string
   } = params;
 
   const ar = locale === "ar";
+  const router = useRouter();
   const [bill, setBill] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
   const [vendor, setVendor] = useState<any>(null);
@@ -85,6 +87,21 @@ export default function BillDetailPage(props: { params: Promise<{ locale: string
     try { await confirmBill(id); load(); }
     catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setActing(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(
+      ar
+        ? "هل أنت متأكد من حذف مسودة فاتورة المشتريات؟ سيتم حذف أسطرها ودفعاتها نهائياً."
+        : "Delete this purchase bill draft? Its lines and payments will be permanently removed."
+    )) return;
+    setActing(true);
+    try {
+      await deleteBill(id);
+      router.push(`/${locale}/purchases/bills`);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر حذف الفاتورة" : "Unable to delete the bill"));
+    } finally { setActing(false); }
   };
 
   const handleReprocess = async () => {
@@ -176,9 +193,14 @@ export default function BillDetailPage(props: { params: Promise<{ locale: string
             </Link>
           )}
           {bill.status === "draft" && (
-            <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={acting}>
-              <Icon name="check" size={14} /> {ar ? "تأكيد الفاتورة" : "Confirm Bill"}
-            </button>
+            <>
+              <button className="btn btn-danger btn-sm" onClick={handleDelete} disabled={acting}>
+                <Icon name="trash" size={14} /> {ar ? "حذف الفاتورة" : "Delete Bill"}
+              </button>
+              <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={acting}>
+                <Icon name="check" size={14} /> {ar ? "تأكيد الفاتورة" : "Confirm Bill"}
+              </button>
+            </>
           )}
           {(bill.status === "confirmed" || bill.status === "partial") && (
             <button className="btn btn-primary btn-sm" onClick={() => setShowPayModal(true)}>

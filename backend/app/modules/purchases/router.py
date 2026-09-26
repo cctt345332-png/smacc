@@ -74,6 +74,12 @@ async def update_bill(bill_id: str, data: dict, user=Depends(require_role(["mana
     return await service.update_bill(db, user["tenant_id"], user["user_id"], bill_id, data)
 
 
+@router.delete("/bills/{bill_id}")
+async def delete_bill(bill_id: str, user=Depends(require_role(["manager","purchaser","accountant"])), db: AsyncSession = Depends(get_db)):
+    """حذف مسودة فاتورة مشتريات فقط؛ المؤكدة تُلغى ولا تُحذف."""
+    return await service.delete_bill(db, user["tenant_id"], bill_id)
+
+
 @router.post("/bills/{bill_id}/confirm")
 async def confirm_bill(bill_id: str, user=Depends(require_role(["manager","purchaser","accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.confirm_bill(db, user["tenant_id"], user["user_id"], bill_id)

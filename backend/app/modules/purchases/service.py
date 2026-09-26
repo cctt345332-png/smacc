@@ -867,6 +867,32 @@ async def update_bill(db: AsyncSession, tenant_id: str, user_id: str, bill_id: s
     return response
 
 
+async def delete_bill(db: AsyncSession, tenant_id: str, bill_id: str) -> dict:
+    """حذف فاتورة مشتريات مسودة فقط، بدون ترك أسطر أو دفعات معلقة."""
+    from sqlalchemy import delete as sql_delete
+
+    result = await db.execute(
+        select(Bill).where(Bill.id == bill_id, Bill.tenant_id == tenant_id)
+    )
+    bill = result.scalar_one_or_none()
+    if not bill:
+        raise HTTPException(404, "الفاتورة غير موجودة")
+
+    status = bill.status.value if hasattr(bill.status, "value") else str(bill.status)
+    if status != BillStatus.DRAFT.value:
+        raise HTTPException(
+            400,
+            "لا يمكن حذف فاتورة مؤكدة أو مدفوعة. استخدم إلغاء الفاتورة للحفاظ على السجل المحاسبي.",
+        )
+
+    # حذف صريح لتفادي lazy-loading في AsyncSession ولضمان عدم بقاء سجلات تابعة.
+    await db.execute(sql_delete(BillPayment).where(BillPayment.bill_id == bill_id))
+    await db.execute(sql_delete(BillLine).where(BillLine.bill_id == bill_id))
+    await db.execute(sql_delete(Bill).where(Bill.id == bill_id, Bill.tenant_id == tenant_id))
+    await db.commit()
+    return {"id": bill_id, "deleted": True}
+
+
 async def cancel_bill(db: AsyncSession, tenant_id: str, bill_id: str):
     bill = await get_bill(db, tenant_id, bill_id)
     if bill.status in (BillStatus.PAID, BillStatus.CANCELLED):
