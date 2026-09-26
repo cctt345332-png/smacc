@@ -2420,6 +2420,16 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
             sub, disc, taxable, vat, tot = _calc_line(quantity, unit_price, discount_pct, vat_rate)
             subtotal += sub; total_discount += disc; total_vat += vat; total += tot
             serial_ids = raw.get("serial_ids") or None
+            if serial_ids:
+                serial_rows = (await db.execute(select(SerialItem).where(
+                    SerialItem.tenant_id == tenant_id,
+                    or_(SerialItem.id.in_(serial_ids), SerialItem.serial_number.in_(serial_ids)),
+                ))).scalars().all()
+                serial_by_value = {str(row.id): str(row.id) for row in serial_rows}
+                serial_by_value.update({str(row.serial_number): str(row.id) for row in serial_rows if row.serial_number})
+                serial_ids = [serial_by_value.get(str(value), str(value)) for value in serial_ids]
+                if any(value not in serial_by_value.values() for value in serial_ids):
+                    raise HTTPException(400, "أحد أرقام السيريال غير موجود")
             db.add(InvoiceLine(id=str(uuid.uuid4()), invoice_id=invoice.id, line_order=i,
                 description_ar=raw.get("description_ar") or "صنف", description_en=raw.get("description_en"),
                 quantity=quantity, unit=raw.get("unit"), unit_price=unit_price, discount_pct=discount_pct,
