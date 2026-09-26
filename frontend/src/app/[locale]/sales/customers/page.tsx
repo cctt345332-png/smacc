@@ -113,6 +113,39 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
     catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف العميل" : "Could not delete customer")); }
   };
 
+  const whatsappNumber = (value: unknown) => {
+    let digits = String(value || "").replace(/\D/g, "");
+    if (digits.startsWith("00")) digits = digits.slice(2);
+    if (digits.startsWith("966")) return digits;
+    if (digits.startsWith("05")) return `966${digits.slice(1)}`;
+    if (digits.startsWith("5")) return `966${digits}`;
+    return digits;
+  };
+
+  const openWhatsApp = (customer: any) => {
+    const number = whatsappNumber(customer.phone || customer.phone2);
+    if (!number) {
+      alert(ar ? "لا يوجد رقم جوال لهذا العميل" : "This customer has no phone number");
+      return;
+    }
+    const message = ar ? `السلام عليكم ${customer.name_ar || ""}` : `Hello ${customer.name_en || customer.name_ar || ""}`;
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  };
+
+  const exportCustomers = () => {
+    const headers = ar ? ["رقم العميل", "الاسم", "النوع", "الرقم الضريبي", "الهاتف", "المدينة", "الحالة"] : ["Customer #", "Name", "Type", "VAT", "Phone", "City", "Status"];
+    const rows = filtered.map(c => {
+      const t = typeInfo(c.customer_type);
+      return [c.customer_number, c.name_ar || c.name_en || "", ar ? t?.ar : t?.en, c.vat_number || "", c.phone || c.phone2 || "", c.address_city || "", c.is_active !== false ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")];
+    });
+    const csv = "\uFEFF" + [headers, ...rows].map(row => row.map(value => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
   const handleSave = async () => {
     if (!form.name_ar) return alert(ar ? "الاسم بالعربي مطلوب" : "Arabic name is required");
     if (!editingCustomer && !form.ar_account_id) return alert(ar ? "يجب اختيار حساب العميل الرئيسي من شجرة الحسابات" : "Select the customer's main account from the chart of accounts");
@@ -197,7 +230,9 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
           <h1 className="page-title">{ar ? "العملاء" : "Customers"}</h1>
           <p className="page-subtitle">{ar ? "إدارة قاعدة بيانات العملاء" : "Manage customer database"}</p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn btn-secondary" onClick={exportCustomers}>{ar ? "تصدير العملاء" : "Export customers"}</button>
+          <button className="btn btn-secondary" onClick={() => window.print()}>{ar ? "طباعة العملاء" : "Print customers"}</button>
           <button className="btn btn-secondary" onClick={handleChartImport} disabled={chartImporting}>
             {chartImporting ? (ar ? "جاري الاستيراد..." : "Importing...") : (ar ? "استيراد العملاء من الشجرة" : "Import customers from chart")}
           </button>
@@ -208,7 +243,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
       </div>
 
       {/* Filters */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card no-print" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
           <input className="form-input" style={{ width: 260 }}
             placeholder={ar ? "بحث بالاسم أو الرقم الضريبي..." : "Search by name or VAT..."}
@@ -268,6 +303,7 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
                       <td><span className={`badge ${c.is_active !== false ? "badge-success" : "badge-gray"}`}>{c.is_active !== false ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}</span></td>
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
+                          <button className="btn btn-ghost btn-sm" title={ar ? "فتح واتساب" : "Open WhatsApp"} onClick={() => openWhatsApp(c)} style={{ color: "#16803C", fontWeight: 700 }}>WhatsApp</button>
                           <Link href={`/${locale}/sales/customers/${c.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "عرض العميل" : "View customer"}><Icon name="view" size={14} /></Link>
                           <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "تعديل العميل" : "Edit customer"} onClick={() => openEdit(c)}><Icon name="edit" size={14} /></button>
                           <button className="btn btn-danger btn-sm btn-icon" title={ar ? "حذف العميل" : "Delete customer"} onClick={() => handleDelete(c)}>×</button>
@@ -281,6 +317,8 @@ export default function CustomersPage(props: { params: Promise<{ locale: string 
           )}
         </div>
       </div>
+
+      <style jsx global>{`@media print { .no-print { display: none !important; } body { background: #fff !important; } .card { box-shadow: none !important; border: 1px solid #ddd !important; } }`}</style>
 
       {/* Modal */}
       {showModal && (
