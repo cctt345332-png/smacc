@@ -101,8 +101,9 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
       const balance = sold - paid;
       const customer = customerById.get(inv.customer_id);
       if (accountScope && !accountScope.has(customer?.ar_account_id)) continue;
-      const due = new Date(inv.due_date || inv.issue_date || inv.invoice_date || inv.created_at);
-      const days = Math.floor((asOfDate.getTime() - due.getTime()) / DAY);
+      // عمر الفاتورة يُحسب من تاريخ إصدار/إنشاء الفاتورة، وليس من تاريخ الاستحقاق.
+      // مثال: فاتورة بتاريخ 05-09 وحتى 26-09 = 21 يوماً.
+      const days = Math.floor((asOfDate.getTime() - issueDate.getTime()) / DAY);
       if (balance <= 0.01) continue;
       result.push({
         id: inv.id,
@@ -110,7 +111,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
         customerId: inv.customer_id,
         invoice: inv.invoice_number || inv.id,
         invoiceDate: issueDate.toISOString(),
-        dueDate: due.toISOString(),
+        dueDate: issueDate.toISOString(),
         sold,
         paid,
         balance,
