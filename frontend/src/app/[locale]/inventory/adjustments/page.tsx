@@ -47,7 +47,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     getWarehouses()
       .then(({ data }) => {
         setWarehouses(data);
-        if (data.length > 0) setSelectedWarehouse((current: string) => current || data[0].id);
+        setSelectedWarehouse((current: string) => current || "all");
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -56,10 +56,16 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   useEffect(() => {
     if (!selectedWarehouse) return;
     setLoading(true);
-    getItems({ warehouse_id: selectedWarehouse })
+    getItems(selectedWarehouse === "all" ? undefined : { warehouse_id: selectedWarehouse })
       .then(({ data }) => setItems(data))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
+  }, [selectedWarehouse]);
+
+  useEffect(() => {
+    setCountMap({});
+    setSerialChanges({});
+    setOpenSerials(null);
   }, [selectedWarehouse]);
 
   const visibleItems = items.filter((item: any) => {
@@ -93,7 +99,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     setSerialChanges({});
     setLoadingSerials(true);
     try {
-      const { data } = await getSerials(itemId, "in_stock", selectedWarehouse);
+      const { data } = await getSerials(itemId, "in_stock", selectedWarehouse === "all" ? undefined : selectedWarehouse);
       setSerialsData(data);
     } catch {} finally { setLoadingSerials(false); }
   };
@@ -106,6 +112,9 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
 
     if (changedItems.length === 0 && changedSerials.length === 0) {
       return alert(ar ? "لم تُدخل أي تغييرات" : "No changes entered");
+    }
+    if (selectedWarehouse === "all") {
+      return alert(ar ? "اختر مستودعًا محددًا قبل حفظ الجرد؛ خيار كل المستودعات للعرض الإجمالي فقط" : "Choose a specific warehouse before saving; All warehouses is view-only");
     }
 
     setSaving(true);
@@ -141,7 +150,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       setTimeout(() => setSaved(false), 4000);
 
       // تحديث الأصناف
-      const { data } = await getItems();
+      const { data } = await getItems({ warehouse_id: selectedWarehouse });
       setItems(data);
     } catch {} finally { setSaving(false); }
 
@@ -171,7 +180,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
           <button className="btn btn-secondary btn-sm" onClick={handleOpenHistory}>
             <Icon name="view" size={14} /> {ar ? "سجل الجرد السابق" : "Count History"}
           </button>
-          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={ar ? "الكميات المدخلة قبل الحفظ" : "Entered counts before posting"} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "الأصناف المعدلة" : "Adjusted items", value: String(changedCount), tone: "amber" }]} tables={[{ headers: [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"], rows: items.filter(item => countMap[item.id] !== undefined && countMap[item.id] !== "").map(item => [String(item.name_ar), String(TRACKING_AR[item.tracking_type] || item.tracking_type), fmt(item.quantity_on_hand), String(countMap[item.id])]), note: notes || undefined }]} />
+          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={ar ? "الكميات المدخلة قبل الحفظ" : "Entered counts before posting"} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: selectedWarehouse === "all" ? (ar ? "كل المستودعات" : "All warehouses") : warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "الأصناف المعدلة" : "Adjusted items", value: String(changedCount), tone: "amber" }]} tables={[{ headers: [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"], rows: items.filter(item => countMap[item.id] !== undefined && countMap[item.id] !== "").map(item => [String(item.name_ar), String(TRACKING_AR[item.tracking_type] || item.tracking_type), fmt(item.quantity_on_hand), String(countMap[item.id])]), note: notes || undefined }]} />
           {changedCount > 0 && (
             <button className="btn btn-primary" onClick={handleSaveCount} disabled={saving}>
               <Icon name="check" size={16} />
@@ -193,6 +202,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
           <div className="form-group" style={{ margin: 0, minWidth: 220 }}>
             <label className="form-label">{ar ? "المستودع" : "Warehouse"}</label>
             <select className="form-input form-select" value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)}>
+              <option value="all">{ar ? "كل المستودعات — إجمالي النظام" : "All warehouses — system total"}</option>
               {warehouses.map(w => <option key={w.id} value={w.id}>{w.name_ar}</option>)}
             </select>
           </div>
