@@ -619,7 +619,7 @@ async def _reverse_bill_inventory(
                 select(StockMovement.id).where(
                     StockMovement.tenant_id == tenant_id,
                     StockMovement.serial_item_id == serial.id,
-                    StockMovement.movement_type.notin_(["purchase", "purchase_edit_rev", "purchase_edit_reverse"]),
+                    StockMovement.movement_type.notin_(["purchase", "purchase_edit_rev"]),
                 ).limit(1)
             )
             has_later_movement = later_movement_r.scalar_one_or_none() is not None
