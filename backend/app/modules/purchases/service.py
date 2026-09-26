@@ -879,10 +879,10 @@ async def delete_bill(db: AsyncSession, tenant_id: str, bill_id: str) -> dict:
         raise HTTPException(404, "الفاتورة غير موجودة")
 
     status = bill.status.value if hasattr(bill.status, "value") else str(bill.status)
-    if status != BillStatus.DRAFT.value:
+    if status not in (BillStatus.DRAFT.value, BillStatus.CANCELLED.value):
         raise HTTPException(
             400,
-            "لا يمكن حذف فاتورة مؤكدة أو مدفوعة. استخدم إلغاء الفاتورة للحفاظ على السجل المحاسبي.",
+            "لا يمكن حذف فاتورة مؤكدة أو مدفوعة. استخدم إلغاء الفاتورة أولاً للحفاظ على السجل المحاسبي.",
         )
 
     # حذف صريح لتفادي lazy-loading في AsyncSession ولضمان عدم بقاء سجلات تابعة.

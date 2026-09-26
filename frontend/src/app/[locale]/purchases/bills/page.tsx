@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getBills, getPurchasesSummary, confirmBill, cancelBill } from "@/lib/purchases";
+import { getBills, getPurchasesSummary, confirmBill, cancelBill, deleteBill } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -63,6 +63,14 @@ export default function BillsPage(props: { params: Promise<{ locale: string }> }
     setActing(id);
     try { await cancelBill(id); load(); }
     catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+    finally { setActing(null); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm(ar ? "حذف هذه الفاتورة نهائياً؟" : "Delete this bill permanently?")) return;
+    setActing(id);
+    try { await deleteBill(id); load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف الفاتورة" : "Unable to delete the bill")); }
     finally { setActing(null); }
   };
 
@@ -224,6 +232,12 @@ export default function BillsPage(props: { params: Promise<{ locale: string }> }
                             <button className="btn btn-ghost btn-sm" style={{ color: "var(--success)" }}
                               onClick={() => handleConfirm(bill.id)} disabled={acting === bill.id} title={ar ? "تأكيد" : "Confirm"}>
                               <Icon name="check" size={14} />
+                            </button>
+                          )}
+                          {(["draft", "cancelled"] as string[]).includes(bill.status) && (
+                            <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }}
+                              onClick={() => handleDelete(bill.id)} disabled={acting === bill.id} title={ar ? "حذف" : "Delete"}>
+                              <Icon name="trash" size={14} />
                             </button>
                           )}
                           {["draft", "confirmed"].includes(bill.status) && (

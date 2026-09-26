@@ -92,8 +92,8 @@ export default function BillDetailPage(props: { params: Promise<{ locale: string
   const handleDelete = async () => {
     if (!confirm(
       ar
-        ? "هل أنت متأكد من حذف مسودة فاتورة المشتريات؟ سيتم حذف أسطرها ودفعاتها نهائياً."
-        : "Delete this purchase bill draft? Its lines and payments will be permanently removed."
+        ? "هل أنت متأكد من حذف فاتورة المشتريات؟ سيتم حذف أسطرها ودفعاتها نهائياً."
+        : "Delete this purchase bill? Its lines and payments will be permanently removed."
     )) return;
     setActing(true);
     try {
@@ -192,7 +192,7 @@ export default function BillDetailPage(props: { params: Promise<{ locale: string
               <Icon name="edit" size={14} /> {ar ? "تعديل" : "Edit"}
             </Link>
           )}
-          {bill.status === "draft" && (
+          {(["draft", "cancelled"] as string[]).includes(bill.status) && (
             <>
               <button className="btn btn-danger btn-sm" onClick={handleDelete} disabled={acting}>
                 <Icon name="trash" size={14} /> {ar ? "حذف الفاتورة" : "Delete Bill"}
