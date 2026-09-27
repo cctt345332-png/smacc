@@ -220,10 +220,11 @@ export default function RepReportsPage(props: { params: Promise<{ locale: string
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
+      <div className="rep-reports-tabs" role="tablist" aria-label={ar ? "تبويبات التقارير" : "Report tabs"} style={{ display: "flex", gap: 4, width: "100%", maxWidth: "100%", overflowX: "auto", overflowY: "hidden", marginBottom: 16, borderBottom: "1px solid var(--border)", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            style={{ padding: "8px 16px", border: "none", background: "none", cursor: "pointer",
+            role="tab" aria-selected={tab === t.key}
+            style={{ flex: "0 0 auto", whiteSpace: "nowrap", padding: "10px 14px", border: "none", background: "none", cursor: "pointer",
               fontSize: 13, fontWeight: tab === t.key ? 700 : 400,
               color: tab === t.key ? "#3E0865" : "var(--text-secondary)",
               borderBottom: tab === t.key ? "2px solid #3E0865" : "2px solid transparent" }}>
