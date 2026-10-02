@@ -4,6 +4,7 @@
 import json
 import math
 import uuid
+import logging
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 from decimal import Decimal
@@ -17,6 +18,8 @@ from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Customer, Invoice, Payment
 from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine, JournalEntryStatus
 from app.models.notifications import Notification, NotificationSeverity, NotificationType
+
+logger = logging.getLogger(__name__)
 
 
 # ─── إنشاء مندوب ─────────────────────────────────────────────────────
@@ -748,6 +751,7 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
             raise HTTPException(400, "كلمة المرور يجب أن تكون 6 أحرف على الأقل")
         from app.core.security import hash_password
         user.hashed_password = hash_password(password)
+        logger.warning("Representative password updated: user_id=%s", user.id)
 
     if "phone" in data: rep.phone = data["phone"]
     if "zone" in data: rep.zone = data["zone"]
