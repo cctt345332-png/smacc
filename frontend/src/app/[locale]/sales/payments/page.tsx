@@ -18,6 +18,7 @@ const METHODS: Record<string, { ar: string; en: string }> = {
 };
 
 const emptyForm = {
+  payment_type: "receipt",
   invoice_id: "",
   customer_id: "",
   payment_date: new Date().toISOString().split("T")[0],
@@ -74,7 +75,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   };
 
   const handleCreate = async () => {
-    if (!form.invoice_id && !form.customer_id) return alert(ar ? "اختر فاتورة أو عميلاً لتحصيل رصيد العميل" : "Select an invoice or customer balance");
+    if (!form.invoice_id && !form.customer_id) return alert(ar ? "اختر عميلاً أو فاتورة" : "Select a customer or invoice");
     if (!form.amount || Number(form.amount) <= 0) return alert(ar ? "أدخل مبلغاً صحيحاً" : "Enter valid amount");
     setSaving(true);
     try {
@@ -110,7 +111,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
     const matchesMonth = !filterMonth || String(p.payment_date || "").slice(0, 7) === filterMonth;
     return matchesRep && matchesMonth;
   });
-  const total = filteredPayments.reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+  const total = filteredPayments.reduce((s: number, p: any) => s + (p.payment_type === "discount" ? 0 : Number(p.amount || 0)), 0);
 
   return (
     <>
@@ -191,6 +192,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               <thead>
                 <tr>
                   <th>{ar ? "رقم السند" : "Receipt #"}</th>
+                  <th>{ar ? "النوع" : "Type"}</th>
                   <th>{ar ? "المصدر" : "Source"}</th>
                   <th>{ar ? "العميل" : "Customer"}</th>
                   <th>{ar ? "المندوب" : "Sales Rep"}</th>
@@ -207,6 +209,11 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                     <td>
                       <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#6F4A84" }}>
                         {p.payment_number}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${p.payment_type === "discount" ? "badge-warning" : "badge-success"}`}>
+                        {p.payment_type === "discount" ? (ar ? "سند خصم" : "Discount") : (ar ? "سند قبض" : "Receipt")}
                       </span>
                     </td>
                     <td style={{ fontSize: 12 }}>
@@ -252,7 +259,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               </tbody>
               <tfoot>
                 <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-                  <td colSpan={8} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                  <td colSpan={9} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                   <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>
                     {fmt(total)} SAR
                   </td>
@@ -268,10 +275,21 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 480 }} className="animate-slide">
             <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ fontSize: 16, fontWeight: 700 }}>{ar ? "سند قبض جديد" : "New Receipt"}</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 700 }}>{form.payment_type === "discount" ? (ar ? "سند خصم جديد" : "New Discount Voucher") : (ar ? "سند قبض جديد" : "New Receipt")}</h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowModal(false)}>✕</button>
             </div>
             <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">{ar ? "نوع السند" : "Voucher type"} <span className="required">*</span></label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {[{ value: "receipt", ar: "سند قبض", en: "Receipt" }, { value: "discount", ar: "سند خصم", en: "Discount" }].map((type) => (
+                    <button key={type.value} type="button" onClick={() => setForm(f => ({ ...f, payment_type: type.value, invoice_id: "" }))} className="btn btn-secondary" style={{ flex: 1, border: "2px solid", borderColor: form.payment_type === type.value ? "var(--primary)" : "var(--border)", background: form.payment_type === type.value ? "var(--primary)" : "white", color: form.payment_type === type.value ? "white" : "var(--text-primary)" }}>
+                      {ar ? type.ar : type.en}
+                    </button>
+                  ))}
+                </div>
+                {form.payment_type === "discount" && <div className="form-hint">{ar ? "يُخصم المبلغ من رصيد العميل ولا يدخل في النقدية أو البنك." : "Reduces the customer balance without affecting cash or bank."}</div>}
+              </div>
               {/* العميل أو الفاتورة */}
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">{ar ? "العميل (تحصيل من الرصيد)" : "Customer (collect from balance)"} <span className="required">*</span></label>

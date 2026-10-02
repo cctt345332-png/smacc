@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Literal
 from decimal import Decimal
 from datetime import datetime, date
 from app.models.sales import (
@@ -227,6 +227,7 @@ class PaymentCreate(BaseModel):
     # من الرصيد الافتتاحي/رصيد العميل مباشرة.
     invoice_id: Optional[str] = None
     customer_id: Optional[str] = None
+    payment_type: Literal["receipt", "discount"] = "receipt"
     payment_date: datetime
     amount: Decimal
     payment_method: PaymentMethod
@@ -246,6 +247,7 @@ class PaymentUpdate(BaseModel):
 class PaymentOut(BaseModel):
     id: str
     payment_number: str
+    payment_type: str = "receipt"
     invoice_id: Optional[str] = None
     customer_id: str
     customer_name_ar: Optional[str] = None

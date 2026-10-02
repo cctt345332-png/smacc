@@ -1124,6 +1124,7 @@ async def get_payments(
         {
             "id": payment.id,
             "payment_number": payment.payment_number,
+            "payment_type": payment.payment_type or "receipt",
             "invoice_id": payment.invoice_id,
             "customer_id": payment.customer_id,
             "customer_name_ar": customer_name,
@@ -1309,6 +1310,9 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
     if invoice and data.customer_id and data.customer_id != invoice.customer_id:
         raise HTTPException(400, "العميل لا يطابق العميل الموجود في الفاتورة")
 
+    if data.payment_type == "discount" and not data.customer_id and not invoice:
+        raise HTTPException(400, "يجب اختيار العميل لإنشاء سند خصم على رصيده")
+
     # المندوب لا يستطيع التحصيل إلا من عملائه، ويرث السند رقم المندوب.
     rep = await db.scalar(select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.user_id == user_id))
     if rep:
@@ -1320,7 +1324,7 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
         payment_rep_id = invoice.rep_id if invoice else customer.rep_id
 
     payment_date = data.payment_date.replace(tzinfo=None)
-    if invoice:
+    if invoice and data.payment_type == "receipt":
         remaining = Decimal(str(invoice.total or 0)) - Decimal(str(invoice.paid_amount or 0))
         if data.amount > remaining + Decimal("0.01"):
             raise HTTPException(400, f"المبلغ أكبر من المتبقي على الفاتورة ({remaining:.2f})")
@@ -1342,6 +1346,7 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
         payment_number=await _next_payment_number(db, tenant_id),
+        payment_type=data.payment_type,
         invoice_id=invoice.id if invoice else None,
         customer_id=customer.id,
         rep_id=payment_rep_id,
@@ -1355,7 +1360,7 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
     )
     db.add(payment)
 
-    if invoice:
+    if invoice and data.payment_type == "receipt":
         invoice.paid_amount += data.amount
         remaining = invoice.total - invoice.paid_amount
         if remaining <= Decimal("0.01"):
@@ -1363,18 +1368,92 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
         elif invoice.paid_amount > 0:
             invoice.status = InvoiceStatus.PARTIAL
 
-    # قيد سند القبض يخصم من حساب العميل سواء كان التحصيل على فاتورة أو على الرصيد المباشر.
+    # سند الخصم لا يلمس النقدية ولا paid_amount؛ يخفّض حساب العميل فقط.
     if fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
-        journal_id = await _create_payment_journal(
-            db, tenant_id, user_id, payment, customer, invoice, fiscal_year_id, data.bank_account_id
-        )
+        if data.payment_type == "discount":
+            journal_id = await _create_discount_journal(
+                db, tenant_id, user_id, payment, customer, invoice, fiscal_year_id
+            )
+        else:
+            journal_id = await _create_payment_journal(
+                db, tenant_id, user_id, payment, customer, invoice, fiscal_year_id, data.bank_account_id
+            )
         if not journal_id:
+            if data.payment_type == "discount":
+                raise HTTPException(409, "تعذر ترحيل سند الخصم: تحقق من ربط حساب خصم المبيعات وحساب العميل")
             raise HTTPException(409, "تعذر ترحيل سند القبض: تحقق من ربط حساب العميل وحساب الصندوق/البنك")
         payment.journal_entry_id = journal_id
 
     await db.commit()
     await db.refresh(payment)
     return payment
+
+
+async def _create_discount_journal(
+    db: AsyncSession, tenant_id: str, user_id: str, payment: Payment,
+    customer: Customer, invoice: Invoice | None, fiscal_year_id: str,
+) -> str | None:
+    """قيد سند الخصم: مدين خصم المبيعات، دائن حساب العميل، بلا حركة نقدية."""
+    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
+    from app.modules.accounting.service import _next_entry_number, get_operational_account
+
+    if not customer.ar_account_id:
+        return None
+    try:
+        discount_account = await get_operational_account(db, tenant_id, "sales_discounts")
+    except HTTPException:
+        return None
+    invoice_label = f"فاتورة {invoice.invoice_number}" if invoice else "رصيد العميل"
+    entry_number = await _next_entry_number(db, tenant_id)
+    description = f"سند خصم {payment.payment_number} — {customer.name_ar} — {invoice_label}"
+    entry = JournalEntry(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, entry_number=entry_number,
+        entry_date=payment.payment_date, fiscal_year_id=fiscal_year_id,
+        description_ar=description, description_en=f"Discount Voucher {payment.payment_number}",
+        status=JournalEntryStatus.POSTED, source="discount_voucher",
+        reference=payment.payment_number, total_debit=payment.amount,
+        total_credit=payment.amount, created_by=user_id, posted_by=user_id,
+        posted_at=datetime.utcnow(),
+    )
+    db.add(entry)
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=discount_account.id,
+        description=description, debit=payment.amount, credit=Decimal("0"), line_order=0,
+    ))
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=customer.ar_account_id,
+        description=f"خصم من رصيد العميل {customer.name_ar}", debit=Decimal("0"),
+        credit=payment.amount, line_order=1,
+    ))
+    await _create_discount_voucher(
+        db, tenant_id, user_id, payment, customer, invoice,
+        customer.ar_account_id, discount_account.id, fiscal_year_id,
+    )
+    return entry.id
+
+
+async def _create_discount_voucher(
+    db, tenant_id, user_id, payment, customer, invoice,
+    ar_account_id, discount_account_id, fiscal_year_id,
+):
+    """يحفظ نسخة سند الخصم للعرض والطباعة، دون أثر نقدي."""
+    from app.models.treasury import Voucher, VoucherType, VoucherStatus
+    from app.modules.treasury.service import _next_number
+    invoice_label = f"فاتورة {invoice.invoice_number}" if invoice else "رصيد العميل"
+    db.add(Voucher(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        voucher_number=await _next_number(db, tenant_id, VoucherType.DISCOUNT),
+        voucher_type=VoucherType.DISCOUNT, status=VoucherStatus.POSTED,
+        voucher_date=payment.payment_date, amount=payment.amount, vat_amount=Decimal("0"),
+        currency_code="SAR", payment_method=payment.payment_method,
+        party_type="customer", party_id=str(customer.id), party_name=customer.name_ar,
+        invoice_id=str(invoice.id) if invoice else None,
+        debit_account_id=discount_account_id, credit_account_id=ar_account_id,
+        fiscal_year_id=fiscal_year_id,
+        description_ar=f"سند خصم — {customer.name_ar} — {invoice_label}",
+        reference=payment.payment_number, created_by=user_id,
+        posted_by=user_id, posted_at=datetime.utcnow(),
+    ))
 
 
 async def _create_payment_journal(

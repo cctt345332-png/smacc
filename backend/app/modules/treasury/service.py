@@ -9,7 +9,7 @@ from app.models.treasury import Voucher, VoucherType, VoucherStatus, PaymentMeth
 
 
 async def _next_number(db: AsyncSession, tenant_id: str, vtype: VoucherType) -> str:
-    prefix = {"receipt": "RV", "payment": "PV", "expense": "EX", "transfer": "TR"}[vtype.value]
+    prefix = {"receipt": "RV", "discount": "DV", "payment": "PV", "expense": "EX", "transfer": "TR"}[vtype.value]
     r = await db.execute(
         select(func.count(Voucher.id)).where(
             Voucher.tenant_id == tenant_id,

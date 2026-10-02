@@ -50,6 +50,11 @@ class PaymentMethod(str, enum.Enum):
     STC_PAY = "stc_pay"
 
 
+class PaymentType(str, enum.Enum):
+    RECEIPT = "receipt"
+    DISCOUNT = "discount"
+
+
 class InvoicePaymentMethod(str, enum.Enum):
     """طريقة الدفع على مستوى الفاتورة (مختلفة عن Payment)"""
     CASH = "cash"         # نقد فوري
@@ -282,6 +287,7 @@ class Payment(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
     payment_number: Mapped[str] = mapped_column(String(50), index=True)
+    payment_type: Mapped[str] = mapped_column(String(20), nullable=False, default="receipt", server_default="receipt")
     invoice_id: Mapped[str | None] = mapped_column(String, ForeignKey("invoices.id"), nullable=True)
     customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"))
     payment_date: Mapped[datetime] = mapped_column(DateTime)

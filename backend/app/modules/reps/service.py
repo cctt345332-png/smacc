@@ -982,6 +982,7 @@ async def get_my_payments(db: AsyncSession, tenant_id: str, user_id: str) -> lis
         {
             "id": payment.id,
             "payment_number": payment.payment_number,
+            "payment_type": payment.payment_type or "receipt",
             "invoice_id": payment.invoice_id,
             "invoice_number": invoice_number,
             "customer_id": payment.customer_id,

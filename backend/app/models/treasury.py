@@ -10,6 +10,7 @@ from app.models.sales import PaymentMethod
 
 class VoucherType(str, enum.Enum):
     RECEIPT = "receipt"
+    DISCOUNT = "discount"
     PAYMENT = "payment"
     EXPENSE = "expense"
     TRANSFER = "transfer"

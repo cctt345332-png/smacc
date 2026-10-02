@@ -35,7 +35,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState("");
-  const [mode, setMode]         = useState<"invoice" | "customer">("invoice");
+  const [mode, setMode]         = useState<"invoice" | "customer" | "discount">("invoice");
 
   const [form, setForm] = useState({
     invoice_id: "", customer_id: "",
@@ -96,8 +96,8 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
   const upd = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
-    const invoiceId = mode === "invoice" ? form.invoice_id : (form.invoice_id || null);
-    const customerId = mode === "customer" ? form.customer_id : null;
+    const invoiceId = mode === "invoice" ? form.invoice_id : null;
+    const customerId = mode === "invoice" ? null : form.customer_id;
     if (!invoiceId && !customerId) {
       setError(ar ? "اختر الفاتورة أو العميل" : "Select an invoice or customer");
       return;
@@ -108,6 +108,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
       await createPayment({
         invoice_id: invoiceId,
         customer_id: customerId,
+        payment_type: mode === "discount" ? "discount" : "receipt",
         amount: Number(form.amount),
         payment_method: form.payment_method,
         payment_date: new Date(form.payment_date).toISOString(),
@@ -121,7 +122,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
     finally { setSaving(false); }
   };
 
-  const total = payments.reduce((s, p) => s + Number(p.amount||0), 0);
+  const total = payments.reduce((s, p) => s + (p.payment_type === "discount" ? 0 : Number(p.amount||0)), 0);
 
   return (
     <>
@@ -183,7 +184,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     <span style={{ fontFamily:"monospace", fontWeight:700, fontSize:13, color:"#3E0865" }}>
                       {p.payment_number || `#${p.id?.slice(-6)}`}
                     </span>
-                    <span style={{ fontWeight:800, fontSize:15, color:"#6F4A84" }}>+ {fmt(p.amount)} SAR</span>
+                    <span style={{ fontWeight:800, fontSize:15, color:p.payment_type === "discount" ? "#B45309" : "#6F4A84" }}>{p.payment_type === "discount" ? "−" : "+"} {fmt(p.amount)} SAR</span>
                   </div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
                     <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20, background:m.bg, color:m.color }}>
@@ -228,7 +229,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
 
             <div style={{ padding:"0 20px 14px", borderBottom:"1px solid var(--border)",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <h2 style={{ fontSize:17, fontWeight:800, margin:0 }}>{ar ? "سند قبض جديد" : "New Receipt"}</h2>
+              <h2 style={{ fontSize:17, fontWeight:800, margin:0 }}>{mode === "discount" ? (ar ? "سند خصم جديد" : "New Discount Voucher") : (ar ? "سند قبض جديد" : "New Receipt")}</h2>
               <button onClick={() => setShowModal(false)}
                 style={{ width:30, height:30, borderRadius:8, border:"1px solid var(--border)",
                   background:"transparent", cursor:"pointer", fontSize:16, color:"var(--text-muted)" }}>×</button>
@@ -245,6 +246,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                 {[
                   { v:"invoice",  ar:"عن طريق الفاتورة", en:"By Invoice" },
                   { v:"customer", ar:"عن طريق العميل",   en:"By Customer" },
+                  { v:"discount", ar:"سند خصم من الرصيد", en:"Discount from balance" },
                 ].map(m => (
                   <button key={m.v} type="button" onClick={() => {
                     setMode(m.v as any);
@@ -316,7 +318,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
               )}
 
               {/* اختيار عبر العميل */}
-              {mode === "customer" && (
+              {mode !== "invoice" && (
                 <div>
                   <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", display:"block", marginBottom:6 }}>
                     {ar ? "العميل *" : "Customer *"}
@@ -348,7 +350,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                   )}
 
                   {/* اختيار الفاتورة اختياري: الفارغ يعني التحصيل من رصيد العميل مباشرة */}
-                  {customerInvoices.length > 0 && (
+                  {mode === "customer" && customerInvoices.length > 0 && (
                     <div style={{ marginTop:10 }}>
                       <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", display:"block", marginBottom:6 }}>
                         {ar ? "الفاتورة (اختياري)" : "Invoice (optional)"}
@@ -373,7 +375,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     </div>
                   )}
 
-                  {customerInvoices.length === 0 && form.customer_id && !loadingBalance && customerBalance && Number(customerBalance.total_due) <= 0 && (
+                  {form.customer_id && !loadingBalance && customerBalance && Number(customerBalance.total_due) <= 0 && (
                     <div style={{ marginTop:8, fontSize:12, color:"#6F4A84", fontWeight:600 }}>
                       {ar ? "لا توجد مبالغ مستحقة لهذا العميل" : "No outstanding balance for this customer"}
                     </div>
@@ -384,15 +386,15 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
               {/* المبلغ */}
               <div>
                 <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", display:"block", marginBottom:6 }}>
-                  {ar ? "المبلغ المقبوض (SAR) *" : "Amount Received (SAR) *"}
+                  {mode === "discount" ? (ar ? "مبلغ الخصم (SAR) *" : "Discount Amount (SAR) *") : (ar ? "المبلغ المقبوض (SAR) *" : "Amount Received (SAR) *")}
                 </label>
                 <input type="number" className="form-input" min="0.01" step="0.01"
                   value={form.amount} onChange={e => upd("amount", e.target.value)}
                   placeholder="0.00" style={{ fontSize:18, fontWeight:700, color:"#6F4A84" }} />
               </div>
 
-              {/* طريقة الدفع */}
-              <div>
+              {/* طريقة الدفع — سند الخصم لا يدخل نقدية */}
+              {mode !== "discount" && <div>
                 <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", display:"block", marginBottom:6 }}>
                   {ar ? "طريقة الدفع *" : "Payment Method *"}
                 </label>
@@ -414,7 +416,7 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>}
 
               {/* مرجع */}
               {["bank_transfer","cheque"].includes(form.payment_method) && (
