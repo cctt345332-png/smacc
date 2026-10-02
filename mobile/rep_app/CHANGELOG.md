@@ -1,0 +1,290 @@
+# Changelog
+
+All notable changes to this template are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.7.0] - 2026-06-21
+
+Architecture clean-up release: the authenticated HTTP transport moves into the
+infrastructure layer, the two published packages are grouped under one
+directory, and data/domain time becomes testable. No breaking changes for
+generated apps.
+
+### Changed
+
+- **Published packages grouped under a top-level `published/` directory** — the
+  two independently-published submodules now live together: `rev_sync` moved
+  from `packages/rev_sync` to `published/rev_sync`, and the `fst` CLI from
+  `tool/cli` to `published/cli`. Their `path:` dependencies, CI checkout paths,
+  and the CLI's clean-slate logic were updated accordingly.
+- **Authenticated transport extracted to the infra layer** — the authenticated
+  `Dio` (auth interceptor + 401 refresh + token store) moved out of
+  `feature_auth`: `storage` now owns `AuthTokenStore` and the
+  `FlutterSecureStorage` provider; `network` owns the authenticated `Dio`,
+  `AuthInterceptor`, and `TokenRefresher`, reading tokens via
+  `storage.AuthTokenStore`. Every API feature now resolves `Dio` from `network`
+  (a declared, layering-enforced dependency) instead of an invisible runtime
+  edge on `feature_auth`. The brittle "auth before other features" DI-ordering
+  constraint is gone, and a guardrail test locks Dio ownership in `network`.
+- **Deterministic time in data/domain** — `feature_bookmarks` and
+  `feature_collections` use the `clock` package's ambient `clock.now()` instead
+  of `DateTime.now()`, so time-dependent logic (including the sync engine's
+  lost-update guard) is testable via `withClock`.
+
+### Fixed
+
+- **Token refresher and token store hardened** — `TokenRefresher` maps non-Dio
+  failures (e.g. a secure-storage write throwing) to a transient outcome instead
+  of letting them escape and break the interceptor / session-restore flow;
+  `SecureAuthTokenStore` serializes `load()` against concurrent token writes so
+  a late storage snapshot can't clobber fresh tokens.
+- **Pre-push hook no longer false-fails on submodules** — the format and analyze
+  steps now skip submodule working trees (`published/cli`, `published/rev_sync`,
+  `simple_backend_server`), which are independently maintained on their own SDKs.
+
+### Docs
+
+- The README architecture tree now shows the `published/` directory.
+
+## [1.6.0] - 2026-06-20
+
+Makes `fst create` customize a project from scratch — Firebase and the demo
+features become opt-out at scaffold time — and extracts the offline-first sync
+engine into its own published package. The template app itself runs unchanged
+(Firebase stays enabled by default).
+
+### Added
+
+- **Fully customizable `fst create`** — non-interactive flags (`--name`,
+  `--package-name`, `--bundle-id`, `--org`, `--yes`) for CI and scripts, plus
+  `--api-url` (sets `API_BASE_URL` in the staging and prod env files) and
+  `--icon` (installs a launcher icon).
+- **Optional Firebase** — `--[no-]firebase`: a generated project builds and runs
+  with no Firebase project. It gates the platform init, swaps the analytics and
+  crash-reporting bindings to no-ops, removes the Firebase Android Gradle
+  plugins, and deletes the bundled native credentials.
+- **Feature selection** — `--exclude-feature` (or an interactive multi-select)
+  drops the demo features (`bookmarks`, `collections`, `notifications`) and
+  excises their wiring; excluding `collections` also excludes `bookmarks`.
+- **Pluggable tracking ports** — `AnalyticsService` and `CrashReporter`
+  interfaces with NoOp and Firebase adapters, so analytics and crash reporting
+  can be kept independently or turned off.
+
+### Changed
+
+- **The offline-first sync engine is now the published `rev_sync` package** —
+  extracted from the in-repo `sync` workspace package to its own public repo,
+  vendored here as a git submodule at `packages/rev_sync` and consumed via a
+  path dependency. The engine itself is unchanged; only its home moved.
+- **`tool/codegen.sh` prefers the FVM-pinned SDK** when `fvm` is installed, so
+  code generation matches the project's pinned Flutter version.
+
+### Fixed
+
+- **Generated projects build under FVM** and stay valid after `fst create
+  --exclude-feature` removes every routed demo feature (`go_router` and the DI
+  wiring no longer go unused).
+- **Submodule pointer integrity** — re-pointing the `tool/cli` submodule after a
+  squash-merge no longer leaves the superproject referencing an orphaned commit.
+
+## [1.5.0] - 2026-06-19
+
+Sharpens the scaffolding path so a project generated with `fst create` comes out
+as a true clean slate, and trims CI wall-clock. No behavior change to the running
+app.
+
+### Added
+
+- **Clean-slate generation** — `fst create` now removes the vendored submodules
+  (the demo backend and the CLI's own source) and the template's git history,
+  then runs `git init` so a new project starts from its own first commit, and
+  writes a minimal, project-specific `README.md` (via the `tool/cli` submodule).
+- **Firebase reconfigure warning** — after scaffolding, `fst create` warns that
+  `lib/firebase_options.dart` still points at the template's Firebase project and
+  prints the `flutterfire configure` steps to fix it.
+- **Widget test coverage** for the splash redirect, home, and profile screens.
+
+### Changed
+
+- **CI skips heavy jobs for non-build changes** — the job-level path filter now
+  uses `predicate-quantifier: every`, so docs-, tooling-, and submodule-only PRs
+  actually skip the Android/iOS/golden/test jobs instead of always running them.
+- **Faster native builds** — the Android job caches `~/.gradle` and the iOS job
+  caches `ios/Pods` + the CocoaPods download cache.
+- **Gradle wrapper** bumped 8.11.1 → 9.6.0, plus GitHub Actions dependency
+  bumps.
+- The identifier rewriter no longer walks `.git/`.
+- README documents the `fst add-feature` generator.
+
+### Fixed
+
+- **iOS flavor display names** aligned with Android so `fst create` renames them
+  cleanly — the prod iOS app no longer keeps a stray "Template" in its name.
+- **Auth** — malformed sign-in/register responses now map to a failure, and a
+  malformed token-refresh body no longer throws.
+
+## [1.4.0] - 2026-06-18
+
+Adds the `fst add-feature` generator and the seams it builds on, making a new
+feature a one-command operation. No behavior change to the running app.
+
+### Added
+
+- **`fst add-feature` generator** — a new CLI command (in
+  `flutter-starter-template-cli`, adopted here via the `tool/cli` submodule and
+  the `# fst:` / `// fst:` wiring markers) that scaffolds a presentation-only
+  feature package and wires it into the workspace, the dependency list, the
+  injectable DI graph, and `enabledFeatures` in one step.
+- **Pluggable feature routing** — `FeatureModule` gains a `routes` getter, so a
+  feature contributes its own non-shell routes (plain `GoRoute` lists built from
+  its path constants) instead of the app router declaring them.
+- **DI module-ordering guard** — a pure file-scan architecture test that locks
+  the load-bearing order of `externalPackageModulesBefore` (`shared_contracts`
+  before `notifications`, `auth` before the other features), so a reorder that
+  would only fail at runtime fails fast in CI.
+
+### Changed
+
+- **Non-shell routes relocated to their features** — the bookmark, collection,
+  and auth (login/register) route classes moved out of `lib/app/router.dart`
+  into their owning packages. The app shell keeps only the typed bottom-nav
+  `StatefulShellRoute` (tabs plus the nested change-password route) and the boot
+  splash route, so adding a feature's screens no longer edits the router.
+- **Feature barrels narrowed to the consumed surface** — `bookmarks`,
+  `collections`, and `notifications` stop exporting their domain repositories
+  and use cases (resolved only through DI). Each package's public API is now the
+  entity, sync controller, screens, and routes the app actually uses; in-package
+  tests reach the now-internal types through `src/` imports, matching the
+  existing `collections` convention.
+
+## [1.3.0] - 2026-06-18
+
+Structure cleanup that sharpens the package boundaries and co-locates tests with
+the code they exercise. No behavior change.
+
+### Changed
+
+- **`Session` contract relocated** — moved from `shared_ui` to
+  `shared_contracts`, alongside the other cross-feature business contracts.
+  `SessionScope` (the `InheritedWidget`) stays in `shared_ui` and reads the
+  contract across the boundary. `shared_contracts` gains a Flutter dependency
+  for `Session`'s `Listenable`.
+- **Feature tests moved beside their packages** — each feature's tests now live
+  under `packages/features/<name>/test/` with a self-contained
+  `test/support.dart`. Cross-feature test doubles (`FakeSession`, the
+  `shared_contracts` reader mocks) and shared fixtures (`testUser`,
+  `testFailure`) are promoted into the `test_utils` package. The root `test/`
+  keeps only the app-level `widget_test` and the `architecture/` layering and
+  feature-boundary suites.
+- **Docs reconciled** — `CLAUDE.md`, `packages/README.md`, `test/README.md`, and
+  `lib/core/README.md` updated for the new `Session` location, the
+  package-owned test convention, and the corrected DI composition-root path
+  (`lib/app/di/injection.dart`).
+
+### Fixed
+
+- Three feature tests imported the root app package solely for `getIt`; they now
+  resolve it from each feature's own locator, removing a cross-layer coupling.
+
+## [1.2.0] - 2026-06-17
+
+Completes the move to a fully package-based architecture. Every feature now
+lives in its own workspace package; the root app (`lib/`) holds no feature code.
+
+### Changed
+
+- **Feature packages** — `home`, `profile`, and `splash` extracted from
+  `lib/features/` into `packages/features/`, joining `auth`, `notifications`,
+  `bookmarks`, and `collections`. `lib/features/` is removed and the app is now
+  a pure composition root (routing, DI, Firebase bootstrap).
+- **Splash decoupling** — the splash screen no longer reaches into app routing.
+  It restores the session and hands control back through an `onRestored`
+  callback the app wires, and resolves its logo against its own package asset
+  bundle so the package is self-contained.
+- **App shell** — the three per-feature sync wrappers collapsed into one
+  closure-based adapter, and the `bookmarks → collections` capability imports
+  are annotated as the documented single-consumer exception.
+
+### Added
+
+- **Architecture guardrails for feature packages** — `package_layering_test`
+  now ranks and direction-checks the nested `packages/features/*` packages, and
+  `feature_boundaries_test` enforces the cross-feature capability allowlist
+  (`bookmarks → collections`, `profile → auth`) at the package level.
+
+### Removed
+
+- Unused app-level `freezed` dev-dependency — the app declares no `@freezed`
+  types (feature packages keep their own generator).
+
+## [1.1.0] - 2026-06-17
+
+Began the move to a package-based architecture and hardened CI.
+
+### Added
+
+- **Feature packages** — `auth`, `notifications`, `bookmarks`, and `collections`
+  extracted into `packages/features/`, with prerequisite packages
+  `shared_contracts` (cross-feature domain projections and reader interfaces),
+  `shared_ui` (the app-wide `Session`/`SessionScope` and shared widgets),
+  `database` (centralized ObjectBox entities and bindings), and `localization`
+  (ARB sources + gen-l10n `AppLocalizations`).
+- **CI build smoke-tests** — Android and iOS debug builds, an l10n guard,
+  lockfile enforcement, golden tests, and Codecov coverage reporting.
+- **Scaffold CLI** — a `flutter-starter-template-cli` tool for generating new
+  projects from the template.
+
+### Changed
+
+- Removed the `lib/shared/` shim layer in favor of the `shared_contracts` /
+  `shared_ui` packages, and pruned app-level dependencies now owned by packages.
+- Aligned per-package DI module naming to `<Name>PackageModule`.
+
+### Removed
+
+- `lib/shared/` (replaced by the `shared_contracts` and `shared_ui` packages).
+
+## [1.0.0] - 2026-06-08
+
+First stable release of the Flutter starter template.
+
+### Added
+
+- **Project foundation** — Flutter SDK pinned to 3.44.0 via FVM, lints via
+  `very_good_analysis`, and a feature-first `core` / `ui` / `shared` / `features`
+  layout (see `CLAUDE.md`).
+- **State management & routing** — `flutter_bloc` (+ `bloc_concurrency`) for app
+  state and `go_router` for declarative navigation.
+- **Dependency injection** — `injectable`/`get_it` wiring, including the
+  per-package micro-DI pattern.
+- **Workspace packages** — extracted into `packages/`: `analytics`,
+  `app_platform`, `app_ui`, `architecture`, `config`, `network`, `storage`,
+  `sync`, `theme`, plus `test_utils`.
+- **Features** — `splash`, `auth`, `home`, `profile`, `bookmarks`,
+  `collections`, and `notifications`, with a shared `Session` contract for
+  app-wide auth state.
+- **Theming & design system** — centralized light/dark `ThemeData` with a
+  `ThemeBloc` toggle and the `app_ui` design-system widgets.
+- **Local persistence** — ObjectBox storage with tracked schema bindings.
+- **Flavors** — `dev` / `staging` / `prod` build flavors driven by
+  `--dart-define-from-file env/<flavor>.json`.
+- **Firebase** — integration with Crashlytics and analytics (CocoaPods on iOS;
+  SPM disabled, see `CLAUDE.md`).
+- **Internationalization** — `flutter_localizations` + `intl` with ARB-based
+  localizations.
+- **CI/CD** — GitHub Actions for analyze/test with coverage gating (`ci.yml`),
+  CodeQL (`codeql.yml`), and a manual-dispatch Fastlane release pipeline
+  (`release.yml`) for TestFlight and Google Play.
+- **Bootstrap CLI** — `tool/setup.sh`, a one-command idempotent setup
+  (submodules, FVM SDK, SPM disable on macOS, `pub get`, code generation,
+  backend deps, and the pre-push hook).
+- **Tooling** — Dart & CodeGraph MCP servers and vendored agent skills.
+
+[1.5.0]: https://github.com/kido-luci/flutter-starter-template/releases/tag/v1.5.0
+[1.4.0]: https://github.com/kido-luci/flutter-starter-template/releases/tag/v1.4.0
+[1.3.0]: https://github.com/kido-luci/flutter-starter-template/releases/tag/v1.3.0
+[1.2.0]: https://github.com/kido-luci/flutter-starter-template/releases/tag/v1.2.0
+[1.1.0]: https://github.com/kido-luci/flutter-starter-template/releases/tag/v1.1.0
+[1.0.0]: https://github.com/kido-luci/flutter-starter-template/releases/tag/v1.0.0

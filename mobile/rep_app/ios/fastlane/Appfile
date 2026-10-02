@@ -1,0 +1,14 @@
+# Account-specific identifiers are read from the environment so nothing
+# project-specific is committed. Copy fastlane/.env.example to fastlane/.env
+# and fill in real values (the .env file is git-ignored).
+#
+# When the `beta` lane authenticates with an App Store Connect API key, most
+# of these are optional — the key already identifies the team and app. They
+# are wired here for completeness and for fastlane actions that still read
+# the Appfile.
+
+app_identifier(ENV["IOS_BUNDLE_ID_BASE"])
+apple_id(ENV["FASTLANE_APPLE_ID"])
+
+team_id(ENV["APPLE_TEAM_ID"])
+itc_team_id(ENV["APP_STORE_CONNECT_TEAM_ID"])

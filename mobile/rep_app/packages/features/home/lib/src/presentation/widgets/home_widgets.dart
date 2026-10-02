@@ -1,0 +1,228 @@
+import 'package:app_ui/app_ui.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:go_router/go_router.dart';
+import 'package:localization/localization.dart';
+import 'package:shared_contracts/shared_contracts.dart';
+import 'package:shared_ui/shared_ui.dart';
+
+import '../bloc/home_bloc.dart';
+import '../bloc/home_state.dart';
+part 'home_welcome.dart';
+part 'home_recent.dart';
+
+/// Entry widget for the Home feature dashboard.
+class HomeBody extends StatefulWidget {
+  /// Creates the dashboard body used by the home screen.
+  const HomeBody({super.key});
+
+  @override
+  State<HomeBody> createState() => _HomeBodyState();
+}
+
+class _HomeBodyState extends State<HomeBody> {
+  static const double _contentMaxWidth = 720;
+  static const double _bottomInset = 112;
+
+  final TextEditingController _searchController = TextEditingController();
+  final ValueNotifier<String> _selectedFilterIdNotifier = ValueNotifier<String>(
+    'all',
+  );
+  late final Listenable _filterListenable;
+
+  @override
+  void initState() {
+    super.initState();
+    _filterListenable = Listenable.merge([
+      _searchController,
+      _selectedFilterIdNotifier,
+    ]);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _selectedFilterIdNotifier.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppScaffold(
+      title: context.l10n.homeAppBarTitle,
+      padding: EdgeInsets.zero,
+      backgroundColor: context.colorScheme.surfaceContainerLow,
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.sizeOf(context).width < AppBreakpoints.medium
+              ? 32 + MediaQuery.paddingOf(context).bottom
+              : 0,
+        ),
+        child: FloatingActionButton(
+          heroTag: 'home-add-bookmark-fab',
+          onPressed: () => context.push<void>('/bookmarks/new'),
+          tooltip: context.l10n.bookmarksAddTooltip,
+          child: const FaIcon(FontAwesomeIcons.plus),
+        ).animateScale(delay: 500.ms),
+      ),
+      body: BlocBuilder<HomeBloc, HomeState>(
+        builder: (context, state) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.lg,
+                  AppSpacing.xl,
+                  _bottomInset,
+                ),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: _contentMaxWidth,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // _QuickActions and _WeeklyDigestPanel are outside all
+                        // listeners — their entrance animations are never
+                        // re-triggered by search/filter input.
+                        ListenableBuilder(
+                          listenable: _searchController,
+                          builder: (context, _) => _SearchSection(
+                            controller: _searchController,
+                            onChanged: (_) {},
+                          ).animateFadeIn(delay: 100.ms),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _QuickActions(
+                          onAdd: () => context.push<void>('/bookmarks/new'),
+                          onLibrary: () => context.push<void>('/bookmarks'),
+                          onTags: () => context.push<void>('/bookmarks'),
+                        ).animateSlideUp(delay: 160.ms),
+                        const SizedBox(height: AppSpacing.md),
+                        ListenableBuilder(
+                          listenable: _filterListenable,
+                          builder: (context, _) {
+                            final filters = _filters(context);
+                            final filteredItems = _filterItems(
+                              state.recentItems,
+                              filters,
+                            );
+                            final hasActiveFilters =
+                                _searchController.text.trim().isNotEmpty ||
+                                _selectedFilterIdNotifier.value != 'all';
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _FilterChips(
+                                  filters: filters,
+                                  selectedId: _selectedFilterIdNotifier.value,
+                                  onSelected: (filter) =>
+                                      _selectedFilterIdNotifier.value =
+                                          filter.id,
+                                ).animateFadeIn(delay: 220.ms),
+                                const SizedBox(height: AppSpacing.xl),
+                                _SuggestedBookmarksSection(
+                                  items: filteredItems,
+                                ).animateFadeIn(delay: 320.ms),
+                                const SizedBox(height: AppSpacing.xl),
+                                _FeaturedCollectionsSection(
+                                  collections: state.collections,
+                                ).animateFadeIn(delay: 380.ms),
+                                const SizedBox(height: AppSpacing.xl),
+                                _RecentBookmarksSection(
+                                  recentItems: filteredItems,
+                                  isEmpty: state.totalBookmarks == 0,
+                                  hasMatches:
+                                      !hasActiveFilters ||
+                                      filteredItems.isNotEmpty,
+                                  animationDelay: 440.ms,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: AppSpacing.xl),
+                        _WeeklyDigestPanel(
+                          recentCount: state.recentBookmarks,
+                          onPressed: () => context.push<void>('/bookmarks'),
+                        ).animateSlideUp(delay: 520.ms),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  List<BookmarkSummary> _filterItems(
+    List<BookmarkSummary> items,
+    List<_HomeFilter> filters,
+  ) {
+    final query = _searchController.text.trim().toLowerCase();
+    final selectedFilter = filters.firstWhere(
+      (filter) => filter.id == _selectedFilterIdNotifier.value,
+      orElse: () => filters.first,
+    );
+
+    return items.where((bookmark) {
+      final searchable = [
+        bookmark.title,
+        bookmark.url,
+        bookmark.description,
+        ...bookmark.tags,
+      ].join(' ').toLowerCase();
+      final matchesSearch = query.isEmpty || searchable.contains(query);
+      final matchesFilter =
+          selectedFilter.id == 'all' ||
+          selectedFilter.keywords.any(searchable.contains);
+      return matchesSearch && matchesFilter;
+    }).toList();
+  }
+
+  List<_HomeFilter> _filters(BuildContext context) => [
+    _HomeFilter(
+      id: 'all',
+      label: context.l10n.homeFilterAll,
+      keywords: const [],
+    ),
+    _HomeFilter(
+      id: 'design',
+      label: context.l10n.homeFilterDesign,
+      keywords: const ['design', 'ui', 'ux', 'figma'],
+    ),
+    _HomeFilter(
+      id: 'articles',
+      label: context.l10n.homeFilterArticles,
+      keywords: const ['article', 'blog', 'medium', 'read'],
+    ),
+    _HomeFilter(
+      id: 'inspiration',
+      label: context.l10n.homeFilterInspiration,
+      keywords: const ['inspiration', 'idea', 'creative', 'gallery'],
+    ),
+    _HomeFilter(
+      id: 'tools',
+      label: context.l10n.homeFilterTools,
+      keywords: const ['tool', 'app', 'extension', 'package'],
+    ),
+  ];
+}
+
+class _HomeFilter {
+  const _HomeFilter({
+    required this.id,
+    required this.label,
+    required this.keywords,
+  });
+
+  final String id;
+  final String label;
+  final List<String> keywords;
+}

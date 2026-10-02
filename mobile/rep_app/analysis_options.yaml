@@ -1,0 +1,57 @@
+# This file configures the analyzer, which statically analyzes Dart code to
+# check for errors, warnings, and lints.
+#
+# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
+# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
+# invoked from the command line by running `flutter analyze`.
+
+# The following line activates a set of recommended lints for Flutter apps,
+# packages, and plugins designed to encourage good coding practices.
+include: package:very_good_analysis/analysis_options.yaml
+
+linter:
+  rules:
+    public_member_api_docs: false
+    always_use_package_imports: false
+    prefer_relative_imports: true
+    discarded_futures: false
+    always_put_required_named_parameters_first: false
+    avoid_redundant_argument_values: false
+    lines_longer_than_80_chars: false
+    cascade_invocations: false
+    sort_pub_dependencies: false
+    # Optional-pillar strips (fst:auth, fst:sync, …) wrap widgets with a
+    # `Widget x = base; x = wrap(x); return …;` idiom. The marked reassignment is
+    # deleted in the stripped tree, leaving a single-assignment local — which
+    # these two stylistic rules would each flag (in one tree or the other). Off
+    # so the template and every stripped variant both lint clean.
+    prefer_final_locals: false
+    join_return_with_assignment: false
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  exclude:
+    - build/**
+    # Match generated files anywhere in the workspace (app and packages/*),
+    # not just the root lib/. Globs are relative to this file, so lib/** would
+    # miss codegen that lands inside a package (e.g. retrofit/injectable).
+    - "**/*.freezed.dart"
+    - "**/*.g.dart"
+    - "**/*.config.dart"
+    - lib/firebase_options.dart
+    # Submodules are independently-maintained repos (own pubspec / pub get / CI /
+    # formatter version). Analyzing their source from the root context yields
+    # spurious "undefined" errors (they aren't resolved here) — leave them to
+    # their own tooling. CI never checks out published/cli; this keeps local
+    # `flutter analyze` and the pre-push hook consistent with CI.
+    - published/**
+    - simple_backend_server/**
+    - android/**
+    - ios/**
+
+
+# Additional information about this file can be found at
+# https://dart.dev/guides/language/analysis-options

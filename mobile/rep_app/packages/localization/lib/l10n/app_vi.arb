@@ -1,0 +1,280 @@
+{
+  "@@locale": "vi",
+  "appTitle": "Flutter Starter",
+  "loginAppBarTitle": "Đăng nhập",
+  "loginHeadline": "Chào mừng trở lại",
+  "loginSubtitle": "Đăng nhập để sắp xếp không gian số của bạn.",
+  "loginUsernameLabel": "Địa chỉ email",
+  "loginUsernameHint": "hello@example.com",
+  "loginPasswordLabel": "Mật khẩu",
+  "loginPasswordHint": "••••••••",
+  "loginShowPassword": "Hiện mật khẩu",
+  "loginHidePassword": "Ẩn mật khẩu",
+  "loginForgotPassword": "Quên?",
+  "loginSubmit": "Đăng nhập",
+  "loginDividerLabel": "HOẶC TIẾP TỤC VỚI",
+  "loginGoogle": "Google",
+  "loginApple": "Apple",
+  "loginRegisterPrompt": "Mới dùng Flutter Starter? ",
+  "loginNavigateToRegister": "Tạo tài khoản",
+  "loginPasswordRecoveryUnavailable": "Khôi phục mật khẩu chưa được cấu hình.",
+  "loginSocialUnavailable": "Đăng nhập mạng xã hội chưa được cấu hình.",
+  "registerAppBarTitle": "Đăng ký",
+  "registerHeadline": "Tham gia Flutter Starter",
+  "registerSubtitle": "Tạo tài khoản để bắt đầu sắp xếp cuộc sống số của bạn thật rõ ràng và dễ dàng.",
+  "registerEmailLabel": "Địa chỉ email",
+  "registerEmailHint": "jane@example.com",
+  "registerInvalidEmail": "Nhập địa chỉ email hợp lệ.",
+  "registerUsernameLabel": "Tên đăng nhập",
+  "registerPasswordLabel": "Mật khẩu",
+  "registerPasswordHint": "••••••••",
+  "registerPasswordHelp": "Mật khẩu phải có ít nhất 8 ký tự.",
+  "registerPasswordMinLengthError": "Mật khẩu cần có ít nhất 8 ký tự.",
+  "registerShowPassword": "Hiện mật khẩu",
+  "registerHidePassword": "Ẩn mật khẩu",
+  "registerConfirmPasswordLabel": "Xác nhận mật khẩu",
+  "registerSubmit": "Tham gia Flutter Starter",
+  "registerLoginPrompt": "Bạn đã có tài khoản? ",
+  "registerNavigateToLogin": "Đăng nhập",
+  "errorPasswordsDoNotMatch": "Mật khẩu không khớp.",
+  "fieldRequired": "Bắt buộc",
+  "errorInvalidCredentials": "Vui lòng nhập tên đăng nhập và mật khẩu.",
+  "errorInvalidInput": "Dữ liệu không hợp lệ.",
+  "errorUnknown": "Đã xảy ra lỗi.",
+  "commonCancel": "Hủy",
+  "commonCreate": "Tạo",
+  "commonDelete": "Xóa",
+  "commonEdit": "Chỉnh sửa",
+  "commonImageLoadFailed": "Không tải được hình ảnh",
+  "commonLoading": "Đang tải…",
+  "commonRetry": "Thử lại",
+  "commonSave": "Lưu",
+  "commonShare": "Chia sẻ",
+  "commonSignOut": "Đăng xuất",
+  "homeAppBarTitle": "Trang chủ",
+  "homeViewAllBookmarks": "Xem tất cả",
+  "homeNoDescription": "Không có mô tả",
+  "homeRecentBookmarks": "Bookmark gần đây",
+  "homeNoBookmarks": "Chưa có bookmark nào. Nhấn + để thêm.",
+  "homeSearchTitle": "Tìm kiếm",
+  "homeSearchSubtitle": "Tìm nhanh bài viết, công cụ và nguồn cảm hứng đã lưu.",
+  "homeSearchHint": "Tìm bookmark...",
+  "homeQuickAdd": "Thêm liên kết",
+  "homeQuickLibrary": "Thư viện",
+  "homeQuickTags": "Thẻ",
+  "homeFilterAll": "Tất cả",
+  "homeFilterDesign": "Thiết kế",
+  "homeFilterArticles": "Bài viết",
+  "homeFilterInspiration": "Cảm hứng",
+  "homeFilterTools": "Công cụ",
+  "homeSuggestedTitle": "Gợi ý cho bạn",
+  "homeFeaturedCollections": "Bộ sưu tập nổi bật",
+  "homeWeeklyDigestTitle": "Tóm tắt tuần",
+  "homeWeeklyDigestEyebrow": "Đọc nhiều nhất",
+  "homeWeeklyDigestHeadline": "Điểm lại kho tri thức đã lưu",
+  "homeWeeklyDigestBody": "{count, plural, =0{Gần đây bạn chưa lưu bookmark nào. Hãy quay lại khi có nội dung mới.} other{Gần đây bạn đã lưu {count} bookmark. Xem lại các điểm nổi bật để tiếp tục mạch đọc.}}",
+  "@homeWeeklyDigestBody": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "homeReadDigest": "Đọc tóm tắt",
+  "homeNoMatches": "Không có bookmark nào khớp với chế độ xem này.",
+  "homeBookmarkVisualFallback": "Gần đây",
+  "profileAppBarTitle": "Hồ sơ",
+  "profileSectionAppearance": "Giao diện",
+  "profileSectionAccount": "Tài khoản",
+  "profileChangePassword": "Đổi mật khẩu",
+  "profileDeleteAccount": "Xóa tài khoản",
+  "profileDeleteAccountDialogTitle": "Xóa tài khoản?",
+  "profileDeleteAccountDialogMessage": "Thao tác này sẽ xóa vĩnh viễn tài khoản và toàn bộ dữ liệu của bạn. Không thể hoàn tác.",
+  "profileDeleteAccountConfirmLabel": "Nhập \"{username}\" để xác nhận",
+  "@profileDeleteAccountConfirmLabel": {
+    "placeholders": {
+      "username": {
+        "type": "String",
+        "example": "alice"
+      }
+    }
+  },
+  "profileDeleteAccountSuccess": "Tài khoản của bạn đã được xóa.",
+  "profileDeleteAccountError": "Không thể xóa tài khoản. Vui lòng thử lại.",
+  "changePasswordAppBarTitle": "Đổi mật khẩu",
+  "changePasswordCurrentLabel": "Mật khẩu hiện tại",
+  "changePasswordNewLabel": "Mật khẩu mới",
+  "changePasswordConfirmLabel": "Xác nhận mật khẩu mới",
+  "changePasswordSubmit": "Cập nhật mật khẩu",
+  "changePasswordSuccessMessage": "Cập nhật mật khẩu thành công.",
+  "changePasswordMismatchError": "Mật khẩu mới không khớp.",
+  "profileSectionAbout": "Giới thiệu",
+  "profileUserIdCopied": "Đã sao chép ID người dùng",
+  "profileAppearanceThemeLabel": "Chủ đề",
+  "profileAppearanceColorLabel": "Màu nhấn",
+  "profileThemeSystemDefault": "Mặc định hệ thống",
+  "profileThemeLight": "Sáng",
+  "profileThemeDark": "Tối",
+  "profileAppVersionBuild": "Phiên bản {version} (bản dựng {buildNumber})",
+  "profileSignOutConfirmMessage": "Bạn có chắc muốn đăng xuất không?",
+  "bookmarksAppBarTitle": "Bookmarks",
+  "bookmarksSearchHint": "Tìm tiêu đề, URL hoặc thẻ",
+  "bookmarksNoMatchesTitle": "Không có kết quả",
+  "bookmarksNoMatchesMessage": "Không có bookmark nào khớp với tìm kiếm.",
+  "bookmarksEmptyTitle": "Chưa có bookmark nào",
+  "bookmarksEmptyMessage": "Nhấn + để thêm bookmark đầu tiên.",
+  "bookmarksNotYetSynced": "Chưa đồng bộ",
+  "bookmarksSyncFailedRetryTooltip": "Đồng bộ thất bại - nhấn để thử lại",
+  "bookmarksAddTooltip": "Thêm bookmark",
+  "bookmarksSearchClear": "Xóa tìm kiếm",
+  "bookmarksSortTooltip": "Sắp xếp bookmark",
+  "bookmarksSortMenuLabel": "Menu sắp xếp",
+  "bookmarksSortNewest": "Mới nhất trước",
+  "bookmarksSortOldest": "Cũ nhất trước",
+  "bookmarksSortTitleAz": "Tiêu đề (A–Z)",
+  "bookmarksTabAll": "Tất cả",
+  "bookmarksTabRecent": "Gần đây",
+  "bookmarksTabCollections": "Bộ sưu tập",
+  "bookmarksRecentEmptyTitle": "Chưa có gì gần đây",
+  "bookmarksRecentEmptyMessage": "Các dấu trang bạn thêm trong tuần này sẽ xuất hiện ở đây.",
+  "bookmarksCollectionsComingSoonTitle": "Bộ sưu tập sắp ra mắt",
+  "bookmarksCollectionsComingSoonMessage": "Nhóm các dấu trang liên quan vào bộ sưu tập trong bản cập nhật sắp tới.",
+  "bookmarkMoreActions": "Thêm thao tác",
+  "bookmarkAppBarTitle": "Chi tiết Bookmark",
+  "bookmarkSourceLabel": "Nguồn",
+  "bookmarkVisitWebsite": "Mở trang web",
+  "bookmarkDetailsLabel": "Chi tiết",
+  "bookmarkDateCreatedLabel": "Ngày tạo",
+  "bookmarkLastModifiedLabel": "Cập nhật lần cuối",
+  "bookmarkMediaLabel": "Phương tiện",
+  "bookmarkOpenInBrowser": "Mở trong trình duyệt",
+  "bookmarkNotFound": "Không tìm thấy bookmark.",
+  "bookmarkDeleteDialogTitle": "Xóa bookmark?",
+  "bookmarkDeleteDialogBody": "Không thể hoàn tác hành động này.\nBookmark sẽ bị xóa vĩnh viễn khỏi bộ sưu tập của bạn.",
+  "bookmarkDeleteDialogMessage": "\"{title}\" sẽ bị xóa.",
+  "bookmarkOpenUrl": "Mở URL",
+  "bookmarkAttachedVideo": "Video đính kèm",
+  "bookmarkInvalidUrl": "URL không hợp lệ",
+  "bookmarkCouldNotOpenUrl": "Không thể mở URL",
+  "bookmarkFormEditTitle": "Chỉnh sửa bookmark",
+  "bookmarkFormNewTitle": "Bookmark mới",
+  "bookmarkFormLoadFailed": "Không tải được bookmark.",
+  "bookmarkTitleLabel": "Tiêu đề",
+  "bookmarkUrlLabel": "URL",
+  "bookmarkDescriptionLabel": "Mô tả (tùy chọn)",
+  "bookmarkTagsLabel": "Thẻ",
+  "bookmarkTagsHint": "các, giá trị, phân tách, bằng, dấu phẩy",
+  "bookmarkPreviewLabel": "Bookmark",
+  "bookmarkTitleRequired": "Bắt buộc nhập tiêu đề",
+  "bookmarkUrlRequired": "Bắt buộc nhập URL",
+  "bookmarkUrlInvalid": "Nhập URL hợp lệ (https://…)",
+  "errorPermissionDenied": "Quyền truy cập bị từ chối.",
+  "errorGalleryPermissionRequired": "Cần có quyền truy cập thư viện ảnh để đính kèm hình ảnh.",
+  "errorCameraPermissionRequired": "Cần có quyền truy cập máy ảnh để chụp ảnh.",
+  "navHome": "Trang chủ",
+  "navBookmarks": "Bookmark",
+  "navProfile": "Hồ sơ",
+  "navSettings": "Cài đặt",
+  "settingsAppBarTitle": "Cài đặt",
+  "bookmarksDetailPlaceholder": "Chọn một bookmark để xem chi tiết",
+  "bookmarkImageLabel": "Hình ảnh của {title}",
+  "bookmarkAttachedImageLabel": "Hình ảnh đính kèm",
+  "bookmarkRemoveImageLabel": "Xóa hình ảnh",
+  "navNotifications": "Thông báo",
+  "notificationsAppBarTitle": "Thông báo",
+  "notificationsActivitySection": "Hoạt động của bạn",
+  "notificationsSection": "Thông báo",
+  "notificationsSectionNew": "Mới",
+  "notificationsSectionEarlier": "Trước đó",
+  "notificationsEmptyTitle": "Chưa có gì ở đây",
+  "notificationsEmptyMessage": "Thông báo và hoạt động gần đây của bạn sẽ hiển thị ở đây.",
+  "notificationsNoNotifications": "Chưa có thông báo nào.",
+  "notificationsLoadError": "Không tải được thông báo. Hãy kéo để làm mới hoặc thử lại.",
+  "notificationsUnreadCount": "{count} chưa đọc",
+  "@notificationsUnreadCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "timeJustNow": "Vừa xong",
+  "timeMinutesAgo": "{minutes} phút trước",
+  "@timeMinutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+  "timeHoursAgo": "{hours} giờ trước",
+  "@timeHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "timeDaysAgo": "{days} ngày trước",
+  "@timeDaysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "collectionsTitle": "Bộ sưu tập",
+  "collectionsEmptyTitle": "Chưa có bộ sưu tập",
+  "collectionsEmptyMessage": "Nhóm các dấu trang liên quan vào bộ sưu tập.",
+  "collectionsLoadError": "Không tải được bộ sưu tập. Kéo để làm mới hoặc thử lại.",
+  "collectionsCreate": "Bộ sưu tập mới",
+  "collectionsCreateTitle": "Bộ sưu tập mới",
+  "collectionsEditTitle": "Sửa bộ sưu tập",
+  "collectionNameLabel": "Tên",
+  "collectionNameHint": "ví dụ: Cảm hứng thiết kế",
+  "collectionNameRequired": "Vui lòng nhập tên",
+  "collectionAppearanceLabel": "Biểu tượng & màu sắc",
+  "collectionSave": "Lưu",
+  "collectionDeleteAction": "Xóa bộ sưu tập",
+  "collectionDeleteDialogTitle": "Xóa bộ sưu tập?",
+  "collectionDeleteDialogMessage": "\"{name}\" sẽ bị xóa. Các dấu trang của bạn vẫn được giữ lại.",
+  "@collectionDeleteDialogMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Cảm hứng thiết kế"
+      }
+    }
+  },
+  "collectionNotFound": "Không tìm thấy bộ sưu tập.",
+  "collectionItemsCount": "{count, plural, =0{Chưa có dấu trang} =1{1 dấu trang} other{{count} dấu trang}}",
+  "@collectionItemsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "collectionAddBookmarks": "Thêm dấu trang",
+  "collectionRemoveBookmark": "Xóa khỏi bộ sưu tập",
+  "collectionEmptyBookmarks": "Bộ sưu tập này chưa có dấu trang nào.",
+  "collectionPickerEmpty": "Tất cả dấu trang đã có trong bộ sưu tập này.",
+  "collectionPickerAddCount": "Thêm {count}",
+  "@collectionPickerAddCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "addToCollectionTitle": "Thêm vào bộ sưu tập",
+  "addToCollectionEmpty": "Bạn chưa tạo bộ sưu tập nào.",
+  "homeCreateCollection": "Tạo bộ sưu tập"
+}

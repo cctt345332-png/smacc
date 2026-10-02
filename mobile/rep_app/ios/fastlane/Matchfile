@@ -1,0 +1,21 @@
+# match stores the distribution certificate and provisioning profiles in a
+# private git repo (encrypted with MATCH_PASSWORD), so every machine and CI
+# runner signs identically. See https://docs.fastlane.tools/actions/match/
+#
+# All values come from the environment (fastlane/.env) so nothing
+# project-specific is committed. The `beta` lane overrides app_identifier and
+# type per flavor; the defaults here cover `bundle exec fastlane match appstore`
+# when run directly to (re)generate assets for all flavors.
+
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+
+type("appstore")
+
+app_identifier(
+  [
+    ENV["IOS_BUNDLE_ID_BASE"],
+    "#{ENV['IOS_BUNDLE_ID_BASE']}.dev",
+    "#{ENV['IOS_BUNDLE_ID_BASE']}.staging",
+  ].compact,
+)

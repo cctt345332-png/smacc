@@ -1,0 +1,319 @@
+name: Release
+
+# Builds and uploads mobile releases via Fastlane.
+#
+#   • Push a `vX.Y.Z` tag → production release: iOS → App Store, Android → Play
+#     production (staged rollout). The published version name comes from the tag
+#     (see tool/set_version.sh); the build number is the CI run number.
+#   • Run manually (Actions tab → Run workflow) → `beta`: iOS → TestFlight,
+#     Android → internal track, with a chosen flavor/platform.
+#
+# Store-deploy is opt-in: configure the secrets and variables listed under each
+# job's `env:` (Settings → Secrets and variables → Actions) first. Each job runs
+# only when its platform identity variable (ANDROID_PACKAGE_NAME_BASE /
+# IOS_BUNDLE_ID_BASE) is set, so a repo that hasn't been configured — the
+# template itself, or a fresh scaffold — skips on a tag push instead of failing.
+# This workflow only does the CI plumbing; the lane logic lives in
+# ios/fastlane/Fastfile and android/fastlane/Fastfile. See the fastlane READMEs.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: Flutter flavor to release
+        type: choice
+        options: [prod, staging, dev]
+        default: prod
+      platform:
+        description: Platforms to release
+        type: choice
+        options: [both, ios, android]
+        default: both
+
+env:
+  # Keep in sync with .fvmrc (3.44.0). CI installs the SDK directly, so the
+  # lanes run with FLUTTER_CMD=flutter rather than via FVM.
+  FLUTTER_VERSION: '3.44.0'
+
+# A release for a given ref should not run twice concurrently.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Least-privilege default: these jobs only deploy to the stores, never write
+# back to the repo, so read access to the checkout is sufficient.
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android → Play
+    # Skip cleanly (no red run) until this platform is configured: the job runs
+    # only once its identity variable is set — which the build needs anyway and
+    # which tool/ci-secrets-setup.sh sets. A repo with no Play account (the
+    # template, a fresh scaffold) therefore skips on a tag push instead of
+    # failing the preflight; once configured, a missing *secret* still fails fast
+    # (the Verify step below). `vars` is readable in `if:`, secrets aren't —
+    # hence gating on the identity variable.
+    if: >-
+      vars.ANDROID_PACKAGE_NAME_BASE != '' && (
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'both' ||
+      github.event.inputs.platform == 'android' )
+    runs-on: ubuntu-latest
+    steps:
+      # Fail fast if the store-deploy secrets/vars aren't configured yet, so a
+      # tag push doesn't burn ~15 min cloning, installing the SDK and building
+      # only to die deep inside Fastlane on an empty base64 blob or an auth
+      # error. Bootstrap them in one shot with tool/ci-secrets-setup.sh. Secrets
+      # are mapped to env (not interpolated into the script) and read by
+      # indirect expansion, so this stays template-injection-safe (zizmor).
+      - name: Verify required Play secrets
+        env:
+          ANDROID_PACKAGE_NAME_BASE: ${{ vars.ANDROID_PACKAGE_NAME_BASE }}
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+        run: |
+          set -euo pipefail
+          required=(
+            ANDROID_PACKAGE_NAME_BASE
+            PLAY_STORE_JSON_KEY
+            ANDROID_KEYSTORE_BASE64
+            ANDROID_KEYSTORE_PASSWORD
+            ANDROID_KEY_PASSWORD
+            ANDROID_KEY_ALIAS
+            ANDROID_GOOGLE_SERVICES_JSON
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            [[ -z "${!name:-}" ]] && missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            {
+              echo "::error::Missing ${#missing[@]} required Play secret(s)/var(s): ${missing[*]}"
+              echo "Set them under Settings → Secrets and variables → Actions,"
+              echo "or bootstrap all at once: tool/ci-secrets-setup.sh"
+              echo "Full table: android/fastlane/README.md"
+            } >&2
+            exit 1
+          fi
+          echo "All required Play secrets are configured."
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # fst:template-only:start
+      # rev_sync is a path-dependency of the build, vendored as a submodule, so
+      # it must be checked out for `flutter pub get` to resolve.
+      - name: Check out rev_sync submodule
+        run: git submodule update --init published/rev_sync
+      # fst:template-only:end
+
+      # On a tag push, stamp the published version name from the tag (e.g.
+      # v1.2.3 → 1.2.3); the build number stays the CI run number. The lanes
+      # build from pubspec.yaml, so this must run before the build step.
+      - name: Stamp release version from the tag
+        if: github.event_name == 'push'
+        run: ./tool/set_version.sh "${GITHUB_REF_NAME#v}" "${{ github.run_number }}"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Generated code (*.g.dart, *.freezed.dart, etc.) is git-ignored, and
+      # `flutter build` does not run build_runner — so generate it here before
+      # the lane builds, or the Dart compile fails on missing sources. We do
+      # NOT cache .dart_tool/build: with the outputs git-ignored, a restored
+      # cache makes build_runner skip regenerating files it believes exist,
+      # producing a broken tree. A full build from an empty cache is correct.
+      - name: Generate code
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Set up Ruby + Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          working-directory: android
+          bundler-cache: true
+
+      - name: Materialize signing & Firebase config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PLAY_JSON: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          # google-services.json is git-ignored; restore it from a secret.
+          printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
+          # Upload keystore + key.properties drive release signing.
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          # Play service-account key the lane authenticates with.
+          printf '%s' "$PLAY_JSON" > android/play-store-key.json
+          cat > android/key.properties <<EOF
+          storePassword=${KEYSTORE_PASSWORD}
+          keyPassword=${KEY_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build & upload to Google Play
+        working-directory: android
+        env:
+          FLUTTER_CMD: flutter
+          BUILD_NUMBER: ${{ github.run_number }}
+          ANDROID_PACKAGE_NAME_BASE: ${{ vars.ANDROID_PACKAGE_NAME_BASE }}
+          PLAY_STORE_JSON_KEY_PATH: ${{ github.workspace }}/android/play-store-key.json
+          # Bind the lane/flavor expressions to env vars (Actions evaluates
+          # them), then reference them as shell vars so nothing is expanded into
+          # the run command — closes the template-injection class (zizmor).
+          LANE: ${{ github.event_name == 'push' && 'release' || 'beta' }}
+          FLAVOR: ${{ github.event.inputs.flavor || 'prod' }}
+        run: bundle exec fastlane "$LANE" "flavor:$FLAVOR"
+
+  ios:
+    name: iOS → TestFlight
+    # Skip cleanly until configured — see the Android job's note. Gated on the
+    # iOS identity variable so an unconfigured repo's tag push skips instead of
+    # failing the preflight.
+    if: >-
+      vars.IOS_BUNDLE_ID_BASE != '' && (
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'both' ||
+      github.event.inputs.platform == 'ios' )
+    runs-on: macos-15
+    steps:
+      # Fail fast if the store-deploy secrets/vars aren't configured yet (see the
+      # Android job's note). MATCH_GIT_BASIC_AUTHORIZATION is gated on the
+      # MATCH_GIT_URL scheme: required for an HTTPS match repo, skipped for SSH.
+      - name: Verify required App Store secrets
+        env:
+          IOS_BUNDLE_ID_BASE: ${{ vars.IOS_BUNDLE_ID_BASE }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          IOS_GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+        run: |
+          set -euo pipefail
+          required=(
+            IOS_BUNDLE_ID_BASE
+            APPLE_TEAM_ID
+            APP_STORE_CONNECT_API_KEY_ID
+            APP_STORE_CONNECT_API_ISSUER_ID
+            APP_STORE_CONNECT_API_KEY_CONTENT
+            MATCH_GIT_URL
+            MATCH_PASSWORD
+            IOS_GOOGLE_SERVICE_INFO_PLIST
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            [[ -z "${!name:-}" ]] && missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            {
+              echo "::error::Missing ${#missing[@]} required App Store secret(s)/var(s): ${missing[*]}"
+              echo "Set them under Settings → Secrets and variables → Actions,"
+              echo "or bootstrap all at once: tool/ci-secrets-setup.sh"
+              echo "Full table: ios/fastlane/README.md"
+            } >&2
+            exit 1
+          fi
+          # An HTTPS match repo can't clone without basic-auth, so a missing
+          # token there is a hard fail too; SSH repos don't need it.
+          if [[ "$MATCH_GIT_URL" =~ ^https?:// ]]; then
+            if [[ -z "${MATCH_GIT_BASIC_AUTHORIZATION:-}" ]]; then
+              echo "::error::MATCH_GIT_BASIC_AUTHORIZATION is required when MATCH_GIT_URL is HTTPS (base64 user:token)." >&2
+              exit 1
+            fi
+          elif [[ -z "${MATCH_GIT_BASIC_AUTHORIZATION:-}" ]]; then
+            echo "::notice::MATCH_GIT_BASIC_AUTHORIZATION is unset — fine for an SSH match repo."
+          fi
+          echo "All required App Store secrets are configured."
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # fst:template-only:start
+      # rev_sync is a path-dependency of the build, vendored as a submodule, so
+      # it must be checked out for `flutter pub get` to resolve.
+      - name: Check out rev_sync submodule
+        run: git submodule update --init published/rev_sync
+      # fst:template-only:end
+
+      # On a tag push, stamp the published version name from the tag (e.g.
+      # v1.2.3 → 1.2.3); the build number stays the CI run number. The lanes
+      # build from pubspec.yaml, so this must run before the build step.
+      - name: Stamp release version from the tag
+        if: github.event_name == 'push'
+        run: ./tool/set_version.sh "${GITHUB_REF_NAME#v}" "${{ github.run_number }}"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # This project requires CocoaPods, not SPM (see CLAUDE.md). The setting is
+      # machine-global, so each runner must disable SPM before the first build.
+      - name: Disable Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+
+      # Generated code (*.g.dart, *.freezed.dart, etc.) is git-ignored, and
+      # `flutter build` does not run build_runner — so generate it here before
+      # the lane builds, or the Dart compile fails on missing sources. We do
+      # NOT cache .dart_tool/build: with the outputs git-ignored, a restored
+      # cache makes build_runner skip regenerating files it believes exist,
+      # producing a broken tree. A full build from an empty cache is correct.
+      - name: Generate code
+        run: |
+          flutter pub get
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Set up Ruby + Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          working-directory: ios
+          bundler-cache: true
+
+      - name: Materialize Firebase config
+        env:
+          GSP: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          set -euo pipefail
+          # GoogleService-Info.plist is git-ignored; restore it from a secret.
+          printf '%s' "$GSP" | base64 --decode > ios/Runner/GoogleService-Info.plist
+
+      - name: Build & upload to TestFlight
+        working-directory: ios
+        env:
+          FLUTTER_CMD: flutter
+          BUILD_NUMBER: ${{ github.run_number }}
+          IOS_BUNDLE_ID_BASE: ${{ vars.IOS_BUNDLE_ID_BASE }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          LANE: ${{ github.event_name == 'push' && 'release' || 'beta' }}
+          FLAVOR: ${{ github.event.inputs.flavor || 'prod' }}
+        run: bundle exec fastlane "$LANE" "flavor:$FLAVOR"

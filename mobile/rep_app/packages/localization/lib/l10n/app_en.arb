@@ -1,0 +1,370 @@
+{
+  "@@locale": "en",
+  "appTitle": "Flutter Starter",
+  "loginAppBarTitle": "Sign in",
+  "loginHeadline": "Welcome Back",
+  "loginSubtitle": "Sign in to organize your digital space.",
+  "loginUsernameLabel": "Email Address",
+  "loginUsernameHint": "hello@example.com",
+  "loginPasswordLabel": "Password",
+  "loginPasswordHint": "••••••••",
+  "loginShowPassword": "Show password",
+  "loginHidePassword": "Hide password",
+  "loginForgotPassword": "Forgot?",
+  "loginSubmit": "Log In",
+  "loginDividerLabel": "OR CONTINUE WITH",
+  "loginGoogle": "Google",
+  "loginApple": "Apple",
+  "loginRegisterPrompt": "New to Flutter Starter? ",
+  "loginNavigateToRegister": "Create an account",
+  "loginPasswordRecoveryUnavailable": "Password recovery isn't configured yet.",
+  "loginSocialUnavailable": "Social sign-in isn't configured yet.",
+  "registerAppBarTitle": "Register",
+  "registerHeadline": "Join Flutter Starter",
+  "registerSubtitle": "Create an account to start organizing your digital life with clarity and ease.",
+  "registerEmailLabel": "Email Address",
+  "registerEmailHint": "jane@example.com",
+  "registerInvalidEmail": "Enter a valid email address.",
+  "registerUsernameLabel": "Username",
+  "registerPasswordLabel": "Password",
+  "registerPasswordHint": "••••••••",
+  "registerPasswordHelp": "Must be at least 8 characters.",
+  "registerPasswordMinLengthError": "Password must be at least 8 characters.",
+  "registerShowPassword": "Show password",
+  "registerHidePassword": "Hide password",
+  "registerConfirmPasswordLabel": "Confirm Password",
+  "registerSubmit": "Join Flutter Starter",
+  "registerLoginPrompt": "Already have an account? ",
+  "registerNavigateToLogin": "Log in",
+  "errorPasswordsDoNotMatch": "Passwords do not match.",
+  "fieldRequired": "Required",
+  "errorInvalidCredentials": "Please enter a username and password.",
+  "errorInvalidInput": "Invalid input.",
+  "errorUnknown": "Something went wrong.",
+  "commonCancel": "Cancel",
+  "commonCreate": "Create",
+  "commonDelete": "Delete",
+  "commonEdit": "Edit",
+  "commonImageLoadFailed": "Failed to load image",
+  "commonLoading": "Loading…",
+  "commonRetry": "Retry",
+  "commonSave": "Save",
+  "commonShare": "Share",
+  "commonSignOut": "Sign out",
+  "homeAppBarTitle": "Home",
+  "homeViewAllBookmarks": "View all",
+  "homeNoDescription": "No description",
+  "homeRecentBookmarks": "Recent Bookmarks",
+  "homeNoBookmarks": "No bookmarks yet. Tap + to add one.",
+  "homeSearchTitle": "Search",
+  "@homeSearchTitle": {
+    "description": "Section title above the home dashboard bookmark search field."
+  },
+  "homeSearchSubtitle": "Find your saved articles, tools, and inspirations instantly.",
+  "@homeSearchSubtitle": {
+    "description": "Supporting text below the home dashboard search title."
+  },
+  "homeSearchHint": "Search bookmarks...",
+  "@homeSearchHint": {
+    "description": "Placeholder text in the home dashboard bookmark search field."
+  },
+  "homeQuickAdd": "Add Link",
+  "@homeQuickAdd": {
+    "description": "Label for the quick action that opens the new bookmark form."
+  },
+  "homeQuickLibrary": "Library",
+  "@homeQuickLibrary": {
+    "description": "Label for the quick action that opens the full bookmarks library."
+  },
+  "homeQuickTags": "Tags",
+  "@homeQuickTags": {
+    "description": "Label for the quick action that opens bookmark tag-related content."
+  },
+  "homeFilterAll": "All",
+  "@homeFilterAll": {
+    "description": "Filter chip label for showing all recent bookmarks."
+  },
+  "homeFilterDesign": "Design",
+  "@homeFilterDesign": {
+    "description": "Filter chip and fallback collection label for design-related bookmarks."
+  },
+  "homeFilterArticles": "Articles",
+  "@homeFilterArticles": {
+    "description": "Filter chip and fallback collection label for article or blog bookmarks."
+  },
+  "homeFilterInspiration": "Inspiration",
+  "@homeFilterInspiration": {
+    "description": "Filter chip label for inspiration-related bookmarks."
+  },
+  "homeFilterTools": "Tools",
+  "@homeFilterTools": {
+    "description": "Filter chip and fallback collection label for tool-related bookmarks."
+  },
+  "homeSuggestedTitle": "Suggested for You",
+  "@homeSuggestedTitle": {
+    "description": "Section title for suggested bookmark cards on the home dashboard."
+  },
+  "homeFeaturedCollections": "Featured Collections",
+  "@homeFeaturedCollections": {
+    "description": "Section title for featured bookmark collection cards on the home dashboard."
+  },
+  "homeWeeklyDigestTitle": "Weekly Digest",
+  "@homeWeeklyDigestTitle": {
+    "description": "Section title for the weekly digest panel on the home dashboard."
+  },
+  "homeWeeklyDigestEyebrow": "Most Read",
+  "@homeWeeklyDigestEyebrow": {
+    "description": "Short eyebrow label displayed above the weekly digest headline."
+  },
+  "homeWeeklyDigestHeadline": "Your saved knowledge catch-up",
+  "@homeWeeklyDigestHeadline": {
+    "description": "Headline text inside the weekly digest panel on the home dashboard."
+  },
+  "homeWeeklyDigestBody": "{count, plural, =0{You have no recent bookmarks. Review saved highlights when you add one.} =1{You saved 1 bookmark recently. Review the highlight and keep your reading flow moving.} other{You saved {count} bookmarks recently. Review the highlights and keep your reading flow moving.}}",
+  "@homeWeeklyDigestBody": {
+    "description": "Body text inside the weekly digest panel. The count is the number of bookmarks saved in the recent window.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12",
+        "description": "Number of bookmarks saved recently."
+      }
+    }
+  },
+  "homeReadDigest": "Read Digest",
+  "@homeReadDigest": {
+    "description": "Call-to-action button label in the weekly digest panel."
+  },
+  "homeNoMatches": "No bookmarks match this view.",
+  "@homeNoMatches": {
+    "description": "Empty-state message shown when active search or filters hide all recent bookmarks."
+  },
+  "homeBookmarkVisualFallback": "Recent",
+  "@homeBookmarkVisualFallback": {
+    "description": "Short fallback label shown on bookmark artwork when a bookmark has no tags."
+  },
+  "profileAppBarTitle": "Profile",
+  "profileSectionAppearance": "Appearance",
+  "profileSectionAccount": "Account",
+  "profileChangePassword": "Change Password",
+  "profileDeleteAccount": "Delete Account",
+  "profileDeleteAccountDialogTitle": "Delete account?",
+  "profileDeleteAccountDialogMessage": "This permanently removes your account and all of its data. This action cannot be undone.",
+  "profileDeleteAccountConfirmLabel": "Type \"{username}\" to confirm",
+  "@profileDeleteAccountConfirmLabel": {
+    "placeholders": {
+      "username": {
+        "type": "String",
+        "example": "alice"
+      }
+    }
+  },
+  "profileDeleteAccountSuccess": "Your account has been deleted.",
+  "profileDeleteAccountError": "Couldn't delete your account. Please try again.",
+  "changePasswordAppBarTitle": "Change Password",
+  "changePasswordCurrentLabel": "Current Password",
+  "changePasswordNewLabel": "New Password",
+  "changePasswordConfirmLabel": "Confirm New Password",
+  "changePasswordSubmit": "Update Password",
+  "changePasswordSuccessMessage": "Password updated successfully.",
+  "changePasswordMismatchError": "New passwords do not match.",
+  "profileSectionAbout": "About",
+  "profileUserIdCopied": "User ID copied",
+  "profileAppearanceThemeLabel": "Theme",
+  "profileAppearanceColorLabel": "Accent color",
+  "profileThemeSystemDefault": "System default",
+  "profileThemeLight": "Light",
+  "profileThemeDark": "Dark",
+  "profileAppVersionBuild": "Version {version} (build {buildNumber})",
+  "@profileAppVersionBuild": {
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "1.0.0"
+      },
+      "buildNumber": {
+        "type": "String",
+        "example": "42"
+      }
+    }
+  },
+  "profileSignOutConfirmMessage": "Are you sure you want to sign out?",
+  "bookmarksAppBarTitle": "Bookmarks",
+  "bookmarksSearchHint": "Search title, URL, or tag",
+  "bookmarksNoMatchesTitle": "No matches",
+  "bookmarksNoMatchesMessage": "No bookmarks match your search.",
+  "bookmarksEmptyTitle": "No bookmarks yet",
+  "bookmarksEmptyMessage": "Tap + to add your first bookmark.",
+  "bookmarksNotYetSynced": "Not yet synced",
+  "bookmarksSyncFailedRetryTooltip": "Sync failed - tap to retry",
+  "bookmarksAddTooltip": "Add bookmark",
+  "bookmarksSearchClear": "Clear search",
+  "bookmarksSortTooltip": "Sort bookmarks",
+  "bookmarksSortMenuLabel": "Sort Menu",
+  "bookmarksSortNewest": "Newest first",
+  "bookmarksSortOldest": "Oldest first",
+  "bookmarksSortTitleAz": "Title (A–Z)",
+  "bookmarksTabAll": "All",
+  "bookmarksTabRecent": "Recent",
+  "bookmarksTabCollections": "Collections",
+  "bookmarksRecentEmptyTitle": "Nothing recent",
+  "bookmarksRecentEmptyMessage": "Bookmarks you add this week show up here.",
+  "bookmarksCollectionsComingSoonTitle": "Collections coming soon",
+  "bookmarksCollectionsComingSoonMessage": "Group related bookmarks into collections in a future update.",
+  "bookmarkMoreActions": "More actions",
+  "bookmarkAppBarTitle": "Bookmark Details",
+  "bookmarkSourceLabel": "Source",
+  "bookmarkVisitWebsite": "Visit Website",
+  "bookmarkDetailsLabel": "Details",
+  "bookmarkDateCreatedLabel": "Date Created",
+  "bookmarkLastModifiedLabel": "Last Modified",
+  "bookmarkMediaLabel": "Media",
+  "bookmarkOpenInBrowser": "Open in Browser",
+  "bookmarkNotFound": "Bookmark not found.",
+  "bookmarkDeleteDialogTitle": "Delete bookmark?",
+  "bookmarkDeleteDialogBody": "This action cannot be undone.\nThe bookmark will be permanently removed from your collection.",
+  "bookmarkDeleteDialogMessage": "\"{title}\" will be removed.",
+  "@bookmarkDeleteDialogMessage": {
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Flutter docs"
+      }
+    }
+  },
+  "bookmarkOpenUrl": "Open URL",
+  "bookmarkAttachedVideo": "Attached video",
+  "bookmarkInvalidUrl": "Invalid URL",
+  "bookmarkCouldNotOpenUrl": "Could not open URL",
+  "bookmarkFormEditTitle": "Edit bookmark",
+  "bookmarkFormNewTitle": "New bookmark",
+  "bookmarkFormLoadFailed": "Failed to load bookmark.",
+  "bookmarkTitleLabel": "Title",
+  "bookmarkUrlLabel": "URL",
+  "bookmarkDescriptionLabel": "Description (optional)",
+  "bookmarkTagsLabel": "Tags",
+  "bookmarkTagsHint": "comma, separated, values",
+  "bookmarkPreviewLabel": "Bookmark",
+  "@bookmarkPreviewLabel": {
+    "description": "Short label shown in the bookmark form preview placeholder."
+  },
+  "bookmarkTitleRequired": "Title is required",
+  "bookmarkUrlRequired": "URL is required",
+  "bookmarkUrlInvalid": "Enter a valid URL (https://…)",
+  "errorPermissionDenied": "Permission denied.",
+  "errorGalleryPermissionRequired": "Photo gallery access is required to attach images.",
+  "errorCameraPermissionRequired": "Camera access is required to take photos.",
+  "navHome": "Home",
+  "navBookmarks": "Bookmarks",
+  "navProfile": "Profile",
+  "navSettings": "Settings",
+  "settingsAppBarTitle": "Settings",
+  "bookmarksDetailPlaceholder": "Select a bookmark to view its details",
+  "bookmarkImageLabel": "Image for {title}",
+  "@bookmarkImageLabel": {
+    "description": "Accessibility label for a bookmark's attached image.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkAttachedImageLabel": "Attached image",
+  "bookmarkRemoveImageLabel": "Remove image",
+  "navNotifications": "Notifications",
+  "notificationsAppBarTitle": "Notifications",
+  "notificationsActivitySection": "Your activity",
+  "notificationsSection": "Notifications",
+  "notificationsSectionNew": "New",
+  "notificationsSectionEarlier": "Earlier",
+  "notificationsEmptyTitle": "Nothing here yet",
+  "notificationsEmptyMessage": "Your notifications and recent activity will appear here.",
+  "notificationsNoNotifications": "No notifications yet.",
+  "notificationsLoadError": "Couldn't load your notifications. Pull to refresh or try again.",
+  "notificationsUnreadCount": "{count} unread",
+  "@notificationsUnreadCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "timeJustNow": "Just now",
+  "timeMinutesAgo": "{minutes}m ago",
+  "@timeMinutesAgo": {
+    "placeholders": {
+      "minutes": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
+  "timeHoursAgo": "{hours}h ago",
+  "@timeHoursAgo": {
+    "placeholders": {
+      "hours": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "timeDaysAgo": "{days}d ago",
+  "@timeDaysAgo": {
+    "placeholders": {
+      "days": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "collectionsTitle": "Collections",
+  "collectionsEmptyTitle": "No collections yet",
+  "collectionsEmptyMessage": "Group related bookmarks into collections.",
+  "collectionsLoadError": "Couldn't load your collections. Pull to refresh or try again.",
+  "collectionsCreate": "New collection",
+  "collectionsCreateTitle": "New collection",
+  "collectionsEditTitle": "Edit collection",
+  "collectionNameLabel": "Name",
+  "collectionNameHint": "e.g. Design inspiration",
+  "collectionNameRequired": "Name is required",
+  "collectionAppearanceLabel": "Icon & color",
+  "collectionSave": "Save",
+  "collectionDeleteAction": "Delete collection",
+  "collectionDeleteDialogTitle": "Delete collection?",
+  "collectionDeleteDialogMessage": "\"{name}\" will be removed. Your bookmarks stay.",
+  "@collectionDeleteDialogMessage": {
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Design inspiration"
+      }
+    }
+  },
+  "collectionNotFound": "Collection not found.",
+  "collectionItemsCount": "{count, plural, =0{No bookmarks} =1{1 bookmark} other{{count} bookmarks}}",
+  "@collectionItemsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "collectionAddBookmarks": "Add bookmarks",
+  "collectionRemoveBookmark": "Remove from collection",
+  "collectionEmptyBookmarks": "No bookmarks in this collection yet.",
+  "collectionPickerEmpty": "All your bookmarks are already in this collection.",
+  "collectionPickerAddCount": "Add {count}",
+  "@collectionPickerAddCount": {
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "addToCollectionTitle": "Add to collection",
+  "addToCollectionEmpty": "You haven't created any collections yet.",
+  "homeCreateCollection": "Create collection"
+}

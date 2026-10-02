@@ -1,0 +1,46 @@
+name: CodeQL
+
+# Scoped to the `actions` language only. CodeQL has no Dart support, so the
+# Flutter app code is covered by `flutter analyze` in ci.yml instead; this
+# workflow just scans the GitHub Actions workflows for insecure patterns.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'LICENSE'
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  schedule:
+    # Weekly, so advisories that land after a PR is merged still get caught.
+    - cron: "27 4 * * 1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze Actions
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4.37.3
+        with:
+          languages: actions
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v4.37.3
+        with:
+          # Pull requests already get a fast pass/fail signal from the
+          # GitHub Actions job. Upload SARIF only on main/scheduled runs so
+          # GitHub Advanced Security does not add a second queued PR check.
+          upload: ${{ github.event_name == 'pull_request' && 'never' || 'always' }}

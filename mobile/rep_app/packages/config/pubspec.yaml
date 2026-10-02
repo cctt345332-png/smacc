@@ -1,0 +1,24 @@
+name: config
+description: App configuration (environment + remote config) for the starter template.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  firebase_remote_config: ^6.5.3
+  injectable: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  build_runner: ^2.15.1
+  injectable_generator: ^3.0.2
+  test_utils: ^0.1.0

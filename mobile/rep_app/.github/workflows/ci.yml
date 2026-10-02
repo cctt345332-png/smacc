@@ -1,0 +1,948 @@
+name: CI
+
+# Path filtering is done at the JOB level (see the `changes` gate below), NOT
+# here via `paths-ignore`. The four build jobs are *required* status checks: a
+# workflow skipped by `paths-ignore` never reports those contexts, so branch
+# protection waits on them forever and a docs-only PR can never merge. Starting
+# the workflow unconditionally and skipping the heavy jobs with an `if:` keeps
+# the same CI-minute savings (a skipped required check counts as passing) while
+# avoiding that deadlock.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Minimal default token scope; no job writes to the repo. The Codecov upload
+# tolerates failure (fail_ci_if_error: false), so read access is sufficient.
+permissions:
+  contents: read
+
+jobs:
+  # Gate: decide whether the expensive build jobs need to run. `code` is true
+  # when any changed path could affect the Flutter build — i.e. anything outside
+  # the docs/tooling allowlist below. The heavy jobs gate on this output: for a
+  # docs-only change they are *skipped* (not absent), and a skipped required
+  # check satisfies branch protection, so the PR stays mergeable. This is the
+  # inverse of the former `paths-ignore` list — '**' selects everything, then
+  # the negations subtract paths that can't affect the build. Keep them in sync.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      # fst:template-only:start
+      cli: ${{ steps.cli_filter.outputs.cli }}
+      # fst:template-only:end
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Filter paths
+        uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          # Use the `every` quantifier so a path matches `code` only when it
+          # satisfies ALL patterns — i.e. it matches `**` AND is not excluded by
+          # any `!` negation below. The action's default (`some`) matches when
+          # ANY pattern hits, and since `**` always hits, the negations are dead
+          # and `code` is permanently true — so docs/tooling/submodule-only PRs
+          # never actually skip the heavy jobs. `every` makes the exclusions real.
+          predicate-quantifier: 'every'
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!doc/**'
+              - '!LICENSE'
+              - '!.mcp.json'
+              - '!.agents/**'
+              - '!.vscode/**'
+              - '!.antigravity/**'
+              - '!.antigravitycli/**'
+              - '!.mcp/**'
+              - '!.codegraph/**'
+              - '!.commandcode/**'
+              - '!skills-lock.json'
+              - '!.antigravityrules'
+              - '!.coderabbit.yaml'
+              - '!.githooks/**'
+              - '!.gitattributes'
+              - '!.gitmodules'
+              - '!.github/dependabot.yml'
+              # Submodule pointer bumps (incl. Dependabot's). These two aren't
+              # part of the Flutter build and aren't checked out, so a gitlink
+              # change can't affect these jobs. (published/rev_sync is deliberately
+              # NOT excluded: it's a path-dependency of the build, is checked out,
+              # and its bumps must trigger these jobs.)
+              # fst:template-only:start
+              - '!simple_backend_server'
+              - '!published/cli'
+              # fst:template-only:end
+
+      # fst:template-only:start
+      # A separate filter (default `some`/OR quantifier — NOT `every`) for the
+      # CLI scaffold smoke-test: it must run whenever the CLI submodule OR any
+      # template surface the CLI rewrites changes (the workspace pubspec, the app
+      # wiring under lib/app/, the marker-bearing tests), so CLI↔template drift
+      # is caught from either side. Kept a distinct step because `every` (above)
+      # and the default `some` can't share one paths-filter invocation.
+      - name: Filter CLI-scaffold paths
+        uses: dorny/paths-filter@v4
+        id: cli_filter
+        with:
+          filters: |
+            cli:
+              - 'published/cli'
+              - 'pubspec.yaml'
+              - 'analysis_options.yaml'
+              - 'lib/app/**'
+              - 'lib/core/**'
+              - 'packages/features/profile/**'
+              - 'packages/features/splash/**'
+              - 'test/widget_test.dart'
+              - 'test/test_utils/**'
+              - 'test/architecture/**'
+              - '.github/workflows/ci.yml'
+      # fst:template-only:end
+
+  analyze-and-test:
+    name: Analyze & Test
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # fst:template-only:start
+      # rev_sync is a published package vendored as a submodule but consumed as
+      # a path dependency, so unlike the Go backend / CLI submodules it must be
+      # checked out for `flutter pub get` to resolve. Fetch only that submodule.
+      - name: Check out rev_sync submodule
+        run: git submodule update --init published/rev_sync
+      # fst:template-only:end
+
+      # Pin to the same Flutter SDK as .fvmrc (3.44.0). Bump both together.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      # --enforce-lockfile makes CI resolve exactly what pubspec.lock pins, so a
+      # stale or uncommitted lockfile fails the build instead of silently
+      # resolving newer versions.
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      # NOTE: we deliberately do NOT cache .dart_tool/build here. Generated
+      # files are git-ignored, so the checkout has none; a restored build cache
+      # makes build_runner believe outputs already exist and skip regenerating
+      # them (observed with flutter_gen's assets.gen.dart), yielding a broken
+      # tree. A fresh full build from an empty cache is correct, if slower.
+
+      # Generate code so analyze/test see it. Most generated files
+      # (*.g.dart, *.freezed.dart, *.config.dart, *.gen.dart) are git-ignored
+      # and produced fresh here. ObjectBox's binding
+      # (packages/database/lib/objectbox.g.dart) and model
+      # (packages/database/lib/objectbox-model.json) ARE tracked — they hold
+      # stable schema UIDs — so the diff guard fails the build if those drift,
+      # i.e. someone changed an @Entity without committing the regenerated
+      # binding. The binding's $lib$ aggregate builder is per-package, so it must
+      # be generated inside the database package, not by the app-root run.
+      - name: Generate code & verify ObjectBox binding is up to date
+        run: |
+          ./tool/codegen.sh
+          (cd packages/database && dart run build_runner build --delete-conflicting-outputs)
+          drift_files="packages/database_drift/lib/src/app_database.g.dart packages/database_drift/drift_schemas"
+          if ! git diff --quiet --exit-code -- $drift_files; then
+            echo "::error::Drift generated files are out of date. Run tool/codegen.sh and commit the regenerated binding + schema snapshot."
+            git diff --stat -- $drift_files
+            exit 1
+          fi
+          objectbox_files="packages/database/lib/objectbox.g.dart packages/database/lib/objectbox-model.json"
+          if ! git diff --quiet --exit-code -- $objectbox_files; then
+            echo "::error::ObjectBox generated files are out of date. Run 'dart run build_runner build --delete-conflicting-outputs' inside packages/database and commit the binding + model."
+            git diff --stat -- $objectbox_files
+            exit 1
+          fi
+
+      # The injectable micro-package modules (packages/**/lib/src/di.module.dart)
+      # are tracked but were previously ungated: they match none of .gitignore's
+      # generated-file patterns (*.g.dart, *.config.dart, ...) so they are
+      # committed by default, and the format/analyze steps below inspect the
+      # freshly regenerated tree rather than what is in git. A stale module could
+      # therefore sit on main indefinitely — four of them did, including an
+      # import alias bound to two different libraries at once.
+      #
+      # codegen.sh (run above) rebuilds every package that owns one, so any
+      # difference here means the committed output no longer matches the
+      # generator. test/architecture/di_module_codegen_coverage_test.dart keeps
+      # that coverage honest, so this guard cannot quietly go blind.
+      # Matched with a glob pathspec rather than an expanded file list: git
+      # applies the glob itself, so the check never depends on the shell
+      # word-splitting a newline-separated `git ls-files` result.
+      - name: Verify generated DI modules are up to date
+        run: |
+          if [ -z "$(git ls-files -- '*di.module.dart')" ]; then
+            echo "::error::No tracked di.module.dart files found. Has the DI module layout changed? Update this guard."
+            exit 1
+          fi
+          if ! git diff --quiet --exit-code -- '*di.module.dart'; then
+            echo "::error::Generated DI modules are out of date. Run ./tool/codegen.sh and commit the regenerated di.module.dart files."
+            git diff --stat -- '*di.module.dart'
+            git diff -- '*di.module.dart'
+            exit 1
+          fi
+
+      # Localizations are generated (generate: true) and the output under
+      # packages/localization/lib/l10n/ is tracked in git, so editing an .arb
+      # without regenerating AppLocalizations would drift undetected. Regenerate
+      # and fail if the tracked output changes — the same guard we use for the
+      # ObjectBox binding. l10n.yaml lives in the localization package now.
+      - name: Verify localizations are up to date
+        run: |
+          (cd packages/localization && flutter gen-l10n)
+          l10n_files="packages/localization/lib/l10n/app_localizations*.dart"
+          if ! git diff --quiet --exit-code -- $l10n_files; then
+            echo "::error::Generated localizations are out of date. Run 'flutter gen-l10n' inside packages/localization and commit the AppLocalizations output."
+            git diff --stat -- $l10n_files
+            exit 1
+          fi
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: flutter analyze
+
+      # Golden tests are excluded: Flutter goldens are not guaranteed to match
+      # across operating systems, and baselines are generated on macOS while
+      # this runner is Ubuntu. They run locally as a regression check (see
+      # dart_test.yaml). Integration tests under integration_test/ also do not
+      # run here — they boot the real assembled App against an actual platform
+      # target (no headless flutter_tester support), which this runner doesn't
+      # have set up. Run them locally before release: see
+      # integration_test/README.md.
+      - name: Run tests
+        run: |
+          flutter test --coverage --exclude-tags golden
+
+          # Root tests can import workspace packages, but package-owned tests
+          # now live under packages/*/test. Keep package source coverage owned
+          # by each package test run so package files are not double-counted.
+          root_lcov="$(mktemp)"
+          awk '
+            BEGIN { include = 1 }
+            /^SF:/ { include = ($0 !~ /^SF:packages\//) }
+            include { print }
+          ' coverage/lcov.info > "$root_lcov"
+          mv "$root_lcov" coverage/lcov.info
+
+          for package in packages/*; do
+            if [ ! -d "$package/test" ]; then
+              continue
+            fi
+
+            (
+              cd "$package"
+              flutter test --coverage --exclude-tags golden
+            )
+
+            if [ -f "$package/coverage/lcov.info" ]; then
+              sed "s|^SF:|SF:$package/|" \
+                "$package/coverage/lcov.info" >> coverage/lcov.info
+            fi
+          done
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage/lcov.info
+          if-no-files-found: ignore
+
+      # Fail the build if line coverage drops below the threshold. Generated
+      # files are excluded so the percentage reflects hand-written code only.
+      # Current workspace baseline is ~54%; raise `min_coverage` as coverage improves.
+      - name: Enforce coverage threshold
+        uses: VeryGoodOpenSource/very_good_coverage@v3
+        with:
+          path: coverage/lcov.info
+          min_coverage: 53
+          exclude: >-
+            **/*.g.dart
+            **/*.freezed.dart
+            **/*.config.dart
+            **/*.gen.dart
+            **/firebase_options.dart
+            lib/l10n/**
+
+      # Publish coverage to Codecov for PR comments and trend tracking. This is
+      # informational only — it never gates the build (fail_ci_if_error: false),
+      # and `always()` uploads even when the threshold above fails. Tokenless
+      # upload works for public repos; set CODECOV_TOKEN to authenticate if you
+      # hit rate limits.
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  # fst:template-only:start
+  # Scaffold-drift smoke-test (matrix over optional-pillar configs): runs the
+  # `fst` CLI's `create` against THIS checkout (via --template-path) for each
+  # pillar combination and asserts the generated project is coherent. Catches
+  # the failure mode flutter analyze can't — the CLI and the template drifting
+  # apart (renamed/removed `fst:` markers, mis-scoped strips, changed wiring) —
+  # independently per config. Pure Dart: no Flutter, no codegen, so it's fast and
+  # the configs run in parallel. Gated on the `cli` filter. Compile-level
+  # verification of each strip is done locally / at release (the default template
+  # is compiled by analyze-and-test + the build jobs).
+  cli-smoke:
+    name: CLI scaffold (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: default, flags: '' }
+          - { name: exclude-notifications, flags: '--exclude-feature notifications' }
+          - { name: exclude-bookmarks, flags: '--exclude-feature bookmarks' }
+          - { name: no-firebase, flags: '--no-firebase' }
+          - { name: no-auth, flags: '--no-auth' }
+          - { name: no-backend, flags: '--no-backend' }
+          - { name: minimal, flags: '--minimal' }
+          # Drift diverges from ObjectBox in what it can strip — it drops
+          # per-feature tables and the sync engine, ObjectBox keeps both — so
+          # the configs where that shows have to be covered on both engines.
+          - { name: default-drift, flags: '--database drift' }
+          - { name: exclude-bookmarks-drift, flags: '--exclude-feature bookmarks --database drift' }
+          - { name: minimal-drift, flags: '--minimal --database drift' }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The smoke-test scaffolds from this checkout, so both the CLI source and
+      # the kept rev_sync path-dependency must be materialised.
+      - name: Check out CLI + rev_sync submodules
+        run: git submodule update --init published/cli published/rev_sync
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+
+      - name: Resolve CLI dependencies
+        working-directory: published/cli
+        run: dart pub get
+
+      # Scaffold into a temp dir OUTSIDE the workspace. --template-path makes the
+      # run exercise the current template (not the published remote); --no-setup
+      # keeps it to pure-Dart scaffolding.
+      - name: Scaffold a project from this checkout
+        working-directory: published/cli
+        run: |
+          dart run bin/fst.dart create \
+            --yes \
+            --name "Smoke App" \
+            --package-name smoke_app \
+            --bundle-id com.example.smoke \
+            --org "Smoke Org" \
+            --template-path "$GITHUB_WORKSPACE" \
+            --output-dir "$RUNNER_TEMP/smoke" \
+            --no-setup \
+            ${{ matrix.flags }}
+
+      - name: Assert the scaffold is coherent
+        env:
+          CONFIG: ${{ matrix.name }}
+        run: |
+          out="$RUNNER_TEMP/smoke"
+          fail=0
+
+          # ── Shared coherence checks (every config) ──
+          grep -q '^name: smoke_app' "$out/pubspec.yaml" \
+            || { echo "::error::pubspec not renamed to smoke_app"; fail=1; }
+          [ ! -d "$out/published/cli" ] \
+            || { echo "::error::dev submodule published/cli leaked"; fail=1; }
+          [ ! -d "$out/simple_backend_server" ] \
+            || { echo "::error::dev submodule simple_backend_server leaked"; fail=1; }
+          [ -d "$out/.git" ] \
+            || { echo "::error::no fresh git repo was initialised"; fail=1; }
+          if grep -rIl 'flutter_starter_template\|lucistudio\|Luci Studio' \
+              "$out/lib" "$out/pubspec.yaml" "$out/android" "$out/ios" 2>/dev/null; then
+            echo "::error::template identifiers leaked into the scaffold"; fail=1
+          fi
+
+          auth="$out/packages/features/auth"
+          network="$out/packages/network"
+          syncconn="$out/packages/sync_connectivity_plus"
+          bookmarks="$out/packages/features/bookmarks"
+          notifications="$out/packages/features/notifications"
+          profile_header="$out/packages/features/profile/lib/src/presentation/widgets/profile_header.dart"
+          infoplist="$out/ios/Runner/Info.plist"
+          manifest="$out/android/app/src/main/AndroidManifest.xml"
+
+          # The camera / microphone / photo-library permissions exist only for
+          # the bookmarks media-capture flow, so the CLI strips them (and their
+          # fst:feature:bookmarks markers) whenever bookmarks is removed. These
+          # helpers keep the native config from drifting into declaring — or
+          # over-stripping — those permissions.
+          assert_no_media_perms() {
+            local key
+            for key in NSCameraUsageDescription NSMicrophoneUsageDescription \
+                NSPhotoLibraryUsageDescription NSPhotoLibraryAddUsageDescription; do
+              if grep -q "$key" "$infoplist"; then
+                echo "::error::$key not stripped from Info.plist ($CONFIG)"; fail=1
+              fi
+            done
+            for key in android.permission.CAMERA android.permission.RECORD_AUDIO; do
+              if grep -q "$key" "$manifest"; then
+                echo "::error::$key not stripped from AndroidManifest ($CONFIG)"; fail=1
+              fi
+            done
+            if grep -q 'fst:feature:bookmarks' "$infoplist" "$manifest"; then
+              echo "::error::bookmarks permission markers survived ($CONFIG)"; fail=1
+            fi
+          }
+
+          assert_media_perms_present() {
+            local key
+            for key in NSCameraUsageDescription NSMicrophoneUsageDescription \
+                NSPhotoLibraryUsageDescription NSPhotoLibraryAddUsageDescription; do
+              grep -q "$key" "$infoplist" \
+                || { echo "::error::$key wrongly stripped ($CONFIG)"; fail=1; }
+            done
+            for key in android.permission.CAMERA android.permission.RECORD_AUDIO; do
+              grep -q "$key" "$manifest" \
+                || { echo "::error::$key wrongly stripped ($CONFIG)"; fail=1; }
+            done
+          }
+
+          # rev_sync is a path dependency, so a scaffold that keeps it must
+          # keep the directory — and one that sheds it must shed both. Only
+          # `--database drift` with the backend off can: ObjectBox entities
+          # implement `Syncable`, so on that path the engine always stays.
+          assert_rev_sync_present() {
+            [ -d "$out/published/rev_sync" ] \
+              || { echo "::error::rev_sync path-dependency missing ($CONFIG)"; fail=1; }
+            grep -q 'rev_sync' "$out/pubspec.yaml" \
+              || { echo "::error::rev_sync dependency wrongly stripped ($CONFIG)"; fail=1; }
+          }
+
+          assert_rev_sync_absent() {
+            [ ! -d "$out/published/rev_sync" ] \
+              || { echo "::error::rev_sync directory not removed ($CONFIG)"; fail=1; }
+            if grep -q 'rev_sync' "$out/pubspec.yaml"; then
+              echo "::error::rev_sync dependency left behind, pub get will fail ($CONFIG)"; fail=1
+            fi
+          }
+
+          # A table whose feature is gone is dead schema: created on every
+          # install, replayed in every migration.
+          assert_drift_table_absent() {
+            local table="$1"
+            [ ! -f "$out/packages/database/lib/src/tables/${table}_table.dart" ] \
+              || { echo "::error::${table} table not removed ($CONFIG)"; fail=1; }
+            if grep -q "${table}_table" "$out/packages/database/lib/src/app_database.dart"; then
+              echo "::error::${table} still registered in AppDatabase ($CONFIG)"; fail=1
+            fi
+          }
+
+          # ── Per-config structural assertions ──
+          case "$CONFIG" in
+            default|default-drift)
+              [ -d "$auth" ] || { echo "::error::auth removed in default"; fail=1; }
+              [ -d "$bookmarks" ] || { echo "::error::bookmarks missing in default"; fail=1; }
+              assert_media_perms_present
+              assert_rev_sync_present
+              ;;
+            exclude-notifications)
+              [ ! -d "$notifications" ] || { echo "::error::notifications not removed"; fail=1; }
+              [ -d "$bookmarks" ] || { echo "::error::bookmarks wrongly removed"; fail=1; }
+              assert_media_perms_present
+              assert_rev_sync_present
+              ;;
+            exclude-bookmarks|exclude-bookmarks-drift)
+              [ ! -d "$bookmarks" ] || { echo "::error::bookmarks not removed (exclude-bookmarks)"; fail=1; }
+              [ -d "$out/packages/features/collections" ] || { echo "::error::collections wrongly removed (exclude-bookmarks)"; fail=1; }
+              [ -d "$auth" ] || { echo "::error::auth wrongly removed (exclude-bookmarks)"; fail=1; }
+              assert_no_media_perms
+              assert_rev_sync_present
+              grep -q 'android.permission.POST_NOTIFICATIONS' "$manifest" \
+                || { echo "::error::POST_NOTIFICATIONS wrongly stripped (exclude-bookmarks)"; fail=1; }
+              if [ "$CONFIG" = exclude-bookmarks-drift ]; then
+                assert_drift_table_absent bookmarks
+                [ -f "$out/packages/database/lib/src/tables/collections_table.dart" ] \
+                  || { echo "::error::collections table wrongly removed ($CONFIG)"; fail=1; }
+              fi
+              ;;
+            no-firebase)
+              [ -d "$auth" ] || { echo "::error::auth removed in no-firebase"; fail=1; }
+              [ ! -f "$out/android/app/google-services.json" ] || { echo "::error::firebase config left in no-firebase"; fail=1; }
+              assert_rev_sync_present
+              ;;
+            no-auth)
+              [ ! -d "$auth" ] || { echo "::error::auth package not removed (no-auth)"; fail=1; }
+              [ ! -f "$profile_header" ] || { echo "::error::profile_header not removed (no-auth)"; fail=1; }
+              [ -d "$bookmarks" ] || { echo "::error::bookmarks wrongly removed (no-auth)"; fail=1; }
+              assert_rev_sync_present
+              if grep -rIq 'fst:auth:' "$out/lib" "$out/test" "$out/packages" 2>/dev/null; then
+                echo "::error::fst:auth markers survived the strip (no-auth)"; fail=1
+              fi
+              ;;
+            no-backend|minimal|minimal-drift)
+              [ ! -d "$auth" ] || { echo "::error::auth not removed ($CONFIG)"; fail=1; }
+              [ ! -d "$network" ] || { echo "::error::network not removed ($CONFIG)"; fail=1; }
+              [ ! -d "$syncconn" ] || { echo "::error::sync_connectivity_plus not removed ($CONFIG)"; fail=1; }
+              [ ! -d "$bookmarks" ] || { echo "::error::bookmarks not removed ($CONFIG)"; fail=1; }
+              [ ! -d "$out/packages/features/collections" ] || { echo "::error::collections not removed ($CONFIG)"; fail=1; }
+              [ ! -d "$notifications" ] || { echo "::error::notifications not removed ($CONFIG)"; fail=1; }
+              if grep -rIq 'fst:backend:\|fst:auth:' "$out/lib" "$out/test" "$out/packages" 2>/dev/null; then
+                echo "::error::fst markers survived the strip ($CONFIG)"; fail=1
+              fi
+              assert_no_media_perms
+              [ ! -d "$out/integration_test" ] \
+                || { echo "::error::demo e2e suite not removed ($CONFIG)"; fail=1; }
+              if [ "$CONFIG" = minimal-drift ]; then
+                assert_rev_sync_absent
+                for t in bookmarks collections notifications activities sync_cursors; do
+                  assert_drift_table_absent "$t"
+                done
+              else
+                assert_rev_sync_present
+              fi
+              ;;
+          esac
+          exit $fail
+
+  # The assertions above prove the right files are gone; only the analyzer
+  # proves what's left still compiles. That gap is exactly how a --minimal
+  # scaffold once shipped with 39 analyzer errors — every strip target was
+  # correctly removed, and the source still referencing it was not.
+  #
+  # Deliberately a separate job from cli-smoke: this one needs the Flutter SDK
+  # and a full codegen run per config, so it is minutes rather than seconds.
+  # The matrix is therefore the four corners — both engines at their fullest
+  # and their emptiest — rather than every flag combination.
+  cli-scaffold-analyze:
+    name: CLI scaffold analyzes (${{ matrix.name }})
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: default, flags: '' }
+          - { name: default-drift, flags: '--database drift' }
+          - { name: minimal, flags: '--minimal' }
+          - { name: minimal-drift, flags: '--minimal --database drift' }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check out CLI + rev_sync submodules
+        run: git submodule update --init published/cli published/rev_sync
+
+      # Same SDK as .fvmrc (3.44.0); bump together. Provides the `dart` the CLI
+      # runs on too, so no separate setup-dart step is needed.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Resolve CLI dependencies
+        working-directory: published/cli
+        run: dart pub get
+
+      - name: Scaffold a project from this checkout
+        working-directory: published/cli
+        run: |
+          dart run bin/fst.dart create \
+            --yes \
+            --name "Smoke App" \
+            --package-name smoke_app \
+            --bundle-id com.example.smoke \
+            --org "Smoke Org" \
+            --template-path "$GITHUB_WORKSPACE" \
+            --output-dir "$RUNNER_TEMP/analyze-smoke" \
+            --no-setup \
+            ${{ matrix.flags }}
+
+      # Runs the scaffold's own bootstrap rather than open-coding the steps, so
+      # a break in tool/setup.sh fails here too. --no-hooks keeps CI out of the
+      # pre-push gate; --no-backend skips Go deps the analyzer doesn't need.
+      # Generated code is git-ignored, so a scaffold from a fresh checkout has
+      # none and cannot be analyzed until this has run.
+      - name: Bootstrap the scaffold
+        working-directory: ${{ runner.temp }}/analyze-smoke
+        run: ./tool/setup.sh --no-hooks --no-backend
+
+      - name: Analyze the scaffold
+        working-directory: ${{ runner.temp }}/analyze-smoke
+        run: flutter analyze
+
+      # The scaffold ships with a pre-push hook and a CI format gate of its
+      # own, so unformatted output blocks the project's first push. Stripping a
+      # marker region leaves the blank lines that surrounded it, which is
+      # exactly the kind of damage `analyze` is blind to.
+      - name: Check the scaffold's formatting
+        working-directory: ${{ runner.temp }}/analyze-smoke
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Test the scaffold
+        working-directory: ${{ runner.temp }}/analyze-smoke
+        run: flutter test
+  # fst:template-only:end
+
+  # Compile smoke-test: `flutter analyze` type-checks Dart but never assembles
+  # the app, so Gradle/plugin/asset/manifest regressions slip past it and only
+  # surface at release time. This job catches them per-PR by building an
+  # unsigned debug APK. Debug (not release) keeps it secret-free: it signs with
+  # the auto-generated debug keystore, so no signing material is needed and the
+  # job runs on fork PRs too. The real signed release build still happens in
+  # release.yml before shipping.
+  build-android:
+    name: Build Android (debug)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # fst:template-only:start
+      # rev_sync is a published package vendored as a submodule but consumed as
+      # a path dependency, so unlike the Go backend / CLI submodules it must be
+      # checked out for `flutter pub get` to resolve. Fetch only that submodule.
+      - name: Check out rev_sync submodule
+        run: git submodule update --init published/rev_sync
+      # fst:template-only:end
+
+      # Pin to the same Flutter SDK as .fvmrc (3.44.0). Bump both together.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      # Cache Gradle's downloaded dependencies and wrapper so the Android build
+      # doesn't refetch the toolchain + dependencies every run. Keyed on the
+      # Gradle build files; restore-keys give a partial-cache fallback. Only
+      # external deps are cached here, not generated Dart — the build_runner
+      # caching caveat documented above does not apply to Gradle's cache.
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties', 'android/gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # fst:firebase:start
+      # The com.google.gms.google-services Gradle plugin parses
+      # google-services.json at build time (it never contacts Firebase), and
+      # the file is git-ignored — so a fresh checkout has none and Gradle fails
+      # without it. We write a placeholder rather than restoring the real config
+      # from a secret: a smoke-test only needs the app to assemble, and a
+      # secret-free job keeps working on fork PRs. The package_name must match
+      # the flavor we build (dev → base applicationId + ".dev"); update it here
+      # if android/app/build.gradle.kts flavor suffixes change.
+      - name: Generate placeholder google-services.json
+        run: |
+          cat > android/app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "ci-placeholder",
+              "storage_bucket": "ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": {
+                    "package_name": "com.lucistudio.flutter_starter_template.dev"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  { "current_key": "AIzaPlaceholderCiKey0000000000000000000" }
+                ],
+                "services": {
+                  "appinvite_service": { "other_platform_oauth_client": [] }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+      # Generated code (*.g.dart, *.freezed.dart, etc.) is git-ignored, and
+      # `flutter build` does not run build_runner — so generate it here before
+      # building, or the Dart compile fails on missing sources. As in the test
+      # job, we do NOT cache .dart_tool/build: with the outputs git-ignored, a
+      # restored cache makes build_runner skip files it believes exist,
+      # producing a broken tree.
+      # fst:firebase:end
+      - name: Generate code
+        run: |
+          flutter pub get --enforce-lockfile
+          ./tool/codegen.sh
+
+      # The app uses Android flavors (dev/staging/prod), so a flavor is
+      # required. dev is the natural debug target.
+      - name: Build debug APK
+        run: flutter build apk --debug --flavor dev
+
+  # iOS counterpart of build-android: catches the CocoaPods/SPM/Podfile and
+  # native-plugin breakage class that only surfaces when Xcode actually
+  # assembles the app. --no-codesign skips certificates/provisioning entirely,
+  # so this needs no Apple secrets and the signed TestFlight build still lives
+  # in release.yml. macOS runners are free for public repos, so this runs on
+  # every PR; the only cost is wall-clock time (pod install + native compile).
+  build-ios:
+    name: Build iOS (debug, no codesign)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # fst:template-only:start
+      # rev_sync is a published package vendored as a submodule but consumed as
+      # a path dependency, so unlike the Go backend / CLI submodules it must be
+      # checked out for `flutter pub get` to resolve. Fetch only that submodule.
+      - name: Check out rev_sync submodule
+        run: git submodule update --init published/rev_sync
+      # fst:template-only:end
+
+      # connectivity_plus 7.x compiles against the iOS 26 SDK: it references
+      # NWPath.isUltraConstrained behind an `if #available(iOS 26.0, *)`, but
+      # the symbol must still exist at compile time. The macos-15 runner's
+      # default Xcode is older and lacks that SDK, so select the latest stable
+      # Xcode (which ships the iOS 26 SDK). Bump runner/Xcode together with the
+      # SDK requirement if a plugin later needs a newer one.
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # Pin to the same Flutter SDK as .fvmrc (3.44.0). Bump both together.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      # Cache the installed Pods and the CocoaPods download cache so the
+      # `pod install` that `flutter build ios` runs doesn't refetch every pod
+      # each run. Keyed on the committed ios/Podfile.lock; restore-keys give a
+      # partial-cache fallback when the lockfile changes.
+      - name: Cache CocoaPods
+        uses: actions/cache@v6
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      # This project requires CocoaPods, not SPM (see CLAUDE.md). The setting is
+      # machine-global, so each runner must disable SPM before the first build.
+      - name: Disable Swift Package Manager
+        run: flutter config --no-enable-swift-package-manager
+
+      # fst:firebase:start
+      # GoogleService-Info.plist is git-ignored but the Xcode project references
+      # it as a bundled resource, so a fresh checkout fails with "Build input
+      # file cannot be found". As on Android, write a placeholder rather than
+      # restoring the real plist from a secret: Firebase reads it at runtime,
+      # never at compile time, so dummy values assemble fine and the job stays
+      # secret-free and fork-friendly.
+      - name: Generate placeholder GoogleService-Info.plist
+        run: |
+          cat > ios/Runner/GoogleService-Info.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>API_KEY</key>
+          	<string>AIzaPlaceholderCiKey0000000000000000000</string>
+          	<key>GCM_SENDER_ID</key>
+          	<string>000000000000</string>
+          	<key>BUNDLE_ID</key>
+          	<string>com.lucistudio.flutter_starter_template.dev</string>
+          	<key>PROJECT_ID</key>
+          	<string>ci-placeholder</string>
+          	<key>STORAGE_BUCKET</key>
+          	<string>ci-placeholder.appspot.com</string>
+          	<key>IS_ADS_ENABLED</key>
+          	<false/>
+          	<key>IS_ANALYTICS_ENABLED</key>
+          	<false/>
+          	<key>IS_APPINVITE_ENABLED</key>
+          	<true/>
+          	<key>IS_GCM_ENABLED</key>
+          	<true/>
+          	<key>IS_SIGNIN_ENABLED</key>
+          	<true/>
+          	<key>GOOGLE_APP_ID</key>
+          	<string>1:000000000000:ios:0000000000000000000000</string>
+          </dict>
+          </plist>
+          EOF
+      # fst:firebase:end
+
+      # fst:firebase:start
+      # firebase.json (git-ignored) drives the FlutterFire Crashlytics build
+      # phase. Write a placeholder with "uploadDebugSymbols": false so the
+      # `flutterfire upload-crashlytics-symbols` phase reads it and skips the
+      # upload entirely — without it the phase throws PathNotFoundException, and
+      # with upload enabled it would need a real Firebase project. dSYM upload is
+      # a release concern handled in release.yml, not this smoke-test.
+      - name: Generate placeholder firebase.json
+        run: |
+          cat > firebase.json <<'EOF'
+          {
+            "flutter": {
+              "platforms": {
+                "android": {
+                  "default": {
+                    "projectId": "ci-placeholder",
+                    "appId": "1:000000000000:android:0000000000000000000000",
+                    "fileOutput": "android/app/google-services.json"
+                  }
+                },
+                "ios": {
+                  "default": {
+                    "projectId": "ci-placeholder",
+                    "appId": "1:000000000000:ios:0000000000000000000000",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "ios/Runner/GoogleService-Info.plist"
+                  }
+                },
+                "dart": {
+                  "lib/firebase_options.dart": {
+                    "projectId": "ci-placeholder",
+                    "configurations": {
+                      "android": "1:000000000000:android:0000000000000000000000",
+                      "ios": "1:000000000000:ios:0000000000000000000000"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          EOF
+
+      # Generated code (*.g.dart, *.freezed.dart, etc.) is git-ignored, and
+      # `flutter build` does not run build_runner — so generate it here before
+      # building. As elsewhere, we do NOT cache .dart_tool/build: a restored
+      # cache makes build_runner skip files it believes exist, producing a
+      # broken tree.
+      # fst:firebase:end
+      - name: Generate code
+        run: |
+          flutter pub get --enforce-lockfile
+          ./tool/codegen.sh
+
+      # The Xcode project has a FlutterFire build phase that runs
+      # `flutterfire upload-crashlytics-symbols`; without the CLI on PATH the
+      # phase fails with "flutterfire: command not found". Install it so the
+      # phase resolves — on a debug build there are no dSYMs to upload, so it
+      # no-ops. (The build-phase script already adds ~/.pub-cache/bin to PATH.)
+      - name: Install FlutterFire CLI
+        run: |
+          dart pub global activate flutterfire_cli 1.4.0
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      # dev flavor maps to the shared dev.xcscheme. --no-codesign skips signing
+      # so no certificates or provisioning profiles are needed.
+      - name: Build iOS (no codesign)
+        run: flutter build ios --debug --no-codesign --flavor dev
+
+  # Golden (pixel-comparison) tests are excluded from analyze-and-test because
+  # Flutter goldens are not stable across operating systems and that job runs on
+  # Ubuntu, while the baselines are generated on macOS. Run them here on macOS —
+  # matching the baselines — so UI regressions are caught in CI. They currently
+  # live in packages/app_ui, which has no codegen, so no build_runner is needed.
+  golden-tests:
+    name: Golden tests (macOS)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # fst:template-only:start
+      # rev_sync is a published package vendored as a submodule but consumed as
+      # a path dependency, so unlike the Go backend / CLI submodules it must be
+      # checked out for `flutter pub get` to resolve. Fetch only that submodule.
+      - name: Check out rev_sync submodule
+        run: git submodule update --init published/rev_sync
+      # fst:template-only:end
+
+      # Pin to the same Flutter SDK as .fvmrc (3.44.0). Bump both together.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Run golden tests
+        working-directory: packages/app_ui
+        run: flutter test --tags golden
+
+      # On mismatch, the golden harness writes actual/diff PNGs under a
+      # `failures/` directory next to the baselines. Upload them so a reviewer
+      # can see exactly what changed.
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-failures
+          path: 'packages/app_ui/test/**/failures/**'
+          if-no-files-found: ignore

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only network security config.
+
+  Android API 28+ blocks cleartext (HTTP) traffic by default. The `dev` flavor
+  talks to a local backend over plain HTTP (http://localhost:8080, or
+  http://10.0.2.2:8080 from the Android emulator), so debug builds need an
+  explicit allowance. This file lives under src/debug/ and is therefore NOT
+  bundled into release builds — production stays cleartext-off.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <!-- The host machine's loopback as seen from the Android emulator. -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

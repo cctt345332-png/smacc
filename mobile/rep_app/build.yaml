@@ -1,0 +1,12 @@
+# Code generation is driven by build_runner. The active generators (freezed,
+# injectable, go_router_builder, flutter_gen) run with their default settings
+# over the whole package. No per-builder scoping is configured: the feature
+# data layers that needed it (retrofit clients, json_serializable models) now
+# live in their own packages, and freezed/injectable are deliberately left
+# unscoped — @freezed spans both data/models and presentation/bloc, and the
+# injectable config builder must see the whole DI graph.
+#
+# Note: CI/release intentionally do NOT cache `.dart_tool/build`. Because
+# generated files are git-ignored, a restored cache makes build_runner skip
+# regenerating outputs it believes exist, producing a broken tree. Correctness
+# comes from a fresh full build, not from caching.

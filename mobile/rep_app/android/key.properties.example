@@ -1,0 +1,17 @@
+# Copy this file to `key.properties` (same directory) and fill it in to enable
+# release signing. `key.properties` and keystore files (*.jks / *.keystore) are
+# git-ignored — never commit them. See https://flutter.dev/to/reference-keystore
+#
+# Without key.properties, release builds fall back to the debug keystore so the
+# template still builds; that fallback is NOT acceptable for a Play upload.
+#
+# Generate an upload keystore once:
+#   keytool -genkey -v -keystore upload-keystore.jks -storetype JKS \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+
+storePassword=
+keyPassword=
+keyAlias=upload
+
+# Absolute path is most robust. A relative path is resolved from android/app.
+storeFile=/absolute/path/to/upload-keystore.jks

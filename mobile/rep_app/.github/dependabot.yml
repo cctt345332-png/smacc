@@ -1,0 +1,73 @@
+version: 2
+updates:
+  # Dart / Flutter packages
+  - package-ecosystem: pub
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - dart
+    ignore:
+      # Held at <2.34.1, matching the caps in packages/database_drift/pubspec.yaml.
+      # `objectbox_generator` pins `analyzer <11.0.0` for the whole workspace,
+      # which holds `drift_dev` at 2.34.0, and that version's schema verifier
+      # does not compile against drift >=2.34.1. Without this, the weekly group
+      # PR keeps proposing a drift bump that cannot build. Drop both this entry
+      # and the pubspec caps once objectbox_generator supports analyzer >=11.
+      - dependency-name: drift
+        versions: [">=2.34.1"]
+      - dependency-name: drift_dev
+        versions: [">=2.34.1"]
+    groups:
+      # Bundle all non-major pub bumps into a single PR.
+      pub-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Android Gradle dependencies
+  - package-ecosystem: gradle
+    directory: "/android"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - android
+    groups:
+      gradle-minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Note: iOS CocoaPods is intentionally omitted — Dependabot has no
+  # CocoaPods support, and there is no Gemfile in /ios to track.
+
+  # GitHub Actions used in workflows
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - ci
+    groups:
+      # All action bumps in one PR — they rarely conflict.
+      github-actions:
+        patterns:
+          - "*"
+
+  # fst:template-only:start
+  # Git submodules (simple_backend_server + published/cli). Dependabot watches each
+  # submodule's default branch and opens the parent pointer-bump PR when it
+  # moves, so the embedded backend and CLI stay in sync without a manual bump.
+  - package-ecosystem: gitsubmodule
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - submodules
+  # fst:template-only:end

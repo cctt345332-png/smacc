@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+#
+# Pre-push guard: runs the same fast static checks as the CI "Analyze & Test"
+# job so formatting/analyzer problems are caught locally instead of failing CI.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Bypass in an emergency:
+#   git push --no-verify
+#
+set -euo pipefail
+
+# Git exports GIT_DIR (and friends) when it runs a hook, and those variables
+# leak into every child process. FVM resolves its pinned SDK by inspecting its
+# own cache with a git subprocess — the inherited GIT_DIR makes that lookup
+# resolve against THIS repository instead, and fvm aborts before running
+# anything:
+#
+#   Invalid argument(s): The provided value "~/fvm/cache.git" is not the root
+#   of a git directory
+#
+# The failure is unconditional, so without this the hook can never run through
+# `git push` on an FVM machine — it is not a property of the branch or the
+# diff, and repairing the fvm cache does not help (git honours GIT_DIR over
+# `-C` even for a valid bare repo).
+#
+# Dropping the variables is safe for our own git calls below: during pre-push
+# the working directory is the repository root, so `git ls-files` rediscovers
+# the repo on its own.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+
+# Prefer the FVM-pinned SDK (this repo pins Flutter via .fvmrc); fall back to a
+# plain toolchain if FVM is not installed.
+if command -v fvm >/dev/null 2>&1; then
+  dart() { fvm dart "$@"; }
+  flutter() { fvm flutter "$@"; }
+  format_fix_cmd="fvm dart format \$(git ls-files '*.dart')"
+else
+  format_fix_cmd="dart format \$(git ls-files '*.dart')"
+fi
+
+if ! command -v dart >/dev/null 2>&1 || ! command -v flutter >/dev/null 2>&1; then
+  echo "✖ Missing required tooling: dart/flutter not found in PATH." >&2
+  echo "  Install the Flutter SDK or FVM and retry (or skip with --no-verify)." >&2
+  exit 1
+fi
+
+# Generated code (*.g.dart, *.freezed.dart, etc.) is git-ignored, so a clean
+# tree has none and analyze would fail on missing sources. Generate first,
+# mirroring CI. Fast once build_runner's cache is warm.
+echo "▶ pre-push: generating code (build_runner)…"
+if ! dart run build_runner build --delete-conflicting-outputs; then
+  echo "✖ Code generation failed. Resolve build_runner errors before pushing." >&2
+  exit 1
+fi
+
+echo "▶ pre-push: verifying formatting (dart format)…"
+# Check only files tracked by THIS repo. Submodule contents (published/cli,
+# published/rev_sync, simple_backend_server) are gitlinks, so `git ls-files`
+# excludes them — their own repos/CI own their formatting, and e.g. the CLI's
+# source is maintained on a different SDK. Passing `.` instead would reformat
+# the submodules and false-fail the push (CI is unaffected: it never checks out
+# published/cli).
+tracked_dart="$(git ls-files '*.dart')"
+# Pass the file list directly (not via xargs): `dart` here is a shell function
+# wrapping `fvm dart`, and xargs would invoke the PATH `dart` binary instead —
+# a different SDK whose formatter rules differ. Word-splitting is intentional
+# (paths have no spaces); the guard skips the no-files case.
+if [ -n "$tracked_dart" ]; then
+  # shellcheck disable=SC2086
+  if ! dart format --output=none --set-exit-if-changed $tracked_dart; then
+    echo "✖ Formatting issues found. Fix with: ${format_fix_cmd}" >&2
+    exit 1
+  fi
+fi
+
+echo "▶ pre-push: analyzing (flutter analyze)…"
+if ! flutter analyze; then
+  echo "✖ Analyzer issues found. Resolve them before pushing." >&2
+  exit 1
+fi
+
+echo "✓ pre-push checks passed"

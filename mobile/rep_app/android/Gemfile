@@ -1,0 +1,6 @@
+source "https://rubygems.org"
+
+# Fastlane drives the Google Play build/upload lanes in fastlane/Fastfile.
+# Pinned to a 2.x range so `bundle install` is reproducible across machines
+# and CI; bump deliberately. Requires Ruby >= 2.7 (see fastlane/README.md).
+gem "fastlane", "~> 2.226"

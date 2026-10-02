@@ -1,0 +1,9 @@
+# Account-specific values are read from the environment so nothing
+# project-specific is committed. Copy fastlane/.env.example to fastlane/.env
+# and fill in real values (the .env file is git-ignored).
+#
+# The `beta` lane overrides package_name per flavor; the value here is the base
+# (prod) package name used by any action that reads the Appfile directly.
+
+json_key_file(ENV["PLAY_STORE_JSON_KEY_PATH"])
+package_name(ENV["ANDROID_PACKAGE_NAME_BASE"])

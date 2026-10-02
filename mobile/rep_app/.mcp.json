@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp",
+        "--path",
+        "."
+      ],
+      "env": {}
+    },
+    "dart": {
+      "type": "stdio",
+      "command": "fvm",
+      "args": [
+        "dart",
+        "mcp-server"
+      ],
+      "env": {}
+    },
+    "firebase": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "firebase-tools@latest",
+        "mcp"
+      ]
+    }
+  }
+}

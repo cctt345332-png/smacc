@@ -1,0 +1,30 @@
+name: app_ui
+description: Shared UI design tokens for the Flutter starter template.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flex_color_scheme: ^8.4.0
+  flutter_animate: ^4.5.2
+  animated_text_kit: ^4.3.0
+  flutter_link_previewer: ^4.2.0
+  flutter_slidable: ^4.0.3
+  photo_view: ^0.15.0
+  cached_network_image: ^3.4.1
+  carousel_slider: ^5.1.2
+  google_fonts: ^8.2.0
+  font_awesome_flutter: ^11.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  test_utils: ^0.1.0

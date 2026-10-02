@@ -1,0 +1,50 @@
+# -------------------------------------------------------------------------
+# Line endings: normalize to LF in the repo, check out native on disk.
+# Keeps diffs clean across macOS / Linux / Windows and CI.
+# -------------------------------------------------------------------------
+* text=auto eol=lf
+
+# Windows-specific scripts must keep CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Shell scripts and gradlew must stay LF and executable-friendly
+*.sh        text eol=lf
+gradlew     text eol=lf
+*.gradle    text eol=lf
+*.gradle.kts text eol=lf
+
+# -------------------------------------------------------------------------
+# Generated files: collapse in diffs and exclude from language stats.
+# -------------------------------------------------------------------------
+*.g.dart        linguist-generated=true
+*.freezed.dart  linguist-generated=true
+*.gr.dart       linguist-generated=true
+*.gen.dart      linguist-generated=true
+*.config.dart   linguist-generated=true
+**/l10n/*.dart  linguist-generated=true
+pubspec.lock    linguist-generated=true -diff
+*.lock          linguist-generated=true -diff
+
+# -------------------------------------------------------------------------
+# Binary assets: never treat as text, never line-ending-normalize.
+# -------------------------------------------------------------------------
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.webp      binary
+*.svg       text
+*.ttf       binary
+*.otf       binary
+*.woff      binary
+*.woff2     binary
+*.pdf       binary
+*.zip       binary
+*.jar       binary
+*.keystore  binary
+*.jks       binary
+*.p12       binary
+*.mp4       binary
+*.mov       binary
