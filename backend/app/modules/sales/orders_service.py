@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -8,6 +9,33 @@ from fastapi import HTTPException
 from app.models.sales_orders import SalesOrder, SalesOrderLine, SalesOrderStatus
 from app.models.sales import Customer, Invoice, InvoiceStatus, Payment, CreditNote
 from app.models.accounting import Account
+
+
+_STATEMENT_PAYMENT_METHOD_AR = {
+    "cash": "نقداً",
+    "bank_transfer": "تحويل بنكي",
+    "cheque": "شيك",
+    "credit_card": "بطاقة ائتمانية",
+    "mada": "مدى",
+    "stc_pay": "STC Pay",
+}
+
+
+def _statement_number(value):
+    """Keep only the numeric part of customer and document references."""
+    text = str(value or "")
+    digits = re.sub(r"\D", "", text)
+    return digits or text
+
+
+def _statement_payment_method(value):
+    key = getattr(value, "value", value)
+    return _STATEMENT_PAYMENT_METHOD_AR.get(str(key), str(key))
+
+
+def _statement_date(value):
+    """The statement displays calendar dates, not timestamps."""
+    return value.date().isoformat() if isinstance(value, datetime) else str(value)
 
 
 async def _next_order_number(db: AsyncSession, tenant_id: str) -> str:
@@ -216,7 +244,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
             prior_balance += amount
         elif entry.entry_date <= to_date:
             transactions.append({
-                "date": entry.entry_date, "type": "opening_balance", "reference": entry.entry_number,
+                "date": entry.entry_date, "type": "opening_balance", "reference": _statement_number(entry.entry_number),
                 "description_ar": entry.description_ar, "description_en": entry.description_en or entry.description_ar,
                 "debit": float(line.debit or 0), "credit": float(line.credit or 0),
             })
@@ -227,7 +255,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
             prior_balance += amount
         else:
             transactions.append({
-                "date": inv.issue_date, "type": "invoice", "reference": inv.invoice_number,
+                "date": inv.issue_date, "type": "invoice", "reference": _statement_number(inv.invoice_number),
                 "description_ar": f"فاتورة مبيعات - {inv.buyer_name_ar}", "description_en": f"Sales Invoice - {inv.buyer_name_ar}",
                 "debit": float(amount), "credit": 0,
             })
@@ -237,8 +265,9 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
             prior_balance -= amount
         else:
             transactions.append({
-                "date": pay.payment_date, "type": "payment", "reference": pay.payment_number,
-                "description_ar": f"سند قبض - {pay.payment_method}", "description_en": f"Payment Receipt - {pay.payment_method}",
+                "date": pay.payment_date, "type": "payment", "reference": _statement_number(pay.payment_number),
+                "description_ar": f"سند قبض - {_statement_payment_method(pay.payment_method)}",
+                "description_en": f"Payment Receipt - {_statement_payment_method(pay.payment_method)}",
                 "debit": 0, "credit": float(amount),
             })
     for credit_note in credit_notes:
@@ -247,7 +276,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
             prior_balance -= amount
         else:
             transactions.append({
-                "date": credit_note.issue_date, "type": "credit_note", "reference": credit_note.credit_note_number,
+                "date": credit_note.issue_date, "type": "credit_note", "reference": _statement_number(credit_note.credit_note_number),
                 "description_ar": f"مرتجع مبيعات - {credit_note.reason or credit_note.credit_note_number}",
                 "description_en": f"Sales Return - {credit_note.reason or credit_note.credit_note_number}",
                 "debit": 0, "credit": float(amount),
@@ -258,7 +287,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
     for t in transactions:
         balance += t["debit"] - t["credit"]
         t["balance"] = round(balance, 2)
-        t["date"] = t["date"].isoformat()
+        t["date"] = _statement_date(t["date"])
 
     total_invoiced = sum(float(i.total or 0) for i in invoices if i.issue_date >= from_date)
     total_paid = sum(float(p.amount or 0) for p in payments if p.payment_date >= from_date)
@@ -277,12 +306,12 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
 
     return {
         "customer": {
-            "id": customer.id, "customer_number": customer.customer_number,
+            "id": customer.id, "customer_number": _statement_number(customer.customer_number),
             "name_ar": customer.name_ar, "name_en": customer.name_en,
             "vat_number": customer.vat_number, "phone": customer.phone,
             "address_city": customer.address_city,
         },
-        "from_date": from_date.isoformat(), "to_date": to_date.isoformat(),
+        "from_date": _statement_date(from_date), "to_date": _statement_date(to_date),
         "transactions": transactions,
         "summary": {
             "opening_balance": round(float(account_opening_total), 2),
