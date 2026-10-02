@@ -152,7 +152,7 @@ class _MoreMenu extends StatelessWidget {
               fields: const [
                 'payment_number',
                 'payment_type',
-                'invoice_id',
+                'invoice_number',
                 'amount',
                 'payment_method',
               ],

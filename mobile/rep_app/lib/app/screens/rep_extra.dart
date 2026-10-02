@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+
 import '../data/api_client.dart';
 
 const _brand = Color(0xFF3E0865);
@@ -75,9 +76,8 @@ class _SerialPickerState extends State<SerialPicker> {
       } catch (_) {}
     }
     if (found.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('السيريال غير متاح: $code')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('السيريال غير متاح: $code')));
       return;
     }
     if (!mounted) return;
@@ -337,9 +337,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -886,6 +885,8 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
         return 'فاتورة مبيعات';
       case 'payment':
         return 'سند قبض';
+      case 'discount':
+        return 'سند خصم';
       case 'opening_balance':
         return 'رصيد افتتاحي';
       default:
@@ -901,6 +902,11 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
     value = value.replaceAll('PaymentMethod.CASH', 'طريقة الدفع: نقدًا');
     value = value.replaceAll('PaymentMethod.BANK', 'طريقة الدفع: تحويل بنكي');
     value = value.replaceAll('PaymentMethod.CARD', 'طريقة الدفع: بطاقة');
+    value = value.replaceAll('product_name:', 'الصنف:');
+    value = value.replaceAll('quantity:', 'الكمية:');
+    value = value.replaceAll('direction:', 'الاتجاه:');
+    value = value.replaceAll(' in', ' وارد');
+    value = value.replaceAll(' out', ' صادر');
     return value;
   }
 
@@ -1018,7 +1024,7 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
                               ),
                             ),
                             subtitle: Text(
-                              '${_movementDescription(m)}\n${m['date']?.toString() ?? '—'}',
+                              '${_movementDescription(m)}\n${('${m['date'] ?? '—'}').split('T').first}',
                             ),
                             trailing: Text(
                               '${debit > 0 ? 'مدين' : 'دائن'}\n${money(amount)} ر.س',

@@ -127,6 +127,7 @@ class _DetailScreenState extends State<DetailScreen> {
         'id': 'المعرّف',
         'invoice_number': 'رقم الفاتورة',
         'payment_number': 'رقم السند',
+        'payment_type': 'نوع السند',
         'name_ar': 'الاسم بالعربي',
         'name_en': 'الاسم بالإنجليزي',
         'buyer_name_ar': 'اسم العميل',
@@ -241,6 +242,7 @@ class _DetailScreenState extends State<DetailScreen> {
       'stc_pay': 'STC Pay',
       'credit_card': 'بطاقة',
     };
+    const voucherTypes = {'receipt': 'سند قبض', 'discount': 'سند خصم'};
     const invoiceTypes = {
       'standard': 'فاتورة ضريبية',
       'simplified': 'فاتورة ضريبية مبسطة',
@@ -259,6 +261,8 @@ class _DetailScreenState extends State<DetailScreen> {
     };
     if (key == 'status') return statuses['$v'] ?? '$v';
     if (key == 'payment_method') return methods['$v'] ?? '$v';
+    if (key == 'payment_type' || key == 'voucher_type')
+      return voucherTypes['$v'] ?? '$v';
     if (key == 'invoice_type') return invoiceTypes['$v'] ?? '$v';
     if (key == 'customer_type') return customerTypes['$v'] ?? '$v';
     if (key == 'condition')

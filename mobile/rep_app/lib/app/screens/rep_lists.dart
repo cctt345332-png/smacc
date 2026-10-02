@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../data/api_client.dart';
 import 'rep_forms.dart';
 import 'detail_screen.dart';
@@ -58,6 +59,8 @@ class _RepListScreenState extends State<RepListScreen> {
       'credit_card': 'بطاقة',
       'receipt': 'سند قبض',
       'discount': 'سند خصم',
+      'in': 'وارد',
+      'out': 'صادر',
     };
     if (translated.containsKey('$v')) return translated['$v']!;
     if ([
@@ -89,6 +92,8 @@ class _RepListScreenState extends State<RepListScreen> {
         'sale_price': 'سعر البيع',
         'date': 'التاريخ',
         'direction': 'الاتجاه',
+        'product_name': 'الصنف',
+        'quantity': 'الكمية',
       }[key] ??
       key;
   String? detailPath(Map<String, dynamic> x) {
@@ -166,77 +171,80 @@ class _RepListScreenState extends State<RepListScreen> {
               itemBuilder: (_, i) {
                 final x = Map<String, dynamic>.from(rows[i] as Map);
                 final path = detailPath(x);
-                final card = Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: Color(0xFFE5DDE9)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                value(x, widget.fields.first),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
+                final card = Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      side: const BorderSide(color: Color(0xFFE5DDE9)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  value(x, widget.fields.first),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ),
-                            ),
-                            if (widget.path == '/sales/invoices' &&
-                                [
-                                  'draft',
-                                  'rejected',
-                                ].contains(x['status']?.toString()))
-                              IconButton(
-                                tooltip: 'تعديل الفاتورة',
-                                onPressed: x['id'] == null
-                                    ? null
-                                    : () => editInvoice(x['id'].toString()),
-                                icon: const Icon(Icons.edit_outlined),
+                              if (widget.path == '/sales/invoices' &&
+                                  [
+                                    'draft',
+                                    'rejected',
+                                  ].contains(x['status']?.toString()))
+                                IconButton(
+                                  tooltip: 'تعديل الفاتورة',
+                                  onPressed: x['id'] == null
+                                      ? null
+                                      : () => editInvoice(x['id'].toString()),
+                                  icon: const Icon(Icons.edit_outlined),
+                                  color: _purple,
+                                ),
+                              Icon(
+                                path == null
+                                    ? Icons.info_outline
+                                    : Icons.chevron_left,
                                 color: _purple,
                               ),
-                            Icon(
-                              path == null
-                                  ? Icons.info_outline
-                                  : Icons.chevron_left,
-                              color: _purple,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 9),
-                        ...widget.fields
-                            .skip(1)
-                            .map(
-                              (key) => Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      '${label(key)}: ',
-                                      style: const TextStyle(
-                                        color: Colors.black54,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Text(
-                                        value(x, key),
+                            ],
+                          ),
+                          const SizedBox(height: 9),
+                          ...widget.fields
+                              .skip(1)
+                              .map(
+                                (key) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        '${label(key)}: ',
                                         style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black54,
+                                          fontSize: 12,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      Expanded(
+                                        child: Text(
+                                          value(x, key),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 );
