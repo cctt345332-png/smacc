@@ -176,6 +176,85 @@ async def get_supervisor_invoices(db: AsyncSession, tenant_id: str, user_id: str
     return result
 
 
+async def _get_supervisor_scope(db: AsyncSession, tenant_id: str, user_id: str):
+    sup = await get_supervisor_by_user(db, user_id)
+    if not sup:
+        raise HTTPException(403, "هذا الحساب ليس مشرفاً")
+    return sup, await get_supervisor_rep_ids(db, sup.id)
+
+
+async def get_supervisor_invoice_detail(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str) -> dict:
+    """تفاصيل فاتورة كاملة، بعد التحقق من أنها تخص أحد من مندوبي المشرف."""
+    from app.models.sales import Invoice
+    from sqlalchemy.orm import selectinload
+
+    _, rep_ids = await _get_supervisor_scope(db, tenant_id, user_id)
+    result = await db.execute(
+        select(Invoice).options(selectinload(Invoice.lines), selectinload(Invoice.payments), selectinload(Invoice.customer))
+        .where(Invoice.id == invoice_id, Invoice.tenant_id == tenant_id)
+    )
+    invoice = result.scalar_one_or_none()
+    if not invoice:
+        raise HTTPException(404, "الفاتورة غير موجودة")
+    customer = invoice.customer
+    resolved_rep_id = invoice.rep_id or (customer.rep_id if customer else None)
+    if resolved_rep_id not in rep_ids:
+        raise HTTPException(403, "لا يمكنك عرض فاتورة خارج نطاق مندوبيك")
+    directory = await _supervisor_rep_directory(db, tenant_id, rep_ids)
+    rep = directory.get(resolved_rep_id, {})
+
+    def money(value):
+        return float(value or 0)
+
+    return {
+        "id": invoice.id, "invoice_number": invoice.invoice_number, "status": _enum_value(invoice.status),
+        "customer_id": invoice.customer_id, "buyer_name_ar": invoice.buyer_name_ar or (customer.name_ar if customer else "—"),
+        "buyer_vat_number": invoice.buyer_vat_number, "buyer_address": invoice.buyer_address,
+        "issue_date": invoice.issue_date, "supply_date": invoice.supply_date, "due_date": invoice.due_date,
+        "subtotal": money(invoice.subtotal), "discount_amount": money(invoice.discount_amount),
+        "taxable_amount": money(invoice.taxable_amount), "vat_amount": money(invoice.vat_amount),
+        "total": money(invoice.total), "paid_amount": money(invoice.paid_amount), "currency_code": invoice.currency_code,
+        "notes": invoice.notes, "terms": invoice.terms, "rep_id": resolved_rep_id,
+        "rep_name": rep.get("full_name", "—"), "rep_code": rep.get("rep_code", "—"),
+        "lines": [{
+            "id": line.id, "description_ar": line.description_ar, "description_en": line.description_en,
+            "quantity": money(line.quantity), "unit": line.unit, "unit_price": money(line.unit_price),
+            "discount_amount": money(line.discount_amount), "vat_rate": money(line.vat_rate),
+            "vat_amount": money(line.vat_amount), "total": money(line.total),
+            "inventory_item_id": line.inventory_item_id, "serial_item_id": line.serial_item_id,
+            "serial_ids_json": line.serial_ids_json,
+        } for line in sorted(invoice.lines, key=lambda item: item.line_order or 0)],
+        "payments": [{
+            "id": payment.id, "payment_number": payment.payment_number, "payment_date": payment.payment_date,
+            "amount": money(payment.amount), "payment_method": _enum_value(payment.payment_method), "reference": payment.reference,
+        } for payment in sorted(invoice.payments, key=lambda item: item.payment_date or datetime.min)],
+    }
+
+
+async def get_supervisor_customer_statements(
+    db: AsyncSession, tenant_id: str, user_id: str, from_date: datetime, to_date: datetime,
+    rep_id: str | None = None, customer_id: str | None = None,
+) -> list:
+    """كشف تفصيلي للعملاء المرتبطين بمناديب المشرف، قابل للفلترة."""
+    from app.models.sales import Customer
+    from app.modules.sales import orders_service
+
+    _, rep_ids = await _get_supervisor_scope(db, tenant_id, user_id)
+    if rep_id:
+        if rep_id not in rep_ids:
+            raise HTTPException(403, "المندوب خارج نطاقك")
+        rep_ids = [rep_id]
+    query = select(Customer).where(Customer.tenant_id == tenant_id, Customer.rep_id.in_(rep_ids))
+    if customer_id:
+        query = query.where(Customer.id == customer_id)
+    customers = (await db.execute(query.order_by(Customer.name_ar))).scalars().all()
+    result = []
+    for customer in customers:
+        statement = await orders_service.get_customer_statement(db, tenant_id, customer.id, from_date, to_date, None)
+        result.append({"customer": {"id": customer.id, "name_ar": customer.name_ar, "customer_number": customer.customer_number, "phone": customer.phone}, "rep_id": customer.rep_id, **statement})
+    return result
+
+
 async def get_supervisor_payments(db: AsyncSession, tenant_id: str, user_id: str) -> list:
     """سندات قبض مناديب المشرف، مع دعم الربط المباشر أو الربط القديم بالفاتورة/العميل."""
     sup = await get_supervisor_by_user(db, user_id)

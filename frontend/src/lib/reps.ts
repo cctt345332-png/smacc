@@ -127,9 +127,13 @@ export const assignRepsToSupervisor = (supervisorId: string, repIds: string[]) =
 // ─── واجهة المشرف الحالي ─────────────────────────────────────────────
 
 export const getSupervisorInvoices = () => api.get("/supervisors/me/invoices");
+export const getSupervisorInvoiceDetail = (invoiceId: string) => api.get(`/supervisors/me/invoices/${invoiceId}`);
 export const getSupervisorPayments = () => api.get("/supervisors/me/payments");
 export const getSupervisorSummary  = () => api.get("/supervisors/me/summary");
 export const getSupervisorReps     = () => api.get("/supervisors/me/reps");
+export const getSupervisorCustomerStatements = (params: {
+  from_date: string; to_date: string; rep_id?: string; customer_id?: string;
+}) => api.get("/supervisors/me/customer-statements", { params });
 
 // ─── الدخول كمندوب (impersonation) ───────────────────────────────
 export const getRepImpersonationToken = (repId: string) =>

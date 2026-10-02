@@ -1,7 +1,8 @@
 """
 راوتر المشرفين
 """
-from fastapi import APIRouter, Depends
+from datetime import datetime
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
@@ -65,6 +66,29 @@ async def my_invoices(
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_supervisor_invoices(db, user["tenant_id"], user["user_id"])
+
+
+@router.get("/me/invoices/{invoice_id}")
+async def my_invoice_detail(
+    invoice_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_supervisor_invoice_detail(db, user["tenant_id"], user["user_id"], invoice_id)
+
+
+@router.get("/me/customer-statements")
+async def my_customer_statements(
+    from_date: datetime = Query(...),
+    to_date: datetime = Query(...),
+    rep_id: str | None = Query(None),
+    customer_id: str | None = Query(None),
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_supervisor_customer_statements(
+        db, user["tenant_id"], user["user_id"], from_date, to_date, rep_id, customer_id
+    )
 
 
 @router.get("/me/summary")

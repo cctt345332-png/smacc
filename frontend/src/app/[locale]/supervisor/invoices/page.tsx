@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getSupervisorInvoices } from "@/lib/reps";
-import api from "@/lib/api";
+import { getSupervisorInvoices, getSupervisorInvoiceDetail, getSupervisorReps } from "@/lib/reps";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const fmtDate = (d: any) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "—";
@@ -28,16 +28,26 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
   const [invoices, setInvoices]   = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [selected, setSelected]   = useState<any>(null);
+  const [detail, setDetail] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [reps, setReps] = useState<any[]>([]);
+  const [filterRep, setFilterRep] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
 
   useEffect(() => {
-    getSupervisorInvoices()
-      .then(r => setInvoices(Array.isArray(r.data) ? r.data : []))
+    Promise.all([getSupervisorInvoices(), getSupervisorReps()])
+      .then(([r, repsRes]) => { setInvoices(Array.isArray(r.data) ? r.data : []); setReps(Array.isArray(repsRes.data) ? repsRes.data : []); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = invoices.filter(i => !filterStatus || i.status === filterStatus);
+  const filtered = invoices.filter(i => (!filterStatus || i.status === filterStatus) && (!filterRep || i.rep_id === filterRep));
+  const openInvoice = async (invoice: any) => {
+    setSelected(invoice); setDetail(null); setDetailLoading(true);
+    try { const result = await getSupervisorInvoiceDetail(invoice.id); setDetail(result.data); }
+    catch { setDetail(null); }
+    finally { setDetailLoading(false); }
+  };
 
   return (
     <>
@@ -51,7 +61,8 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
       </div>
 
       {/* فلتر */}
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+        <SearchableSelect locale={locale} options={reps.map(rep => ({ value: rep.id, label: `${rep.full_name} · ${rep.rep_code}`, searchText: rep.phone || "" }))} value={filterRep} onChange={setFilterRep} placeholder={ar ? "ابحث واختر المندوب" : "Search and choose rep"} style={{ padding: "10px 14px", borderRadius: 10, fontSize: 13 }} />
         <select style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", fontSize: 13 }}
           value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
           <option value="">{ar ? "كل الحالات" : "All Statuses"}</option>
@@ -75,7 +86,7 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
             const st = STATUS[inv.status] || STATUS.draft;
             const rem = Math.max(0, Number(inv.total || 0) - Number(inv.paid_amount || 0));
             return (
-              <div key={inv.id} onClick={() => setSelected(inv)}
+              <div key={inv.id} onClick={() => openInvoice(inv)}
                 style={{ background: "var(--surface)", borderRadius: 14, padding: "14px 16px",
                   border: "1px solid var(--border)", cursor: "pointer" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -131,12 +142,15 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
                     background: "transparent", cursor: "pointer", fontSize: 16 }}>×</button>
               </div>
             </div>
+            {detailLoading && <div style={{ padding: 16, textAlign: "center", color: "var(--text-muted)", fontSize: 12 }}>{ar ? "جاري تحميل تفاصيل الفاتورة..." : "Loading invoice details..."}</div>}
+            {detail && (
+              <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
               {[
-                { label: ar ? "الإجمالي" : "Total", value: fmt(selected.total) + " SAR", color: "#75617F" },
-                { label: ar ? "المدفوع" : "Paid",   value: fmt(selected.paid_amount) + " SAR", color: "#6F4A84" },
-                { label: ar ? "المتبقي" : "Due",    value: fmt(Math.max(0, Number(selected.total) - Number(selected.paid_amount))) + " SAR", color: "#DC2626" },
-                { label: ar ? "التاريخ" : "Date",   value: fmtDate(selected.issue_date), color: "var(--text-primary)" },
+                { label: ar ? "الإجمالي" : "Total", value: fmt(detail.total) + " SAR", color: "#75617F" },
+                { label: ar ? "المدفوع" : "Paid",   value: fmt(detail.paid_amount) + " SAR", color: "#6F4A84" },
+                { label: ar ? "المتبقي" : "Due",    value: fmt(Math.max(0, Number(detail.total) - Number(detail.paid_amount))) + " SAR", color: "#DC2626" },
+                { label: ar ? "المندوب" : "Rep",    value: detail.rep_name || "—", color: "#5A187E" },
               ].map(f => (
                 <div key={f.label} style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 12px" }}>
                   <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>{f.label}</div>
@@ -144,6 +158,16 @@ export default function SupervisorInvoicesPage(props: { params: Promise<{ locale
                 </div>
               ))}
             </div>
+            <div style={{ border: "1px solid var(--border)", borderRadius: 10, overflowX: "auto" }}>
+              <div style={{ padding: "10px 12px", fontWeight: 800, fontSize: 13 }}>{ar ? "تفاصيل الأصناف" : "Line items"}</div>
+              <table style={{ width: "100%", minWidth: 430, borderCollapse: "collapse", fontSize: 12 }}>
+                <thead><tr><th style={{ padding: 8, textAlign: "start" }}>{ar ? "الصنف" : "Item"}</th><th style={{ padding: 8 }}>{ar ? "الكمية" : "Qty"}</th><th style={{ padding: 8 }}>{ar ? "سعر الوحدة" : "Unit price"}</th><th style={{ padding: 8 }}>{ar ? "الإجمالي" : "Total"}</th></tr></thead>
+                <tbody>{(detail.lines || []).map((line: any) => <tr key={line.id} style={{ borderTop: "1px solid var(--border)" }}><td style={{ padding: 8 }}>{line.description_ar || line.description_en || "—"}</td><td style={{ padding: 8, textAlign: "center" }}>{fmt(line.quantity)}</td><td style={{ padding: 8, textAlign: "center" }}>{fmt(line.unit_price)}</td><td style={{ padding: 8, textAlign: "center", fontWeight: 700 }}>{fmt(line.total)}</td></tr>)}</tbody>
+              </table>
+            </div>
+            {detail.payments?.length > 0 && <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "السندات المرتبطة: " : "Linked receipts: "}{detail.payments.map((p: any) => `${p.payment_number} (${fmt(p.amount)} SAR)`).join("، ")}</div>}
+              </>
+            )}
           </div>
         </div>
       )}
