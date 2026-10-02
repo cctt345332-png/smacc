@@ -1,4 +1,5 @@
 import uuid
+import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from app.models.user import User
 from app.models.tenant import Tenant
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 class RegisterRequest(BaseModel):
@@ -92,10 +94,15 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     user = result.scalar_one_or_none()
 
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user:
+        logger.warning("Login failed: email_not_found")
+        raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
+    if not verify_password(data.password, user.hashed_password):
+        logger.warning("Login failed: password_mismatch user_id=%s", user.id)
         raise HTTPException(status_code=401, detail="بيانات الدخول غير صحيحة")
 
     if not user.is_active:
+        logger.warning("Login failed: account_inactive user_id=%s", user.id)
         raise HTTPException(status_code=403, detail="الحساب موقوف")
 
     token = create_access_token({
