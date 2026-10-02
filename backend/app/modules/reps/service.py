@@ -731,6 +731,24 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
     if not rep:
         raise HTTPException(404, "المندوب غير موجود")
 
+    user = await db.scalar(select(User).where(User.id == rep.user_id, User.tenant_id == tenant_id))
+    if not user:
+        raise HTTPException(404, "حساب دخول المندوب غير موجود")
+    if "email" in data:
+        email = str(data["email"] or "").strip().lower()
+        if not email:
+            raise HTTPException(400, "البريد الإلكتروني مطلوب")
+        existing = await db.scalar(select(User).where(User.email == email, User.id != user.id))
+        if existing:
+            raise HTTPException(400, "البريد الإلكتروني مستخدم بالفعل")
+        user.email = email
+    if "password" in data and data["password"]:
+        password = str(data["password"])
+        if len(password) < 6:
+            raise HTTPException(400, "كلمة المرور يجب أن تكون 6 أحرف على الأقل")
+        from app.core.security import hash_password
+        user.hashed_password = hash_password(password)
+
     if "phone" in data: rep.phone = data["phone"]
     if "zone" in data: rep.zone = data["zone"]
     if "notes" in data: rep.notes = data["notes"]
@@ -742,17 +760,12 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
         rep.customer_edit_permissions = {key: bool(value) for key, value in permissions.items() if key in allowed_permission_keys}
     if "is_active" in data:
         rep.is_active = data["is_active"]
-        u_r = await db.execute(select(User).where(User.id == rep.user_id))
-        user = u_r.scalar_one_or_none()
-        if user: user.is_active = data["is_active"]
+        user.is_active = data["is_active"]
     if "full_name" in data:
-        u_r = await db.execute(select(User).where(User.id == rep.user_id))
-        user = u_r.scalar_one_or_none()
-        if user:
-            user.full_name = data["full_name"]
-            wh_r = await db.execute(select(Warehouse).where(Warehouse.id == rep.warehouse_id))
-            wh = wh_r.scalar_one_or_none()
-            if wh: wh.name_ar = f"مستودع المندوب — {data['full_name']}"
+        user.full_name = data["full_name"]
+        wh_r = await db.execute(select(Warehouse).where(Warehouse.id == rep.warehouse_id))
+        wh = wh_r.scalar_one_or_none()
+        if wh: wh.name_ar = f"مستودع المندوب — {data['full_name']}"
     # عند تعديل مندوب موجود لا نلمس parent_id لحسابه المحاسبي؛
     # اختيار فرع المدينة كان يسبب نقل الحساب وفصل الشجرة عن ترتيبها.
     # إنشاء الحساب الجديد يتم في create_rep فقط. هنا نسمح بتغيير الرابط

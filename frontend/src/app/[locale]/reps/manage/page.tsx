@@ -106,6 +106,8 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
   const handleSave = async () => {
     if (!form.full_name || !form.email || (!editRep && !form.password))
       return setError(ar ? "الاسم والبريد وكلمة المرور مطلوبة" : "Name, email and password required");
+    if (form.password && form.password.length < 6)
+      return setError(ar ? "كلمة المرور يجب أن تكون 6 أحرف على الأقل" : "Password must be at least 6 characters");
     if (!editRep && !form.customer_account_parent_id)
       return setError(ar ? "يجب اختيار فرع المدينة تحت حساب العملاء" : "Choose the city branch under Customers");
     setSaving(true); setError("");
@@ -123,7 +125,7 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
         target_monthly: form.target_monthly ? Number(form.target_monthly) : 0,
         commission_pct: form.commission_pct ? Number(form.commission_pct) : 0,
       };
-      if (!editRep) payload.password = form.password;
+      if (form.password) payload.password = form.password;
 
       if (editRep) {
         await updateRep(editRep.id, payload);
@@ -390,14 +392,13 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
                 </div>
                 <div className="form-group">
                   <label className="form-label">{ar ? "البريد الإلكتروني" : "Email"} <span className="required">*</span></label>
-                  <input className="form-input" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} disabled={!!editRep} />
+                  <input className="form-input" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
                 </div>
-                {!editRep && (
-                  <div className="form-group">
-                    <label className="form-label">{ar ? "كلمة المرور" : "Password"} <span className="required">*</span></label>
-                    <input className="form-input" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} />
-                  </div>
-                )}
+                <div className="form-group">
+                  <label className="form-label">{ar ? (editRep ? "كلمة المرور الجديدة" : "كلمة المرور") : (editRep ? "New Password" : "Password")} {!editRep && <span className="required">*</span>}</label>
+                  <input className="form-input" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder={editRep ? (ar ? "اتركها فارغة للإبقاء على القديمة" : "Leave blank to keep current password") : ""} autoComplete="new-password" />
+                  {editRep && <p className="form-hint">{ar ? "اكتب كلمة جديدة فقط إذا أردت استبدال كلمة المرور الحالية." : "Enter a new password only if you want to replace the current one."}</p>}
+                </div>
                 <div className="form-group">
                   <label className="form-label">{ar ? "الجوال" : "Phone"}</label>
                   <input className="form-input" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} />
