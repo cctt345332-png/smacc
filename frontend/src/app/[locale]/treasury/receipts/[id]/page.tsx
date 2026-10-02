@@ -67,13 +67,16 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
   );
 
   const status = STATUS[voucher.status as keyof typeof STATUS] || { ar: voucher.status, badge: "badge-gray" };
+  const voucherType = String(voucher.voucher_type || voucher.payment_type || "receipt").toLowerCase();
+  const isDiscount = voucherType === "discount";
+  const voucherTitle = isDiscount ? (ar ? "سند خصم" : "Discount Voucher") : (ar ? "سند قبض" : "Receipt Voucher");
 
   return (
     <>
       <div className="page-header">
         <div>
           <div className="breadcrumb">
-            <Link href={`/${locale}/treasury/receipts`}>{ar ? "سندات القبض" : "Receipts"}</Link>
+            <Link href={`/${locale}/treasury/receipts`}>{ar ? "السندات" : "Vouchers"}</Link>
             <span className="breadcrumb-sep">/</span>
             <span>{voucher.voucher_number}</span>
           </div>
@@ -107,7 +110,7 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
               {company?.logo_data && <img src={company.logo_data} alt="Logo" style={{ height: 48, objectFit: "contain", borderRadius: 6 }} />}
               <div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#6F4A84" }}>
-                  {ar ? "سند قبض" : "Receipt Voucher — سند قبض"}
+                  {ar ? voucherTitle : `${voucherTitle} — ${isDiscount ? "سند خصم" : "سند قبض"}`}
                 </div>
                 <span className={`badge ${status.badge}`} style={{ marginTop: 4 }}>{status.ar}</span>
               </div>
@@ -157,7 +160,7 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
         {/* Amount */}
         <div style={{ padding: "28px", display: "flex", justifyContent: "center" }}>
           <div style={{ textAlign: "center", background: "#F7F2F8", borderRadius: 12, padding: "24px 48px", border: "2px solid #E9DDF0" }}>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>{ar ? "المبلغ المستلم" : "Amount Received"}</div>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>{isDiscount ? (ar ? "قيمة الخصم" : "Discount Amount") : (ar ? "المبلغ المستلم" : "Amount Received")}</div>
             <div style={{ fontSize: 36, fontWeight: 800, color: "#6F4A84" }}>{fmt(voucher.amount)}</div>
             <div style={{ fontSize: 14, color: "#6F4A84", marginTop: 4 }}>SAR</div>
             {Number(voucher.vat_amount) > 0 && (

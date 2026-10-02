@@ -1,5 +1,11 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+
 import '../data/api_client.dart';
 
 const detailBrand = Color(0xFF3E0865);
@@ -441,6 +447,208 @@ class _DetailScreenState extends State<DetailScreen> {
     );
   }
 
+  String _voucherType(Map<String, dynamic> d) =>
+      '${d['payment_type'] ?? d['voucher_type'] ?? 'receipt'}'.toLowerCase();
+  String _voucherTitle(Map<String, dynamic> d) =>
+      _voucherType(d) == 'discount' ? 'سند خصم' : 'سند قبض';
+
+  String _paymentMethodAr(dynamic method) =>
+      const {
+        'cash': 'نقداً',
+        'bank_transfer': 'تحويل بنكي',
+        'cheque': 'شيك',
+        'mada': 'مدى',
+        'stc_pay': 'STC Pay',
+      }['${method ?? ''}'] ??
+      '${method ?? '—'}';
+
+  pw.Widget _pdfRow(String label, dynamic value) => pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 7),
+    child: pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [pw.Text('$value'), pw.Text('$label')],
+    ),
+  );
+
+  Future<void> _printPayment(Map<String, dynamic> d) async {
+    final doc = pw.Document();
+    final arabic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+    );
+    final latin = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    Map<String, dynamic> company = {};
+    try {
+      final raw = await widget.apiClient.getMap('/settings/company');
+      company = Map<String, dynamic>.from(
+        raw['data'] is Map ? raw['data'] as Map : raw,
+      );
+    } catch (_) {}
+    pw.MemoryImage? logo;
+    final logoData = company['logo_data'];
+    if (logoData is String && logoData.isNotEmpty) {
+      try {
+        logo = pw.MemoryImage(
+          base64Decode(
+            logoData.contains(',') ? logoData.split(',').last : logoData,
+          ),
+        );
+      } catch (_) {}
+    }
+    final discount = _voucherType(d) == 'discount';
+    final title = discount ? 'سند خصم' : 'سند قبض';
+    final date = '${d['payment_date'] ?? d['voucher_date'] ?? ''}'
+        .split('T')
+        .first;
+    doc.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        theme: pw.ThemeData.withFont(base: arabic, fontFallback: [latin]),
+        build: (_) => pw.Directionality(
+          textDirection: pw.TextDirection.rtl,
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  if (logo != null) pw.Image(logo!, height: 55),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        '${company['name_ar'] ?? company['name'] ?? 'اسم الشركة'}',
+                        style: pw.TextStyle(
+                          fontSize: 15,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.Text(
+                        title,
+                        style: pw.TextStyle(
+                          fontSize: 22,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.deepPurple,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 16),
+              pw.Divider(color: PdfColors.deepPurple),
+              pw.Container(
+                padding: const pw.EdgeInsets.all(14),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey300),
+                ),
+                child: pw.Column(
+                  children: [
+                    _pdfRow(
+                      'رقم السند',
+                      d['payment_number'] ?? d['voucher_number'] ?? '—',
+                    ),
+                    _pdfRow('التاريخ', date),
+                    _pdfRow(
+                      'العميل',
+                      d['customer_name_ar'] ?? d['party_name'] ?? '—',
+                    ),
+                    _pdfRow(
+                      discount ? 'قيمة الخصم' : 'المبلغ',
+                      '${d['amount'] ?? 0} ${d['currency_code'] ?? 'SAR'}',
+                    ),
+                    if (!discount)
+                      _pdfRow(
+                        'طريقة الدفع',
+                        _paymentMethodAr(d['payment_method']),
+                      ),
+                    if (d['description_ar'] != null)
+                      _pdfRow('البيان', d['description_ar']),
+                  ],
+                ),
+              ),
+              pw.Spacer(),
+              pw.Divider(),
+              pw.Text(
+                '${company['name_ar'] ?? company['name'] ?? 'SMACC'}',
+                textAlign: pw.TextAlign.center,
+                style: const pw.TextStyle(fontSize: 9),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await Printing.layoutPdf(onLayout: (_) async => doc.save());
+  }
+
+  Widget _paymentView(Map<String, dynamic> d) {
+    final discount = _voucherType(d) == 'discount';
+    final date = '${d['payment_date'] ?? d['voucher_date'] ?? ''}'
+        .split('T')
+        .first;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          color: const Color(0xFFF8F1FA),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _voucherTitle(d),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: detailBrand,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _row(
+                  'رقم السند',
+                  d['payment_number'] ?? d['voucher_number'] ?? '—',
+                  'التاريخ',
+                  date,
+                ),
+                _row(
+                  'العميل',
+                  d['customer_name_ar'] ?? d['party_name'] ?? '—',
+                  discount ? 'قيمة الخصم' : 'المبلغ',
+                  '${d['amount'] ?? 0} ر.س',
+                ),
+                if (!discount)
+                  _row(
+                    'طريقة الدفع',
+                    _paymentMethodAr(d['payment_method']),
+                    'المرجع',
+                    d['reference'] ?? '—',
+                  ),
+                if (d['description_ar'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      '${d['description_ar']}',
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: () => _printPayment(d),
+          icon: const Icon(Icons.print),
+          label: Text('معاينة / طباعة ${_voucherTitle(d)}'),
+        ),
+      ],
+    );
+  }
+
   Widget _lineCard(int index, Map<String, dynamic> line) => Container(
     margin: const EdgeInsets.only(bottom: 10),
     padding: const EdgeInsets.all(12),
@@ -588,6 +796,8 @@ class _DetailScreenState extends State<DetailScreen> {
             : raw;
         return widget.path.contains('/invoices/')
             ? _invoiceView(data)
+            : widget.path.contains('/payments/')
+            ? _paymentView(data)
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: data.entries

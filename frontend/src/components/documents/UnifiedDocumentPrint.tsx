@@ -12,6 +12,7 @@ export type PrintDocumentKind =
   | "purchase_order"
   | "purchase_bill"
   | "receipt"
+  | "discount"
   | "payment"
   | "expense";
 
@@ -49,6 +50,7 @@ export type UnifiedPrintDocument = {
   reference_number?: string;
   reference_label?: string;
   payment_method?: string;
+  payment_type?: string;
   delivery_address?: string;
   party_name?: string;
   lines?: PrintLine[];
@@ -89,6 +91,7 @@ const kindMeta: Record<PrintDocumentKind, { ar: string; en: string; accent: stri
   purchase_order: { ar: "أمر شراء", en: "Purchase Order", accent: "#4C126D", tax: false },
   purchase_bill: { ar: "فاتورة مورد", en: "Purchase Bill", accent: "#4C126D", tax: false },
   receipt: { ar: "سند قبض", en: "Receipt Voucher", accent: "#6F4A84", tax: false },
+  discount: { ar: "سند خصم", en: "Discount Voucher", accent: "#B45309", tax: false },
   payment: { ar: "سند صرف", en: "Payment Voucher", accent: "#B45309", tax: false },
   expense: { ar: "سند مصروف", en: "Expense Voucher", accent: "#9F1239", tax: false },
 };

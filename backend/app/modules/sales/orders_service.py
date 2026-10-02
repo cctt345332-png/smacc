@@ -261,13 +261,16 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
             })
     for pay in payments:
         amount = Decimal(str(pay.amount or 0))
+        payment_type = getattr(pay.payment_type, "value", pay.payment_type) or "receipt"
+        is_discount = str(payment_type).lower() == "discount"
         if pay.payment_date < from_date:
             prior_balance -= amount
         else:
             transactions.append({
-                "date": pay.payment_date, "type": "payment", "reference": _statement_number(pay.payment_number),
-                "description_ar": f"سند قبض - {_statement_payment_method(pay.payment_method)}",
-                "description_en": f"Payment Receipt - {_statement_payment_method(pay.payment_method)}",
+                "date": pay.payment_date, "type": "discount" if is_discount else "payment",
+                "payment_type": payment_type, "reference": _statement_number(pay.payment_number),
+                "description_ar": ("سند خصم" if is_discount else "سند قبض") + (f" - {_statement_payment_method(pay.payment_method)}" if not is_discount else ""),
+                "description_en": "Discount Voucher" if is_discount else f"Payment Receipt - {_statement_payment_method(pay.payment_method)}",
                 "debit": 0, "credit": float(amount),
             })
     for credit_note in credit_notes:

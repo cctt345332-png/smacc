@@ -96,6 +96,7 @@ export default function CommercialPrintPage({ source, locale, id }: Props) {
           reference_number: raw?.original_invoice_number || raw?.original_bill_number || related?.invoice_number || related?.bill_number || raw?.reference,
           reference_label: raw?.original_invoice_id ? "الفاتورة الأصلية" : raw?.original_bill_id ? "فاتورة المورد الأصلية" : "المرجع",
           payment_method: raw?.payment_method,
+          payment_type: raw?.payment_type || raw?.voucher_type,
           delivery_address: raw?.delivery_address,
           party_name: raw?.party_name || raw?.buyer_name_ar || raw?.customer_name_ar || raw?.vendor_name_ar,
           lines: isVoucher ? [{ description_ar: raw?.description_ar || raw?.description || sourceLabel[source], quantity: 1, unit_price: raw?.amount, subtotal: raw?.amount, vat_amount: raw?.vat_amount, total: raw?.amount }] : normalizeLines(raw),
@@ -113,5 +114,7 @@ export default function CommercialPrintPage({ source, locale, id }: Props) {
 
   if (error) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#B42318", fontFamily: "Cairo, sans-serif" }}>{error}</div>;
   if (!document) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", color: "#75617F", fontFamily: "Cairo, sans-serif" }}>{ar ? "جارٍ تجهيز قالب الطباعة…" : "Preparing print template…"}</div>;
-  return <UnifiedDocumentPrint kind={configs[source].kind} document={document} company={company} party={party} locale={locale} />;
+  const voucherType = String(document.payment_type || "").toLowerCase();
+  const printKind = source === "receipt" && voucherType === "discount" ? "discount" : configs[source].kind;
+  return <UnifiedDocumentPrint kind={printKind} document={document} company={company} party={party} locale={locale} />;
 }
