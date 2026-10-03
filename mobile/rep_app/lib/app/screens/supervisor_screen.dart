@@ -629,7 +629,7 @@ class _StatementCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         subtitle: Text(
-          'مندوب: ${data['rep_id'] ?? '—'}\nالفواتير: ${money(summary['total_invoiced'])} • المقبوض: ${money(summary['total_paid'])}',
+          'مندوب: ${data['rep_name'] ?? data['full_name'] ?? data['rep_code'] ?? '—'}\nالفواتير: ${money(summary['total_invoiced'])} • المقبوض: ${money(summary['total_paid'])}',
         ),
         isThreeLine: true,
         trailing: Text(

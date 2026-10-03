@@ -272,6 +272,7 @@ async def get_supervisor_aging(
         if rep_id not in allowed_rep_ids:
             raise HTTPException(403, "المندوب خارج نطاقك")
         allowed_rep_ids = [rep_id]
+    rep_directory = await _supervisor_rep_directory(db, tenant_id, allowed_rep_ids)
     invoices = await get_supervisor_invoices(db, tenant_id, user_id)
     rows = []
     for invoice in invoices:
@@ -295,7 +296,9 @@ async def get_supervisor_aging(
         rows.append({
             "invoice_id": invoice.get("id"), "invoice_number": invoice.get("invoice_number"),
             "customer_id": invoice.get("customer_id"), "customer_name": invoice.get("buyer_name_ar") or "—",
-            "rep_id": invoice_rep_id, "rep_name": invoice.get("rep_name") or "—",
+            "rep_id": invoice_rep_id,
+            "rep_name": rep_directory.get(invoice_rep_id, {}).get("full_name", "—"),
+            "rep_code": rep_directory.get(invoice_rep_id, {}).get("rep_code", "—"),
             "issue_date": issue_date.isoformat() if issue_date else None,
             "invoice_total": float(total), "paid_amount": float(paid), "outstanding": float(outstanding),
             "overdue_days": age, "bucket": "متأخر" if age > 0 else "ضمن المهلة",
