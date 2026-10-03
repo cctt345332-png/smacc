@@ -25,11 +25,11 @@ router = APIRouter(prefix="/sales", tags=["sales"])
 @router.get("/customers", response_model=list[CustomerOut])
 async def list_customers(
     search: Optional[str] = None,
+    rep_id: Optional[str] = None,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     # المندوب يشوف عملاءه فقط
-    rep_id = None
     if user["role"] == "sales_rep":
         rep_id = await get_rep_id_for_user(db, user["user_id"])
     return await service.get_customers(db, user["tenant_id"], search, rep_id)

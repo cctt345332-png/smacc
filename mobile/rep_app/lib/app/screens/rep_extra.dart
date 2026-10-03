@@ -564,12 +564,16 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
       statements = [];
     });
     try {
-      final selected = customerList
+      final source = repId == null
+          ? customerList
+          : await widget.apiClient.getList(
+              '/sales/customers?rep_id=${Uri.encodeQueryComponent(repId!)}',
+            );
+      final selected = source
           .map((x) => Map<String, dynamic>.from(x as Map))
           .where((c) {
             if (customerId != null && c['id']?.toString() != customerId)
               return false;
-            if (repId != null && c['rep_id']?.toString() != repId) return false;
             return true;
           })
           .toList();
@@ -744,114 +748,87 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const Text(
-                  'تحديد التقرير',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  elevation: 0,
-                  margin: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: const BorderSide(color: Color(0xFFE5DDE9)),
+                DropdownButtonFormField<String?>(
+                  initialValue: customerId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'العميل — اتركه فارغًا للكل',
+                    border: OutlineInputBorder(),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      children: [
-                        DropdownButtonFormField<String?>(
-                          initialValue: customerId,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'العميل — اتركه فارغًا للكل',
-                            prefixIcon: Icon(Icons.person_outline),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('كل العملاء'),
-                            ),
-                            ...customerList.map((x) {
-                              final m = Map<String, dynamic>.from(x as Map);
-                              return DropdownMenuItem<String?>(
-                                value: m['id']?.toString(),
-                                child: Text(
-                                  m['name_ar']?.toString() ?? '—',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }),
-                          ],
-                          onChanged: (v) => setState(() {
-                            customerId = v;
-                            statements = [];
-                            statement = null;
-                          }),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String?>(
-                          initialValue: repId,
-                          isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'المندوب — اختياري',
-                            prefixIcon: Icon(Icons.badge_outlined),
-                            border: OutlineInputBorder(),
-                          ),
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('كل المناديب'),
-                            ),
-                            ...repSnap.data!.map((x) {
-                              final m = Map<String, dynamic>.from(x as Map);
-                              return DropdownMenuItem<String?>(
-                                value: m['id']?.toString(),
-                                child: Text(
-                                  m['full_name']?.toString() ??
-                                      m['name_ar']?.toString() ??
-                                      '—',
-                                ),
-                              );
-                            }),
-                          ],
-                          onChanged: (v) => setState(() {
-                            repId = v;
-                            statements = [];
-                            statement = null;
-                          }),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _pickDate(true),
-                                icon: const Icon(Icons.date_range),
-                                label: Text('من ${dateText(fromDate)}'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _pickDate(false),
-                                icon: const Icon(Icons.event),
-                                label: Text('إلى ${dateText(toDate)}'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('كل العملاء'),
                     ),
+                    ...customerList.map((x) {
+                      final m = Map<String, dynamic>.from(x as Map);
+                      return DropdownMenuItem<String?>(
+                        value: m['id']?.toString(),
+                        child: Text(
+                          m['name_ar']?.toString() ?? '—',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }),
+                  ],
+                  onChanged: (v) => setState(() {
+                    customerId = v;
+                    statements = [];
+                    statement = null;
+                  }),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String?>(
+                  initialValue: repId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'المندوب — اختياري',
+                    border: OutlineInputBorder(),
                   ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('كل المناديب'),
+                    ),
+                    ...repSnap.data!.map((x) {
+                      final m = Map<String, dynamic>.from(x as Map);
+                      return DropdownMenuItem<String?>(
+                        value: m['id']?.toString(),
+                        child: Text(
+                          m['full_name']?.toString() ??
+                              m['name_ar']?.toString() ??
+                              '—',
+                        ),
+                      );
+                    }),
+                  ],
+                  onChanged: (v) => setState(() {
+                    repId = v;
+                    statements = [];
+                    statement = null;
+                  }),
                 ),
-                const SizedBox(height: 14),
-                const Text(
-                  'نتيجة الكشف',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickDate(true),
+                        icon: const Icon(Icons.date_range),
+                        label: Text('من ${dateText(fromDate)}'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickDate(false),
+                        icon: const Icon(Icons.event),
+                        label: Text('إلى ${dateText(toDate)}'),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 FilledButton.icon(
                   onPressed: loadingAll
                       ? null
