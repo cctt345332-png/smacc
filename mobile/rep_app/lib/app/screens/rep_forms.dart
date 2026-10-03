@@ -985,7 +985,8 @@ class _PaymentCreateScreenState extends State<PaymentCreateScreen> {
         .toList();
     setState(() {
       customerId = id;
-      invoiceId = selected.length == 1 ? '${selected.first['id']}' : null;
+      // التحصيل عن طريق العميل يكون على رصيده العام، وليس على فاتورة محددة.
+      invoiceId = null;
       customerInvoices = selected;
       customerBalance = null;
       balanceError = null;
@@ -1020,19 +1021,18 @@ class _PaymentCreateScreenState extends State<PaymentCreateScreen> {
   }
 
   Future<void> _save() async {
-    final selectedInvoice = mode == 'discount'
-        ? null
-        : mode == 'invoice'
-        ? invoiceId
-        : (customerInvoices.length == 1
-              ? '${customerInvoices.first['id']}'
-              : invoiceId);
+    final selectedInvoice = mode == 'invoice' ? invoiceId : null;
     final entered = double.tryParse(amount.text) ?? 0;
-    if (selectedInvoice == null &&
-        !(mode == 'discount' && customerId != null)) {
+    if (mode == 'invoice' && selectedInvoice == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('اختر الفاتورة')));
+      return;
+    }
+    if (mode != 'invoice' && customerId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('اختر العميل')));
       return;
     }
     if (entered <= 0) {
@@ -1206,15 +1206,6 @@ class _PaymentCreateScreenState extends State<PaymentCreateScreen> {
                     ),
                   ),
                 ),
-                if (customerInvoices.length > 1) ...[
-                  const SizedBox(height: 12),
-                  const Text(
-                    'اختر الفاتورة *',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  _invoiceDropdown(customerInvoices),
-                ],
               ],
             ],
             const SizedBox(height: 12),

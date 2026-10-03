@@ -349,29 +349,9 @@ export default function RepPaymentsPage(props: { params: Promise<{ locale: strin
                     </div>
                   )}
 
-                  {/* اختيار الفاتورة اختياري: الفارغ يعني التحصيل من رصيد العميل مباشرة */}
-                  {mode === "customer" && customerInvoices.length > 0 && (
-                    <div style={{ marginTop:10 }}>
-                      <label style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", display:"block", marginBottom:6 }}>
-                        {ar ? "الفاتورة (اختياري)" : "Invoice (optional)"}
-                      </label>
-                      <select className="form-input form-select" value={form.invoice_id}
-                        onChange={e => {
-                          const inv = customerInvoices.find(i => i.id === e.target.value);
-                          const rem = inv ? Number(inv.total||0) - Number(inv.paid_amount||0) : Number(customerBalance?.total_due || 0);
-                          setForm(f => ({ ...f, invoice_id: e.target.value, amount: rem > 0 ? rem.toFixed(2) : "" }));
-                        }}>
-                        <option value="">{ar ? "— تحصيل من رصيد العميل / الرصيد الافتتاحي —" : "— Collect from customer/opening balance —"}</option>
-                        {customerInvoices.map((inv: any) => {
-                          const rem = Number(inv.total||0) - Number(inv.paid_amount||0);
-                          return (
-                            <option key={inv.id} value={inv.id}>
-                              {inv.invoice_number} — {fmt(rem)} SAR
-                            </option>
-                          );
-                        })}
-                      </select>
-                      {!form.invoice_id && <div style={{ marginTop:6, fontSize:11, color:"#6F4A84" }}>{ar ? "سيتم تسجيل السند على حساب العميل مباشرة." : "The receipt will be posted directly to the customer account."}</div>}
+                  {mode === "customer" && (
+                    <div style={{ marginTop:10, fontSize:11, color:"#6F4A84" }}>
+                      {ar ? "سيتم تسجيل السند على رصيد العميل العام، بما يشمل الرصيد الافتتاحي والفواتير." : "The receipt will be posted to the customer's general balance, including opening balances and invoices."}
                     </div>
                   )}
 
