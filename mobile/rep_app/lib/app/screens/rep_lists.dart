@@ -12,6 +12,7 @@ class RepListScreen extends StatefulWidget {
     required this.title,
     required this.path,
     required this.fields,
+    this.showCreate = true,
     this.empty = 'لا توجد بيانات',
     super.key,
   });
@@ -19,6 +20,7 @@ class RepListScreen extends StatefulWidget {
   final String title;
   final String path;
   final List<String> fields;
+  final bool showCreate;
   final String empty;
   @override
   State<RepListScreen> createState() => _RepListScreenState();
@@ -78,6 +80,10 @@ class _RepListScreenState extends State<RepListScreen> {
       const {
         'invoice_number': 'رقم الفاتورة',
         'buyer_name_ar': 'العميل',
+        'customer_name_ar': 'العميل',
+        'customer_number': 'رقم العميل',
+        'rep_name': 'المندوب',
+        'rep_code': 'رمز المندوب',
         'status': 'الحالة',
         'total': 'الإجمالي',
         'paid_amount': 'المدفوع',
@@ -138,8 +144,9 @@ class _RepListScreenState extends State<RepListScreen> {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
-          if (widget.path == '/sales/invoices' ||
-              widget.path == '/sales/payments')
+          if (widget.showCreate &&
+              (widget.path == '/sales/invoices' ||
+                  widget.path == '/sales/payments'))
             IconButton(
               onPressed: openCreate,
               icon: const Icon(Icons.add_circle_outline),

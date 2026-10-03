@@ -49,6 +49,7 @@ class _CompanyShellState extends State<CompanyShell> {
         apiClient: widget.apiClient,
         title: 'فواتير الشركة',
         path: '/sales/invoices',
+        showCreate: false,
         fields: const [
           'invoice_number',
           'buyer_name_ar',
@@ -61,6 +62,7 @@ class _CompanyShellState extends State<CompanyShell> {
         apiClient: widget.apiClient,
         title: 'سندات الشركة',
         path: '/sales/payments',
+        showCreate: false,
         fields: const [
           'payment_number',
           'payment_type',
