@@ -7,6 +7,7 @@ import 'screens/company_reports_screen.dart';
 import 'screens/company_records_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/manager_more_screen.dart';
 import 'screens/rep_extra.dart';
 import 'screens/rep_lists.dart';
 import 'screens/supervisor_screen.dart';
@@ -42,6 +43,11 @@ class CompanyShell extends StatefulWidget {
 
 class _CompanyShellState extends State<CompanyShell> {
   int index = 0;
+  void _openMore() => showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => _CompanyMoreMenu(apiClient: widget.apiClient),
+  );
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -60,7 +66,13 @@ class _CompanyShellState extends State<CompanyShell> {
       body: IndexedStack(index: index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
-        onDestinationSelected: (value) => setState(() => index = value),
+        onDestinationSelected: (value) {
+          if (value == 4) {
+            _openMore();
+          } else {
+            setState(() => index = value);
+          }
+        },
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.dashboard_outlined),
@@ -82,10 +94,59 @@ class _CompanyShellState extends State<CompanyShell> {
             selectedIcon: Icon(Icons.analytics),
             label: 'التقارير',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz_rounded),
+            label: 'المزيد',
+          ),
         ],
       ),
     );
   }
+}
+
+class _CompanyMoreMenu extends StatelessWidget {
+  const _CompanyMoreMenu({required this.apiClient});
+  final ApiClient apiClient;
+  void _push(BuildContext context, Widget page) {
+    Navigator.pop(context);
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(builder: (_) => page),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'المزيد',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.map_outlined),
+            title: const Text('تتبع المندوبين'),
+            subtitle: const Text('الخريطة الحية وتفاصيل المسار'),
+            onTap: () =>
+                _push(context, RepTrackingScreen(apiClient: apiClient)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.how_to_reg_outlined),
+            title: const Text('حضور المناديب'),
+            subtitle: const Text('وقت تسجيل الحضور لكل مندوب'),
+            onTap: () =>
+                _push(context, RepAttendanceAdminScreen(apiClient: apiClient)),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class RepShell extends StatefulWidget {
