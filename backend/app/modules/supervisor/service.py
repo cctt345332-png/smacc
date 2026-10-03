@@ -239,7 +239,7 @@ async def get_supervisor_customer_statements(
     from app.models.sales import Customer
     from app.modules.sales import orders_service
 
-    _, rep_ids = await _get_supervisor_scope(db, tenant_id, user_id)
+    supervisor, rep_ids = await _get_supervisor_scope(db, tenant_id, user_id)
     if rep_id:
         if rep_id not in rep_ids:
             raise HTTPException(403, "المندوب خارج نطاقك")
@@ -257,6 +257,7 @@ async def get_supervisor_customer_statements(
             "rep_id": customer.rep_id,
             "rep_name": rep_directory.get(customer.rep_id, {}).get("full_name", "—"),
             "rep_code": rep_directory.get(customer.rep_id, {}).get("rep_code", "—"),
+            "supervisor_name": supervisor.name or "—",
             **statement,
         })
     return result
@@ -267,7 +268,7 @@ async def get_supervisor_aging(
     rep_id: str | None = None, customer_id: str | None = None,
 ) -> list:
     """أعمار الديون للمشرف: العمر يبدأ بعد مهلة 21 يوماً من تاريخ إصدار الفاتورة."""
-    _, allowed_rep_ids = await _get_supervisor_scope(db, tenant_id, user_id)
+    supervisor, allowed_rep_ids = await _get_supervisor_scope(db, tenant_id, user_id)
     if rep_id:
         if rep_id not in allowed_rep_ids:
             raise HTTPException(403, "المندوب خارج نطاقك")
@@ -299,6 +300,7 @@ async def get_supervisor_aging(
             "rep_id": invoice_rep_id,
             "rep_name": rep_directory.get(invoice_rep_id, {}).get("full_name", "—"),
             "rep_code": rep_directory.get(invoice_rep_id, {}).get("rep_code", "—"),
+            "supervisor_name": supervisor.name or "—",
             "issue_date": issue_date.isoformat() if issue_date else None,
             "invoice_total": float(total), "paid_amount": float(paid), "outstanding": float(outstanding),
             "overdue_days": age, "bucket": "متأخر" if age > 0 else "ضمن المهلة",

@@ -150,13 +150,21 @@ class _SupervisorStatementsScreenState
         widget.apiClient,
         title: 'كشف عملاء المناديب',
         filename: 'كشوف-عملاء-المناديب.pdf',
-        headers: const ['العميل', 'المندوب', 'الفواتير', 'المقبوض', 'الرصيد'],
+        headers: const [
+          'العميل',
+          'المندوب',
+          'المشرف',
+          'الفواتير',
+          'المقبوض',
+          'الرصيد',
+        ],
         rows: data.map((r) {
           final c = Map<String, dynamic>.from((r['customer'] as Map?) ?? {});
           final s = Map<String, dynamic>.from((r['summary'] as Map?) ?? {});
           return <String>[
             '${c['name_ar'] ?? '—'}',
             '${r['rep_name'] ?? r['rep_code'] ?? '—'}',
+            '${r['supervisor_name'] ?? '—'}',
             _money(s['total_invoiced']),
             _money(s['total_paid']),
             _money(s['closing_balance'] ?? s['outstanding']),
@@ -184,7 +192,7 @@ class _StatementTile extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         subtitle: Text(
-          'رقم العميل: ${c['customer_number'] ?? '—'}\nمندوب: ${data['rep_name'] ?? data['rep_code'] ?? '—'}',
+          'رقم العميل: ${c['customer_number'] ?? '—'}\nمندوب: ${data['rep_name'] ?? data['rep_code'] ?? '—'}\nمشرف: ${data['supervisor_name'] ?? '—'}',
         ),
         isThreeLine: true,
         trailing: Column(
@@ -305,6 +313,9 @@ class SupervisorStatementDetailScreen extends StatelessWidget {
           'كشف حساب ${c['name_ar'] ?? ''} - مندوب ${data['rep_name'] ?? data['rep_code'] ?? '—'}',
       filename: 'كشف-حساب-${c['customer_number'] ?? 'عميل'}.pdf',
       headers: const [
+        'العميل',
+        'المندوب',
+        'المشرف',
         'التاريخ',
         'النوع',
         'المرجع',
@@ -323,6 +334,9 @@ class SupervisorStatementDetailScreen extends StatelessWidget {
             ? 'فاتورة'
             : 'رصيد افتتاحي';
         return <String>[
+          '${c['name_ar'] ?? '—'}',
+          '${data['rep_name'] ?? data['rep_code'] ?? '—'}',
+          '${data['supervisor_name'] ?? '—'}',
           _date(m['date']),
           type,
           '${m['reference'] ?? '—'}',
@@ -421,9 +435,10 @@ class _SupervisorAgingScreenState extends State<SupervisorAgingScreen> {
                         title: 'تقرير أعمار الديون',
                         filename: 'أعمار-الديون.pdf',
                         headers: const [
-                          'الفاتورة',
                           'العميل',
                           'المندوب',
+                          'المشرف',
+                          'الفاتورة',
                           'تاريخ الإصدار',
                           'الإجمالي',
                           'المتبقي',
@@ -432,9 +447,10 @@ class _SupervisorAgingScreenState extends State<SupervisorAgingScreen> {
                         rows: filtered
                             .map(
                               (r) => <String>[
-                                '${r['invoice_number'] ?? '—'}',
                                 '${r['customer_name'] ?? '—'}',
                                 '${r['rep_name'] ?? '—'}',
+                                '${r['supervisor_name'] ?? '—'}',
+                                '${r['invoice_number'] ?? '—'}',
                                 _date(r['issue_date']),
                                 _money(r['invoice_total']),
                                 _money(r['outstanding']),
@@ -463,7 +479,7 @@ class _SupervisorAgingScreenState extends State<SupervisorAgingScreen> {
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     subtitle: Text(
-                      'المندوب: ${r['rep_name'] ?? '—'}\nتاريخ الإصدار: ${_date(r['issue_date'])}',
+                      'المندوب: ${r['rep_name'] ?? '—'}\nالمشرف: ${r['supervisor_name'] ?? '—'}\nتاريخ الإصدار: ${_date(r['issue_date'])}',
                     ),
                     trailing: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
