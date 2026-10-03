@@ -264,7 +264,9 @@ export default function ManageRepsPage(props: { params: Promise<{ locale: string
               <tbody>
                 {filtered.map(rep => {
                   const sum = summaries[rep.id];
-                  const pct = rep.target_monthly > 0 ? Math.min(100, Math.round((Number(sum?.total_sales || 0) / Number(rep.target_monthly)) * 100)) : null;
+                  // الهدف شهري؛ لا نستخدم total_sales لأنه تراكمي منذ إنشاء المندوب.
+                  const monthlySales = Number(sum?.monthly_sales || 0);
+                  const pct = rep.target_monthly > 0 ? Math.min(100, Math.round((monthlySales / Number(rep.target_monthly)) * 100)) : null;
                   return (
                     <tr key={rep.id}>
                       <td>
