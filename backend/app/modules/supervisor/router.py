@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
 from app.modules.supervisor import service
+from app.modules.sales import service as sales_service
 
 router = APIRouter(prefix="/supervisors", tags=["supervisors"])
 
@@ -94,13 +95,22 @@ async def my_customer_statements(
 @router.get("/me/aging")
 async def my_aging(
     as_of: datetime = Query(...),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     rep_id: str | None = Query(None),
     customer_id: str | None = Query(None),
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.get_supervisor_aging(
-        db, user["tenant_id"], user["user_id"], as_of, rep_id, customer_id
+    supervisor = await service.get_supervisor_by_user(db, user["user_id"])
+    if not supervisor:
+        return []
+    allowed = set(await service.get_supervisor_rep_ids(db, supervisor.id))
+    if rep_id:
+        allowed = {rep_id} if rep_id in allowed else set()
+    return await sales_service.get_unified_aging(
+        db, user["tenant_id"], as_of, from_date, to_date,
+        rep_id=rep_id, customer_id=customer_id, allowed_rep_ids=allowed,
     )
 
 

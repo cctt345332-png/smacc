@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, use } from "react";
 import Link from "next/link";
-import { getInvoices, getPayments } from "@/lib/sales";
+import { getUnifiedAging } from "@/lib/sales";
 import { getCustomers } from "@/lib/sales";
 import { getAccounts } from "@/lib/accounting";
 import SearchableSelect from "@/components/ui/SearchableSelect";
@@ -29,8 +29,6 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const { locale } = use(props.params);
   const ar = locale === "ar";
   const now = new Date();
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [rows, setRows] = useState<AgingRow[]>([]);
@@ -43,10 +41,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const [customerId, setCustomerId] = useState("");
 
   useEffect(() => {
-    // لا نجعل فشل جلب السندات يمنع ظهور الفواتير؛ السداد المباشر إضافة للتقرير.
-    Promise.allSettled([getInvoices(), getPayments(), getCustomers(), getAccounts()]).then(([i, p, c, a]) => {
-      if (i.status === "fulfilled") setInvoices(Array.isArray(i.value.data) ? i.value.data : []);
-      if (p.status === "fulfilled") setPayments(Array.isArray(p.value.data) ? p.value.data : []);
+    Promise.allSettled([getCustomers(), getAccounts()]).then(([c, a]) => {
       if (c.status === "fulfilled") setCustomers(Array.isArray(c.value.data) ? c.value.data : []);
       if (a.status === "fulfilled") setAccounts(Array.isArray(a.value.data) ? a.value.data : []);
     });
@@ -68,59 +63,28 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
 
   const load = () => {
     setLoading(true);
-    const asOfDate = new Date(`${asOf}T23:59:59`);
-    const start = new Date(`${fromDate}T00:00:00`);
-    const end = new Date(`${toDate}T23:59:59`);
-    const result: AgingRow[] = [];
-    const eligible = invoices.filter((inv: any) => {
-      const status = String(inv.status || "").toLowerCase();
-      const sold = Number(inv.total || 0);
-      const issueDate = new Date(inv.issue_date || inv.invoice_date || inv.created_at);
-      return Number.isFinite(issueDate.getTime()) && issueDate >= start && issueDate <= end && sold > 0.01 && !["draft", "submitted", "rejected", "cancelled"].includes(status) && (!customerId || inv.customer_id === customerId);
-    }).sort((a: any, b: any) => new Date(a.due_date || a.issue_date).getTime() - new Date(b.due_date || b.issue_date).getTime());
-    const directPayments = payments.filter((p: any) => !p.invoice_id && (!customerId || p.customer_id === customerId) && new Date(p.payment_date).getTime() <= asOfDate.getTime()).sort((a: any, b: any) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime());
-    const remainingDirectByCustomer = new Map<string, number>();
-    for (const payment of directPayments) {
-      const key = String(payment.customer_id || "");
-      remainingDirectByCustomer.set(key, (remainingDirectByCustomer.get(key) || 0) + Number(payment.amount || 0));
-    }
-    for (const inv of eligible) {
-      const status = String(inv.status || "").toLowerCase();
-      const sold = Number(inv.total || 0);
-      const invoiceReceipts = payments.filter((p: any) => p.invoice_id === inv.id && new Date(p.payment_date).getTime() <= asOfDate.getTime());
-      // سندات الفاتورة هي المصدر الدقيق. نستخدم paid_amount القديم فقط عند تعذر جلب السندات.
-      const invoicePaid = payments.length > 0
-        ? invoiceReceipts.reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
-        : Number(inv.paid_amount || 0);
-      const issueDate = new Date(inv.issue_date || inv.invoice_date || inv.created_at);
-      const customerKey = String(inv.customer_id || "");
-      const unallocatedDirect = remainingDirectByCustomer.get(customerKey) || 0;
-      const directApplied = Math.min(Math.max(0, sold - invoicePaid), unallocatedDirect);
-      remainingDirectByCustomer.set(customerKey, unallocatedDirect - directApplied);
-      const paid = invoicePaid + directApplied;
-      const balance = sold - paid;
-      const customer = customerById.get(inv.customer_id);
-      if (accountScope && !accountScope.has(customer?.ar_account_id)) continue;
-      // عمر الفاتورة يُحسب من تاريخ إصدار/إنشاء الفاتورة، وليس من تاريخ الاستحقاق.
-      // مثال: فاتورة بتاريخ 05-09 وحتى 26-09 = 21 يوماً.
-      const days = Math.floor((asOfDate.getTime() - issueDate.getTime()) / DAY);
-      if (balance <= 0.01) continue;
-      result.push({
-        id: inv.id,
-        customer: inv.buyer_name_ar || customer?.name_ar || customer?.name_en || customer?.customer_number || "—",
-        customerId: inv.customer_id,
-        invoice: inv.invoice_number || inv.id,
-        invoiceDate: issueDate.toISOString(),
-        dueDate: issueDate.toISOString(),
-        sold,
-        paid,
-        balance,
-        days,
-      });
-    }
-    setRows(result.sort((a, b) => b.days - a.days || b.balance - a.balance));
-    setLoaded(true);
-    setLoading(false);
+    getUnifiedAging({
+      as_of: `${asOf}T23:59:59`,
+      from_date: `${fromDate}T00:00:00`,
+      to_date: `${toDate}T23:59:59`,
+      customer_id: customerId || undefined,
+      account_id: accountId || undefined,
+    }).then((response) => {
+      setRows((Array.isArray(response.data) ? response.data : []).map((row: any) => ({
+        id: row.invoice_id,
+        customer: row.customer_name || "—",
+        customerId: row.customer_id,
+        invoice: row.invoice_number || row.invoice_id,
+        invoiceDate: row.issue_date,
+        dueDate: row.issue_date,
+        sold: Number(row.invoice_total || 0),
+        paid: Number(row.paid_amount || 0),
+        balance: Number(row.outstanding || 0),
+        days: Number(row.age_days || 0),
+        rep: row.rep_name,
+      })));
+      setLoaded(true);
+    }).finally(() => setLoading(false));
   };
 
   const totals = rows.reduce((a, r) => ({ sold: a.sold + r.sold, paid: a.paid + r.paid, balance: a.balance + r.balance }), { sold: 0, paid: 0, balance: 0 });

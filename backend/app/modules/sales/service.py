@@ -524,6 +524,134 @@ async def delete_customer(
     return {"message": "تم حذف العميل", "id": customer_id}
 
 
+# ─── Unified receivables aging ───────────────────────────────────────
+async def get_unified_aging(
+    db: AsyncSession,
+    tenant_id: str,
+    as_of: datetime,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    rep_id: str | None = None,
+    customer_id: str | None = None,
+    allowed_rep_ids: set[str] | None = None,
+    account_id: str | None = None,
+) -> list[dict]:
+    """المصدر الوحيد لتقرير أعمار الديون في الويب وتطبيقات الهاتف.
+
+    القاعدة: تاريخ الإصدار هو بداية العمر، وأول 21 يوماً مهلة؛ السداد
+    المرتبط بالفاتورة والسداد العام على رصيد العميل يوزعان على الفواتير
+    الأقدم أولاً. سند الخصم يخفض المتبقي لكنه لا يدخل في تقارير النقدية.
+    """
+    as_of = as_of.replace(tzinfo=None)
+    start = (from_date or datetime(1970, 1, 1)).replace(tzinfo=None)
+    end = (to_date or as_of).replace(tzinfo=None)
+    end = min(end, as_of)
+
+    invoice_query = (
+        select(Invoice, Customer)
+        .join(Customer, Customer.id == Invoice.customer_id)
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_((InvoiceStatus.CONFIRMED, InvoiceStatus.PAID, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE)),
+            Invoice.issue_date >= start,
+            Invoice.issue_date <= end,
+        )
+        .order_by(Invoice.issue_date.asc(), Invoice.invoice_number.asc())
+    )
+    if customer_id:
+        invoice_query = invoice_query.where(Invoice.customer_id == customer_id)
+    if rep_id:
+        invoice_query = invoice_query.where(Invoice.rep_id == rep_id)
+    if allowed_rep_ids is not None:
+        if not allowed_rep_ids:
+            return []
+        invoice_query = invoice_query.where(Invoice.rep_id.in_(allowed_rep_ids))
+
+    if account_id:
+        account_rows = await db.execute(select(Account.id, Account.parent_id).where(Account.tenant_id == tenant_id))
+        children: dict[str | None, list[str]] = {}
+        for child_id, parent_id in account_rows.all():
+            children.setdefault(parent_id, []).append(child_id)
+        account_scope = {account_id}
+        pending = [account_id]
+        while pending:
+            parent = pending.pop()
+            for child in children.get(parent, []):
+                if child not in account_scope:
+                    account_scope.add(child)
+                    pending.append(child)
+        invoice_query = invoice_query.where(Customer.ar_account_id.in_(account_scope))
+
+    invoice_rows = (await db.execute(invoice_query)).all()
+    if not invoice_rows:
+        return []
+    invoice_ids = [invoice.id for invoice, _ in invoice_rows]
+    customer_ids = {invoice.customer_id for invoice, _ in invoice_rows}
+    rep_ids = {invoice.rep_id for invoice, _ in invoice_rows if invoice.rep_id}
+    rep_directory: dict[str, dict] = {}
+    if rep_ids:
+        rep_rows = await db.execute(
+            select(SalesRep, User)
+            .join(User, User.id == SalesRep.user_id)
+            .where(SalesRep.tenant_id == tenant_id, SalesRep.id.in_(rep_ids))
+        )
+        rep_directory = {
+            rep.id: {"name": user.full_name or rep.rep_code, "code": rep.rep_code}
+            for rep, user in rep_rows.all()
+        }
+    payment_rows = await db.execute(
+        select(Payment)
+        .where(
+            Payment.tenant_id == tenant_id,
+            Payment.payment_date <= as_of,
+            or_(Payment.invoice_id.in_(invoice_ids), Payment.customer_id.in_(customer_ids)),
+        )
+        .order_by(Payment.payment_date.asc(), Payment.payment_number.asc())
+    )
+    payments = list(payment_rows.scalars().all())
+    linked_paid: dict[str, Decimal] = {}
+    direct_paid: dict[str, Decimal] = {}
+    for payment in payments:
+        amount = Decimal(str(payment.amount or 0))
+        if amount <= 0:
+            continue
+        if payment.invoice_id:
+            linked_paid[payment.invoice_id] = linked_paid.get(payment.invoice_id, Decimal("0")) + amount
+        elif payment.customer_id:
+            direct_paid[payment.customer_id] = direct_paid.get(payment.customer_id, Decimal("0")) + amount
+
+    result = []
+    for invoice, customer in invoice_rows:
+        total = Decimal(str(invoice.total or 0))
+        invoice_paid = min(total, linked_paid.get(invoice.id, Decimal("0")))
+        available_direct = direct_paid.get(invoice.customer_id, Decimal("0"))
+        direct_applied = min(max(Decimal("0"), total - invoice_paid), available_direct)
+        direct_paid[invoice.customer_id] = available_direct - direct_applied
+        paid = invoice_paid + direct_applied
+        outstanding = max(Decimal("0"), total - paid)
+        if outstanding <= Decimal("0.01"):
+            continue
+        age_days = max((as_of.date() - invoice.issue_date.date()).days, 0)
+        overdue_days = max(age_days - 21, 0)
+        result.append({
+            "invoice_id": invoice.id,
+            "invoice_number": invoice.invoice_number,
+            "customer_id": invoice.customer_id,
+            "customer_name": invoice.buyer_name_ar or customer.name_ar or customer.name_en or customer.customer_number,
+            "rep_id": invoice.rep_id,
+            "rep_name": rep_directory.get(invoice.rep_id, {}).get("name", "—"),
+            "rep_code": rep_directory.get(invoice.rep_id, {}).get("code", "—"),
+            "issue_date": invoice.issue_date.date().isoformat(),
+            "invoice_total": float(total),
+            "paid_amount": float(paid),
+            "outstanding": float(outstanding),
+            "age_days": age_days,
+            "overdue_days": overdue_days,
+            "bucket": "متأخر" if overdue_days > 0 else "ضمن المهلة",
+        })
+    return sorted(result, key=lambda row: (row["overdue_days"], row["outstanding"]), reverse=True)
+
+
 # ─── Invoices ────────────────────────────────────────────────────────
 async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = None,
                         customer_id: str | None = None, rep_id: str | None = None,

@@ -135,17 +135,31 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
       error = null;
     });
     try {
+      final asOf = DateTime.now();
       final result = await Future.wait<Object>([
-        widget.apiClient.getList('/sales/invoices'),
-        widget.apiClient.getList('/sales/payments'),
+        widget.apiClient.getList(
+          '/sales/aging?as_of=${Uri.encodeQueryComponent(asOf.toIso8601String())}${customerId == null ? '' : '&customer_id=${Uri.encodeQueryComponent(customerId!)}'}${repId == null ? '' : '&rep_id=${Uri.encodeQueryComponent(repId!)}'}',
+        ),
         widget.apiClient.getList('/sales/customers'),
         widget.apiClient.getList('/reps'),
       ]);
-      invoices = result[0] as List<dynamic>;
-      payments = result[1] as List<dynamic>;
-      customers = result[2] as List<dynamic>;
-      reps = result[3] as List<dynamic>;
-      _calculate(invoices, payments);
+      final aging = result[0] as List<dynamic>;
+      customers = result[1] as List<dynamic>;
+      reps = result[2] as List<dynamic>;
+      rows = aging.map((item) {
+        final r = Map<String, dynamic>.from(item as Map);
+        return <String, dynamic>{
+          'customer': r['customer_name'] ?? '—',
+          'rep': r['rep_name'] ?? '—',
+          'invoice': r['invoice_number'] ?? '—',
+          'date': DateTime.tryParse('${r['issue_date']}') ?? asOf,
+          'sold': _number(r['invoice_total']),
+          'paid': _number(r['paid_amount']),
+          'balance': _number(r['outstanding']),
+          'days': (r['age_days'] as num?)?.toInt() ?? 0,
+          'overdue': (r['overdue_days'] as num?)?.toInt() ?? 0,
+        };
+      }).toList();
       if (mounted) setState(() => loading = false);
     } catch (e) {
       if (mounted)
@@ -309,7 +323,7 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
                     ],
                     onChanged: (value) {
                       setState(() => repId = value);
-                      _calculateFromCurrentData();
+                      load();
                     },
                   ),
                   const SizedBox(height: 12),
@@ -355,9 +369,9 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
       borderRadius: BorderRadius.circular(14),
       side: const BorderSide(color: Color(0xFFE5DDE9)),
     ),
-    color: (row['days'] as int) >= 30
+    color: (row['overdue'] as int) >= 30
         ? const Color(0xFFFFE7E5)
-        : (row['days'] as int) > 21
+        : (row['overdue'] as int) > 0
         ? const Color(0xFFFFF3D6)
         : Colors.white,
     child: Padding(
@@ -388,6 +402,7 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
             'الفاتورة: ${row['invoice']}  •  التاريخ: ${(row['date'] as DateTime).toIso8601String().split('T').first}',
           ),
           Text('المندوب: ${row['rep']}'),
+          Text('أيام التأخير بعد مهلة 21 يوماً: ${row['overdue']}'),
           Text(
             'العمر: ${row['days']} يوم  •  الإجمالي: ${money(row['sold'])}  •  المسدد: ${money(row['paid'])}',
             style: TextStyle(

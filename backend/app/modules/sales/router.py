@@ -21,6 +21,24 @@ from app.modules.sales.schemas import (
 router = APIRouter(prefix="/sales", tags=["sales"])
 
 
+# ─── Unified receivables aging ───────────────────────────────────────
+@router.get("/aging")
+async def unified_aging(
+    as_of: datetime = Query(...),
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
+    rep_id: str | None = Query(None),
+    customer_id: str | None = Query(None),
+    account_id: str | None = Query(None),
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_unified_aging(
+        db, user["tenant_id"], as_of, from_date, to_date,
+        rep_id=rep_id, customer_id=customer_id, account_id=account_id,
+    )
+
+
 # ─── Customers ───────────────────────────────────────────────────────
 @router.get("/customers", response_model=list[CustomerOut])
 async def list_customers(
