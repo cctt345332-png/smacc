@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -76,8 +74,9 @@ class _SerialPickerState extends State<SerialPicker> {
       } catch (_) {}
     }
     if (found.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('السيريال غير متاح: $code')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('السيريال غير متاح: $code')));
       return;
     }
     if (!mounted) return;
@@ -337,8 +336,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -504,380 +504,32 @@ class CustomerStatementsScreen extends StatefulWidget {
 
 class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
   late Future<List<dynamic>> customers;
+  late Future<List<dynamic>> reps;
   String? customerId;
+  String? repId;
+  DateTime fromDate = DateTime(2020, 1, 1);
+  DateTime toDate = DateTime.now();
   Future<Map<String, dynamic>>? statement;
+  List<Map<String, dynamic>> statements = [];
+  bool loadingAll = false;
+
   @override
   void initState() {
     super.initState();
     customers = widget.apiClient.getList('/sales/customers');
+    reps = widget.apiClient.getList('/reps');
   }
 
   String money(dynamic v) =>
       (double.tryParse('${v ?? 0}') ?? 0).toStringAsFixed(2);
-
-  Future<void> _shareStatementPdf(Map<String, dynamic> data) async {
-    final fontData = await rootBundle.load(
-      'assets/fonts/NotoSansArabic-Regular.ttf',
-    );
-    final font = pw.Font.ttf(fontData);
-    final latinFontData = await rootBundle.load(
-      'assets/fonts/NotoSans-Regular.ttf',
-    );
-    final latinFont = pw.Font.ttf(latinFontData);
-    final logoData = await rootBundle.load('assets/branding/masar_logo.png');
-    var logoBytes = logoData.buffer.asUint8List();
-    Map<String, dynamic> company = {};
-    try {
-      company = await widget.apiClient.getMap('/settings/company');
-      final logoSource = company['logo_data']?.toString();
-      if (logoSource != null && logoSource.startsWith('data:image/')) {
-        final comma = logoSource.indexOf(',');
-        if (comma > 0) {
-          logoBytes = Uint8List.fromList(
-            base64Decode(logoSource.substring(comma + 1)),
-          );
-        }
-      }
-    } catch (_) {
-      // Keep the bundled logo only if the company settings cannot be loaded.
-    }
-    final logo = pw.MemoryImage(logoBytes);
-    final summary = (data['summary'] as Map?)?.cast<String, dynamic>() ?? data;
-    final rows = (data['transactions'] as List?) ?? [];
-    final customer = (data['customer'] as Map?)?.cast<String, dynamic>() ?? {};
-    final customerName = customer['name_ar']?.toString() ?? '—';
-    final customerNumber = customer['customer_number']?.toString() ?? '—';
-    final companyName =
-        company['name_ar']?.toString() ?? company['name']?.toString() ?? 'مسار';
-    final companyDetail = [
-      company['vat_number'] == null
-          ? ''
-          : 'الرقم الضريبي: ${company['vat_number']}',
-      company['cr_number'] == null
-          ? ''
-          : 'السجل التجاري: ${company['cr_number']}',
-      company['address_city']?.toString() ?? '',
-    ].where((value) => value.isNotEmpty).join(' · ');
-    final now = DateTime.now();
-    final generated =
-        '${now.day.toString().padLeft(2, '0')}-${now.month.toString().padLeft(2, '0')}-${now.year}';
-    final period = '2020-01-01 — ${now.toIso8601String().split('T').first}';
-    final pdf = pw.Document(title: 'كشف حساب $customerName', author: 'مسار');
-
-    String cell(dynamic value) => value?.toString() ?? '—';
-    String transactionType(Map<String, dynamic> m) {
-      switch (m['type']?.toString()) {
-        case 'invoice':
-          return 'فاتورة';
-        case 'payment':
-          return 'سند قبض';
-        case 'opening_balance':
-          return 'رصيد افتتاحي';
-        default:
-          return cell(m['type']);
-      }
-    }
-
-    String transactionDescription(Map<String, dynamic> m) {
-      var value = cell(m['description_ar'] ?? m['description']);
-      value = value.replaceAll('PaymentMethod.CASH', 'طريقة الدفع: نقدًا');
-      value = value.replaceAll('PaymentMethod.BANK', 'طريقة الدفع: تحويل بنكي');
-      value = value.replaceAll('PaymentMethod.CARD', 'طريقة الدفع: بطاقة');
-      value = value.replaceAll('Opening balance', 'رصيد افتتاحي');
-      value = value.replaceAll('Sales invoice', 'فاتورة مبيعات');
-      return value;
-    }
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        textDirection: pw.TextDirection.rtl,
-        theme: pw.ThemeData.withFont(
-          base: font,
-          bold: font,
-          fontFallback: [latinFont],
-        ),
-        margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 30),
-        header: (context) => pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 8),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(
-                color: PdfColor.fromInt(0xFF3E0865),
-                width: 2,
-              ),
-            ),
-          ),
-          child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Expanded(
-                child: pw.Row(
-                  children: [
-                    pw.Container(
-                      width: 44,
-                      height: 44,
-                      padding: const pw.EdgeInsets.all(2),
-                      decoration: pw.BoxDecoration(
-                        border: pw.Border.all(
-                          color: const PdfColor.fromInt(0xFFD5C8DD),
-                        ),
-                      ),
-                      child: pw.Image(logo, fit: pw.BoxFit.contain),
-                    ),
-                    pw.SizedBox(width: 7),
-                    pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.start,
-                      children: [
-                        pw.Text(
-                          companyName,
-                          style: pw.TextStyle(
-                            fontSize: 13,
-                            fontWeight: pw.FontWeight.bold,
-                            color: const PdfColor.fromInt(0xFF3E0865),
-                          ),
-                        ),
-                        pw.Text(
-                          companyDetail.isEmpty
-                              ? 'نظام مسار المحاسبي'
-                              : companyDetail,
-                          style: const pw.TextStyle(
-                            fontSize: 8,
-                            color: PdfColor.fromInt(0xFF75617F),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.center,
-                  children: [
-                    pw.Text(
-                      'كشف حساب عميل',
-                      style: pw.TextStyle(
-                        fontSize: 17,
-                        fontWeight: pw.FontWeight.bold,
-                        color: const PdfColor.fromInt(0xFF3E0865),
-                      ),
-                    ),
-                    pw.Text(
-                      'كشف حساب العميل',
-                      style: const pw.TextStyle(
-                        fontSize: 9,
-                        color: PdfColor.fromInt(0xFF75617F),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      'رمز التقرير: CST-${customerNumber == '—' ? '' : customerNumber}',
-                      style: const pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColor.fromInt(0xFF75617F),
-                      ),
-                    ),
-                    pw.Text(
-                      'تاريخ الطباعة: $generated',
-                      style: const pw.TextStyle(
-                        fontSize: 8,
-                        color: PdfColor.fromInt(0xFF75617F),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        footer: (context) => pw.Row(
-          children: [
-            _pdfSign('إعداد: المحاسب'),
-            _pdfSign('مراجعة: المدير المالي'),
-            _pdfSign('اعتماد: الإدارة'),
-            _pdfSign('صفحة ${context.pageNumber} من ${context.pagesCount}'),
-          ],
-        ),
-        build: (context) => [
-          pw.Container(
-            margin: const pw.EdgeInsets.only(top: 10, bottom: 8),
-            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: pw.BoxDecoration(
-              color: const PdfColor.fromInt(0xFFF4EFF7),
-              border: pw.Border.all(color: PdfColor.fromInt(0xFFD5C8DD)),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'الفترة: $period',
-                  style: pw.TextStyle(
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                    color: const PdfColor.fromInt(0xFF3E0865),
-                  ),
-                ),
-                pw.Text(
-                  '$customerName  —  رقم العميل: $customerNumber',
-                  style: pw.TextStyle(
-                    fontSize: 10,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          pw.Row(
-            children: [
-              _pdfMetric(
-                'الرصيد الافتتاحي',
-                '${money(summary['opening_balance'])} ر.س',
-                const PdfColor.fromInt(0xFF3E0865),
-              ),
-              _pdfMetric(
-                'إجمالي الفواتير',
-                '${money(summary['total_invoiced'])} ر.س',
-                const PdfColor.fromInt(0xFF3E0865),
-              ),
-              _pdfMetric(
-                'المقبوض',
-                '${money(summary['total_paid'])} ر.س',
-                const PdfColor.fromInt(0xFF6F4A84),
-              ),
-              _pdfMetric(
-                'الرصيد المستحق',
-                '${money(summary['closing_balance'] ?? summary['outstanding'])} ر.س',
-                const PdfColor.fromInt(0xFFB42318),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 9),
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: pw.BoxDecoration(
-              color: const PdfColor.fromInt(0xFFEFE8F3),
-              border: pw.Border.all(color: PdfColor.fromInt(0xFFCDBED6)),
-            ),
-            child: pw.Text(
-              'حركات الحساب',
-              style: pw.TextStyle(
-                fontSize: 10,
-                fontWeight: pw.FontWeight.bold,
-                color: const PdfColor.fromInt(0xFF3E0865),
-              ),
-            ),
-          ),
-          pw.TableHelper.fromTextArray(
-            headers: [
-              'التاريخ',
-              'النوع',
-              'المرجع',
-              'البيان',
-              'مدين',
-              'دائن',
-              'الرصيد',
-            ],
-            data: rows.map((r) {
-              final m = Map<String, dynamic>.from(r as Map);
-              return [
-                cell(m['date']),
-                transactionType(m),
-                cell(m['reference']),
-                transactionDescription(m),
-                money(m['debit'] ?? (m['type'] == 'invoice' ? m['amount'] : 0)),
-                money(
-                  m['credit'] ?? (m['type'] == 'payment' ? m['amount'] : 0),
-                ),
-                money(m['balance'] ?? m['running_balance']),
-              ];
-            }).toList(),
-            headerStyle: pw.TextStyle(
-              fontWeight: pw.FontWeight.bold,
-              color: const PdfColor.fromInt(0xFF3E0865),
-              fontSize: 8,
-            ),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColor.fromInt(0xFFF5F0F7),
-            ),
-            cellStyle: const pw.TextStyle(fontSize: 8),
-            cellAlignment: pw.Alignment.centerRight,
-            cellPadding: const pw.EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: 5,
-            ),
-            border: pw.TableBorder.all(
-              color: const PdfColor.fromInt(0xFFCDBED6),
-              width: .6,
-            ),
-          ),
-        ],
-      ),
-    );
-    await Printing.sharePdf(
-      bytes: await pdf.save(),
-      filename: 'كشف-حساب-$customerName.pdf',
-    );
+  String dateText(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  String dateQuery(DateTime value, {bool end = false}) =>
+      '${dateText(value)}T${end ? '23:59:59' : '00:00:00'}';
+  String customerName(Map<String, dynamic> data) {
+    final c = (data['customer'] as Map?)?.cast<String, dynamic>();
+    return c?['name_ar']?.toString() ?? 'العميل';
   }
-
-  pw.Widget _pdfSign(String label) => pw.Expanded(
-    child: pw.Container(
-      margin: const pw.EdgeInsets.symmetric(horizontal: 6),
-      padding: const pw.EdgeInsets.only(top: 5),
-      decoration: const pw.BoxDecoration(
-        border: pw.Border(
-          top: pw.BorderSide(color: PdfColor.fromInt(0xFFD5C8DD)),
-        ),
-      ),
-      child: pw.Text(
-        label,
-        textAlign: pw.TextAlign.center,
-        style: const pw.TextStyle(
-          fontSize: 8,
-          color: PdfColor.fromInt(0xFF75617F),
-        ),
-      ),
-    ),
-  );
-
-  pw.Widget _pdfMetric(String label, String value, PdfColor color) =>
-      pw.Expanded(
-        child: pw.Container(
-          margin: const pw.EdgeInsets.symmetric(horizontal: 4),
-          padding: const pw.EdgeInsets.all(9),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: const PdfColor.fromInt(0xFFE5DDE9)),
-            borderRadius: pw.BorderRadius.circular(7),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            children: [
-              pw.Text(
-                label,
-                style: const pw.TextStyle(
-                  fontSize: 8,
-                  color: PdfColor.fromInt(0xFF6B7280),
-                ),
-              ),
-              pw.SizedBox(height: 3),
-              pw.Text(
-                value,
-                style: pw.TextStyle(
-                  fontSize: 11,
-                  fontWeight: pw.FontWeight.bold,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
 
   String _movementType(Map<String, dynamic> movement) {
     switch (movement['type']?.toString()) {
@@ -902,144 +554,351 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
     value = value.replaceAll('PaymentMethod.CASH', 'طريقة الدفع: نقدًا');
     value = value.replaceAll('PaymentMethod.BANK', 'طريقة الدفع: تحويل بنكي');
     value = value.replaceAll('PaymentMethod.CARD', 'طريقة الدفع: بطاقة');
-    value = value.replaceAll('product_name:', 'الصنف:');
-    value = value.replaceAll('quantity:', 'الكمية:');
-    value = value.replaceAll('direction:', 'الاتجاه:');
-    value = value.replaceAll(' in', ' وارد');
-    value = value.replaceAll(' out', ' صادر');
     return value;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'كشوفات حساب العملاء',
-          style: TextStyle(fontWeight: FontWeight.w800),
+  Future<void> _loadStatements(List<dynamic> customerList) async {
+    setState(() {
+      loadingAll = true;
+      statement = null;
+      statements = [];
+    });
+    try {
+      final selected = customerList
+          .map((x) => Map<String, dynamic>.from(x as Map))
+          .where((c) {
+            if (customerId != null && c['id']?.toString() != customerId)
+              return false;
+            if (repId != null && c['rep_id']?.toString() != repId) return false;
+            return true;
+          })
+          .toList();
+      if (selected.isEmpty) throw Exception('لا يوجد عملاء مطابقون للفلاتر');
+      final result = await Future.wait(
+        selected.map(
+          (c) => widget.apiClient.getMap(
+            '/sales/customers/${c['id']}/statement?from_date=${Uri.encodeQueryComponent(dateQuery(fromDate))}&to_date=${Uri.encodeQueryComponent(dateQuery(toDate, end: true))}',
+          ),
         ),
-      ),
-      body: FutureBuilder<List<dynamic>>(
-        future: customers,
-        builder: (context, snap) {
-          if (!snap.hasData)
-            return const Center(child: CircularProgressIndicator());
-          return ListView(
-            padding: const EdgeInsets.all(16),
+      );
+      if (!mounted) return;
+      setState(() {
+        statements = result;
+        loadingAll = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          loadingAll = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    }
+  }
+
+  Future<void> _pickDate(bool from) async {
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      initialDate: from ? fromDate : toDate,
+      locale: const Locale('ar'),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (from) {
+        fromDate = picked;
+        if (toDate.isBefore(fromDate)) toDate = fromDate;
+      } else {
+        toDate = picked;
+        if (toDate.isBefore(fromDate)) fromDate = toDate;
+      }
+      statement = null;
+      statements = [];
+    });
+  }
+
+  Future<void> _shareAllStatementsPdf(List<Map<String, dynamic>> data) async {
+    final ar = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
+    );
+    final latin = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    final rows = <List<String>>[];
+    for (final item in data) {
+      final name = customerName(item);
+      for (final raw in (item['transactions'] as List? ?? [])) {
+        final m = Map<String, dynamic>.from(raw as Map);
+        rows.add([
+          name,
+          '${m['date'] ?? '—'}'.split('T').first,
+          _movementType(m),
+          '${m['reference'] ?? '—'}',
+          money(m['debit'] ?? 0),
+          money(m['credit'] ?? 0),
+          money(m['balance'] ?? m['running_balance'] ?? 0),
+        ]);
+      }
+    }
+    final pdf = pw.Document(title: 'كشوف حساب العملاء');
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        textDirection: pw.TextDirection.rtl,
+        theme: pw.ThemeData.withFont(base: ar, bold: ar, fontFallback: [latin]),
+        header: (_) => pw.Container(
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(
+                color: PdfColor.fromInt(0xFF3E0865),
+                width: 2,
+              ),
+            ),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              DropdownButtonFormField<String>(
-                initialValue: customerId,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'اختر العميل',
-                  border: OutlineInputBorder(),
+              pw.Text(
+                'كشوف حساب العملاء',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                  color: const PdfColor.fromInt(0xFF3E0865),
                 ),
-                items: snap.data!.map((x) {
-                  final m = Map<String, dynamic>.from(x as Map);
-                  return DropdownMenuItem(
-                    value: m['id'].toString(),
-                    child: Text(
-                      m['name_ar']?.toString() ?? '—',
-                      overflow: TextOverflow.ellipsis,
+              ),
+              pw.Text(
+                'الفترة: ${dateText(fromDate)} — ${dateText(toDate)}',
+                style: const pw.TextStyle(fontSize: 9),
+              ),
+            ],
+          ),
+        ),
+        build: (_) => [
+          pw.SizedBox(height: 12),
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'العميل',
+              'التاريخ',
+              'النوع',
+              'المرجع',
+              'مدين',
+              'دائن',
+              'الرصيد',
+            ],
+            data: rows,
+            headerStyle: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              color: const PdfColor.fromInt(0xFF3E0865),
+            ),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFFF4EFF7),
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellAlignment: pw.Alignment.centerRight,
+            border: pw.TableBorder.all(
+              color: const PdfColor.fromInt(0xFFCDBED6),
+              width: .6,
+            ),
+          ),
+        ],
+      ),
+    );
+    await Printing.sharePdf(
+      bytes: await pdf.save(),
+      filename: 'كشوف-حساب-العملاء.pdf',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text(
+        'كشوفات حساب العملاء',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+      actions: [
+        IconButton(
+          onPressed: statements.isEmpty
+              ? null
+              : () => _shareAllStatementsPdf(statements),
+          icon: const Icon(Icons.print),
+          tooltip: 'طباعة الكشوف',
+        ),
+      ],
+    ),
+    body: FutureBuilder<List<dynamic>>(
+      future: customers,
+      builder: (context, customerSnap) {
+        if (!customerSnap.hasData)
+          return const Center(child: CircularProgressIndicator());
+        final customerList = customerSnap.data!;
+        return FutureBuilder<List<dynamic>>(
+          future: reps,
+          builder: (context, repSnap) {
+            if (!repSnap.hasData)
+              return const Center(child: CircularProgressIndicator());
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                DropdownButtonFormField<String?>(
+                  initialValue: customerId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'العميل — اتركه فارغًا للكل',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('كل العملاء'),
                     ),
-                  );
-                }).toList(),
-                onChanged: (v) => setState(() {
-                  customerId = v;
-                  statement = null;
-                }),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: customerId == null
-                    ? null
-                    : () {
-                        final now = DateTime.now().toIso8601String();
-                        setState(() {
-                          statement = widget.apiClient.getMap(
-                            '/sales/customers/$customerId/statement?from_date=2020-01-01T00:00:00&to_date=${Uri.encodeQueryComponent(now)}',
-                          );
-                        });
-                      },
-                icon: const Icon(Icons.receipt_long),
-                label: const Text('عرض كشف الحساب'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: _brand,
-                  minimumSize: const Size.fromHeight(50),
-                ),
-              ),
-              if (statement != null)
-                FutureBuilder<Map<String, dynamic>>(
-                  future: statement,
-                  builder: (context, ss) {
-                    if (!ss.hasData)
-                      return const Padding(
-                        padding: EdgeInsets.all(30),
-                        child: Center(child: CircularProgressIndicator()),
+                    ...customerList.map((x) {
+                      final m = Map<String, dynamic>.from(x as Map);
+                      return DropdownMenuItem<String?>(
+                        value: m['id']?.toString(),
+                        child: Text(
+                          m['name_ar']?.toString() ?? '—',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       );
-                    final data = ss.data!;
+                    }),
+                  ],
+                  onChanged: (v) => setState(() {
+                    customerId = v;
+                    statements = [];
+                    statement = null;
+                  }),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String?>(
+                  initialValue: repId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'المندوب — اختياري',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('كل المناديب'),
+                    ),
+                    ...repSnap.data!.map((x) {
+                      final m = Map<String, dynamic>.from(x as Map);
+                      return DropdownMenuItem<String?>(
+                        value: m['id']?.toString(),
+                        child: Text(
+                          m['full_name']?.toString() ??
+                              m['name_ar']?.toString() ??
+                              '—',
+                        ),
+                      );
+                    }),
+                  ],
+                  onChanged: (v) => setState(() {
+                    repId = v;
+                    statements = [];
+                    statement = null;
+                  }),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickDate(true),
+                        icon: const Icon(Icons.date_range),
+                        label: Text('من ${dateText(fromDate)}'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickDate(false),
+                        icon: const Icon(Icons.event),
+                        label: Text('إلى ${dateText(toDate)}'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: loadingAll
+                      ? null
+                      : () => _loadStatements(customerList),
+                  icon: const Icon(Icons.receipt_long),
+                  label: Text(
+                    loadingAll
+                        ? 'جاري تحميل الكشوف...'
+                        : 'عرض الكشوف حسب الفلاتر',
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _brand,
+                    minimumSize: const Size.fromHeight(50),
+                  ),
+                ),
+                if (statements.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => _shareAllStatementsPdf(statements),
+                    icon: const Icon(Icons.picture_as_pdf_outlined),
+                    label: Text(
+                      'طباعة ${statements.length == 1 ? 'كشف العميل' : 'كل الكشوف'}',
+                    ),
+                  ),
+                  const Divider(),
+                  ...statements.map((data) {
                     final summary =
                         (data['summary'] as Map?)?.cast<String, dynamic>() ??
                         data;
                     final rows = (data['transactions'] as List?) ?? [];
-                    return Column(
-                      children: [
-                        const SizedBox(height: 18),
-                        Text(
-                          'إجمالي الفواتير: ${money(summary['total_invoiced'])} ر.س',
+                    return Card(
+                      child: ExpansionTile(
+                        initiallyExpanded: statements.length == 1,
+                        title: Text(
+                          customerName(data),
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
-                        Text('المقبوض: ${money(summary['total_paid'])} ر.س'),
-                        Text(
-                          'المتبقي: ${money(summary['outstanding'] ?? summary['closing_balance'])} ر.س',
+                        subtitle: Text(
+                          'الفواتير: ${money(summary['total_invoiced'])} ر.س  •  المقبوض: ${money(summary['total_paid'])} ر.س  •  المتبقي: ${money(summary['outstanding'] ?? summary['closing_balance'])} ر.س',
                         ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () => _shareStatementPdf(data),
-                          icon: const Icon(Icons.picture_as_pdf_outlined),
-                          label: const Text('تحميل / مشاركة كشف الحساب PDF'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _brand,
-                            side: const BorderSide(color: _brand),
-                          ),
-                        ),
-                        const Divider(),
-                        ...rows.map((r) {
-                          final m = Map<String, dynamic>.from(r as Map);
-                          final debit =
-                              double.tryParse('${m['debit'] ?? 0}') ?? 0;
-                          final credit =
-                              double.tryParse('${m['credit'] ?? 0}') ?? 0;
-                          final rawAmount =
-                              double.tryParse('${m['amount'] ?? 0}') ?? 0;
-                          final amount = debit > 0
-                              ? debit
-                              : credit > 0
-                              ? credit
-                              : rawAmount;
-                          return ListTile(
-                            title: Text(
-                              _movementType(m),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
+                        children: [
+                          ...rows.map((r) {
+                            final m = Map<String, dynamic>.from(r as Map);
+                            final debit =
+                                double.tryParse('${m['debit'] ?? 0}') ?? 0;
+                            final credit =
+                                double.tryParse('${m['credit'] ?? 0}') ?? 0;
+                            final amount = debit > 0 ? debit : credit;
+                            return ListTile(
+                              title: Text(_movementType(m)),
+                              subtitle: Text(
+                                '${_movementDescription(m)}\n${('${m['date'] ?? '—'}').split('T').first}',
                               ),
+                              trailing: Text(
+                                '${debit > 0 ? 'مدين' : 'دائن'}\n${money(amount)} ر.س',
+                                textAlign: TextAlign.end,
+                              ),
+                            );
+                          }),
+                          if (rows.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text('لا توجد حركات في الفترة المحددة'),
                             ),
-                            subtitle: Text(
-                              '${_movementDescription(m)}\n${('${m['date'] ?? '—'}').split('T').first}',
-                            ),
-                            trailing: Text(
-                              '${debit > 0 ? 'مدين' : 'دائن'}\n${money(amount)} ر.س',
-                              textAlign: TextAlign.end,
-                            ),
-                          );
-                        }),
-                      ],
+                        ],
+                      ),
                     );
-                  },
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+                  }),
+                ],
+              ],
+            );
+          },
+        );
+      },
+    ),
+  );
 }

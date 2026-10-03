@@ -30,13 +30,18 @@ class _AppState extends State<App> {
       : widget.sessionStore.isSupervisor
       ? SupervisorShell(apiClient: widget.apiClient)
       : widget.sessionStore.isCompanyManager
-      ? CompanyShell(apiClient: widget.apiClient)
+      ? CompanyShell(apiClient: widget.apiClient, onSignedOut: _onSignedIn)
       : RepShell(apiClient: widget.apiClient);
 }
 
 class CompanyShell extends StatefulWidget {
-  const CompanyShell({required this.apiClient, super.key});
+  const CompanyShell({
+    required this.apiClient,
+    required this.onSignedOut,
+    super.key,
+  });
   final ApiClient apiClient;
+  final VoidCallback onSignedOut;
   @override
   State<CompanyShell> createState() => _CompanyShellState();
 }
@@ -46,7 +51,10 @@ class _CompanyShellState extends State<CompanyShell> {
   void _openMore() => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
-    builder: (_) => _CompanyMoreMenu(apiClient: widget.apiClient),
+    builder: (_) => _CompanyMoreMenu(
+      apiClient: widget.apiClient,
+      onSignedOut: widget.onSignedOut,
+    ),
   );
   @override
   Widget build(BuildContext context) {
@@ -105,8 +113,9 @@ class _CompanyShellState extends State<CompanyShell> {
 }
 
 class _CompanyMoreMenu extends StatelessWidget {
-  const _CompanyMoreMenu({required this.apiClient});
+  const _CompanyMoreMenu({required this.apiClient, required this.onSignedOut});
   final ApiClient apiClient;
+  final VoidCallback onSignedOut;
   void _push(BuildContext context, Widget page) {
     Navigator.pop(context);
     Navigator.push<void>(
@@ -142,6 +151,18 @@ class _CompanyMoreMenu extends StatelessWidget {
             subtitle: const Text('وقت تسجيل الحضور لكل مندوب'),
             onTap: () =>
                 _push(context, RepAttendanceAdminScreen(apiClient: apiClient)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text(
+              'تسجيل الخروج',
+              style: TextStyle(color: Colors.red),
+            ),
+            onTap: () async {
+              Navigator.pop(context);
+              await apiClient.sessionStore.clear();
+              onSignedOut();
+            },
           ),
         ],
       ),
