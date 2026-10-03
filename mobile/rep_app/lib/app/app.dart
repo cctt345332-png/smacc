@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 
 import 'data/api_client.dart';
 import 'data/session_store.dart';
+import 'screens/company_dashboard_screen.dart';
+import 'screens/company_reports_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/rep_lists.dart';
 import 'screens/rep_extra.dart';
+import 'screens/rep_lists.dart';
 import 'screens/supervisor_screen.dart';
-import 'screens/company_dashboard_screen.dart';
 
 class App extends StatefulWidget {
   const App({required this.apiClient, required this.sessionStore, super.key});
@@ -27,8 +28,80 @@ class _AppState extends State<App> {
       : widget.sessionStore.isSupervisor
       ? SupervisorShell(apiClient: widget.apiClient)
       : widget.sessionStore.isCompanyManager
-      ? CompanyDashboardScreen(apiClient: widget.apiClient)
+      ? CompanyShell(apiClient: widget.apiClient)
       : RepShell(apiClient: widget.apiClient);
+}
+
+class CompanyShell extends StatefulWidget {
+  const CompanyShell({required this.apiClient, super.key});
+  final ApiClient apiClient;
+  @override
+  State<CompanyShell> createState() => _CompanyShellState();
+}
+
+class _CompanyShellState extends State<CompanyShell> {
+  int index = 0;
+  @override
+  Widget build(BuildContext context) {
+    final pages = [
+      CompanyDashboardScreen(apiClient: widget.apiClient),
+      RepListScreen(
+        apiClient: widget.apiClient,
+        title: 'فواتير الشركة',
+        path: '/sales/invoices',
+        fields: const [
+          'invoice_number',
+          'buyer_name_ar',
+          'status',
+          'total',
+          'paid_amount',
+        ],
+      ),
+      RepListScreen(
+        apiClient: widget.apiClient,
+        title: 'سندات الشركة',
+        path: '/sales/payments',
+        fields: const [
+          'payment_number',
+          'payment_type',
+          'customer_name_ar',
+          'rep_name',
+          'amount',
+          'payment_method',
+        ],
+      ),
+      CompanyReportsScreen(apiClient: widget.apiClient),
+    ];
+    return Scaffold(
+      body: IndexedStack(index: index, children: pages),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: index,
+        onDestinationSelected: (value) => setState(() => index = value),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'الرئيسية',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'الفواتير',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.payments_outlined),
+            selectedIcon: Icon(Icons.payments),
+            label: 'السندات',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
+            label: 'التقارير',
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class RepShell extends StatefulWidget {
@@ -80,11 +153,10 @@ class _RepShellState extends State<RepShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
-          if (i == 4) {
+          if (i == 4)
             _openMore();
-          } else {
+          else
             setState(() => _index = i);
-          }
         },
         destinations: const [
           NavigationDestination(
@@ -142,46 +214,35 @@ class _MoreMenu extends StatelessWidget {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             ),
           ),
-          const SizedBox(height: 8),
-          _tile(
-            context,
-            Icons.payments_outlined,
-            'سندات القبض',
-            RepListScreen(
-              apiClient: apiClient,
-              title: 'سندات القبض',
-              path: '/sales/payments',
-              fields: const [
-                'payment_number',
-                'payment_type',
-                'invoice_number',
-                'amount',
-                'payment_method',
-              ],
+          ListTile(
+            leading: const Icon(Icons.payments_outlined),
+            title: const Text('سندات القبض'),
+            onTap: () => _push(
+              context,
+              RepListScreen(
+                apiClient: apiClient,
+                title: 'سندات القبض',
+                path: '/sales/payments',
+                fields: const [
+                  'payment_number',
+                  'payment_type',
+                  'invoice_number',
+                  'amount',
+                  'payment_method',
+                ],
+              ),
             ),
           ),
-          _tile(
-            context,
-            Icons.local_shipping_outlined,
-            'مناقلات المخزون',
-            RepListScreen(
-              apiClient: apiClient,
-              title: 'مناقلاتي',
-              path: '/reps/me/transfers',
-              fields: const ['date', 'direction', 'product_name', 'quantity'],
-            ),
+          ListTile(
+            leading: const Icon(Icons.account_balance_outlined),
+            title: const Text('كشوفات حساب العملاء'),
+            onTap: () =>
+                _push(context, CustomerStatementsScreen(apiClient: apiClient)),
           ),
-          _tile(
-            context,
-            Icons.account_balance_outlined,
-            'كشوفات حساب العملاء',
-            CustomerStatementsScreen(apiClient: apiClient),
-          ),
-          _tile(
-            context,
-            Icons.fact_check_outlined,
-            'الحضور والانصراف',
-            AttendanceScreen(apiClient: apiClient),
+          ListTile(
+            leading: const Icon(Icons.fact_check_outlined),
+            title: const Text('الحضور والانصراف'),
+            onTap: () => _push(context, AttendanceScreen(apiClient: apiClient)),
           ),
           ListTile(
             leading: const Icon(Icons.person_outline),
@@ -191,16 +252,5 @@ class _MoreMenu extends StatelessWidget {
         ],
       ),
     ),
-  );
-  Widget _tile(
-    BuildContext context,
-    IconData icon,
-    String title,
-    Widget page,
-  ) => ListTile(
-    leading: Icon(icon, color: const Color(0xFF3E0865)),
-    title: Text(title),
-    trailing: const Icon(Icons.chevron_left),
-    onTap: () => _push(context, page),
   );
 }
