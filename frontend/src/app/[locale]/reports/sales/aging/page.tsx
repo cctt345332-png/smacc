@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getUnifiedAging } from "@/lib/sales";
 import { getCustomers } from "@/lib/sales";
 import { getAccounts } from "@/lib/accounting";
+import { getReps } from "@/lib/reps";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
@@ -30,6 +31,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const ar = locale === "ar";
   const now = new Date();
   const [customers, setCustomers] = useState<any[]>([]);
+  const [reps, setReps] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [rows, setRows] = useState<AgingRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,11 +41,13 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const [asOf, setAsOf] = useState(now.toISOString().split("T")[0]);
   const [accountId, setAccountId] = useState("");
   const [customerId, setCustomerId] = useState("");
+  const [repId, setRepId] = useState("");
 
   useEffect(() => {
-    Promise.allSettled([getCustomers(), getAccounts()]).then(([c, a]) => {
+    Promise.allSettled([getCustomers(), getAccounts(), getReps()]).then(([c, a, r]) => {
       if (c.status === "fulfilled") setCustomers(Array.isArray(c.value.data) ? c.value.data : []);
       if (a.status === "fulfilled") setAccounts(Array.isArray(a.value.data) ? a.value.data : []);
+      if (r.status === "fulfilled") setReps(Array.isArray(r.value.data) ? r.value.data : []);
     });
   }, []);
 
@@ -68,6 +72,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
       from_date: `${fromDate}T00:00:00`,
       to_date: `${toDate}T23:59:59`,
       customer_id: customerId || undefined,
+      rep_id: repId || undefined,
       account_id: accountId || undefined,
     }).then((response) => {
       setRows((Array.isArray(response.data) ? response.data : []).map((row: any) => ({
@@ -91,6 +96,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
   const overdue = rows.filter(r => r.days > 30);
   const date = (value: string) => new Date(value).toLocaleDateString(ar ? "ar-SA" : "en-GB");
   const customerOptions = customers.map(c => ({ value: c.id, label: c.name_ar || c.name_en || c.customer_number || c.id, searchText: `${c.customer_number || ""} ${c.name_ar || ""} ${c.name_en || ""}` }));
+  const repOptions = reps.map(r => ({ value: r.id, label: r.full_name || r.rep_code || r.id, searchText: `${r.rep_code || ""} ${r.full_name || ""}` }));
 
   return <>
     <div className="page-header">
@@ -108,6 +114,7 @@ export default function AgingReportPage(props: { params: Promise<{ locale: strin
       <div className="form-group" style={{ margin: 0, minWidth: 180 }}><label className="form-label">{ar ? "حساب حتى تاريخ" : "Age as of"}</label><input type="date" className="form-input" value={asOf} onChange={e => setAsOf(e.target.value)} /></div>
       <div className="form-group" style={{ margin: 0, minWidth: 260 }}><label className="form-label">{ar ? "فرع الحساب" : "Account branch"}</label><SearchableAccountSelect accounts={accounts} value={accountId} onChange={setAccountId} locale={locale} allowGroups placeholder={ar ? "ابحث في شجرة الحسابات كاملة..." : "Search the full account tree..."} /></div>
       <div className="form-group" style={{ margin: 0, minWidth: 280 }}><label className="form-label">{ar ? "العميل" : "Customer"}</label><SearchableSelect locale={locale} value={customerId} onChange={setCustomerId} placeholder={ar ? "ابحث عن العميل..." : "Search customer..."} options={[{ value: "", label: ar ? "كل العملاء" : "All customers" }, ...customerOptions]} /></div>
+      <div className="form-group" style={{ margin: 0, minWidth: 260 }}><label className="form-label">{ar ? "المندوب" : "Representative"}</label><SearchableSelect locale={locale} value={repId} onChange={setRepId} placeholder={ar ? "ابحث عن المندوب..." : "Search representative..."} options={[{ value: "", label: ar ? "كل المناديب" : "All representatives" }, ...repOptions]} /></div>
       <button className="btn btn-primary" onClick={load} disabled={loading}>{loading ? (ar ? "جاري..." : "Loading...") : (ar ? "عرض التقرير" : "Show Report")}</button>
     </div></div>
 

@@ -370,9 +370,14 @@ class _SupervisorAgingScreenState extends State<SupervisorAgingScreen> {
   Future<void> load() async {
     setState(() => loading = true);
     try {
+      final asOf = DateTime.now();
+      final fromDate = DateTime(asOf.year, 1, 1);
+      final repQuery = repId == null
+          ? ''
+          : '&rep_id=${Uri.encodeQueryComponent(repId!)}';
       final result = await Future.wait<Object>([
         widget.apiClient.getList(
-          '/supervisors/me/aging?as_of=${Uri.encodeQueryComponent(DateTime.now().toIso8601String())}',
+          '/supervisors/me/aging?as_of=${Uri.encodeQueryComponent(asOf.toIso8601String())}&from_date=${Uri.encodeQueryComponent(fromDate.toIso8601String())}&to_date=${Uri.encodeQueryComponent(asOf.toIso8601String())}$repQuery',
         ),
         widget.apiClient.getList('/supervisors/me/reps'),
       ]);
@@ -424,7 +429,10 @@ class _SupervisorAgingScreenState extends State<SupervisorAgingScreen> {
                     ),
                   ),
                 ],
-                onChanged: (v) => setState(() => repId = v),
+                onChanged: (v) {
+                  setState(() => repId = v);
+                  load();
+                },
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(

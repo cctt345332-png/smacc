@@ -118,8 +118,6 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
   List<Map<String, dynamic>> rows = [];
   List<dynamic> customers = [];
   List<dynamic> reps = [];
-  List<dynamic> invoices = [];
-  List<dynamic> payments = [];
   String? customerId;
   String? repId;
 
@@ -136,9 +134,10 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
     });
     try {
       final asOf = DateTime.now();
+      final fromDate = DateTime(asOf.year, 1, 1);
       final result = await Future.wait<Object>([
         widget.apiClient.getList(
-          '/sales/aging?as_of=${Uri.encodeQueryComponent(asOf.toIso8601String())}${customerId == null ? '' : '&customer_id=${Uri.encodeQueryComponent(customerId!)}'}${repId == null ? '' : '&rep_id=${Uri.encodeQueryComponent(repId!)}'}',
+          '/sales/aging?as_of=${Uri.encodeQueryComponent(asOf.toIso8601String())}&from_date=${Uri.encodeQueryComponent(fromDate.toIso8601String())}&to_date=${Uri.encodeQueryComponent(asOf.toIso8601String())}${customerId == null ? '' : '&customer_id=${Uri.encodeQueryComponent(customerId!)}'}${repId == null ? '' : '&rep_id=${Uri.encodeQueryComponent(repId!)}'}',
         ),
         widget.apiClient.getList('/sales/customers'),
         widget.apiClient.getList('/reps'),
@@ -168,79 +167,6 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
           loading = false;
         });
     }
-  }
-
-  void _calculate(List<dynamic> invoices, List<dynamic> payments) {
-    final now = DateTime.now();
-    final customerNames = <String, String>{};
-    final repNames = <String, String>{};
-    for (final item in customers) {
-      final c = Map<String, dynamic>.from(item as Map);
-      customerNames[c['id'].toString()] =
-          (c['name_ar'] ?? c['customer_number'] ?? '—').toString();
-    }
-    for (final item in reps) {
-      final r = Map<String, dynamic>.from(item as Map);
-      repNames[r['id'].toString()] =
-          (r['full_name'] ?? r['name_ar'] ?? r['name'] ?? '—').toString();
-    }
-    final direct = <String, double>{};
-    for (final item in payments) {
-      final p = Map<String, dynamic>.from(item as Map);
-      if (p['invoice_id'] == null && p['customer_id'] != null) {
-        direct[p['customer_id'].toString()] =
-            (direct[p['customer_id'].toString()] ?? 0) + _number(p['amount']);
-      }
-    }
-    final result = <Map<String, dynamic>>[];
-    for (final item in invoices) {
-      final inv = Map<String, dynamic>.from(item as Map);
-      final status = '${inv['status']}'.toLowerCase();
-      if (['draft', 'submitted', 'rejected', 'cancelled'].contains(status))
-        continue;
-      if (customerId != null && inv['customer_id']?.toString() != customerId)
-        continue;
-      if (repId != null && inv['rep_id']?.toString() != repId) continue;
-      final sold = _number(inv['total']);
-      if (sold <= .01) continue;
-      final invoicePaid = payments
-          .where((p) {
-            final x = Map<String, dynamic>.from(p as Map);
-            return x['invoice_id']?.toString() == inv['id']?.toString();
-          })
-          .fold<double>(
-            0,
-            (sum, p) =>
-                sum + _number(Map<String, dynamic>.from(p as Map)['amount']),
-          );
-      final key = inv['customer_id']?.toString() ?? '';
-      final directPaid = (direct[key] ?? 0).clamp(0, sold - invoicePaid);
-      direct[key] = (direct[key] ?? 0) - directPaid;
-      final paid = invoicePaid + directPaid;
-      final date =
-          DateTime.tryParse('${inv['issue_date'] ?? inv['created_at']}') ?? now;
-      final balance = sold - paid;
-      if (balance <= .01) continue;
-      result.add({
-        'customer': inv['buyer_name_ar'] ?? customerNames[key] ?? '—',
-        'rep': repNames[inv['rep_id']?.toString()] ?? '—',
-        'invoice': inv['invoice_number'] ?? '—',
-        'date': date,
-        'sold': sold,
-        'paid': paid,
-        'balance': balance,
-        'days': now
-            .difference(DateTime(date.year, date.month, date.day))
-            .inDays,
-      });
-    }
-    result.sort((a, b) => (b['days'] as int).compareTo(a['days'] as int));
-    rows = result;
-  }
-
-  void _calculateFromCurrentData() {
-    _calculate(invoices, payments);
-    setState(() {});
   }
 
   double _number(dynamic value) => double.tryParse('$value') ?? 0;
