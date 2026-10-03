@@ -873,16 +873,35 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
     if not rep:
         raise HTTPException(403, "هذا الحساب ليس مندوباً")
 
+    confirmed_statuses = ["confirmed", "paid", "partial", "overdue"]
+
     # إجمالي المبيعات — فقط confirmed/paid/partial
     sales_r = await db.execute(
         select(func.sum(Invoice.total), func.count(Invoice.id))
         .where(
             Invoice.tenant_id == tenant_id,
             Invoice.rep_id == rep.id,
-            Invoice.status.in_(["confirmed", "paid", "partial", "overdue"]),
+            Invoice.status.in_(confirmed_statuses),
         )
     )
     total_sales, invoice_count = sales_r.one()
+
+    # إنجاز الهدف الشهري: يبدأ تلقائياً من أول يوم في الشهر الحالي.
+    # نستخدم توقيت السعودية حتى لا تنتقل الفاتورة للشهر الخطأ قرب منتصف الليل.
+    local_now = _saudi_now().replace(tzinfo=None)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    monthly_sales_r = await db.execute(
+        select(func.sum(Invoice.total))
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.rep_id == rep.id,
+            Invoice.status.in_(confirmed_statuses),
+            Invoice.issue_date >= month_start,
+            Invoice.issue_date < month_end,
+        )
+    )
+    monthly_sales = monthly_sales_r.scalar() or Decimal("0")
 
     # المقبوضات
     pay_r = await db.execute(
@@ -904,6 +923,7 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
     return {
         "rep_id": rep.id,
         "total_sales": float(total_sales or 0),
+        "monthly_sales": float(monthly_sales),
         "invoice_count": invoice_count or 0,
         "total_collected": float(total_collected),
         "opening_balance": float(opening_balance),
@@ -1077,6 +1097,20 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
     )
     total_sales, invoice_count = sales_r.one()
 
+    local_now = _saudi_now().replace(tzinfo=None)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+    monthly_sales_r = await db.execute(
+        select(func.sum(Invoice.total)).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.rep_id == rep_id,
+            Invoice.status.in_(["confirmed", "paid", "partial", "overdue"]),
+            Invoice.issue_date >= month_start,
+            Invoice.issue_date < month_end,
+        )
+    )
+    monthly_sales = monthly_sales_r.scalar() or Decimal("0")
+
     # إجمالي المقبوضات
     pay_r = await db.execute(
         select(func.sum(Payment.amount))
@@ -1101,6 +1135,7 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
         "zone": rep.zone,
         "warehouse_name": wh.name_ar,
         "total_sales": float(total_sales or 0),
+        "monthly_sales": float(monthly_sales),
         "invoice_count": invoice_count or 0,
         "total_collected": float(total_collected),
         "opening_balance": float(opening_balance),

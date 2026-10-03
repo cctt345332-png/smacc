@@ -245,7 +245,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget monthlyTarget() {
     final target = num.tryParse('${summary?['target_monthly'] ?? 0}') ?? 0;
-    final sales = num.tryParse('${summary?['total_sales'] ?? 0}') ?? 0;
+    final sales = num.tryParse('${summary?['monthly_sales'] ?? 0}') ?? 0;
     final progress = target > 0 ? (sales / target).clamp(0, 1).toDouble() : 0.0;
     final percentage = target > 0 ? (sales / target * 100).round() : 0;
     final remaining = target > sales ? target - sales : 0;
