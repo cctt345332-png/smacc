@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../data/api_client.dart';
 import 'rep_forms.dart';
 import 'rep_lists.dart';
@@ -19,10 +22,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? profile, summary;
   Object? error;
   bool loading = true;
+  Timer? _locationTimer;
   @override
   void initState() {
     super.initState();
     _load();
+    _sendLocation();
+    _locationTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => _sendLocation(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _locationTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _sendLocation() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      );
+      await widget.apiClient.post('/reps/me/location', {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'accuracy': position.accuracy,
+        'speed': position.speed,
+        'heading': position.heading,
+        'recorded_at': DateTime.now().toUtc().toIso8601String(),
+        'is_moving': position.speed > 1,
+      });
+    } catch (_) {
+      // التتبع اختياري ولا يمنع المندوب من استخدام التطبيق.
+    }
   }
 
   Future<void> _load() async {

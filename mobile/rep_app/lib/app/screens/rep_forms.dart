@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../data/api_client.dart';
@@ -38,15 +39,15 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       'address_postal',
       'address_additional',
       'website',
-      'credit_limit',
-      'payment_terms_days',
-      'opening_balance',
       'notes',
     ])
       k: TextEditingController(),
   };
   String type = 'company';
   bool saving = false;
+  bool locating = false;
+  double? latitude;
+  double? longitude;
   @override
   void dispose() {
     for (final x in c.values) x.dispose();
@@ -63,10 +64,10 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       for (final e in c.entries)
         if (e.value.text.trim().isNotEmpty) e.key: e.value.text.trim(),
     };
-    for (final k in ['credit_limit', 'opening_balance'])
-      data[k] = double.tryParse(c[k]!.text) ?? 0;
-    data['payment_terms_days'] =
-        int.tryParse(c['payment_terms_days']!.text) ?? 30;
+    if (latitude != null && longitude != null) {
+      data['latitude'] = latitude;
+      data['longitude'] = longitude;
+    }
     try {
       await widget.apiClient.post('/sales/customers', data);
       if (mounted) {
@@ -77,10 +78,49 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> _pickLocation() async {
+    setState(() => locating = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception('فعّل خدمة الموقع في الجهاز أولاً');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('لم يتم السماح للتطبيق بالوصول إلى الموقع');
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        latitude = position.latitude;
+        longitude = position.longitude;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تم تحديد موقع العميل')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => locating = false);
     }
   }
 
@@ -169,15 +209,31 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
           field('address_postal', 'الرمز البريدي'),
           field('address_additional', 'العنوان الإضافي'),
           field('website', 'الموقع الإلكتروني'),
-          const Divider(height: 28),
-          const Text(
-            'الحدود المالية',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          OutlinedButton.icon(
+            onPressed: locating ? null : _pickLocation,
+            icon: locating
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.location_on_outlined),
+            label: Text(
+              latitude == null
+                  ? 'تحديد موقع المحل الحالي'
+                  : 'تم تحديد موقع المحل',
+            ),
           ),
-          const SizedBox(height: 12),
-          field('credit_limit', 'حد الائتمان', number: true),
-          field('payment_terms_days', 'مدة السداد بالأيام', number: true),
-          field('opening_balance', 'الرصيد الافتتاحي', number: true),
+          if (latitude != null && longitude != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'الإحداثيات: ${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.black54, fontSize: 12),
+              ),
+            ),
+          const Divider(height: 28),
           field('notes', 'ملاحظات', lines: 3),
           const SizedBox(height: 8),
           FilledButton.icon(
@@ -609,8 +665,9 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -973,13 +1030,15 @@ class _PaymentCreateScreenState extends State<PaymentCreateScreen> {
     final entered = double.tryParse(amount.text) ?? 0;
     if (selectedInvoice == null &&
         !(mode == 'discount' && customerId != null)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('اختر الفاتورة')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('اختر الفاتورة')));
       return;
     }
     if (entered <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('أدخل مبلغاً صحيحاً')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('أدخل مبلغاً صحيحاً')));
       return;
     }
     setState(() => saving = true);
@@ -1008,8 +1067,9 @@ class _PaymentCreateScreenState extends State<PaymentCreateScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('تعذر إنشاء السند: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('تعذر إنشاء السند: $e')));
     } finally {
       if (mounted) setState(() => saving = false);
     }
