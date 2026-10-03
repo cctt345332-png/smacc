@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
 import '../data/api_client.dart';
 import 'rep_extra.dart';
 
@@ -76,9 +77,8 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -305,9 +305,9 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
   double get total {
     final q = double.tryParse(qty.text) ?? 0,
         p = double.tryParse(price.text) ?? 0,
-        d = double.tryParse(discount.text) ?? 0,
-        t = double.tryParse(vat.text) ?? 0;
-    return q * p * (1 - d / 100) * (1 + t / 100);
+        d = double.tryParse(discount.text) ?? 0;
+    // السعر المدخل شامل الضريبة؛ لا نضيف الضريبة مرة ثانية على الإجمالي.
+    return q * p * (1 - d / 100);
   }
 
   Future<void> _chooseSerials() async {
@@ -594,9 +594,8 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -944,15 +943,13 @@ class _PaymentCreateScreenState extends State<PaymentCreateScreen> {
     final entered = double.tryParse(amount.text) ?? 0;
     if (selectedInvoice == null &&
         !(mode == 'discount' && customerId != null)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('اختر الفاتورة')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('اختر الفاتورة')));
       return;
     }
     if (entered <= 0) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('أدخل مبلغاً صحيحاً')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('أدخل مبلغاً صحيحاً')));
       return;
     }
     setState(() => saving = true);
@@ -981,9 +978,8 @@ class _PaymentCreateScreenState extends State<PaymentCreateScreen> {
       }
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('تعذر إنشاء السند: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('تعذر إنشاء السند: $e')));
     } finally {
       if (mounted) setState(() => saving = false);
     }
