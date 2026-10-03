@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +13,12 @@ String _money(dynamic v) =>
     '${(num.tryParse("$v") ?? 0).toStringAsFixed(2)} ر.س';
 String _date(dynamic v) => v == null ? '—' : '${v.toString()}'.split('T').first;
 int _days(dynamic v) => int.tryParse('$v') ?? 0;
+String _movementAmount(Map<String, dynamic> movement) {
+  final amount = num.tryParse('${movement['amount'] ?? ''}') ?? 0;
+  final debit = num.tryParse('${movement['debit'] ?? ''}') ?? 0;
+  final credit = num.tryParse('${movement['credit'] ?? ''}') ?? 0;
+  return _money(amount != 0 ? amount : (debit != 0 ? debit : credit));
+}
 
 class SupervisorStatementsScreen extends StatefulWidget {
   const SupervisorStatementsScreen({required this.apiClient, super.key});
@@ -128,7 +133,7 @@ class _SupervisorStatementsScreenState
                   data: r,
                   onOpen: () => Navigator.push(
                     context,
-                    MaterialPageRoute(
+                    MaterialPageRoute<void>(
                       builder: (_) => SupervisorStatementDetailScreen(
                         apiClient: widget.apiClient,
                         data: r,
@@ -151,7 +156,7 @@ class _SupervisorStatementsScreenState
           final s = Map<String, dynamic>.from((r['summary'] as Map?) ?? {});
           return <String>[
             '${c['name_ar'] ?? '—'}',
-            '${r['rep_id'] ?? '—'}',
+            '${r['rep_name'] ?? r['rep_code'] ?? '—'}',
             _money(s['total_invoiced']),
             _money(s['total_paid']),
             _money(s['closing_balance'] ?? s['outstanding']),
@@ -179,7 +184,7 @@ class _StatementTile extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         subtitle: Text(
-          'رقم العميل: ${c['customer_number'] ?? '—'}\nمندوب: ${data['rep_id'] ?? '—'}',
+          'رقم العميل: ${c['customer_number'] ?? '—'}\nمندوب: ${data['rep_name'] ?? data['rep_code'] ?? '—'}',
         ),
         isThreeLine: true,
         trailing: Column(
@@ -241,7 +246,7 @@ class SupervisorStatementDetailScreen extends StatelessWidget {
                     ),
                   ),
                   Text('رقم العميل: ${c['customer_number'] ?? '—'}'),
-                  Text('مندوب: ${data['rep_id'] ?? '—'}'),
+                  Text('مندوب: ${data['rep_name'] ?? data['rep_code'] ?? '—'}'),
                   const Divider(),
                   Text('إجمالي الفواتير: ${_money(s['total_invoiced'])}'),
                   Text('المقبوض: ${_money(s['total_paid'])}'),
@@ -282,9 +287,7 @@ class SupervisorStatementDetailScreen extends StatelessWidget {
                   '${_date(m['date'])}\n${m['description_ar'] ?? m['description'] ?? '—'}',
                 ),
                 isThreeLine: true,
-                trailing: Text(
-                  _money(m['amount'] ?? m['debit'] ?? m['credit']),
-                ),
+                trailing: Text(_movementAmount(m)),
               ),
             );
           }),
@@ -298,7 +301,8 @@ class SupervisorStatementDetailScreen extends StatelessWidget {
     final tx = (data['transactions'] as List?) ?? [];
     await _sharePdf(
       apiClient,
-      title: 'كشف حساب ${c['name_ar'] ?? ''}',
+      title:
+          'كشف حساب ${c['name_ar'] ?? ''} - مندوب ${data['rep_name'] ?? data['rep_code'] ?? '—'}',
       filename: 'كشف-حساب-${c['customer_number'] ?? 'عميل'}.pdf',
       headers: const [
         'التاريخ',

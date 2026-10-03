@@ -248,10 +248,17 @@ async def get_supervisor_customer_statements(
     if customer_id:
         query = query.where(Customer.id == customer_id)
     customers = (await db.execute(query.order_by(Customer.name_ar))).scalars().all()
+    rep_directory = await _supervisor_rep_directory(db, tenant_id, rep_ids)
     result = []
     for customer in customers:
         statement = await orders_service.get_customer_statement(db, tenant_id, customer.id, from_date, to_date, None)
-        result.append({"customer": {"id": customer.id, "name_ar": customer.name_ar, "customer_number": customer.customer_number, "phone": customer.phone}, "rep_id": customer.rep_id, **statement})
+        result.append({
+            "customer": {"id": customer.id, "name_ar": customer.name_ar, "customer_number": customer.customer_number, "phone": customer.phone},
+            "rep_id": customer.rep_id,
+            "rep_name": rep_directory.get(customer.rep_id, {}).get("full_name", "—"),
+            "rep_code": rep_directory.get(customer.rep_id, {}).get("rep_code", "—"),
+            **statement,
+        })
     return result
 
 
