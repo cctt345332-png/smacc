@@ -87,14 +87,31 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                   if (reps.isEmpty)
                     const _Empty(text: 'لا يوجد مناديب مسجلون')
                   else
-                    ...reps.map(
-                      (rep) =>
-                          _RepTile(rep: Map<String, dynamic>.from(rep as Map)),
-                    ),
+                    ..._sortedRepTiles(),
                 ],
               ),
             ),
     );
+  }
+
+  List<Widget> _sortedRepTiles() {
+    final items = reps.map((x) => Map<String, dynamic>.from(x as Map)).toList();
+    items.sort((a, b) {
+      final av =
+          num.tryParse('${a['sales_total'] ?? a['total_sales'] ?? 0}') ?? 0;
+      final bv =
+          num.tryParse('${b['sales_total'] ?? b['total_sales'] ?? 0}') ?? 0;
+      return bv.compareTo(av);
+    });
+    final maxSales = items.fold<num>(0, (max, item) {
+      final value =
+          num.tryParse('${item['sales_total'] ?? item['total_sales'] ?? 0}') ??
+          0;
+      return value > max ? value : max;
+    });
+    return items
+        .map((item) => _RepTile(rep: item, maxSales: maxSales))
+        .toList();
   }
 }
 
@@ -240,8 +257,9 @@ class _MetricGrid extends StatelessWidget {
 }
 
 class _RepTile extends StatelessWidget {
-  const _RepTile({required this.rep});
+  const _RepTile({required this.rep, required this.maxSales});
   final Map<String, dynamic> rep;
+  final num maxSales;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +267,13 @@ class _RepTile extends StatelessWidget {
         .toString();
     final code = (rep['rep_code'] ?? rep['code'] ?? '').toString();
     final zone = (rep['zone'] ?? rep['city'] ?? '').toString();
+    final sales =
+        num.tryParse('${rep['sales_total'] ?? rep['total_sales'] ?? 0}') ?? 0;
+    final collected =
+        num.tryParse('${rep['total_collected'] ?? rep['collected'] ?? 0}') ?? 0;
+    final progress = maxSales <= 0
+        ? 0.0
+        : (sales / maxSales).clamp(0.0, 1.0).toDouble();
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
@@ -257,14 +282,46 @@ class _RepTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(15),
         side: const BorderSide(color: Color(0xFFE7DFEB)),
       ),
-      child: ListTile(
-        leading: const CircleAvatar(
-          backgroundColor: Color(0xFFEFE7F5),
-          child: Icon(Icons.person_outline, color: _purple),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+        child: Column(
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: Color(0xFFEFE7F5),
+                child: Icon(Icons.person_outline, color: _purple),
+              ),
+              title: Text(
+                name,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              subtitle: Text(
+                [code, zone].where((x) => x.isNotEmpty).join(' • '),
+              ),
+              trailing: Text(
+                '${sales.toStringAsFixed(0)} ر.س',
+                style: const TextStyle(
+                  color: _purple,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            LinearProgressIndicator(
+              value: progress,
+              color: _purple,
+              backgroundColor: const Color(0xFFEFE7F5),
+            ),
+            const SizedBox(height: 5),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'المبيعات: ${sales.toStringAsFixed(2)} ر.س  •  المحصل: ${collected.toStringAsFixed(2)} ر.س',
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+            ),
+          ],
         ),
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
-        subtitle: Text([code, zone].where((x) => x.isNotEmpty).join(' • ')),
-        trailing: const Icon(Icons.chevron_left),
       ),
     );
   }

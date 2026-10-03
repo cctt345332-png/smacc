@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/api_client.dart';
 import 'rep_extra.dart';
+import 'company_rep_reports_screen.dart';
 
 const _purple = Color(0xFF3E0865);
 
@@ -49,6 +50,17 @@ class CompanyReportsScreen extends StatelessWidget {
             context,
             MaterialPageRoute(
               builder: (_) => CompanyAgingScreen(apiClient: apiClient),
+            ),
+          ),
+        ),
+        _ReportTile(
+          icon: Icons.groups_outlined,
+          title: 'حركة المندوبين',
+          subtitle: 'فواتير وسندات كل مندوب مع الفلترة والطباعة',
+          onTap: () => Navigator.push<void>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CompanyRepReportsScreen(apiClient: apiClient),
             ),
           ),
         ),
@@ -105,7 +117,11 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
   Object? error;
   List<Map<String, dynamic>> rows = [];
   List<dynamic> customers = [];
+  List<dynamic> reps = [];
+  List<dynamic> invoices = [];
+  List<dynamic> payments = [];
   String? customerId;
+  String? repId;
 
   @override
   void initState() {
@@ -123,9 +139,13 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
         widget.apiClient.getList('/sales/invoices'),
         widget.apiClient.getList('/sales/payments'),
         widget.apiClient.getList('/sales/customers'),
+        widget.apiClient.getList('/reps'),
       ]);
+      invoices = result[0] as List<dynamic>;
+      payments = result[1] as List<dynamic>;
       customers = result[2] as List<dynamic>;
-      _calculate(result[0] as List<dynamic>, result[1] as List<dynamic>);
+      reps = result[3] as List<dynamic>;
+      _calculate(invoices, payments);
       if (mounted) setState(() => loading = false);
     } catch (e) {
       if (mounted)
@@ -139,10 +159,16 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
   void _calculate(List<dynamic> invoices, List<dynamic> payments) {
     final now = DateTime.now();
     final customerNames = <String, String>{};
+    final repNames = <String, String>{};
     for (final item in customers) {
       final c = Map<String, dynamic>.from(item as Map);
       customerNames[c['id'].toString()] =
           (c['name_ar'] ?? c['customer_number'] ?? '—').toString();
+    }
+    for (final item in reps) {
+      final r = Map<String, dynamic>.from(item as Map);
+      repNames[r['id'].toString()] =
+          (r['full_name'] ?? r['name_ar'] ?? r['name'] ?? '—').toString();
     }
     final direct = <String, double>{};
     for (final item in payments) {
@@ -160,6 +186,7 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
         continue;
       if (customerId != null && inv['customer_id']?.toString() != customerId)
         continue;
+      if (repId != null && inv['rep_id']?.toString() != repId) continue;
       final sold = _number(inv['total']);
       if (sold <= .01) continue;
       final invoicePaid = payments
@@ -182,6 +209,7 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
       if (balance <= .01) continue;
       result.add({
         'customer': inv['buyer_name_ar'] ?? customerNames[key] ?? '—',
+        'rep': repNames[inv['rep_id']?.toString()] ?? '—',
         'invoice': inv['invoice_number'] ?? '—',
         'date': date,
         'sold': sold,
@@ -194,6 +222,11 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
     }
     result.sort((a, b) => (b['days'] as int).compareTo(a['days'] as int));
     rows = result;
+  }
+
+  void _calculateFromCurrentData() {
+    _calculate(invoices, payments);
+    setState(() {});
   }
 
   double _number(dynamic value) => double.tryParse('$value') ?? 0;
@@ -252,6 +285,33 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
                       load();
                     },
                   ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String?>(
+                    initialValue: repId,
+                    decoration: const InputDecoration(
+                      labelText: 'المندوب',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('كل المناديب'),
+                      ),
+                      ...reps.map((item) {
+                        final r = Map<String, dynamic>.from(item as Map);
+                        return DropdownMenuItem<String?>(
+                          value: r['id']?.toString(),
+                          child: Text(
+                            '${r['full_name'] ?? r['name_ar'] ?? r['name'] ?? 'مندوب'}',
+                          ),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      setState(() => repId = value);
+                      _calculateFromCurrentData();
+                    },
+                  ),
                   const SizedBox(height: 12),
                   Card(
                     elevation: 0,
@@ -295,6 +355,11 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
       borderRadius: BorderRadius.circular(14),
       side: const BorderSide(color: Color(0xFFE5DDE9)),
     ),
+    color: (row['days'] as int) >= 30
+        ? const Color(0xFFFFE7E5)
+        : (row['days'] as int) > 21
+        ? const Color(0xFFFFF3D6)
+        : Colors.white,
     child: Padding(
       padding: const EdgeInsets.all(13),
       child: Column(
@@ -322,8 +387,17 @@ class _CompanyAgingScreenState extends State<CompanyAgingScreen> {
           Text(
             'الفاتورة: ${row['invoice']}  •  التاريخ: ${(row['date'] as DateTime).toIso8601String().split('T').first}',
           ),
+          Text('المندوب: ${row['rep']}'),
           Text(
             'العمر: ${row['days']} يوم  •  الإجمالي: ${money(row['sold'])}  •  المسدد: ${money(row['paid'])}',
+            style: TextStyle(
+              color: (row['days'] as int) >= 30
+                  ? Colors.red.shade800
+                  : (row['days'] as int) > 21
+                  ? Colors.orange.shade900
+                  : null,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
