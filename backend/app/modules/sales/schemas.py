@@ -78,6 +78,7 @@ class CustomerOut(BaseModel):
     customer_number: str
     customer_type: CustomerType
     name_ar: str
+    rep_id: Optional[str] = None
     name_en: Optional[str]
     vat_number: Optional[str]
     cr_number: Optional[str]
