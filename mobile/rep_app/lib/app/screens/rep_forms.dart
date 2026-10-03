@@ -231,6 +231,19 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
 
   bool get editing => widget.invoiceId != null;
 
+  static const int defaultCreditDays = 21;
+
+  void _calculateDueDate() {
+    final issueDate = DateTime.tryParse(issue.text.trim());
+    if (issueDate == null) return;
+    final calculated = issueDate.add(const Duration(days: defaultCreditDays));
+    final value =
+        '${calculated.year.toString().padLeft(4, '0')}-'
+        '${calculated.month.toString().padLeft(2, '0')}-'
+        '${calculated.day.toString().padLeft(2, '0')}';
+    if (due.text != value) due.text = value;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -274,6 +287,7 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
         due.text = invoice['due_date'] == null
             ? ''
             : '${invoice['due_date']}'.substring(0, 10);
+        if (payment == 'credit' && due.text.isEmpty) _calculateDueDate();
         notes.text = invoice['notes']?.toString() ?? '';
         itemId = line['inventory_item_id']?.toString();
         itemName = line['description_ar']?.toString() ?? '';
@@ -549,6 +563,7 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
       'customer_id': customerId,
       'invoice_type': 'simplified',
       'invoice_payment_method': payment,
+      'credit_days': payment == 'credit' ? defaultCreditDays : null,
       'issue_date': '${issue.text}T00:00:00',
       'supply_date': '${issue.text}T00:00:00',
       'due_date': payment == 'credit' && due.text.isNotEmpty
@@ -656,12 +671,26 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                     DropdownMenuItem(value: 'cash', child: Text('نقدي')),
                     DropdownMenuItem(value: 'credit', child: Text('آجل')),
                   ],
-                  onChanged: (v) => setState(() => payment = v ?? 'cash'),
+                  onChanged: (v) {
+                    setState(() {
+                      payment = v ?? 'cash';
+                      if (payment == 'credit') {
+                        _calculateDueDate();
+                      } else {
+                        due.clear();
+                      }
+                    });
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: issue,
                   textDirection: TextDirection.ltr,
+                  onChanged: (_) {
+                    if (payment == 'credit') {
+                      setState(_calculateDueDate);
+                    }
+                  },
                   decoration: const InputDecoration(
                     labelText: 'تاريخ الإصدار',
                     border: OutlineInputBorder(),
@@ -672,6 +701,7 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                   TextField(
                     controller: due,
                     textDirection: TextDirection.ltr,
+                    readOnly: true,
                     decoration: const InputDecoration(
                       labelText: 'تاريخ الاستحقاق',
                       border: OutlineInputBorder(),

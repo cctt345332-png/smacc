@@ -1,7 +1,7 @@
 import uuid
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, case, or_
@@ -633,10 +633,14 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
     tenant = tenant_r.scalar_one_or_none()
 
     if data.invoice_payment_method == InvoicePaymentMethod.CREDIT:
+        # المدة الافتراضية للآجل 21 يومًا؛ يحسب النظام التاريخ تلقائيًا
+        # من تاريخ الإصدار إذا لم يرسله التطبيق.
+        if data.credit_days is None:
+            data.credit_days = 21
         if data.credit_days not in (21, 30):
             raise HTTPException(400, "مدة الآجل المسموحة هي 21 أو 30 يومًا فقط")
         if not data.due_date:
-            raise HTTPException(400, "يجب تحديد تاريخ الاستحقاق للفاتورة الآجلة")
+            data.due_date = data.issue_date + timedelta(days=data.credit_days)
     else:
         # النقد والتحويل والشيك لا يحمل مدة آجل تلقائيًا.
         data.due_date = None
