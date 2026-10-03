@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/api_client.dart';
+import 'supervisor_statements.dart';
 
 const _supervisorPurple = Color(0xFF3E0865);
 
@@ -541,6 +542,40 @@ class _SupervisorReportsScreenState extends State<SupervisorReportsScreen> {
           : ListView(
               padding: const EdgeInsets.all(14),
               children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SupervisorStatementsScreen(
+                              apiClient: widget.apiClient,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.account_balance_wallet),
+                        label: const Text('كشوفات العملاء'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => SupervisorAgingScreen(
+                              apiClient: widget.apiClient,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.schedule),
+                        label: const Text('أعمار الديون'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: repId,
                   isExpanded: true,

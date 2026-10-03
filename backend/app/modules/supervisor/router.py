@@ -91,6 +91,19 @@ async def my_customer_statements(
     )
 
 
+@router.get("/me/aging")
+async def my_aging(
+    as_of: datetime = Query(...),
+    rep_id: str | None = Query(None),
+    customer_id: str | None = Query(None),
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_supervisor_aging(
+        db, user["tenant_id"], user["user_id"], as_of, rep_id, customer_id
+    )
+
+
 @router.get("/me/summary")
 async def my_summary(
     user=Depends(get_current_user),

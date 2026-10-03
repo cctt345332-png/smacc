@@ -255,6 +255,47 @@ async def get_supervisor_customer_statements(
     return result
 
 
+async def get_supervisor_aging(
+    db: AsyncSession, tenant_id: str, user_id: str, as_of: datetime,
+    rep_id: str | None = None, customer_id: str | None = None,
+) -> list:
+    """أعمار الديون للمشرف: العمر يبدأ بعد مهلة 21 يوماً من تاريخ إصدار الفاتورة."""
+    _, allowed_rep_ids = await _get_supervisor_scope(db, tenant_id, user_id)
+    if rep_id:
+        if rep_id not in allowed_rep_ids:
+            raise HTTPException(403, "المندوب خارج نطاقك")
+        allowed_rep_ids = [rep_id]
+    invoices = await get_supervisor_invoices(db, tenant_id, user_id)
+    rows = []
+    for invoice in invoices:
+        invoice_rep_id = invoice.get("rep_id")
+        if invoice_rep_id not in allowed_rep_ids or invoice.get("status") not in {"confirmed", "paid", "partial", "overdue"}:
+            continue
+        if customer_id and invoice.get("customer_id") != customer_id:
+            continue
+        total = Decimal(str(invoice.get("total") or 0))
+        paid = Decimal(str(invoice.get("paid_amount") or 0))
+        outstanding = max(total - paid, Decimal("0"))
+        if outstanding <= 0:
+            continue
+        raw_date = invoice.get("issue_date") or invoice.get("supply_date")
+        try:
+            issue_date = raw_date.date() if hasattr(raw_date, "date") else datetime.fromisoformat(str(raw_date)).date()
+            age = max((as_of.date() - issue_date).days - 21, 0)
+        except (TypeError, ValueError):
+            issue_date = None
+            age = 0
+        rows.append({
+            "invoice_id": invoice.get("id"), "invoice_number": invoice.get("invoice_number"),
+            "customer_id": invoice.get("customer_id"), "customer_name": invoice.get("buyer_name_ar") or "—",
+            "rep_id": invoice_rep_id, "rep_name": invoice.get("rep_name") or "—",
+            "issue_date": issue_date.isoformat() if issue_date else None,
+            "invoice_total": float(total), "paid_amount": float(paid), "outstanding": float(outstanding),
+            "overdue_days": age, "bucket": "متأخر" if age > 0 else "ضمن المهلة",
+        })
+    return sorted(rows, key=lambda row: (row["overdue_days"], row["outstanding"]), reverse=True)
+
+
 async def get_supervisor_payments(db: AsyncSession, tenant_id: str, user_id: str) -> list:
     """سندات قبض مناديب المشرف، مع دعم الربط المباشر أو الربط القديم بالفاتورة/العميل."""
     sup = await get_supervisor_by_user(db, user_id)
