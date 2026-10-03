@@ -146,14 +146,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       (a, b) =>
           (a['sales_total'] as num).compareTo(b['sales_total'] as num) * -1,
     );
-    final maxSales = items.fold<num>(
-      0,
-      (max, item) =>
-          (item['sales_total'] as num) > max ? item['sales_total'] as num : max,
-    );
-    return items
-        .map((item) => _RepTile(rep: item, maxSales: maxSales))
-        .toList();
+    return items.map((item) => _RepTile(rep: item)).toList();
   }
 }
 
@@ -299,9 +292,8 @@ class _MetricGrid extends StatelessWidget {
 }
 
 class _RepTile extends StatelessWidget {
-  const _RepTile({required this.rep, required this.maxSales});
+  const _RepTile({required this.rep});
   final Map<String, dynamic> rep;
-  final num maxSales;
 
   @override
   Widget build(BuildContext context) {
@@ -313,9 +305,11 @@ class _RepTile extends StatelessWidget {
         num.tryParse('${rep['sales_total'] ?? rep['total_sales'] ?? 0}') ?? 0;
     final collected =
         num.tryParse('${rep['total_collected'] ?? rep['collected'] ?? 0}') ?? 0;
-    final progress = maxSales <= 0
+    final target = num.tryParse('${rep['target_monthly'] ?? 0}') ?? 0;
+    final progress = target <= 0
         ? 0.0
-        : (sales / maxSales).clamp(0.0, 1.0).toDouble();
+        : (sales / target).clamp(0.0, 1.0).toDouble();
+    final progressPercent = target <= 0 ? null : (sales / target * 100).round();
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
@@ -355,12 +349,21 @@ class _RepTile extends StatelessWidget {
               backgroundColor: const Color(0xFFEFE7F5),
             ),
             const SizedBox(height: 5),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                'المبيعات: ${sales.toStringAsFixed(2)} ر.س  •  المحصل: ${collected.toStringAsFixed(2)} ر.س',
-                style: const TextStyle(fontSize: 11, color: Colors.black54),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    target > 0
+                        ? 'الهدف الشهري: ${target.toStringAsFixed(2)} ر.س  •  الإنجاز: $progressPercent%'
+                        : 'الهدف الشهري غير محدد',
+                    style: const TextStyle(fontSize: 10, color: Colors.black54),
+                  ),
+                ),
+                Text(
+                  'المحصل: ${collected.toStringAsFixed(2)} ر.س',
+                  style: const TextStyle(fontSize: 10, color: Colors.black54),
+                ),
+              ],
             ),
           ],
         ),
