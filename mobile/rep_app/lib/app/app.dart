@@ -6,6 +6,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/rep_lists.dart';
 import 'screens/rep_extra.dart';
+import 'screens/supervisor_screen.dart';
 
 class App extends StatefulWidget {
   const App({required this.apiClient, required this.sessionStore, super.key});
@@ -26,6 +27,8 @@ class _AppState extends State<App> {
   @override
   Widget build(BuildContext context) => !_signedIn
       ? LoginScreen(apiClient: widget.apiClient, onSignedIn: _onSignedIn)
+      : widget.sessionStore.isSupervisor
+      ? SupervisorShell(apiClient: widget.apiClient)
       : RepShell(apiClient: widget.apiClient);
 }
 
