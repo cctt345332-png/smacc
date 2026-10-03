@@ -104,6 +104,7 @@ class _CompanyRepReportsScreenState extends State<CompanyRepReportsScreen> {
 
   String money(double v) => '${v.toStringAsFixed(2)} ر.س';
   String selectedName() => rep(repId)['full_name']?.toString() ?? 'كل المناديب';
+  String ltr(dynamic value) => '\u200E${value ?? '—'}\u200E';
 
   Future<void> printReport() async {
     final arabic = pw.Font.ttf(
@@ -127,18 +128,18 @@ class _CompanyRepReportsScreenState extends State<CompanyRepReportsScreen> {
             'تقرير حركة المندوبين',
             style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
           ),
-          pw.Text('المندوب: $selectedName()'),
+          pw.Text('المندوب: ${selectedName()}'),
           pw.SizedBox(height: 12),
           pw.TableHelper.fromTextArray(
             headers: const ['التاريخ', 'النوع', 'المرجع', 'العميل', 'المبلغ'],
             data: data
                 .map(
                   (r) => [
-                    '${r['date'] ?? '—'}'.split('T').first,
+                    ltr('${r['date'] ?? '—'}'.split('T').first),
                     r['kind'],
-                    r['number'],
+                    ltr(r['number']),
                     r['customer'],
-                    money(r['amount'] as double),
+                    ltr(money(r['amount'] as double)),
                   ],
                 )
                 .toList(),
@@ -148,7 +149,7 @@ class _CompanyRepReportsScreenState extends State<CompanyRepReportsScreen> {
     );
     await Printing.sharePdf(
       bytes: await pdf.save(),
-      filename: 'تقرير-حركة-$selectedName().pdf',
+      filename: 'تقرير-حركة-${selectedName()}.pdf',
     );
   }
 

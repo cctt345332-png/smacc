@@ -15,7 +15,7 @@ class CompanyDashboardScreen extends StatefulWidget {
 
 class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   Map<String, dynamic> summary = {};
-  List<dynamic> reps = [];
+  List<dynamic> reps = [], invoices = [], payments = [];
   Object? error;
   bool loading = true;
 
@@ -34,11 +34,15 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       final result = await Future.wait<Object>([
         widget.apiClient.getMap('/sales/invoices/system-summary'),
         widget.apiClient.getList('/reps'),
+        widget.apiClient.getList('/sales/invoices'),
+        widget.apiClient.getList('/sales/payments'),
       ]);
       if (!mounted) return;
       setState(() {
         summary = Map<String, dynamic>.from(result[0] as Map);
         reps = result[1] as List<dynamic>;
+        invoices = result[2] as List<dynamic>;
+        payments = result[3] as List<dynamic>;
         loading = false;
       });
     } catch (e) {
@@ -96,19 +100,44 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
 
   List<Widget> _sortedRepTiles() {
     final items = reps.map((x) => Map<String, dynamic>.from(x as Map)).toList();
-    items.sort((a, b) {
-      final av =
-          num.tryParse('${a['sales_total'] ?? a['total_sales'] ?? 0}') ?? 0;
-      final bv =
-          num.tryParse('${b['sales_total'] ?? b['total_sales'] ?? 0}') ?? 0;
-      return bv.compareTo(av);
-    });
-    final maxSales = items.fold<num>(0, (max, item) {
-      final value =
-          num.tryParse('${item['sales_total'] ?? item['total_sales'] ?? 0}') ??
-          0;
-      return value > max ? value : max;
-    });
+    final stats = <String, Map<String, num>>{};
+    for (final raw in invoices) {
+      final item = Map<String, dynamic>.from(raw as Map);
+      final status = '${item['status'] ?? ''}'.toLowerCase();
+      final id = item['rep_id']?.toString();
+      if (id == null || ['draft', 'rejected', 'cancelled'].contains(status))
+        continue;
+      stats.putIfAbsent(id, () => {'sales': 0, 'collected': 0});
+      stats[id]!['sales'] =
+          stats[id]!['sales']! + (num.tryParse('${item['total'] ?? 0}') ?? 0);
+    }
+    for (final raw in payments) {
+      final item = Map<String, dynamic>.from(raw as Map);
+      final id = item['rep_id']?.toString();
+      final type =
+          '${item['payment_type'] ?? item['voucher_type'] ?? 'receipt'}'
+              .toLowerCase();
+      if (id == null || type == 'discount') continue;
+      stats.putIfAbsent(id, () => {'sales': 0, 'collected': 0});
+      stats[id]!['collected'] =
+          stats[id]!['collected']! +
+          (num.tryParse('${item['amount'] ?? 0}') ?? 0);
+    }
+    for (final item in items) {
+      final values =
+          stats[item['id']?.toString()] ?? {'sales': 0, 'collected': 0};
+      item['sales_total'] = values['sales'] ?? 0;
+      item['total_collected'] = values['collected'] ?? 0;
+    }
+    items.sort(
+      (a, b) =>
+          (a['sales_total'] as num).compareTo(b['sales_total'] as num) * -1,
+    );
+    final maxSales = items.fold<num>(
+      0,
+      (max, item) =>
+          (item['sales_total'] as num) > max ? item['sales_total'] as num : max,
+    );
     return items
         .map((item) => _RepTile(rep: item, maxSales: maxSales))
         .toList();
