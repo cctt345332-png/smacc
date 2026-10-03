@@ -7,6 +7,7 @@ import 'screens/login_screen.dart';
 import 'screens/rep_lists.dart';
 import 'screens/rep_extra.dart';
 import 'screens/supervisor_screen.dart';
+import 'screens/company_dashboard_screen.dart';
 
 class App extends StatefulWidget {
   const App({required this.apiClient, required this.sessionStore, super.key});
@@ -19,16 +20,14 @@ class App extends StatefulWidget {
 class _AppState extends State<App> {
   bool get _signedIn => widget.sessionStore.token?.isNotEmpty == true;
   void _onSignedIn() => setState(() {});
-  Future<void> _logout() async {
-    await widget.sessionStore.clear();
-    if (mounted) setState(() {});
-  }
 
   @override
   Widget build(BuildContext context) => !_signedIn
       ? LoginScreen(apiClient: widget.apiClient, onSignedIn: _onSignedIn)
       : widget.sessionStore.isSupervisor
       ? SupervisorShell(apiClient: widget.apiClient)
+      : widget.sessionStore.isCompanyManager
+      ? CompanyDashboardScreen(apiClient: widget.apiClient)
       : RepShell(apiClient: widget.apiClient);
 }
 

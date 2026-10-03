@@ -23,6 +23,7 @@ class SessionStore {
   }
 
   bool get isSupervisor => role == 'supervisor';
+  bool get isCompanyManager => role == 'admin' || role == 'manager';
   Future<void> saveToken(String token) =>
       _preferences.setString(_tokenKey, token);
   Future<void> clear() => _preferences.remove(_tokenKey);
