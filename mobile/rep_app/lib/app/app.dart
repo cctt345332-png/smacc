@@ -4,6 +4,7 @@ import 'data/api_client.dart';
 import 'data/session_store.dart';
 import 'screens/company_dashboard_screen.dart';
 import 'screens/company_reports_screen.dart';
+import 'screens/company_records_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/rep_extra.dart';
@@ -45,32 +46,13 @@ class _CompanyShellState extends State<CompanyShell> {
   Widget build(BuildContext context) {
     final pages = [
       CompanyDashboardScreen(apiClient: widget.apiClient),
-      RepListScreen(
+      CompanyRecordsScreen(
         apiClient: widget.apiClient,
-        title: 'فواتير الشركة',
-        path: '/sales/invoices',
-        showCreate: false,
-        fields: const [
-          'invoice_number',
-          'buyer_name_ar',
-          'status',
-          'total',
-          'paid_amount',
-        ],
+        kind: CompanyRecordKind.invoices,
       ),
-      RepListScreen(
+      CompanyRecordsScreen(
         apiClient: widget.apiClient,
-        title: 'سندات الشركة',
-        path: '/sales/payments',
-        showCreate: false,
-        fields: const [
-          'payment_number',
-          'payment_type',
-          'customer_name_ar',
-          'rep_name',
-          'amount',
-          'payment_method',
-        ],
+        kind: CompanyRecordKind.payments,
       ),
       CompanyReportsScreen(apiClient: widget.apiClient),
     ];
