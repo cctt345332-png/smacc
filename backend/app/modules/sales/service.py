@@ -2184,6 +2184,7 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
     """ملخص موحّد للمدير؛ لا يخلط طلبات المناديب مع أداء النظام الأساسي."""
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
+    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
     confirmed_statuses = (
         InvoiceStatus.CONFIRMED,
         InvoiceStatus.PAID,
@@ -2293,7 +2294,15 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
             Payment.tenant_id == tenant_id,
         )
     )
-    total_customer_payments = Decimal(str(payments_r.scalar() or 0))
+    all_customer_payments = Decimal(str(payments_r.scalar() or 0))
+    monthly_payments_r = await db.execute(
+        select(func.coalesce(func.sum(Payment.amount), 0)).where(
+            Payment.tenant_id == tenant_id,
+            Payment.payment_date >= month_start,
+            Payment.payment_date < month_end,
+        )
+    )
+    monthly_customer_payments = Decimal(str(monthly_payments_r.scalar() or 0))
     opening_total = account_opening_total + opening_journal_total
     confirmed_customer_invoices_r = await db.execute(
         select(Invoice.total).where(
@@ -2304,7 +2313,7 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
     confirmed_invoice_total = sum(
         (total or Decimal("0")) for (total,) in confirmed_customer_invoices_r.all()
     )
-    outstanding_total = confirmed_invoice_total - total_customer_payments + opening_total
+    outstanding_total = confirmed_invoice_total - all_customer_payments + opening_total
 
     margin = float(estimated_gross_profit / sales_before_vat * 100) if sales_before_vat else 0.0
     return {
@@ -2318,8 +2327,8 @@ async def get_system_dashboard_summary(db: AsyncSession, tenant_id: str) -> dict
         "new_customers": int(new_customers_r.scalar() or 0),
         "total_customers": int(total_customers_r.scalar() or 0),
         "opening_balance": float(opening_total),
-        "total_collected": float(total_customer_payments),
-        "operational_outstanding": float(confirmed_invoice_total - total_customer_payments),
+        "total_collected": float(monthly_customer_payments),
+        "operational_outstanding": float(confirmed_invoice_total - all_customer_payments),
         "outstanding_total": float(outstanding_total),
     }
 

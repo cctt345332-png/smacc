@@ -58,6 +58,13 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   String money(dynamic value) =>
       '${(num.tryParse('$value') ?? 0).toStringAsFixed(2)} ر.س';
 
+  bool _isCurrentMonth(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '');
+    if (date == null) return false;
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -105,7 +112,9 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       final item = Map<String, dynamic>.from(raw as Map);
       final status = '${item['status'] ?? ''}'.toLowerCase();
       final id = item['rep_id']?.toString();
-      if (id == null || ['draft', 'rejected', 'cancelled'].contains(status))
+      if (id == null ||
+          !_isCurrentMonth(item['issue_date']) ||
+          ['draft', 'rejected', 'cancelled'].contains(status))
         continue;
       stats.putIfAbsent(id, () => {'sales': 0, 'collected': 0});
       stats[id]!['sales'] =
@@ -117,7 +126,11 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       final type =
           '${item['payment_type'] ?? item['voucher_type'] ?? 'receipt'}'
               .toLowerCase();
-      if (id == null || type == 'discount') continue;
+      if (id == null ||
+          !_isCurrentMonth(item['payment_date']) ||
+          type == 'discount') {
+        continue;
+      }
       stats.putIfAbsent(id, () => {'sales': 0, 'collected': 0});
       stats[id]!['collected'] =
           stats[id]!['collected']! +
