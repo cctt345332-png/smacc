@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-
 import '../data/api_client.dart';
+import 'company_records_screen.dart';
 import 'supervisor_statements.dart';
 
 const _supervisorPurple = Color(0xFF3E0865);
@@ -18,8 +18,19 @@ class _SupervisorShellState extends State<SupervisorShell> {
   Widget build(BuildContext context) {
     final pages = [
       SupervisorDashboardScreen(apiClient: widget.apiClient),
-      SupervisorRecordsScreen(apiClient: widget.apiClient, kind: 'invoices'),
-      SupervisorRecordsScreen(apiClient: widget.apiClient, kind: 'payments'),
+      CompanyRecordsScreen(
+        apiClient: widget.apiClient,
+        kind: CompanyRecordKind.invoices,
+        apiPath: '/supervisors/me/invoices',
+        titleOverride: 'فواتير المناديب',
+      ),
+      CompanyRecordsScreen(
+        apiClient: widget.apiClient,
+        kind: CompanyRecordKind.payments,
+        apiPath: '/supervisors/me/payments',
+        titleOverride: 'سندات المناديب',
+        enableDetails: false,
+      ),
       SupervisorReportsScreen(apiClient: widget.apiClient),
     ];
     return Scaffold(

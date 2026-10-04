@@ -11,10 +11,16 @@ class CompanyRecordsScreen extends StatefulWidget {
   const CompanyRecordsScreen({
     required this.apiClient,
     required this.kind,
+    this.apiPath,
+    this.titleOverride,
+    this.enableDetails = true,
     super.key,
   });
   final ApiClient apiClient;
   final CompanyRecordKind kind;
+  final String? apiPath;
+  final String? titleOverride;
+  final bool enableDetails;
   @override
   State<CompanyRecordsScreen> createState() => _CompanyRecordsScreenState();
 }
@@ -31,8 +37,10 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
   DateTime? to;
 
   bool get invoices => widget.kind == CompanyRecordKind.invoices;
-  String get path => invoices ? '/sales/invoices' : '/sales/payments';
-  String get title => invoices ? 'فواتير الشركة' : 'سندات الشركة';
+  String get path =>
+      widget.apiPath ?? (invoices ? '/sales/invoices' : '/sales/payments');
+  String get title =>
+      widget.titleOverride ?? (invoices ? 'فواتير الشركة' : 'سندات الشركة');
 
   @override
   void initState() {
@@ -319,7 +327,7 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
     final titleValue =
         x[invoices ? 'invoice_number' : 'payment_number']?.toString() ?? '—';
     return InkWell(
-      onTap: id == null
+      onTap: !widget.enableDetails || id == null
           ? null
           : () => Navigator.push<void>(
               context,

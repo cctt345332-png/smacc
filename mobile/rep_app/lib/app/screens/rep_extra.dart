@@ -505,6 +505,7 @@ class CustomerStatementsScreen extends StatefulWidget {
 class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
   late Future<List<dynamic>> customers;
   late Future<List<dynamic>> reps;
+  final customerSearch = TextEditingController();
   String? customerId;
   String? repId;
   DateTime fromDate = DateTime(2020, 1, 1);
@@ -518,6 +519,13 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
     super.initState();
     customers = widget.apiClient.getList('/sales/customers');
     reps = widget.apiClient.getList('/reps');
+    customerSearch.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    customerSearch.dispose();
+    super.dispose();
   }
 
   String money(dynamic v) =>
@@ -748,6 +756,22 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
             return ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                TextField(
+                  controller: customerSearch,
+                  textDirection: TextDirection.rtl,
+                  decoration: InputDecoration(
+                    labelText: 'بحث عن العميل بالاسم أو الرقم',
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: customerSearch.text.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: customerSearch.clear,
+                            icon: const Icon(Icons.clear),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 DropdownButtonFormField<String?>(
                   initialValue: customerId,
                   isExpanded: true,
@@ -760,16 +784,26 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
                       value: null,
                       child: Text('كل العملاء'),
                     ),
-                    ...customerList.map((x) {
-                      final m = Map<String, dynamic>.from(x as Map);
-                      return DropdownMenuItem<String?>(
-                        value: m['id']?.toString(),
-                        child: Text(
-                          m['name_ar']?.toString() ?? '—',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }),
+                    ...customerList
+                        .where((x) {
+                          final m = Map<String, dynamic>.from(x as Map);
+                          final q = customerSearch.text.trim().toLowerCase();
+                          if (q.isEmpty || m['id']?.toString() == customerId)
+                            return true;
+                          return '${m['name_ar'] ?? ''} ${m['name_en'] ?? ''} ${m['customer_number'] ?? ''}'
+                              .toLowerCase()
+                              .contains(q);
+                        })
+                        .map((x) {
+                          final m = Map<String, dynamic>.from(x as Map);
+                          return DropdownMenuItem<String?>(
+                            value: m['id']?.toString(),
+                            child: Text(
+                              m['name_ar']?.toString() ?? '—',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }),
                   ],
                   onChanged: (v) => setState(() {
                     customerId = v;

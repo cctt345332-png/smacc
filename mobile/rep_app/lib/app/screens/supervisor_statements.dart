@@ -435,6 +435,32 @@ class _SupervisorAgingScreenState extends State<SupervisorAgingScreen> {
                 },
               ),
               const SizedBox(height: 10),
+              Card(
+                elevation: 0,
+                color: const Color(0xFFF1EAF5),
+                child: ListTile(
+                  title: const Text(
+                    'إجمالي المتبقي',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  trailing: Text(
+                    _money(
+                      filtered.fold<double>(
+                        0,
+                        (sum, row) =>
+                            sum +
+                            (double.tryParse('${row['outstanding']}') ?? 0),
+                      ),
+                    ),
+                    style: const TextStyle(
+                      color: _purple,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 17,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: filtered.isEmpty
                     ? null
@@ -471,44 +497,69 @@ class _SupervisorAgingScreenState extends State<SupervisorAgingScreen> {
                 label: const Text('طباعة تقرير أعمار الديون'),
               ),
               const SizedBox(height: 10),
-              ...filtered.map(
-                (r) => Card(
+              ...filtered.map((r) {
+                final overdue = _days(r['overdue_days']);
+                final days = _days(r['age_days']);
+                return Card(
                   elevation: 0,
                   margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Icon(
-                      Icons.schedule,
-                      color: _days(r['overdue_days']) > 0
-                          ? Colors.red
-                          : Colors.green,
-                    ),
-                    title: Text(
-                      '${r['invoice_number'] ?? '—'} • ${r['customer_name'] ?? '—'}',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: Text(
-                      'المندوب: ${r['rep_name'] ?? '—'}\nالمشرف: ${r['supervisor_name'] ?? '—'}\nتاريخ الإصدار: ${_date(r['issue_date'])}',
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: Color(0xFFE5DDE9)),
+                  ),
+                  color: overdue >= 30
+                      ? const Color(0xFFFFE7E5)
+                      : overdue > 0
+                      ? const Color(0xFFFFF3D6)
+                      : Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${r['customer_name'] ?? '—'}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              _money(r['outstanding']),
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
                         Text(
-                          _money(r['outstanding']),
-                          style: const TextStyle(fontWeight: FontWeight.w800),
+                          'الفاتورة: ${r['invoice_number'] ?? '—'}  •  التاريخ: ${_date(r['issue_date'])}',
                         ),
                         Text(
-                          '${r['overdue_days'] ?? 0} يوم',
+                          'المندوب: ${r['rep_name'] ?? '—'}  •  المشرف: ${r['supervisor_name'] ?? '—'}',
+                        ),
+                        Text('أيام التأخير بعد مهلة 21 يوماً: $overdue'),
+                        Text(
+                          'العمر: $days يوم  •  الإجمالي: ${_money(r['invoice_total'])}  •  المسدد: ${_money(r['paid_amount'])}',
                           style: TextStyle(
-                            color: _days(r['overdue_days']) > 0
-                                ? Colors.red
-                                : Colors.green,
+                            color: days >= 30
+                                ? Colors.red.shade800
+                                : days > 21
+                                ? Colors.orange.shade900
+                                : null,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
+                );
+              }),
             ],
           ),
   );
