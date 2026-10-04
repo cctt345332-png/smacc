@@ -553,19 +553,18 @@ async def get_unified_aging(
         .where(
             Invoice.tenant_id == tenant_id,
             Invoice.status.in_((InvoiceStatus.CONFIRMED, InvoiceStatus.PAID, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE)),
-            Invoice.issue_date >= start,
+            # لا نطبق from_date هنا؛ يجب إدخال الفواتير الأقدم في FIFO
+            # قبل تصفية الصفوف المعروضة، وإلا سيُوزع سند الرصيد خطأً.
             Invoice.issue_date <= end,
         )
         .order_by(Invoice.issue_date.asc(), Invoice.invoice_number.asc())
     )
     if customer_id:
         invoice_query = invoice_query.where(Invoice.customer_id == customer_id)
-    if rep_id:
-        invoice_query = invoice_query.where(Invoice.rep_id == rep_id)
-    if allowed_rep_ids is not None:
-        if not allowed_rep_ids:
-            return []
-        invoice_query = invoice_query.where(Invoice.rep_id.in_(allowed_rep_ids))
+    # فلاتر المندوب ونطاق التاريخ تُطبق بعد توزيع السداد، لا على مصدر FIFO.
+    # سند العميل يُوزع على أقدم فواتيره حتى لو كانت لمندوب آخر أو خارج الفترة.
+    if allowed_rep_ids is not None and not allowed_rep_ids:
+        return []
 
     if account_id:
         account_rows = await db.execute(select(Account.id, Account.parent_id).where(Account.tenant_id == tenant_id))
@@ -630,6 +629,12 @@ async def get_unified_aging(
         paid = invoice_paid + direct_applied
         outstanding = max(Decimal("0"), total - paid)
         if outstanding <= Decimal("0.01"):
+            continue
+        if invoice.issue_date < start or invoice.issue_date > end:
+            continue
+        if rep_id and invoice.rep_id != rep_id:
+            continue
+        if allowed_rep_ids is not None and invoice.rep_id not in allowed_rep_ids:
             continue
         age_days = max((as_of.date() - invoice.issue_date.date()).days, 0)
         overdue_days = max(age_days - 21, 0)
