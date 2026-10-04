@@ -82,6 +82,7 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
         x['buyer_name_ar'],
         x['payment_number'],
         x['customer_name_ar'],
+        x['customer_name'],
         x['rep_name'],
         x['rep_code'],
         x['invoice_number'],
@@ -137,6 +138,9 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
       key;
 
   String translated(dynamic value) {
+    if (value == null || '$value' == 'null' || '$value'.trim().isEmpty) {
+      return invoices ? '—' : 'سند قبض';
+    }
     const values = {
       'draft': 'مسودة',
       'submitted': 'بانتظار المراجعة',
@@ -154,7 +158,7 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
       'cheque': 'شيك',
       'mada': 'مدى',
     };
-    return values['$value'] ?? '$value';
+    return values['${value}'.toLowerCase()] ?? '$value';
   }
 
   String money(dynamic value) =>
@@ -366,7 +370,9 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
               ),
               const SizedBox(height: 8),
               ...fields.map((key) {
-                final raw = x[key];
+                final raw = key == 'customer_name_ar'
+                    ? (x['customer_name_ar'] ?? x['customer_name'])
+                    : x[key];
                 final display =
                     key == 'status' ||
                         key == 'payment_type' ||
@@ -374,7 +380,7 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
                     ? translated(raw)
                     : ['total', 'paid_amount', 'amount'].contains(key)
                     ? money(raw)
-                    : (raw == null ? '—' : '$raw');
+                    : (raw == null || '$raw' == 'null' ? '—' : '$raw');
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Row(

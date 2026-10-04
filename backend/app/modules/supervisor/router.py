@@ -130,6 +130,17 @@ async def my_payments(
     return await service.get_supervisor_payments(db, user["tenant_id"], user["user_id"])
 
 
+@router.get("/me/payments/{payment_id}")
+async def my_payment_detail(
+    payment_id: str,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_supervisor_payment_detail(
+        db, user["tenant_id"], user["user_id"], payment_id
+    )
+
+
 @router.get("/me/reps")
 async def my_reps(
     user=Depends(get_current_user),

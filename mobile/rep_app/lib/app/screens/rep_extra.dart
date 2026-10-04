@@ -799,7 +799,7 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
                           return DropdownMenuItem<String?>(
                             value: m['id']?.toString(),
                             child: Text(
-                              m['name_ar']?.toString() ?? '—',
+                              '${m['name_ar'] ?? '—'}${m['customer_number'] == null ? '' : ' — ${m['customer_number']}'}',
                               overflow: TextOverflow.ellipsis,
                             ),
                           );

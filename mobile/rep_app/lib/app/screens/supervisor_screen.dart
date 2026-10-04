@@ -29,7 +29,6 @@ class _SupervisorShellState extends State<SupervisorShell> {
         kind: CompanyRecordKind.payments,
         apiPath: '/supervisors/me/payments',
         titleOverride: 'سندات المناديب',
-        enableDetails: false,
       ),
       SupervisorReportsScreen(apiClient: widget.apiClient),
     ];

@@ -350,11 +350,13 @@ async def get_supervisor_payments(db: AsyncSession, tenant_id: str, user_id: str
         result.append({
             "id": payment.id,
             "payment_number": payment.payment_number,
+            "payment_type": _enum_value(getattr(payment, "payment_type", None)) or "receipt",
             "payment_date": payment.payment_date,
             "amount": payment.amount or Decimal("0"),
             "payment_method": _enum_value(payment.payment_method),
             "customer_id": payment.customer_id,
-            "customer_name": customer.name_ar,
+            "customer_name_ar": customer.name_ar if customer else None,
+            "customer_name": customer.name_ar if customer else None,
             "invoice_id": payment.invoice_id,
             "invoice_number": invoice.invoice_number if invoice else None,
             "rep_id": resolved_rep_id,
@@ -365,6 +367,23 @@ async def get_supervisor_payments(db: AsyncSession, tenant_id: str, user_id: str
             "notes": payment.notes,
         })
     return result
+
+
+async def get_supervisor_payment_detail(
+    db: AsyncSession, tenant_id: str, user_id: str, payment_id: str
+) -> dict:
+    """تفاصيل سند ضمن نطاق مناديب المشرف."""
+    payment = next(
+        (
+            item
+            for item in await get_supervisor_payments(db, tenant_id, user_id)
+            if item.get("id") == payment_id
+        ),
+        None,
+    )
+    if not payment:
+        raise HTTPException(404, "السند غير موجود أو خارج نطاق المشرف")
+    return payment
 
 
 async def get_supervisor_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
