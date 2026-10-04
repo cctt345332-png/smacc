@@ -252,6 +252,25 @@ class _CustomerFormScreenState extends State<CustomerFormScreen> {
   );
 }
 
+class _InvoiceLineDraft {
+  String? itemId;
+  String itemName = '';
+  bool serialTracking = false;
+  List<dynamic> serials = [];
+  List<String> selectedSerialIds = [];
+  final qty = TextEditingController(text: '1');
+  final price = TextEditingController();
+  final discount = TextEditingController(text: '0');
+  final vat = TextEditingController(text: '15');
+
+  void dispose() {
+    qty.dispose();
+    price.dispose();
+    discount.dispose();
+    vat.dispose();
+  }
+}
+
 class InvoiceCreateScreen extends StatefulWidget {
   const InvoiceCreateScreen({
     required this.apiClient,
@@ -269,20 +288,12 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
   late Future<List<dynamic>> _stock;
   String? customerId;
   String payment = 'cash';
-  String? itemId;
-  String itemName = '';
-  bool serialTracking = false;
-  List<dynamic> serials = [];
-  List<String> selectedSerialIds = [];
+  final List<_InvoiceLineDraft> lines = [_InvoiceLineDraft()];
   final issue = TextEditingController(
     text: DateTime.now().toIso8601String().substring(0, 10),
   );
   final due = TextEditingController();
   final notes = TextEditingController();
-  final qty = TextEditingController(text: '1');
-  final price = TextEditingController();
-  final discount = TextEditingController(text: '0');
-  final vat = TextEditingController(text: '15');
   bool saving = false;
 
   bool get editing => widget.invoiceId != null;
@@ -316,22 +327,37 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
       final invoice = raw['data'] is Map
           ? Map<String, dynamic>.from(raw['data'] as Map)
           : raw;
-      final lines = invoice['lines'] is List
+      final rawLines = invoice['lines'] is List
           ? invoice['lines'] as List
           : const <dynamic>[];
-      final line = lines.isEmpty
-          ? <String, dynamic>{}
-          : Map<String, dynamic>.from(lines.first as Map);
-      final vatRate = double.tryParse('${line['vat_rate'] ?? 15}') ?? 15;
-      final rawSerials = line['serial_ids_json'];
-      List<String> serialIds = [];
-      if (rawSerials is List) {
-        serialIds = rawSerials.map((x) => '$x').toList();
-      } else if (rawSerials != null && '$rawSerials'.isNotEmpty) {
-        try {
-          final decoded = jsonDecode('$rawSerials');
-          if (decoded is List) serialIds = decoded.map((x) => '$x').toList();
-        } catch (_) {}
+      final drafts = rawLines.isEmpty
+          ? [_InvoiceLineDraft()]
+          : <_InvoiceLineDraft>[];
+      for (final raw in rawLines) {
+        final line = Map<String, dynamic>.from(raw as Map);
+        final draft = _InvoiceLineDraft();
+        final vatRate = double.tryParse('${line['vat_rate'] ?? 15}') ?? 15;
+        draft.itemId = line['inventory_item_id']?.toString();
+        draft.itemName = line['description_ar']?.toString() ?? '';
+        draft.qty.text = '${line['quantity'] ?? 1}';
+        draft.price.text =
+            ((double.tryParse('${line['unit_price'] ?? 0}') ?? 0) *
+                    (1 + vatRate / 100))
+                .toStringAsFixed(2);
+        draft.discount.text = '${line['discount_pct'] ?? 0}';
+        draft.vat.text = '$vatRate';
+        final rawSerials = line['serial_ids_json'];
+        if (rawSerials is List) {
+          draft.selectedSerialIds = rawSerials.map((x) => '$x').toList();
+        } else if (rawSerials != null && '$rawSerials'.isNotEmpty) {
+          try {
+            final decoded = jsonDecode('$rawSerials');
+            if (decoded is List)
+              draft.selectedSerialIds = decoded.map((x) => '$x').toList();
+          } catch (_) {}
+        }
+        draft.serialTracking = draft.selectedSerialIds.isNotEmpty;
+        drafts.add(draft);
       }
       if (!mounted) return;
       setState(() {
@@ -345,17 +371,10 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
             : '${invoice['due_date']}'.substring(0, 10);
         if (payment == 'credit' && due.text.isEmpty) _calculateDueDate();
         notes.text = invoice['notes']?.toString() ?? '';
-        itemId = line['inventory_item_id']?.toString();
-        itemName = line['description_ar']?.toString() ?? '';
-        qty.text = '${line['quantity'] ?? 1}';
-        price.text =
-            ((double.tryParse('${line['unit_price'] ?? 0}') ?? 0) *
-                    (1 + vatRate / 100))
-                .toStringAsFixed(2);
-        discount.text = '${line['discount_pct'] ?? 0}';
-        vat.text = '$vatRate';
-        selectedSerialIds = serialIds;
-        serialTracking = serialIds.isNotEmpty;
+        lines
+          ..forEach((line) => line.dispose())
+          ..clear()
+          ..addAll(drafts);
       });
     } catch (e) {
       if (mounted) {
@@ -368,40 +387,48 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
 
   @override
   void dispose() {
-    for (final x in [issue, due, notes, qty, price, discount, vat]) x.dispose();
+    issue.dispose();
+    due.dispose();
+    notes.dispose();
+    for (final line in lines) line.dispose();
     super.dispose();
   }
 
-  double get total {
-    final q = double.tryParse(qty.text) ?? 0,
-        p = double.tryParse(price.text) ?? 0,
-        d = double.tryParse(discount.text) ?? 0;
-    // السعر المدخل شامل الضريبة؛ لا نضيف الضريبة مرة ثانية على الإجمالي.
-    return q * p * (1 - d / 100);
-  }
+  double get total => lines.fold<double>(0, (sum, line) {
+    final q = double.tryParse(line.qty.text) ?? 0;
+    final p = double.tryParse(line.price.text) ?? 0;
+    final d = double.tryParse(line.discount.text) ?? 0;
+    return sum + q * p * (1 - d / 100);
+  });
 
-  Future<void> _chooseSerials() async {
-    if (itemId == null) return;
+  Future<void> _chooseSerials(int index) async {
+    final line = lines[index];
+    if (line.itemId == null) return;
     final result = await Navigator.push<List<String>>(
       context,
       MaterialPageRoute<List<String>>(
         builder: (_) => SerialPicker(
           apiClient: widget.apiClient,
-          productId: itemId!,
-          selected: selectedSerialIds,
+          productId: line.itemId!,
+          selected: line.selectedSerialIds,
         ),
       ),
     );
     if (result != null && mounted) {
       setState(() {
-        selectedSerialIds = result;
-        qty.text = result.length.toString();
+        line.selectedSerialIds = result;
+        line.qty.text = result.length.toString();
       });
     }
   }
 
-  Future<void> _selectItem(String? value, List<dynamic> stock) async {
+  Future<void> _selectItem(
+    int index,
+    String? value,
+    List<dynamic> stock,
+  ) async {
     if (value == null) return;
+    final line = lines[index];
     final m = stock
         .map((x) => Map<String, dynamic>.from(x as Map))
         .firstWhere(
@@ -411,24 +438,25 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
     final isSerial =
         m['item_tracking'] == 'serial' || m['tracking_type'] == 'serial';
     setState(() {
-      itemId = value;
-      itemName = (m['item_name'] ?? m['name_ar'] ?? '').toString();
-      serialTracking = isSerial;
-      selectedSerialIds = [];
-      serials = [];
-      price.text = (m['sale_price'] ?? 0).toString();
-      qty.text = isSerial ? '0' : '1';
+      line.itemId = value;
+      line.itemName = (m['item_name'] ?? m['name_ar'] ?? '').toString();
+      line.serialTracking = isSerial;
+      line.selectedSerialIds = [];
+      line.serials = [];
+      line.price.text = (m['sale_price'] ?? 0).toString();
+      line.qty.text = isSerial ? '0' : '1';
     });
     if (isSerial) {
       try {
         final rows = await widget.apiClient.getAvailableSerials(value);
-        if (mounted) setState(() => serials = rows);
+        if (mounted) setState(() => line.serials = rows);
       } catch (_) {}
     }
   }
 
-  Future<void> _scanSerial() async {
-    if (serials.isEmpty) return;
+  Future<void> _scanSerial(int index) async {
+    final line = lines[index];
+    if (line.serials.isEmpty) return;
     final controller = MobileScannerController(
       formats: const [BarcodeFormat.all],
     );
@@ -461,7 +489,7 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                 final normalized = code
                     .replaceAll(RegExp(r'\s'), '')
                     .toLowerCase();
-                var found = serials
+                var found = line.serials
                     .map((x) => Map<String, dynamic>.from(x as Map))
                     .where(
                       (x) =>
@@ -476,7 +504,7 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                     final remote = await widget.apiClient.searchSerials(code);
                     found = remote
                         .map((x) => Map<String, dynamic>.from(x as Map))
-                        .where((x) => '${x['product_id']}' == itemId)
+                        .where((x) => '${x['product_id']}' == line.itemId)
                         .map(
                           (x) => <String, dynamic>{
                             'id': x['serial_id'],
@@ -489,12 +517,12 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                 }
                 if (found.isNotEmpty && mounted) {
                   final id = found.first['id'].toString();
-                  if (!selectedSerialIds.contains(id)) {
+                  if (!line.selectedSerialIds.contains(id)) {
                     setState(() {
-                      selectedSerialIds.add(id);
-                      qty.text = selectedSerialIds.length.toString();
+                      line.selectedSerialIds.add(id);
+                      line.qty.text = line.selectedSerialIds.length.toString();
                       if (found.first['sale_price'] != null)
-                        price.text = found.first['sale_price'].toString();
+                        line.price.text = found.first['sale_price'].toString();
                     });
                   }
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -598,23 +626,30 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
   }
 
   Future<void> _save({bool submit = false}) async {
-    if (customerId == null || itemId == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('اختر العميل والصنف أولاً')));
-      return;
-    }
-    if (serialTracking && selectedSerialIds.isEmpty) {
+    if (customerId == null || lines.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر سيريالاً واحداً على الأقل للجهاز')),
+        const SnackBar(
+          content: Text('اختر العميل وأضف صنفاً واحداً على الأقل'),
+        ),
       );
       return;
     }
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i];
+      if (line.itemId == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('اختر الصنف في السطر ${i + 1}')));
+        return;
+      }
+      if (line.serialTracking && line.selectedSerialIds.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('اختر سيريالات السطر ${i + 1}')));
+        return;
+      }
+    }
     setState(() => saving = true);
-    final q = double.tryParse(qty.text) ?? 1,
-        p = double.tryParse(price.text) ?? 0,
-        t = double.tryParse(vat.text) ?? 15,
-        d = double.tryParse(discount.text) ?? 0;
     final payload = {
       'customer_id': customerId,
       'invoice_type': 'simplified',
@@ -627,17 +662,25 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
           : null,
       'notes': notes.text.trim().isEmpty ? null : notes.text.trim(),
       'lines': [
-        {
-          'description_ar': itemName,
-          'quantity': q,
-          'unit_price': p / (1 + t / 100),
-          'discount_pct': d,
-          'vat_rate': t,
-          'vat_category': 'S',
-          'line_order': 0,
-          'inventory_item_id': itemId,
-          if (serialTracking) 'serial_ids': selectedSerialIds,
-        },
+        for (var i = 0; i < lines.length; i++)
+          (() {
+            final line = lines[i];
+            final q = double.tryParse(line.qty.text) ?? 1;
+            final p = double.tryParse(line.price.text) ?? 0;
+            final t = double.tryParse(line.vat.text) ?? 15;
+            final d = double.tryParse(line.discount.text) ?? 0;
+            return <String, dynamic>{
+              'description_ar': line.itemName,
+              'quantity': q,
+              'unit_price': p / (1 + t / 100),
+              'discount_pct': d,
+              'vat_rate': t,
+              'vat_category': 'S',
+              'line_order': i,
+              'inventory_item_id': line.itemId,
+              if (line.serialTracking) 'serial_ids': line.selectedSerialIds,
+            };
+          })(),
       ],
     };
     try {
@@ -647,8 +690,9 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
               payload,
             )
           : await widget.apiClient.post('/sales/invoices', payload);
-      if (submit && result['id'] != null)
+      if (submit && result['id'] != null) {
         await widget.apiClient.post('/reps/me/invoices/${result['id']}/submit');
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -667,10 +711,169 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ).showSnackBar(SnackBar(content: Text('تعذر حفظ الفاتورة: $e')));
     } finally {
       if (mounted) setState(() => saving = false);
     }
+  }
+
+  Widget _lineEditor(int index, List<dynamic> stock) {
+    final line = lines[index];
+    final name = line.itemName.isEmpty ? 'صنف جديد' : line.itemName;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 0,
+      color: const Color(0xFFFBF8FC),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE4D8EA)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'الصنف ${index + 1}: $name',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                if (lines.length > 1)
+                  IconButton(
+                    onPressed: saving
+                        ? null
+                        : () => setState(() {
+                            lines[index].dispose();
+                            lines.removeAt(index);
+                          }),
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  ),
+              ],
+            ),
+            DropdownButtonFormField<String>(
+              initialValue: line.itemId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'الصنف من مخزون المندوب *',
+                border: OutlineInputBorder(),
+              ),
+              items: stock.map((x) {
+                final m = Map<String, dynamic>.from(x as Map);
+                final label =
+                    '${m['item_name'] ?? m['name_ar'] ?? '—'} — المتاح: ${m['available_qty'] ?? m['quantity'] ?? 0}';
+                return DropdownMenuItem(
+                  value: (m['item_id'] ?? m['id'])?.toString(),
+                  child: _dropdownText(label),
+                );
+              }).toList(),
+              onChanged: saving ? null : (v) => _selectItem(index, v, stock),
+            ),
+            if (line.serialTracking)
+              Card(
+                color: const Color(0xFFFFF7E6),
+                child: ListTile(
+                  leading: const Icon(
+                    Icons.devices_other,
+                    color: Colors.orange,
+                  ),
+                  title: Text(
+                    'سيريالات السطر — المحدد: ${line.selectedSerialIds.length}',
+                  ),
+                  trailing: Wrap(
+                    children: [
+                      IconButton(
+                        onPressed: saving ? null : () => _scanSerial(index),
+                        icon: const Icon(Icons.qr_code_scanner),
+                      ),
+                      IconButton(
+                        onPressed: saving ? null : () => _chooseSerials(index),
+                        icon: const Icon(Icons.list_alt),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                  Expanded(
+                    child: TextField(
+                      controller: line.qty,
+                      onChanged: (_) => setState(() {}),
+                      readOnly: line.serialTracking,
+                    decoration: const InputDecoration(
+                      labelText: 'الكمية',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: line.price,
+                      onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'السعر شامل الضريبة',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                  Expanded(
+                    child: TextField(
+                      controller: line.discount,
+                      onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'الخصم %',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: line.vat,
+                      onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'الضريبة %',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'إجمالي السطر: ${_lineTotal(line).toStringAsFixed(2)} ر.س',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: _brand,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _lineTotal(_InvoiceLineDraft line) {
+    final q = double.tryParse(line.qty.text) ?? 0;
+    final p = double.tryParse(line.price.text) ?? 0;
+    final d = double.tryParse(line.discount.text) ?? 0;
+    return q * p * (1 - d / 100);
   }
 
   Widget _dropdownText(String text) =>
@@ -766,107 +969,30 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                   ),
                 ],
                 const Divider(height: 32),
-                const Text(
-                  'الصنف',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  initialValue: itemId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'الصنف من مخزون المندوب *',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: stock.map((x) {
-                    final m = Map<String, dynamic>.from(x as Map);
-                    final name =
-                        '${m['item_name'] ?? m['name_ar'] ?? '—'} — المتاح: ${m['available_qty'] ?? m['quantity'] ?? 0}';
-                    return DropdownMenuItem(
-                      value: (m['item_id'] ?? m['id'])?.toString(),
-                      child: _dropdownText(name),
-                    );
-                  }).toList(),
-                  onChanged: (v) => _selectItem(v, stock),
-                ),
-                if (serialTracking)
-                  Card(
-                    color: const Color(0xFFFFF7E6),
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.devices_other,
-                        color: Colors.orange,
-                      ),
-                      title: Text(
-                        'جهاز مسرّل — المحدد: ${selectedSerialIds.length}',
-                      ),
-                      subtitle: const Text('اختر سيريالاً لكل جهاز'),
-                      trailing: Wrap(
-                        children: [
-                          IconButton(
-                            onPressed: _scanSerial,
-                            icon: const Icon(Icons.qr_code_scanner),
-                          ),
-                          IconButton(
-                            onPressed: _chooseSerials,
-                            icon: const Icon(Icons.list_alt),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 12),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: qty,
-                        readOnly: serialTracking,
-                        decoration: const InputDecoration(
-                          labelText: 'الكمية',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
+                    const Text(
+                      'أصناف الفاتورة',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: price,
-                        decoration: const InputDecoration(
-                          labelText: 'السعر شامل الضريبة',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: saving
+                          ? null
+                          : () =>
+                                setState(() => lines.add(_InvoiceLineDraft())),
+                      icon: const Icon(Icons.add),
+                      label: const Text('إضافة صنف'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: discount,
-                        decoration: const InputDecoration(
-                          labelText: 'الخصم %',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: vat,
-                        decoration: const InputDecoration(
-                          labelText: 'الضريبة %',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 10),
+                ...List.generate(
+                  lines.length,
+                  (index) => _lineEditor(index, stock),
                 ),
                 const SizedBox(height: 12),
                 TextField(

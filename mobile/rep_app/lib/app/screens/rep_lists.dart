@@ -250,6 +250,25 @@ class _RepListScreenState extends State<RepListScreen> {
                                   ),
                                 ),
                               ),
+                          if (widget.path == '/sales/invoices' &&
+                              x['status']?.toString() == 'rejected' &&
+                              '${x['rejection_note'] ?? ''}'.trim().isNotEmpty)
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(top: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFEEEE),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'سبب الرفض: ${x['rejection_note']}',
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
