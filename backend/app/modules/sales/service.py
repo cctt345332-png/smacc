@@ -2641,8 +2641,10 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
             subtotal += sub; total_discount += disc; total_vat += vat; total += tot
             serial_ids = raw.get("serial_ids") or None
             if serial_ids:
-                serial_rows = (await db.execute(select(SerialItem).where(
-                    SerialItem.tenant_id == tenant_id,
+                serial_rows = (await db.execute(select(SerialItem).join(
+                    InventoryItem, SerialItem.product_id == InventoryItem.id
+                ).where(
+                    InventoryItem.tenant_id == tenant_id,
                     or_(SerialItem.id.in_(serial_ids), SerialItem.serial_number.in_(serial_ids)),
                 ))).scalars().all()
                 serial_by_value = {str(row.id): str(row.id) for row in serial_rows}
