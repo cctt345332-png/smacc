@@ -17,29 +17,165 @@ class StockCountScreen extends StatefulWidget {
 
 class _StockCountScreenState extends State<StockCountScreen> {
   late Future<List<dynamic>> _future;
+  late Future<void> _filtersFuture;
   bool _busy = false;
+  String? _warehouseId;
+  String? _repId;
+  List<Map<String, dynamic>> _warehouses = [];
+  List<Map<String, dynamic>> _reps = [];
+
+  bool get _canFilter =>
+      widget.apiClient.sessionStore.isCompanyManager ||
+      widget.apiClient.sessionStore.isSupervisor;
 
   @override
   void initState() {
     super.initState();
+    _filtersFuture = _loadFilters();
     _reload();
   }
 
+  Future<void> _loadFilters() async {
+    if (!_canFilter) return;
+    final warehouseRows = await widget.apiClient.getList(
+      '/inventory/warehouses',
+    );
+    final repPath = widget.apiClient.sessionStore.isSupervisor
+        ? '/supervisors/me/reps'
+        : '/reps';
+    final repRows = await widget.apiClient.getList(repPath);
+    if (!mounted) return;
+    setState(() {
+      _warehouses = warehouseRows
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList();
+      _reps = repRows
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .where((row) => row['is_active'] != false)
+          .toList();
+    });
+  }
+
   void _reload() {
-    _future = widget.apiClient.getList('/inventory/stock');
+    final params = <String, String>{};
+    if (_warehouseId != null) params['warehouse_id'] = _warehouseId!;
+    if (_repId != null) params['rep_id'] = _repId!;
+    final query = Uri(queryParameters: params).query;
+    _future = widget.apiClient.getList(
+      '/inventory/stock${query.isEmpty ? '' : '?$query'}',
+    );
+  }
+
+  String _repNameForWarehouse(String? warehouseId) {
+    if (warehouseId == null) return '—';
+    final rep = _reps
+        .where((row) => row['warehouse_id']?.toString() == warehouseId)
+        .firstOrNull;
+    return rep?['full_name']?.toString() ?? '—';
   }
 
   num _number(dynamic value) => num.tryParse('$value') ?? 0;
 
-  Future<void> _count(Map<String, dynamic> row) async {
-    if (row['item_tracking']?.toString() == 'serial') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('الأصناف ذات السيريال تُجرد من إدارة السيريالات'),
+  Future<void> _serialCount(Map<String, dynamic> row) async {
+    final warehouseId = row['warehouse_id']?.toString();
+    final productId = row['item_id']?.toString();
+    if (warehouseId == null || productId == null) return;
+    try {
+      final rawRows = await widget.apiClient.getList(
+        '/inventory/serials/by-warehouse?warehouse_id=${Uri.encodeQueryComponent(warehouseId)}&product_id=${Uri.encodeQueryComponent(productId)}',
+      );
+      final rows = rawRows
+          .map((raw) => Map<String, dynamic>.from(raw as Map))
+          .toList();
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * .78,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'سيريالات ${row['item_name'] ?? ''}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _printSerials(row, rows),
+                        icon: const Icon(Icons.print),
+                        tooltip: 'طباعة السيريالات',
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '${rows.length} سيريال — ${row['warehouse_name'] ?? ''}',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                  ),
+                ),
+                const Divider(),
+                Expanded(
+                  child: rows.isEmpty
+                      ? const Center(child: Text('لا توجد سيريالات متاحة'))
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: rows.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 6),
+                          itemBuilder: (_, index) {
+                            final serial =
+                                rows[index]['serial_number']?.toString() ?? '—';
+                            return Card(
+                              elevation: 0,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  radius: 15,
+                                  child: Text('${index + 1}'),
+                                ),
+                                title: SelectableText(
+                                  serial,
+                                  textAlign: TextAlign.left,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: .4,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'الحالة: ${rows[index]['condition'] ?? 'جديد'}',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
         ),
       );
-      return;
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
     }
+  }
+
+  Future<void> _count(Map<String, dynamic> row) async {
     final controller = TextEditingController(
       text: '${_number(row['quantity'])}',
     );
@@ -172,11 +308,18 @@ class _StockCountScreenState extends State<StockCountScreen> {
     }
   }
 
-  Future<void> _print(List<dynamic> rawRows) async {
-    final fontData = await rootBundle.load(
-      'assets/fonts/NotoSansArabic-Regular.ttf',
+  Future<List<pw.Font>> _pdfFonts() async {
+    final arabic = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'),
     );
-    final font = pw.Font.ttf(fontData);
+    final latin = pw.Font.ttf(
+      await rootBundle.load('assets/fonts/NotoSans-Regular.ttf'),
+    );
+    return [arabic, latin];
+  }
+
+  Future<void> _print(List<dynamic> rawRows) async {
+    final fonts = await _pdfFonts();
     final rows = rawRows
         .map((raw) => Map<String, dynamic>.from(raw as Map))
         .toList();
@@ -186,39 +329,48 @@ class _StockCountScreenState extends State<StockCountScreen> {
         doc.addPage(
           pw.MultiPage(
             pageFormat: format,
-            theme: pw.ThemeData.withFont(base: font),
+            theme: pw.ThemeData.withFont(
+              base: fonts[0],
+              fontFallback: [fonts[1]],
+            ),
             textDirection: pw.TextDirection.rtl,
             header: (_) => pw.Text(
-              'جرد المخزون',
+              'جرد المخزون / Stock Count',
               style: pw.TextStyle(
-                font: font,
+                font: fonts[0],
+                fontFallback: [fonts[1]],
                 fontSize: 18,
                 fontWeight: pw.FontWeight.bold,
               ),
             ),
             build: (_) => [
               pw.SizedBox(height: 12),
-          pw.TableHelper.fromTextArray(
+              pw.TableHelper.fromTextArray(
                 headerStyle: pw.TextStyle(
-                  font: font,
+                  font: fonts[0],
+                  fontFallback: [fonts[1]],
                   fontWeight: pw.FontWeight.bold,
                 ),
-                cellStyle: pw.TextStyle(font: font, fontSize: 9),
+                cellStyle: pw.TextStyle(
+                  font: fonts[0],
+                  fontFallback: [fonts[1]],
+                  fontSize: 9,
+                ),
                 headers: const [
-                  'الصنف',
-                  'المستودع',
-                  'الكمية',
-                  'المتاح',
-                  'القيمة',
+                  'الصنف / Item',
+                  'المستودع / Warehouse',
+                  'المندوب / Rep',
+                  'الكمية / Qty',
+                  'القيمة / Value',
                 ],
                 data: rows
                     .map(
                       (row) => [
                         row['item_name'] ?? '—',
                         row['warehouse_name'] ?? '—',
+                        _repNameForWarehouse(row['warehouse_id']?.toString()),
                         '${row['quantity'] ?? 0}',
-                        '${row['available_qty'] ?? 0}',
-                        '${row['stock_value'] ?? 0} ر.س',
+                        '${row['stock_value'] ?? 0} SAR',
                       ],
                     )
                     .toList(),
@@ -230,6 +382,157 @@ class _StockCountScreenState extends State<StockCountScreen> {
       },
     );
   }
+
+  Future<void> _printSerials(
+    Map<String, dynamic> row,
+    List<Map<String, dynamic>> serials,
+  ) async {
+    final fonts = await _pdfFonts();
+    await Printing.layoutPdf(
+      onLayout: (format) async {
+        final doc = pw.Document();
+        doc.addPage(
+          pw.MultiPage(
+            pageFormat: format,
+            theme: pw.ThemeData.withFont(
+              base: fonts[0],
+              fontFallback: [fonts[1]],
+            ),
+            textDirection: pw.TextDirection.rtl,
+            header: (_) => pw.Text(
+              'سيريالات الصنف / Serial Numbers',
+              style: pw.TextStyle(
+                font: fonts[0],
+                fontFallback: [fonts[1]],
+                fontSize: 17,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            build: (_) => [
+              pw.Text(
+                '${row['item_name'] ?? ''} — ${row['warehouse_name'] ?? ''}',
+                style: pw.TextStyle(
+                  font: fonts[0],
+                  fontFallback: [fonts[1]],
+                  fontSize: 11,
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.TableHelper.fromTextArray(
+                headerStyle: pw.TextStyle(
+                  font: fonts[0],
+                  fontFallback: [fonts[1]],
+                  fontWeight: pw.FontWeight.bold,
+                ),
+                cellStyle: pw.TextStyle(
+                  font: fonts[0],
+                  fontFallback: [fonts[1]],
+                  fontSize: 10,
+                ),
+                headers: const ['#', 'Serial Number', 'الحالة / Condition'],
+                data: serials
+                    .asMap()
+                    .entries
+                    .map(
+                      (entry) => [
+                        '${entry.key + 1}',
+                        entry.value['serial_number'] ?? '—',
+                        entry.value['condition'] ?? 'new',
+                      ],
+                    )
+                    .toList(),
+              ),
+            ],
+          ),
+        );
+        return doc.save();
+      },
+    );
+  }
+
+  Widget _filters() => FutureBuilder<void>(
+    future: _filtersFuture,
+    builder: (context, snapshot) {
+      if (!_canFilter || snapshot.connectionState != ConnectionState.done)
+        return const SizedBox.shrink();
+      return Card(
+        elevation: 0,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'فلاتر الجرد',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: _stockPurple,
+                ),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+      initialValue: _warehouseId,
+                decoration: const InputDecoration(labelText: 'المستودع'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('كل المستودعات'),
+                  ),
+                  ..._warehouses.map(
+                    (row) => DropdownMenuItem(
+                      value: row['id']?.toString(),
+                      child: Text(row['name_ar']?.toString() ?? '—'),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _warehouseId = value;
+                    if (value != null)
+                      _repId = _reps
+                          .where((r) => r['warehouse_id']?.toString() == value)
+                          .firstOrNull?['id']
+                          ?.toString();
+                  });
+                  setState(_reload);
+                },
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+      initialValue: _repId,
+                decoration: const InputDecoration(labelText: 'المندوب'),
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('كل المناديب'),
+                  ),
+                  ..._reps.map(
+                    (row) => DropdownMenuItem(
+                      value: row['id']?.toString(),
+                      child: Text(
+                        '${row['full_name'] ?? '—'}  •  ${row['rep_code'] ?? ''}',
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _repId = value;
+                    if (value != null)
+                      _warehouseId = _reps
+                          .where((r) => r['id']?.toString() == value)
+                          .firstOrNull?['warehouse_id']
+                          ?.toString();
+                  });
+                  setState(_reload);
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -263,16 +566,15 @@ class _StockCountScreenState extends State<StockCountScreen> {
             ),
           );
         final rows = snapshot.data ?? <dynamic>[];
-        if (rows.isEmpty)
-          return const Center(child: Text('لا يوجد مخزون متاح'));
         return RefreshIndicator(
           onRefresh: () async => setState(_reload),
           child: ListView.separated(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 90),
-            itemCount: rows.length + 1,
+            itemCount: rows.length + 2,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
-              if (index == 0) {
+              if (index == 0) return _filters();
+              if (index == 1)
                 return Row(
                   children: [
                     Expanded(
@@ -294,8 +596,7 @@ class _StockCountScreenState extends State<StockCountScreen> {
                     ),
                   ],
                 );
-              }
-              final row = Map<String, dynamic>.from(rows[index - 1] as Map);
+              final row = Map<String, dynamic>.from(rows[index - 2] as Map);
               final isSerial = row['item_tracking']?.toString() == 'serial';
               return Card(
                 elevation: 0,
@@ -327,7 +628,7 @@ class _StockCountScreenState extends State<StockCountScreen> {
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        '${row['warehouse_name'] ?? '—'}  •  ${row['item_sku'] ?? ''}',
+                        '${row['warehouse_name'] ?? '—'}  •  ${_repNameForWarehouse(row['warehouse_id']?.toString())}  •  ${row['item_sku'] ?? ''}',
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -338,15 +639,18 @@ class _StockCountScreenState extends State<StockCountScreen> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      OutlinedButton.icon(
-                        onPressed: _busy || isSerial ? null : () => _count(row),
-                        icon: const Icon(Icons.fact_check_outlined),
-                        label: Text(
-                          isSerial
-                              ? 'جرد السيريالات من إدارة السيريالات'
-                              : 'تسجيل الجرد',
+                      if (isSerial)
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : () => _serialCount(row),
+                          icon: const Icon(Icons.pin_outlined),
+                          label: const Text('جرد السيريالات وعرض الأرقام'),
+                        )
+                      else
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : () => _count(row),
+                          icon: const Icon(Icons.fact_check_outlined),
+                          label: const Text('تسجيل الجرد'),
                         ),
-                      ),
                     ],
                   ),
                 ),

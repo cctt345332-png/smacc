@@ -164,7 +164,7 @@ async def my_reps(
     )
     return [
         {
-            "id": rep.id, "rep_code": rep.rep_code,
+            "id": rep.id, "rep_code": rep.rep_code, "warehouse_id": rep.warehouse_id,
             "full_name": u.full_name, "phone": rep.phone,
             "zone": rep.zone, "is_active": rep.is_active,
         }

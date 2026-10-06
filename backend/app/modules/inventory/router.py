@@ -494,10 +494,27 @@ async def stock_value_report(tenant_id=Depends(get_tenant_id), db: AsyncSession 
 @router.get("/stock")
 async def stock_by_warehouse(
     warehouse_id: Optional[str] = None,
+    rep_id: Optional[str] = None,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     allowed = await _scoped_warehouse_ids(user, db)
+    if rep_id:
+        from app.models.reps import SalesRep, SupervisorRep, Supervisor
+        rep_query = select(SalesRep).where(
+            SalesRep.id == rep_id,
+            SalesRep.tenant_id == user["tenant_id"],
+        )
+        if user.get("role") == "supervisor":
+            rep_query = rep_query.join(SupervisorRep, SupervisorRep.rep_id == SalesRep.id).join(
+                Supervisor, Supervisor.id == SupervisorRep.supervisor_id
+            ).where(Supervisor.user_id == user["user_id"])
+        rep = (await db.execute(rep_query)).scalar_one_or_none()
+        if not rep:
+            raise HTTPException(403, "لا تملك صلاحية عرض مخزون هذا المندوب")
+        if warehouse_id and warehouse_id != rep.warehouse_id:
+            raise HTTPException(400, "المستودع لا يطابق مستودع المندوب")
+        warehouse_id = rep.warehouse_id
     if allowed is None:
         return await service.get_stock_by_warehouse(db, user["tenant_id"], warehouse_id)
     if warehouse_id and warehouse_id not in allowed:
@@ -555,6 +572,9 @@ async def serials_by_warehouse(
     db: AsyncSession = Depends(get_db),
 ):
     """جلب السيريالات المتاحة في مستودع محدد"""
+    allowed = await _scoped_warehouse_ids(user, db)
+    if allowed is not None and warehouse_id not in allowed:
+        raise HTTPException(403, "لا تملك صلاحية عرض سيريالات هذا المستودع")
     from sqlalchemy import select as _select
     from sqlalchemy.orm import selectinload as sil
     from app.models.inventory import SerialItem as SI, InventoryItem as II
