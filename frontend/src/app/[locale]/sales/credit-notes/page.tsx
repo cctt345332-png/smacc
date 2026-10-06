@@ -107,6 +107,9 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                         <Link href={`/${locale}/sales/credit-notes/${cn.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "عرض" : "View"}>
                           <Icon name="view" size={14} />
                         </Link>
+                        {cn.original_invoice_id && <Link href={`/${locale}/sales/credit-notes/new?edit=${cn.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "تعديل" : "Edit"}>
+                          <Icon name="edit" size={14} />
+                        </Link>}
                         <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "طباعة" : "Print"}
                           onClick={() => window.open(`/${locale}/sales/credit-notes/${cn.id}`, "_blank")}>
                           <Icon name="print" size={14} />

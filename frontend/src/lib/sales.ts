@@ -49,6 +49,7 @@ export const convertToInvoice = (id: string) => api.post(`/sales/quotations/${id
 export const getCreditNotes = () => api.get("/sales/credit-notes");
 export const getCreditNote = (id: string) => api.get(`/sales/credit-notes/${id}`);
 export const createCreditNote = (data: any) => api.post("/sales/credit-notes", data);
+export const updateCreditNote = (id: string, data: any) => api.patch(`/sales/credit-notes/${id}`, data);
 export const createRepCreditNote = (data: any) => api.post("/reps/me/credit-notes", data);
 export const getRefundRequests = (creditNoteId: string) => api.get(`/sales/credit-notes/${creditNoteId}/refund-requests`);
 export const createRefundRequest = (creditNoteId: string, data: { amount: number; reason?: string }) => api.post(`/sales/credit-notes/${creditNoteId}/refund-requests`, data);

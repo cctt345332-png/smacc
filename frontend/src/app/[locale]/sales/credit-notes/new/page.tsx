@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getInvoices, getInvoice, getCustomers, createCreditNote } from "@/lib/sales";
+import { getInvoices, getInvoice, getCreditNote, getCustomers, createCreditNote, updateCreditNote } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
@@ -53,6 +53,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
 
   const ar = locale === "ar";
   const router = useRouter();
+  const editId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("edit") : null;
   const [invoices, setInvoices] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
@@ -67,6 +68,41 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     getInvoices({ status: "confirmed" }).then(({ data }) => setInvoices(data)).catch(() => {});
     getCustomers().then(({ data }) => setCustomers(data)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      try {
+        const { data: cn } = await getCreditNote(editId);
+        if (!cn.original_invoice_id) throw new Error("customer-return");
+        const { data: inv } = await getInvoice(cn.original_invoice_id);
+        const byLine = new Map<string, any>((cn.lines || []).map((line: any) => [String(line.original_invoice_line_id), line] as [string, any]));
+        setForm({ original_invoice_id: inv.id, issue_date: String(cn.issue_date).slice(0, 10), reason: cn.reason || "" });
+        setLines((inv.lines || []).map((l: any) => {
+          const old = byLine.get(String(l.id));
+          const original_serial_ids = parseSerialIds(l);
+          let selected: string[] = [];
+          try { selected = JSON.parse(old?.serial_ids_json || "[]").map(String); } catch { selected = []; }
+          return {
+            original_invoice_line_id: l.id, original_serial_ids,
+            serial_details: Array.isArray(l.serial_details) ? l.serial_details : [],
+            return_serial_ids: selected,
+            picked: {
+              mode: l.inventory_item_id ? (original_serial_ids.length ? "serial" : "item") : "free",
+              description_ar: l.description_ar, unit_price: Number(l.unit_price),
+              quantity: original_serial_ids.length ? selected.length : Number(old?.quantity || l.quantity),
+              inventory_item_id: l.inventory_item_id || undefined,
+              serial_item_id: l.serial_item_id || undefined, item_name: l.description_ar,
+            },
+            vat_rate: String(l.vat_rate || 15),
+          } as Line;
+        }).filter((line: Line) => Boolean(line.original_invoice_line_id && byLine.has(line.original_invoice_line_id))));
+      } catch {
+        alert(ar ? "تعذر تحميل المرتجع للتعديل" : "Could not load return for editing");
+        router.replace(`/${locale}/sales/credit-notes`);
+      }
+    })();
+  }, [editId, ar, locale, router]);
 
   // عند اختيار الفاتورة الأصلية — جلب أسطرها تلقائياً
   const handleInvoiceSelect = async (invoiceId: string) => {
@@ -158,7 +194,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     if (lines.some(l => !l.picked.description_ar || Number(l.picked.quantity || 0) <= 0)) return alert(ar ? "حدد كمية مرتجعة صحيحة لكل سطر مختار" : "Choose a valid return quantity for each selected line");
     setSaving(true);
     try {
-      await createCreditNote({
+      const payload = {
         ...form,
         issue_date: new Date(form.issue_date).toISOString(),
         lines: lines.map((l, i) => ({
@@ -173,7 +209,9 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
           serial_item_id: l.picked.serial_item_id || null,
           serial_ids: (l.original_serial_ids || []).length ? l.return_serial_ids || [] : undefined,
         })),
-      });
+      };
+      if (editId) await updateCreditNote(editId, payload);
+      else await createCreditNote(payload);
       router.push(`/${locale}/sales/credit-notes`);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setSaving(false); }
@@ -188,12 +226,12 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
             <span className="breadcrumb-sep">/</span>
             <span>{ar ? "مرتجع جديد" : "New Return"}</span>
           </div>
-          <h1 className="page-title">{ar ? "مرتجع مبيعات جديد" : "New Sales Return"}</h1>
+          <h1 className="page-title">{editId ? (ar ? "تعديل مرتجع مبيعات" : "Edit Sales Return") : (ar ? "مرتجع مبيعات جديد" : "New Sales Return")}</h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Link href={`/${locale}/sales/credit-notes`} className="btn btn-secondary btn-sm">{ar ? "إلغاء" : "Cancel"}</Link>
           <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-            {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ المرتجع" : "Save Return")}
+            {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editId ? (ar ? "حفظ التعديل" : "Save Changes") : (ar ? "حفظ المرتجع" : "Save Return"))}
           </button>
         </div>
       </div>

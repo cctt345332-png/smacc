@@ -315,6 +315,12 @@ async def create_credit_note(data: CreditNoteCreate, user=Depends(require_role([
     return await service.create_credit_note(db, user["tenant_id"], user["user_id"], data)
 
 
+@router.patch("/credit-notes/{cn_id}")
+async def update_credit_note(cn_id: str, data: CreditNoteCreate, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    """تعديل مرتجع مرتبط بفاتورة مع عكس أثر النسخة السابقة."""
+    return await service.update_credit_note(db, user["tenant_id"], user["user_id"], cn_id, data)
+
+
 @router.get("/credit-notes")
 async def list_credit_notes(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select

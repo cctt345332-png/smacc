@@ -1935,6 +1935,105 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
     return cn
 
 
+async def _reverse_credit_note_effects(db: AsyncSession, tenant_id: str, user_id: str, cn: CreditNote):
+    """يعكس أثر مرتجع مرتبط بفاتورة قبل استبدال بياناته أثناء التعديل."""
+    from app.models.inventory import InventoryStock, SerialStatus
+    from app.models.accounting import JournalEntryStatus
+
+    original = await get_invoice(db, tenant_id, cn.original_invoice_id) if cn.original_invoice_id else None
+    if not original:
+        raise HTTPException(400, "لا يمكن تعديل مرتجع عميل مستقل بأمان؛ أنشئ مرتجعًا جديدًا بدلًا منه")
+
+    rows = (await db.execute(select(CreditNoteLine).where(
+        CreditNoteLine.credit_note_id == cn.id
+    ))).scalars().all()
+    rep = await db.get(SalesRep, original.rep_id) if original.rep_id else None
+    warehouse_id = rep.warehouse_id if rep else None
+    for row in rows:
+        try:
+            serial_ids = [str(value) for value in json.loads(row.serial_ids_json or "[]")]
+        except (TypeError, ValueError):
+            serial_ids = []
+        if serial_ids:
+            serials = (await db.execute(select(SerialItem).where(
+                SerialItem.id.in_(serial_ids)
+            ).with_for_update())).scalars().all()
+            for serial in serials:
+                # لا نعكس سيريالًا تغيّرت حالته بعد إنشاء المرتجع.
+                if getattr(serial.status, "value", serial.status) == "in_stock" and serial.sale_invoice_id is None:
+                    serial.status = SerialStatus.SOLD
+                    serial.sale_invoice_id = original.id
+                    serial.sold_at = cn.issue_date
+                    db.add(StockMovement(
+                        id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
+                        warehouse_id=serial.warehouse_id or warehouse_id, movement_type="sale", quantity=Decimal("-1"),
+                        unit_cost=serial.cost_price, serial_item_id=serial.id,
+                        reference_type="credit_note_edit_reverse", reference_id=cn.id,
+                        created_by=user_id, notes="عكس مرتجع المبيعات عند التعديل",
+                    ))
+            continue
+        if not row.inventory_item_id:
+            continue
+        item = await db.get(InventoryItem, row.inventory_item_id, with_for_update=True)
+        qty = Decimal(str(row.quantity or 0))
+        if not item or qty <= 0:
+            continue
+        item.quantity_on_hand = max(Decimal("0"), item.quantity_on_hand - qty)
+        if warehouse_id:
+            stock = (await db.execute(select(InventoryStock).where(
+                InventoryStock.tenant_id == tenant_id,
+                InventoryStock.item_id == item.id,
+                InventoryStock.warehouse_id == warehouse_id,
+            ).with_for_update())).scalar_one_or_none()
+            if stock:
+                stock.quantity = max(Decimal("0"), stock.quantity - qty)
+        db.add(StockMovement(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+            warehouse_id=warehouse_id, movement_type="sale", quantity=-qty,
+            unit_cost=item.cost_price, reference_type="credit_note_edit_reverse",
+            reference_id=cn.id, created_by=user_id, notes="عكس كمية مرتجع المبيعات عند التعديل",
+        ))
+
+    if cn.journal_entry_id:
+        entry = await db.get(JournalEntry, cn.journal_entry_id, with_for_update=True)
+        if entry and entry.status == JournalEntryStatus.POSTED:
+            entry.status = JournalEntryStatus.CANCELLED
+            journal_rows = (await db.execute(select(JournalEntryLine).where(
+                JournalEntryLine.entry_id == entry.id
+            ))).scalars().all()
+            reversal = JournalEntry(
+                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                entry_number=await _next_sales_reversal_number(db, tenant_id),
+                entry_date=datetime.utcnow(), fiscal_year_id=entry.fiscal_year_id,
+                description_ar=f"عكس إشعار دائن: {cn.credit_note_number}",
+                description_en=f"Reversal of credit note: {cn.credit_note_number}",
+                status=JournalEntryStatus.POSTED, source="reversal", reference=cn.credit_note_number,
+                total_debit=entry.total_credit, total_credit=entry.total_debit,
+                created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow(),
+            )
+            db.add(reversal)
+            for journal_row in journal_rows:
+                db.add(JournalEntryLine(
+                    id=str(uuid.uuid4()), entry_id=reversal.id, account_id=journal_row.account_id,
+                    cost_center_id=journal_row.cost_center_id, description=f"عكس: {journal_row.description or ''}",
+                    debit=journal_row.credit, credit=journal_row.debit, line_order=journal_row.line_order,
+                ))
+
+
+async def update_credit_note(db: AsyncSession, tenant_id: str, user_id: str, credit_note_id: str, data: CreditNoteCreate):
+    """تعديل مرتجع مرتبط بفاتورة: عكس القديم ثم إنشاء النسخة الجديدة داخل نفس المعاملة."""
+    cn = await get_credit_note(db, tenant_id, credit_note_id)
+    refund_count = (await db.execute(select(func.count(RefundRequest.id)).where(
+        RefundRequest.tenant_id == tenant_id, RefundRequest.credit_note_id == cn.id,
+    ))).scalar() or 0
+    if refund_count:
+        raise HTTPException(409, "لا يمكن تعديل مرتجع مرتبط بطلب استرداد؛ أنشئ مرتجعًا جديدًا بدلًا منه")
+    await _reverse_credit_note_effects(db, tenant_id, user_id, cn)
+    await db.delete(cn)
+    await db.flush()
+    return await create_credit_note(db, tenant_id, user_id, data)
+
+
 async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
     """مرتجع عميل مستقل عن الفاتورة بنفس أسطر المرتجع العادي."""
     if not data.customer_id:
