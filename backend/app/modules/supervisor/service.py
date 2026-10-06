@@ -119,7 +119,7 @@ async def _supervisor_rep_directory(db: AsyncSession, tenant_id: str, rep_ids: l
             "full_name": full_name or rep_code,
             "target_monthly": float(target_monthly or 0),
         }
-        for rep_id, rep_code, full_name in r.all()
+        for rep_id, rep_code, full_name, target_monthly in r.all()
     }
 
 
