@@ -2,6 +2,8 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getInvoices, getSalesSummary } from "@/lib/sales";
+import { getReps } from "@/lib/reps";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 import {
   INVOICE_STATUS_PRESENTATION,
@@ -22,18 +24,32 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
   const [fromDate, setFromDate] = useState(`${now.getFullYear()}-01-01`);
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [reps, setReps] = useState<any[]>([]);
+  const [repId, setRepId] = useState("");
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
+  useEffect(() => {
+    getReps()
+      .then((response) => setReps(Array.isArray(response.data) ? response.data : []))
+      .catch(() => setReps([]));
+  }, []);
+
   const load = async () => {
     setLoading(true);
     try {
+      if (!fromDate || !toDate || fromDate > toDate) {
+        throw new Error(ar ? "نطاق التاريخ غير صحيح" : "Invalid date range");
+      }
       const [inv, sum] = await Promise.all([getInvoices(), getSalesSummary()]);
       const filtered = inv.data.filter((i: any) => {
-        const d = new Date(i.issue_date);
-        return d >= new Date(fromDate)
-          && d <= new Date(toDate)
+        const d = new Date(i.issue_date).getTime();
+        const from = new Date(`${fromDate}T00:00:00`).getTime();
+        const to = new Date(`${toDate}T23:59:59.999`).getTime();
+        return d >= from
+          && d <= to
+          && (!repId || i.rep_id === repId)
           && isFinancialInvoiceStatus(i.status);
       });
       setInvoices(filtered);
@@ -41,6 +57,12 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
       setLoaded(true);
     } catch {} finally { setLoading(false); }
   };
+
+  const repOptions = reps.map((rep: any) => ({
+    value: rep.id,
+    label: rep.full_name || rep.rep_name || rep.rep_code || rep.id,
+    searchText: `${rep.rep_code || ""} ${rep.full_name || ""} ${rep.rep_name || ""}`,
+  }));
 
   const totalVAT = invoices.reduce((s, i) => s + Number(i.vat_amount || 0), 0);
   const totalNet = invoices.reduce((s, i) => s + Number(i.taxable_amount || 0), 0);
@@ -76,6 +98,16 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
           <div className="form-group" style={{ margin: 0 }}>
             <label className="form-label">{ar ? "إلى" : "To"}</label>
             <input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} />
+          </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 280 }}>
+            <label className="form-label">{ar ? "المندوب" : "Representative"}</label>
+            <SearchableSelect
+              locale={locale}
+              value={repId}
+              onChange={setRepId}
+              placeholder={ar ? "ابحث عن المندوب..." : "Search representative..."}
+              options={[{ value: "", label: ar ? "كل المناديب" : "All representatives" }, ...repOptions]}
+            />
           </div>
           <button className="btn btn-primary" onClick={load} disabled={loading}>
             {loading ? (ar ? "جاري..." : "Loading...") : (ar ? "عرض التقرير" : "Show Report")}
@@ -117,6 +149,7 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
                     <tr>
                       <th>{ar ? "رقم الفاتورة" : "Invoice #"}</th>
                       <th>{ar ? "العميل" : "Customer"}</th>
+                      <th>{ar ? "المندوب" : "Representative"}</th>
                       <th>{ar ? "التاريخ" : "Date"}</th>
                       <th>{ar ? "الاستحقاق" : "Due Date"}</th>
                       <th>{ar ? "النوع" : "Type"}</th>
@@ -136,6 +169,7 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
                         <tr key={inv.id} style={isOverdue ? { background: "#FFF5F5" } : {}}>
                           <td><Link href={`/${locale}/sales/invoices/${inv.id}`} style={{ color: "var(--primary)", fontWeight: 700, textDecoration: "none" }}>{inv.invoice_number}</Link></td>
                           <td>{inv.buyer_name_ar}</td>
+                          <td>{inv.rep_name || inv.rep_code || "—"}</td>
                           <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(inv.issue_date).toLocaleDateString("en-SA")}</td>
                           <td style={{ fontSize: 12 }}>
                             {due ? (
@@ -157,7 +191,7 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-                      <td colSpan={5} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                      <td colSpan={6} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(totalNet)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#D97706" }}>{fmt(totalVAT)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84", fontSize: 15 }}>{fmt(totalGross)}</td>
