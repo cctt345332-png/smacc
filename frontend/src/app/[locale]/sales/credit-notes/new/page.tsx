@@ -74,7 +74,26 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     (async () => {
       try {
         const { data: cn } = await getCreditNote(editId);
-        if (!cn.original_invoice_id) throw new Error("customer-return");
+        if (!cn.original_invoice_id) {
+          setReturnMode("customer");
+          setCustomerId(cn.customer_id || "");
+          setForm({ original_invoice_id: "", issue_date: String(cn.issue_date).slice(0, 10), reason: cn.reason || "" });
+          setLines((cn.lines || []).map((line: any) => {
+            let serialIds: string[] = [];
+            try { serialIds = JSON.parse(line.serial_ids_json || "[]").map(String); } catch { serialIds = []; }
+            return {
+              picked: {
+                mode: serialIds.length ? "serial" : "item",
+                description_ar: line.description_ar || "مرتجع",
+                item_name: line.description_ar || "مرتجع",
+                inventory_item_id: line.inventory_item_id || undefined,
+                quantity: Number(line.quantity || 0), unit_price: Number(line.unit_price || 0),
+              },
+              vat_rate: "0", manual_serials: serialIds.join("\n"),
+            } as Line;
+          }));
+          return;
+        }
         const { data: inv } = await getInvoice(cn.original_invoice_id);
         const byLine = new Map<string, any>((cn.lines || []).map((line: any) => [String(line.original_invoice_line_id), line] as [string, any]));
         setForm({ original_invoice_id: inv.id, issue_date: String(cn.issue_date).slice(0, 10), reason: cn.reason || "" });
@@ -183,7 +202,9 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
       if (customerLines.some(l => !l.serial_ids.length && lines.find(x => x.picked.inventory_item_id === l.inventory_item_id)?.picked.mode === "serial")) return alert(ar ? "أدخل سيريالات كل مادة متسلسلة" : "Enter serials for every serial-tracked item");
       setSaving(true);
       try {
-        await createCreditNote({ customer_id: customerId, issue_date: new Date(form.issue_date).toISOString(), reason: form.reason, lines: customerLines });
+        const payload = { customer_id: customerId, issue_date: new Date(form.issue_date).toISOString(), reason: form.reason, lines: customerLines };
+        if (editId) await updateCreditNote(editId, payload);
+        else await createCreditNote(payload);
         router.push(`/${locale}/sales/credit-notes`);
       } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
       finally { setSaving(false); }

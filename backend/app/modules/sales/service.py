@@ -1941,13 +1941,14 @@ async def _reverse_credit_note_effects(db: AsyncSession, tenant_id: str, user_id
     from app.models.accounting import JournalEntryStatus
 
     original = await get_invoice(db, tenant_id, cn.original_invoice_id) if cn.original_invoice_id else None
-    if not original:
-        raise HTTPException(400, "لا يمكن تعديل مرتجع عميل مستقل بأمان؛ أنشئ مرتجعًا جديدًا بدلًا منه")
 
     rows = (await db.execute(select(CreditNoteLine).where(
         CreditNoteLine.credit_note_id == cn.id
     ))).scalars().all()
-    rep = await db.get(SalesRep, original.rep_id) if original.rep_id else None
+    rep_id = original.rep_id if original else None
+    customer = await db.get(Customer, cn.customer_id) if cn.customer_id else None
+    rep_id = rep_id or (customer.rep_id if customer else None)
+    rep = await db.get(SalesRep, rep_id) if rep_id else None
     warehouse_id = rep.warehouse_id if rep else None
     for row in rows:
         try:
@@ -1960,15 +1961,16 @@ async def _reverse_credit_note_effects(db: AsyncSession, tenant_id: str, user_id
             ).with_for_update())).scalars().all()
             for serial in serials:
                 # لا نعكس سيريالًا تغيّرت حالته بعد إنشاء المرتجع.
-                if getattr(serial.status, "value", serial.status) == "in_stock" and serial.sale_invoice_id is None:
+                if getattr(serial.status, "value", serial.status) == "in_stock":
                     serial.status = SerialStatus.SOLD
-                    serial.sale_invoice_id = original.id
-                    serial.sold_at = cn.issue_date
+                    if original:
+                        serial.sale_invoice_id = original.id
+                        serial.sold_at = original.issue_date
                     db.add(StockMovement(
                         id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
                         warehouse_id=serial.warehouse_id or warehouse_id, movement_type="sale", quantity=Decimal("-1"),
                         unit_cost=serial.cost_price, serial_item_id=serial.id,
-                        reference_type="credit_note_edit_reverse", reference_id=cn.id,
+                    reference_type="credit_note_edit_reverse", reference_id=cn.id,
                         created_by=user_id, notes="عكس مرتجع المبيعات عند التعديل",
                     ))
             continue

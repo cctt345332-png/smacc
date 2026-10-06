@@ -42,7 +42,7 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
             <span>{ar ? "مرتجعات المبيعات" : "Sales Returns"}</span>
           </div>
           <h1 className="page-title">{ar ? "مرتجعات المبيعات" : "Sales Returns"}</h1>
-          <p className="page-subtitle">{ar ? "إشعارات دائن ضريبية متوافقة مع زاتكا" : "ZATCA-compliant tax credit notes"}</p>
+          <p className="page-subtitle">{ar ? "إدارة مرتجعات المبيعات" : "Sales returns management"}</p>
         </div>
         <Link href={`/${locale}/sales/credit-notes/new`} className="btn btn-primary btn-sm">
           <Icon name="plus" size={14} /> {ar ? "+ مرتجع جديد" : "+ New Return"}
@@ -72,7 +72,6 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                   <th>{ar ? "التاريخ" : "Date"}</th>
                   <th>{ar ? "السبب" : "Reason"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th>
-                  <th>{ar ? "زاتكا" : "ZATCA"}</th>
                   <th>{ar ? "الإجراءات" : "Actions"}</th>
                 </tr>
               </thead>
@@ -98,18 +97,13 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                     <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{cn.reason}</td>
                     <td style={{ textAlign: "end", fontWeight: 700, color: "#DC2626" }}>{fmt(cn.total)} SAR</td>
                     <td>
-                      <span className={`badge ${cn.zatca_status === "cleared" ? "badge-success" : "badge-gray"}`}>
-                        {cn.zatca_status === "cleared" ? (ar ? "مقبول" : "Cleared") : (ar ? "معلق" : "Pending")}
-                      </span>
-                    </td>
-                    <td>
                       <div style={{ display: "flex", gap: 4 }}>
                         <Link href={`/${locale}/sales/credit-notes/${cn.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "عرض" : "View"}>
                           <Icon name="view" size={14} />
                         </Link>
-                        {cn.original_invoice_id && <Link href={`/${locale}/sales/credit-notes/new?edit=${cn.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "تعديل" : "Edit"}>
+                        <Link href={`/${locale}/sales/credit-notes/new?edit=${cn.id}`} className="btn btn-ghost btn-sm btn-icon" title={ar ? "تعديل" : "Edit"}>
                           <Icon name="edit" size={14} />
-                        </Link>}
+                        </Link>
                         <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "طباعة" : "Print"}
                           onClick={() => window.open(`/${locale}/sales/credit-notes/${cn.id}`, "_blank")}>
                           <Icon name="print" size={14} />
