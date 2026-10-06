@@ -240,6 +240,12 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
                   <td>
                     <div style={{ fontWeight: 500 }}>{line.description_ar}</div>
                     {line.description_en && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{line.description_en}</div>}
+                    {Array.isArray(line.serial_details) && line.serial_details.length > 0 && (
+                      <div style={{ marginTop: 5, fontSize: 11, color: "var(--text-secondary)" }}>
+                        {ar ? "السيريالات: " : "Serials: "}
+                        {line.serial_details.map((serial: any) => serial.serial_number).filter(Boolean).join("، ")}
+                      </div>
+                    )}
                   </td>
                   <td style={{ textAlign: "end" }}>{fmt(line.quantity)}</td>
                   <td style={{ textAlign: "end" }}>{fmt(line.unit_price)}</td>

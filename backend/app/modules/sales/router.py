@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
@@ -388,6 +389,25 @@ async def get_credit_note(cn_id: str, tenant_id=Depends(get_tenant_id), db: Asyn
     payload["customer_vat_number"] = customer.vat_number if customer else None
     payload["customer_address_city"] = customer.address_city if customer else None
     payload["customer_phone"] = customer.phone if customer else None
+    # serial_ids_json يخزن المعرف الداخلي، لكن الواجهة يجب أن تعرض رقم السيريال الفعلي.
+    serial_ids = set()
+    for line in payload.get("lines", []):
+        try:
+            serial_ids.update(str(value) for value in json.loads(line.get("serial_ids_json") or "[]"))
+        except (TypeError, ValueError):
+            continue
+    if serial_ids:
+        from app.models.inventory import SerialItem
+        serial_rows = (await db.execute(
+            select(SerialItem).where(SerialItem.id.in_(serial_ids))
+        )).scalars().all()
+        serial_map = {str(row.id): {"id": str(row.id), "serial_number": row.serial_number} for row in serial_rows}
+        for line in payload.get("lines", []):
+            try:
+                ids = [str(value) for value in json.loads(line.get("serial_ids_json") or "[]")]
+            except (TypeError, ValueError):
+                ids = []
+            line["serial_details"] = [serial_map[value] for value in ids if value in serial_map]
     return payload
 
 

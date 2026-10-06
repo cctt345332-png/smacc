@@ -81,6 +81,8 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
           setLines((cn.lines || []).map((line: any) => {
             let serialIds: string[] = [];
             try { serialIds = JSON.parse(line.serial_ids_json || "[]").map(String); } catch { serialIds = []; }
+            const serialDetails = Array.isArray(line.serial_details) ? line.serial_details : [];
+            const serialValues = serialIds.map(id => serialDetails.find((serial: any) => String(serial.id) === id)?.serial_number || "");
             return {
               picked: {
                 mode: serialIds.length ? "serial" : "item",
@@ -89,7 +91,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                 inventory_item_id: line.inventory_item_id || undefined,
                 quantity: Number(line.quantity || 0), unit_price: Number(line.unit_price || 0),
               },
-              vat_rate: "0", manual_serials: serialIds.join("\n"),
+              vat_rate: "0", manual_serials: serialValues.join("\n"),
             } as Line;
           }));
           return;
@@ -321,7 +323,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
             <tbody>
               {lines.map((line, i) => {
                 const c = calcLine(line);
-                const serialEntries = (line.original_serial_ids || []).map(serialId => line.serial_details?.find(serial => String(serial.id) === String(serialId)) || { id: serialId, serial_number: serialId });
+                const serialEntries = (line.original_serial_ids || []).map(serialId => line.serial_details?.find(serial => String(serial.id) === String(serialId)) || { id: serialId, serial_number: "" });
                 const visibleSerials = serialEntries.filter(serial => !serialSearch.trim() || serial.serial_number.toLowerCase().includes(serialSearch.trim().toLowerCase()) || serial.id.toLowerCase().includes(serialSearch.trim().toLowerCase()));
                 return (
                   <tr key={i}>
