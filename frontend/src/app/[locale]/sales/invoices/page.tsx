@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getInvoices, getSalesSummary, confirmInvoice, cancelInvoice, deleteInvoiceDraft } from "@/lib/sales";
+import * as XLSX from "xlsx";
+import { getInvoices, getInvoice, getSalesSummary, confirmInvoice, cancelInvoice, deleteInvoiceDraft } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import {
   FINANCIAL_INVOICE_STATUSES,
@@ -28,6 +29,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("");
   const [acting, setActing] = useState<string | null>(null);
+  const [serialExporting, setSerialExporting] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -64,6 +66,44 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
     try { await deleteInvoiceDraft(id); load(); }
     catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setActing(null); }
+  };
+
+  const exportInvoiceSerials = async (invoice: any) => {
+    setSerialExporting(invoice.id);
+    try {
+      const { data } = await getInvoice(invoice.id);
+      const lines = Array.isArray(data?.lines) ? data.lines : [];
+      const rows = lines.flatMap((line: any) =>
+        (Array.isArray(line.serial_details) ? line.serial_details : []).map((serial: any) => ({
+          [ar ? "رقم الفاتورة" : "Invoice Number"]: invoice.invoice_number || data.invoice_number || "",
+          [ar ? "العميل" : "Customer"]: invoice.buyer_name_ar || data.buyer_name_ar || "",
+          [ar ? "المندوب" : "Sales Rep"]: invoice.rep_name || data.rep_name || "",
+          [ar ? "تاريخ الفاتورة" : "Invoice Date"]: invoice.issue_date ? String(invoice.issue_date).split("T")[0] : "",
+          [ar ? "الصنف" : "Item"]: line.description_ar || "",
+          [ar ? "رقم السيريال" : "Serial Number"]: serial.serial_number || "",
+          [ar ? "الحالة" : "Status"]: serial.status || "",
+          [ar ? "الحالة/النوع" : "Condition"]: serial.condition || "",
+          [ar ? "التكلفة" : "Cost"]: Number(serial.cost_price || 0),
+        }))
+      );
+      if (!rows.length) {
+        alert(ar ? "لا توجد سيريالات مسجلة في هذه الفاتورة" : "No serials are registered on this invoice");
+        return;
+      }
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet["!cols"] = [
+        { wch: 18 }, { wch: 30 }, { wch: 28 }, { wch: 16 }, { wch: 34 },
+        { wch: 28 }, { wch: 16 }, { wch: 16 }, { wch: 14 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, sheet, ar ? "السيريالات" : "Serials");
+      const safeNumber = String(invoice.invoice_number || invoice.id).replace(/[^\u0600-\u06FFa-zA-Z0-9_-]+/g, "-");
+      XLSX.writeFile(workbook, `${safeNumber}-serials.xlsx`);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر تحميل سيريالات الفاتورة" : "Unable to load invoice serials"));
+    } finally {
+      setSerialExporting(null);
+    }
   };
 
   return (
@@ -236,6 +276,11 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                           <Link href={`/${locale}/sales/invoices/${inv.id}`} className="btn btn-ghost btn-sm" title={ar ? "عرض" : "View"}>
                             <Icon name="view" size={14} />
                           </Link>
+                          <button className="btn btn-ghost btn-sm" style={{ color: "var(--primary)" }}
+                            onClick={() => exportInvoiceSerials(inv)} disabled={serialExporting === inv.id}
+                            title={ar ? "تحميل سيريالات الفاتورة Excel" : "Download invoice serials as Excel"}>
+                            <Icon name="download" size={14} />
+                          </button>
                           {inv.status === "draft" && (
                             <button
                               className="btn btn-ghost btn-sm"
