@@ -1082,6 +1082,7 @@ async def get_bill_serials(
                 result.append({
                     "id": serial.id,
                     "serial_number": serial.serial_number,
+                    "product_name": line.description_ar or "",
                     "condition": serial.condition,
                     "status": serial.status,
                     "cost_price": float(serial.cost_price),

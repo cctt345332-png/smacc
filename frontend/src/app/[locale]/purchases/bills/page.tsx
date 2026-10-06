@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getBills, getPurchasesSummary, confirmBill, cancelBill, deleteBill } from "@/lib/purchases";
+import * as XLSX from "xlsx";
+import { getBills, getPurchasesSummary, confirmBill, cancelBill, deleteBill, getBillSerials } from "@/lib/purchases";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -29,6 +30,7 @@ export default function BillsPage(props: { params: Promise<{ locale: string }> }
   const [filterStatus, setFilterStatus] = useState("");
   const [filterVendor, setFilterVendor] = useState("");
   const [acting, setActing] = useState<string | null>(null);
+  const [serialExporting, setSerialExporting] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -72,6 +74,43 @@ export default function BillsPage(props: { params: Promise<{ locale: string }> }
     try { await deleteBill(id); load(); }
     catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف الفاتورة" : "Unable to delete the bill")); }
     finally { setActing(null); }
+  };
+
+  const exportBillSerials = async (bill: any) => {
+    setSerialExporting(bill.id);
+    try {
+      const { data } = await getBillSerials(bill.id);
+      const serials = Array.isArray(data) ? data : [];
+      if (!serials.length) {
+        alert(ar ? "لا توجد سيريالات مسجلة في هذه الفاتورة" : "No serials are registered on this bill");
+        return;
+      }
+      const rows = serials.map((serial: any, index: number) => ({
+        "#": index + 1,
+        [ar ? "رقم الفاتورة" : "Bill Number"]: bill.bill_number || "",
+        [ar ? "المورد" : "Vendor"]: bill.vendor_name_ar || "",
+        [ar ? "تاريخ الفاتورة" : "Bill Date"]: bill.bill_date ? new Date(bill.bill_date).toLocaleDateString("en-CA") : "",
+        [ar ? "الصنف" : "Item"]: serial.product_name || "",
+        [ar ? "رقم السيريال" : "Serial Number"]: serial.serial_number || "",
+        [ar ? "الحالة" : "Status"]: serial.status || "",
+        [ar ? "الحالة/النوع" : "Condition"]: serial.condition || "",
+        [ar ? "التكلفة" : "Cost"]: Number(serial.cost_price || 0),
+        [ar ? "سعر البيع" : "Sale Price"]: serial.sale_price == null ? "" : Number(serial.sale_price),
+      }));
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.json_to_sheet(rows);
+      sheet["!cols"] = [
+        { wch: 6 }, { wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 34 },
+        { wch: 28 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
+      ];
+      XLSX.utils.book_append_sheet(workbook, sheet, ar ? "السيريالات" : "Serials");
+      const safeNumber = String(bill.bill_number || bill.id).replace(/[^\u0600-\u06FFa-zA-Z0-9_-]+/g, "-");
+      XLSX.writeFile(workbook, `${safeNumber}-serials.xlsx`);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر تحميل سيريالات الفاتورة" : "Unable to load bill serials"));
+    } finally {
+      setSerialExporting(null);
+    }
   };
 
   return (
@@ -228,6 +267,11 @@ export default function BillsPage(props: { params: Promise<{ locale: string }> }
                           <Link href={`/${locale}/purchases/bills/${bill.id}`} className="btn btn-ghost btn-sm" title={ar ? "عرض" : "View"}>
                             <Icon name="view" size={14} />
                           </Link>
+                          <button className="btn btn-ghost btn-sm" style={{ color: "var(--primary)" }}
+                            onClick={() => exportBillSerials(bill)} disabled={serialExporting === bill.id}
+                            title={ar ? "تحميل سيريالات الفاتورة Excel" : "Download bill serials as Excel"}>
+                            <Icon name="download" size={14} />
+                          </button>
                           {bill.status === "draft" && (
                             <button className="btn btn-ghost btn-sm" style={{ color: "var(--success)" }}
                               onClick={() => handleConfirm(bill.id)} disabled={acting === bill.id} title={ar ? "تأكيد" : "Confirm"}>
