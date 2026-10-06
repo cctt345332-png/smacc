@@ -292,76 +292,88 @@ class _RepCard extends StatelessWidget {
   final Map<String, dynamic> rep;
   final String Function(dynamic) money;
   @override
-  Widget build(BuildContext context) => Card(
-    elevation: 0,
-    margin: const EdgeInsets.only(bottom: 10),
-    child: Padding(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                backgroundColor: Color(0xFFEDE2F2),
-                child: Icon(Icons.person, color: _supervisorPurple),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${rep['full_name'] ?? rep['name'] ?? '—'}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      '${rep['rep_code'] ?? '—'}',
-                      style: const TextStyle(color: Colors.black54),
-                    ),
-                  ],
+  Widget build(BuildContext context) {
+    final target = num.tryParse('${rep['target_monthly']}') ?? 0;
+    final monthlySales = num.tryParse('${rep['monthly_sales']}') ?? 0;
+    final progress = target > 0
+        ? (monthlySales / target).clamp(0, 1).toDouble()
+        : 0.0;
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const CircleAvatar(
+                  backgroundColor: Color(0xFFEDE2F2),
+                  child: Icon(Icons.person, color: _supervisorPurple),
                 ),
-              ),
-              Text(
-                '${rep['invoice_count'] ?? 0} فاتورة',
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${rep['full_name'] ?? rep['name'] ?? '—'}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        '${rep['rep_code'] ?? '—'}',
+                        style: const TextStyle(color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                Text(
+                  '${rep['invoice_count'] ?? 0} فاتورة',
+                  style: const TextStyle(
+                    color: _supervisorPurple,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'الهدف الشهري: ${money(target)}',
                 style: const TextStyle(
-                  color: _supervisorPurple,
+                  fontSize: 12,
+                  color: Colors.black54,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-            ],
-          ),
-          const Divider(height: 22),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _SmallStat('المبيعات', money(rep['total_sales'])),
-              _SmallStat('المحصل', money(rep['total_collected'])),
-              _SmallStat('المتبقي', money(rep['outstanding'])),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                minHeight: 9,
+                value: progress,
+                color: _supervisorPurple,
+                backgroundColor: const Color(0xFFEFE7F5),
+              ),
+            ),
+            const SizedBox(height: 5),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                'إنجاز الشهر: ${money(monthlySales)}${target > 0 ? ' من ${money(target)}' : ''}',
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
-
-class _SmallStat extends StatelessWidget {
-  const _SmallStat(this.label, this.value);
-  final String label, value;
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Text(label, style: const TextStyle(fontSize: 11, color: Colors.black54)),
-      const SizedBox(height: 3),
-      Text(
-        value,
-        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
-      ),
-    ],
-  );
+    );
+  }
 }
 
 class SupervisorRecordsScreen extends StatefulWidget {

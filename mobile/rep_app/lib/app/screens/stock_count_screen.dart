@@ -470,36 +470,47 @@ class _StockCountScreenState extends State<StockCountScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-      initialValue: _warehouseId,
-                decoration: const InputDecoration(labelText: 'المستودع'),
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('كل المستودعات'),
-                  ),
-                  ..._warehouses.map(
-                    (row) => DropdownMenuItem(
-                      value: row['id']?.toString(),
-                      child: Text(row['name_ar']?.toString() ?? '—'),
+              if (!widget.apiClient.sessionStore.isSupervisor)
+                DropdownButtonFormField<String>(
+                  initialValue: _warehouseId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'المستودع'),
+                  items: [
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('كل المستودعات'),
                     ),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _warehouseId = value;
-                    if (value != null)
-                      _repId = _reps
-                          .where((r) => r['warehouse_id']?.toString() == value)
-                          .firstOrNull?['id']
-                          ?.toString();
-                  });
-                  setState(_reload);
-                },
-              ),
+                    ..._warehouses.map(
+                      (row) => DropdownMenuItem(
+                        value: row['id']?.toString(),
+                        child: Text(
+                          row['name_ar']?.toString() ?? '—',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _warehouseId = value;
+                      if (value != null)
+                        _repId = _reps
+                            .where(
+                              (r) => r['warehouse_id']?.toString() == value,
+                            )
+                            .firstOrNull?['id']
+                            ?.toString();
+                    });
+                    setState(_reload);
+                  },
+                ),
+              if (!widget.apiClient.sessionStore.isSupervisor)
+                const SizedBox(height: 8),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-      initialValue: _repId,
+                initialValue: _repId,
+                isExpanded: true,
                 decoration: const InputDecoration(labelText: 'المندوب'),
                 items: [
                   const DropdownMenuItem(
@@ -511,6 +522,8 @@ class _StockCountScreenState extends State<StockCountScreen> {
                       value: row['id']?.toString(),
                       child: Text(
                         '${row['full_name'] ?? '—'}  •  ${row['rep_code'] ?? ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),

@@ -2,7 +2,8 @@
 خدمة المشرفين — إنشاء + إدارة + ربط بالمناديب
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
@@ -108,7 +109,7 @@ async def _supervisor_rep_directory(db: AsyncSession, tenant_id: str, rep_ids: l
     if not rep_ids:
         return {}
     r = await db.execute(
-        select(SalesRep.id, SalesRep.rep_code, User.full_name)
+        select(SalesRep.id, SalesRep.rep_code, User.full_name, SalesRep.target_monthly)
         .join(User, User.id == SalesRep.user_id)
         .where(SalesRep.tenant_id == tenant_id, SalesRep.id.in_(rep_ids))
     )
@@ -116,6 +117,7 @@ async def _supervisor_rep_directory(db: AsyncSession, tenant_id: str, rep_ids: l
         rep_id: {
             "rep_code": rep_code,
             "full_name": full_name or rep_code,
+            "target_monthly": float(target_monthly or 0),
         }
         for rep_id, rep_code, full_name in r.all()
     }
@@ -460,11 +462,25 @@ async def get_supervisor_summary(db: AsyncSession, tenant_id: str, user_id: str)
     operational_outstanding = total_sales - total_collected
     opening_total = sum(opening_by_rep.values(), Decimal("0"))
 
+    local_now = datetime.now(ZoneInfo("Asia/Riyadh")).replace(tzinfo=None)
+    month_start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_end = (month_start.replace(day=28) + timedelta(days=4)).replace(day=1)
+
     rep_summaries = []
     for rep_id in rep_ids:
         rep_invoices = invoice_by_rep.get(rep_id, [])
         rep_sales = invoice_total(rep_id)
         rep_collected = payment_by_rep.get(rep_id, Decimal("0"))
+        monthly_sales = sum(
+            (
+                Decimal(str(invoice.get("total") or 0))
+                for invoice in rep_invoices
+                if invoice.get("status") in financial_statuses
+                and invoice.get("issue_date")
+                and month_start <= invoice["issue_date"] < month_end
+            ),
+            Decimal("0"),
+        )
         rep_status_counts = {}
         for invoice in rep_invoices:
             status = str(invoice.get("status") or "unknown")
@@ -473,6 +489,8 @@ async def get_supervisor_summary(db: AsyncSession, tenant_id: str, user_id: str)
             "rep_id": rep_id,
             "rep_code": rep_directory.get(rep_id, {}).get("rep_code", "—"),
             "full_name": rep_directory.get(rep_id, {}).get("full_name", "—"),
+            "target_monthly": rep_directory.get(rep_id, {}).get("target_monthly", 0),
+            "monthly_sales": float(monthly_sales),
             "invoice_count": len(rep_invoices),
             "financial_invoice_count": sum(1 for invoice in rep_invoices if invoice.get("status") in financial_statuses),
             "invoice_status_counts": rep_status_counts,
