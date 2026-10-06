@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    # جلسة التطبيق طويلة لتجنب إخراج المستخدم أثناء العمل الميداني.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30
 
     DATABASE_URL: str = "postgresql+asyncpg://erp:erp@postgres:5432/erp"
     REDIS_URL: str = "redis://redis:6379"

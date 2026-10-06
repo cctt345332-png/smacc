@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../data/api_client.dart';
 import 'company_records_screen.dart';
 import 'supervisor_statements.dart';
+import 'stock_count_screen.dart';
 
 const _supervisorPurple = Color(0xFF3E0865);
 
@@ -31,6 +32,7 @@ class _SupervisorShellState extends State<SupervisorShell> {
         titleOverride: 'سندات المناديب',
       ),
       SupervisorReportsScreen(apiClient: widget.apiClient),
+      StockCountScreen(apiClient: widget.apiClient),
     ];
     return Scaffold(
       body: IndexedStack(index: index, children: pages),
@@ -57,6 +59,11 @@ class _SupervisorShellState extends State<SupervisorShell> {
             icon: Icon(Icons.analytics_outlined),
             selectedIcon: Icon(Icons.analytics),
             label: 'التقارير',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2),
+            label: 'المخزون والجرد',
           ),
         ],
       ),

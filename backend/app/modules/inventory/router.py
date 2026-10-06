@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional
@@ -12,6 +12,27 @@ from app.modules.inventory import service
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
+
+
+async def _scoped_warehouse_ids(user, db: AsyncSession) -> set[str] | None:
+    """نطاق المستودعات المسموح به للمستخدم داخل تطبيق المندوب."""
+    role = user.get("role")
+    if role == "sales_rep":
+        from app.models.reps import SalesRep
+        rep = (await db.execute(select(SalesRep).where(SalesRep.user_id == user["user_id"]))).scalar_one_or_none()
+        return {rep.warehouse_id} if rep and rep.warehouse_id else set()
+    if role == "supervisor":
+        from app.models.reps import Supervisor, SupervisorRep, SalesRep
+        sup = (await db.execute(select(Supervisor).where(Supervisor.user_id == user["user_id"]))).scalar_one_or_none()
+        if not sup:
+            return set()
+        rows = await db.execute(
+            select(SalesRep.warehouse_id)
+            .join(SupervisorRep, SupervisorRep.rep_id == SalesRep.id)
+            .where(SupervisorRep.supervisor_id == sup.id, SalesRep.warehouse_id.is_not(None))
+        )
+        return {row[0] for row in rows.all() if row[0]}
+    return None
 
 
 @router.post("/serial-reconciliation")
@@ -476,15 +497,15 @@ async def stock_by_warehouse(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # المندوب يشوف مستودعه فقط تلقائياً
-    if user["role"] == "sales_rep":
-        from app.models.reps import SalesRep
-        from sqlalchemy import select as _sel
-        rep_r = await db.execute(_sel(SalesRep).where(SalesRep.user_id == user["user_id"]))
-        rep = rep_r.scalar_one_or_none()
-        if rep:
-            warehouse_id = rep.warehouse_id
-    return await service.get_stock_by_warehouse(db, user["tenant_id"], warehouse_id)
+    allowed = await _scoped_warehouse_ids(user, db)
+    if allowed is None:
+        return await service.get_stock_by_warehouse(db, user["tenant_id"], warehouse_id)
+    if warehouse_id and warehouse_id not in allowed:
+        raise HTTPException(403, "لا تملك صلاحية الوصول إلى هذا المستودع")
+    rows = []
+    for scoped_id in ([warehouse_id] if warehouse_id else sorted(allowed)):
+        rows.extend(await service.get_stock_by_warehouse(db, user["tenant_id"], scoped_id))
+    return rows
 
 @router.get("/items/{item_id}/stock-levels")
 async def item_stock_levels(item_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
@@ -586,6 +607,9 @@ async def list_movements(
 @router.post("/stock-count", status_code=201)
 async def stock_count(data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     from decimal import Decimal
+    allowed = await _scoped_warehouse_ids(user, db)
+    if allowed is not None and data["warehouse_id"] not in allowed:
+        raise HTTPException(403, "لا تملك صلاحية جرد هذا المستودع")
     return await service.create_stock_count(
         db, user["tenant_id"], user["user_id"],
         item_id=data["item_id"],
@@ -599,10 +623,18 @@ async def count_history(
     item_id: Optional[str] = None,
     warehouse_id: Optional[str] = None,
     limit: int = 100,
-    tenant_id=Depends(get_tenant_id),
+    user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await service.get_count_sessions(db, tenant_id, item_id, warehouse_id, limit)
+    allowed = await _scoped_warehouse_ids(user, db)
+    if allowed is None:
+        return await service.get_count_sessions(db, user["tenant_id"], item_id, warehouse_id, limit)
+    if warehouse_id and warehouse_id not in allowed:
+        raise HTTPException(403, "لا تملك صلاحية عرض جرد هذا المستودع")
+    rows = []
+    for scoped_id in ([warehouse_id] if warehouse_id else sorted(allowed)):
+        rows.extend(await service.get_count_sessions(db, user["tenant_id"], item_id, scoped_id, limit))
+    return sorted(rows, key=lambda x: x.get("counted_at", ""), reverse=True)[:limit]
 
 @router.get("/alerts/low-stock")
 async def low_stock_alerts(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):

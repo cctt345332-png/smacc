@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'data/api_client.dart';
@@ -10,6 +11,7 @@ import 'screens/login_screen.dart';
 import 'screens/manager_more_screen.dart';
 import 'screens/rep_extra.dart';
 import 'screens/rep_lists.dart';
+import 'screens/stock_count_screen.dart';
 import 'screens/supervisor_screen.dart';
 
 class App extends StatefulWidget {
@@ -153,6 +155,12 @@ class _CompanyMoreMenu extends StatelessWidget {
                 _push(context, RepAttendanceAdminScreen(apiClient: apiClient)),
           ),
           ListTile(
+            leading: const Icon(Icons.fact_check_outlined),
+            title: const Text('المخزون والجرد'),
+            subtitle: const Text('عرض المخزون وتسجيل وطباعة الجرد'),
+            onTap: () => _push(context, StockCountScreen(apiClient: apiClient)),
+          ),
+          ListTile(
             leading: const Icon(Icons.logout, color: Colors.red),
             title: const Text(
               'تسجيل الخروج',
@@ -179,6 +187,95 @@ class RepShell extends StatefulWidget {
 
 class _RepShellState extends State<RepShell> {
   int _index = 0;
+  Timer? _attendanceTimer;
+  bool _attendancePromptShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkAttendancePrompt(),
+    );
+    _attendanceTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _checkAttendancePrompt(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _attendanceTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _checkAttendancePrompt() async {
+    if (_attendancePromptShown || !mounted) return;
+    try {
+      final status = await widget.apiClient.getMap('/reps/me/attendance/today');
+      if (!mounted || status['requires_check_in'] != true) return;
+      _attendancePromptShown = true;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          var busy = false;
+          return StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text(
+                'تسجيل حضور اليوم',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              content: const Text(
+                'حان وقت تسجيل الحضور. سجّل حضورك الآن ليتم حفظ الوقت والموقع.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: busy ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('لاحقًا'),
+                ),
+                FilledButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          setDialogState(() => busy = true);
+                          try {
+                            await widget.apiClient.post(
+                              '/reps/me/attendance/check-in',
+                              {},
+                            );
+                            if (dialogContext.mounted)
+                              Navigator.pop(dialogContext);
+                            if (mounted)
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('تم تسجيل الحضور بنجاح'),
+                                ),
+                              );
+                          } catch (error) {
+                            setDialogState(() => busy = false);
+                            if (mounted)
+                              ScaffoldMessenger.of(
+                                this.context,
+                              ).showSnackBar(SnackBar(content: Text('$error')));
+                          }
+                        },
+                  icon: busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.how_to_reg),
+                  label: Text(busy ? 'جاري التسجيل...' : 'تسجيل الحضور'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } catch (_) {}
+  }
+
   void _openMore() => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -207,12 +304,7 @@ class _RepShellState extends State<RepShell> {
         ],
       ),
       CustomersScreen(apiClient: widget.apiClient),
-      RepListScreen(
-        apiClient: widget.apiClient,
-        title: 'مخزوني',
-        path: '/reps/me/stock',
-        fields: const ['item_name', 'item_sku', 'available_qty', 'sale_price'],
-      ),
+      StockCountScreen(apiClient: widget.apiClient),
     ];
     return Scaffold(
       body: IndexedStack(index: _index, children: pages),
