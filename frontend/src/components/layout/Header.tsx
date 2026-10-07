@@ -36,6 +36,7 @@ const QUICK_ACTION_CATALOG: QuickAction[] = [
   { id: "sales-return", href: "/sales/credit-notes/new", icon: "refund", ar: "مرتجع مبيعات", en: "Sales return", section: "sales" },
   { id: "receipt", href: "/treasury/receipts/new", icon: "cash", ar: "سند قبض", en: "Receipt", section: "treasury" },
   { id: "payment", href: "/treasury/payments/new", icon: "wallet", ar: "سند صرف", en: "Payment", section: "treasury" },
+  { id: "expenses", href: "/treasury/rep-expenses", icon: "wallet", ar: "مصاريف المناديب", en: "Rep expenses", section: "treasury" },
   { id: "journal", href: "/accounting/journal/new", icon: "journal", ar: "قيد يومي", en: "Journal entry", section: "accounting" },
   { id: "inventory", href: "/inventory/items", icon: "inventory", ar: "المخزون", en: "Inventory", section: "inventory" },
   { id: "serial-report", href: "/reports/inventory/serial-profit", icon: "serial", ar: "تقرير السيريالات", en: "Serial report", section: "reports" },
