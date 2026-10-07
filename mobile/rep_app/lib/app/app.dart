@@ -10,6 +10,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/manager_more_screen.dart';
 import 'screens/rep_extra.dart';
+import 'screens/rep_expenses_screen.dart';
 import 'screens/rep_lists.dart';
 import 'screens/stock_count_screen.dart';
 import 'screens/supervisor_screen.dart';
@@ -396,6 +397,13 @@ class _MoreMenu extends StatelessWidget {
             title: const Text('كشوفات حساب العملاء'),
             onTap: () =>
                 _push(context, CustomerStatementsScreen(apiClient: apiClient)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: const Text('مصاريفي'),
+            subtitle: const Text('إرسال المصاريف والمرفقات للإدارة'),
+            onTap: () =>
+                _push(context, RepExpensesScreen(apiClient: apiClient)),
           ),
           ListTile(
             leading: const Icon(Icons.fact_check_outlined),
