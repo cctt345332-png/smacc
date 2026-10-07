@@ -598,35 +598,134 @@ async def get_unified_aging(
             rep.id: {"name": user.full_name or rep.rep_code, "code": rep.rep_code}
             for rep, user in rep_rows.all()
         }
+    # نبني دفتر ذمم واحدًا لكل عميل، بنفس ترتيب كشف الحساب:
+    # الرصيد الافتتاحي ← الفواتير، ثم نوزع سندات القبض والخصم والمرتجعات
+    # زمنيًا على أقدم رصيد قائم. هذا يمنع بقاء مبلغ على فاتورة قد غطاها مرتجع.
     payment_rows = await db.execute(
         select(Payment)
         .where(
             Payment.tenant_id == tenant_id,
             Payment.payment_date <= as_of,
-            or_(Payment.invoice_id.in_(invoice_ids), Payment.customer_id.in_(customer_ids)),
+            Payment.customer_id.in_(customer_ids),
         )
         .order_by(Payment.payment_date.asc(), Payment.payment_number.asc())
     )
     payments = list(payment_rows.scalars().all())
-    linked_paid: dict[str, Decimal] = {}
-    direct_paid: dict[str, Decimal] = {}
+    credit_rows = await db.execute(
+        select(CreditNote)
+        .where(
+            CreditNote.tenant_id == tenant_id,
+            CreditNote.issue_date <= as_of,
+            CreditNote.customer_id.in_(customer_ids),
+        )
+        .order_by(CreditNote.issue_date.asc(), CreditNote.credit_note_number.asc())
+    )
+    credit_notes = list(credit_rows.scalars().all())
+
+    # الرصيد الافتتاحي في كشف الحساب يتكون من قيمة الحساب وقيد/قيود
+    # customer_opening_balance المرحّلة، لذلك يدخل FIFO كرصيد مستقل غير معروض
+    # كسطر فاتورة.
+    from app.models.accounting import JournalEntryStatus
+    opening_values: dict[str, Decimal] = {customer_id: Decimal("0") for customer_id in customer_ids}
+    account_ids = {
+        customer.id: customer.ar_account_id
+        for _, customer in invoice_rows
+        if customer.ar_account_id
+    }
+    if account_ids:
+        account_rows = await db.execute(
+            select(Account.id, Account.opening_balance).where(
+                Account.tenant_id == tenant_id,
+                Account.id.in_(set(account_ids.values())),
+            )
+        )
+        opening_by_account = {
+            account_id: Decimal(str(opening_balance or 0))
+            for account_id, opening_balance in account_rows.all()
+        }
+        for customer_id, account_id in account_ids.items():
+            opening_values[customer_id] += opening_by_account.get(account_id, Decimal("0"))
+        opening_entry_rows = await db.execute(
+            select(Customer.id, JournalEntryLine.debit, JournalEntryLine.credit)
+            .join(Account, Account.id == Customer.ar_account_id)
+            .join(JournalEntryLine, JournalEntryLine.account_id == Account.id)
+            .join(JournalEntry, JournalEntry.id == JournalEntryLine.entry_id)
+            .where(
+                Customer.tenant_id == tenant_id,
+                Customer.id.in_(customer_ids),
+                JournalEntry.tenant_id == tenant_id,
+                JournalEntry.status == JournalEntryStatus.POSTED,
+                JournalEntry.source == "customer_opening_balance",
+                JournalEntry.entry_date <= as_of,
+            )
+        )
+        for customer_id, debit, credit in opening_entry_rows.all():
+            opening_values[customer_id] += Decimal(str(debit or 0)) - Decimal(str(credit or 0))
+
+    customer_invoices: dict[str, list[dict]] = {customer_id: [] for customer_id in customer_ids}
+    invoice_buckets: dict[str, dict] = {}
+    for invoice, customer in invoice_rows:
+        bucket = {
+            "invoice": invoice,
+            "customer": customer,
+            "total": Decimal(str(invoice.total or 0)),
+            "allocated": Decimal("0"),
+        }
+        customer_invoices.setdefault(invoice.customer_id, []).append(bucket)
+        invoice_buckets[invoice.id] = bucket
+    for buckets in customer_invoices.values():
+        buckets.sort(key=lambda item: (item["invoice"].issue_date, item["invoice"].invoice_number))
+
+    def allocate_fifo(customer_id: str, amount: Decimal, skip_invoice_id: str | None = None) -> Decimal:
+        """يستهلك الرصيد الافتتاحي ثم أقدم الفواتير، ولا يعيد فائض الدائن."""
+        if amount <= 0:
+            return Decimal("0")
+        opening_available = opening_values.get(customer_id, Decimal("0"))
+        opening_applied = min(opening_available, amount)
+        opening_values[customer_id] = opening_available - opening_applied
+        remaining = amount - opening_applied
+        for bucket in customer_invoices.get(customer_id, []):
+            if remaining <= 0:
+                break
+            if skip_invoice_id and bucket["invoice"].id == skip_invoice_id:
+                continue
+            available = max(Decimal("0"), bucket["total"] - bucket["allocated"])
+            applied = min(available, remaining)
+            bucket["allocated"] += applied
+            remaining -= applied
+        return amount - remaining
+
+    # نطبق الحركات حسب تاريخها. السداد/الخصم المرتبط بفاتورة يذهب إليها
+    # مباشرة، أما السند العام للعميل فيتبع FIFO الكامل.
+    events = []
     for payment in payments:
         amount = Decimal(str(payment.amount or 0))
-        if amount <= 0:
-            continue
-        if payment.invoice_id:
-            linked_paid[payment.invoice_id] = linked_paid.get(payment.invoice_id, Decimal("0")) + amount
-        elif payment.customer_id:
-            direct_paid[payment.customer_id] = direct_paid.get(payment.customer_id, Decimal("0")) + amount
+        if amount > 0:
+            events.append((payment.payment_date, payment.payment_number, "payment", payment, amount))
+    for credit_note in credit_notes:
+        amount = Decimal(str(credit_note.total or 0))
+        if amount > 0:
+            events.append((credit_note.issue_date, credit_note.credit_note_number, "credit_note", credit_note, amount))
+    events.sort(key=lambda event: (event[0], event[1] or ""))
+    for _date, _reference, event_type, event, amount in events:
+        linked_invoice_id = getattr(event, "invoice_id", None) if event_type == "payment" else getattr(event, "original_invoice_id", None)
+        if linked_invoice_id and linked_invoice_id in invoice_buckets:
+            bucket = invoice_buckets[linked_invoice_id]
+            available = max(Decimal("0"), bucket["total"] - bucket["allocated"])
+            linked_applied = min(available, amount)
+            bucket["allocated"] += linked_applied
+            # لا نضيع أي فائض؛ قد يكون السند أكبر من المتبقي في الفاتورة
+            # المرتبطة، وفي هذه الحالة يخفض أقدم ذمم العميل التالية.
+            if amount > linked_applied:
+                allocate_fifo(event.customer_id, amount - linked_applied, skip_invoice_id=linked_invoice_id)
+        else:
+            allocate_fifo(event.customer_id, amount)
 
     result = []
     for invoice, customer in invoice_rows:
-        total = Decimal(str(invoice.total or 0))
-        invoice_paid = min(total, linked_paid.get(invoice.id, Decimal("0")))
-        available_direct = direct_paid.get(invoice.customer_id, Decimal("0"))
-        direct_applied = min(max(Decimal("0"), total - invoice_paid), available_direct)
-        direct_paid[invoice.customer_id] = available_direct - direct_applied
-        paid = invoice_paid + direct_applied
+        bucket = invoice_buckets[invoice.id]
+        total = bucket["total"]
+        paid = min(total, bucket["allocated"])
         outstanding = max(Decimal("0"), total - paid)
         if outstanding <= Decimal("0.01"):
             continue
