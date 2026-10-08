@@ -100,6 +100,12 @@ class ApiClient {
   };
 
   Map<String, dynamic> _checked(http.Response response) {
+    if (response.statusCode == 413 || response.statusCode == 422) {
+      throw ApiException(
+        'حجم المرفق أو بيانات المصروف أكبر من الحد المسموح، صغّر الصورة ثم حاول مرة أخرى',
+        response.statusCode,
+      );
+    }
     final data = _decode(response);
     if (response.statusCode == 401) {
       sessionStore.clear();
@@ -118,10 +124,18 @@ class ApiClient {
 
   Map<String, dynamic> _decode(http.Response response) {
     if (response.body.isEmpty) return <String, dynamic>{};
-    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-    return decoded is Map<String, dynamic>
-        ? decoded
-        : <String, dynamic>{'data': decoded};
+    try {
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      return decoded is Map<String, dynamic>
+          ? decoded
+          : <String, dynamic>{'data': decoded};
+    } on FormatException {
+      return <String, dynamic>{
+        'detail': response.statusCode >= 500
+            ? 'تعذر الوصول إلى الخادم، حاول مرة أخرى'
+            : 'استجابة غير صالحة من الخادم (HTTP ${response.statusCode})',
+      };
+    }
   }
 
   String _message(Map<String, dynamic> data, String fallback) {

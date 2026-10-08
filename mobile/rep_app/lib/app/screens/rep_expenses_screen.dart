@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 
 import '../data/api_client.dart';
 
@@ -96,16 +97,22 @@ class _RepExpensesScreenState extends State<RepExpensesScreen> {
     if (result == null) return;
     final selected = <_ExpenseAttachment>[];
     for (final file in result.files) {
-      final bytes = file.bytes;
-      if (bytes == null) continue;
+      final originalBytes = file.bytes;
+      if (originalBytes == null) continue;
+      final prepared = _prepareAttachment(
+        file.name,
+        file.extension,
+        originalBytes,
+      );
+      final bytes = prepared.bytes;
       if (bytes.length > 5 * 1024 * 1024) {
         _show('حجم الملف ${file.name} أكبر من 5 ميجابايت');
         continue;
       }
       selected.add(
         _ExpenseAttachment(
-          name: file.name,
-          type: _contentType(file.extension),
+          name: prepared.name,
+          type: prepared.type,
           size: bytes.length,
           bytes: bytes,
         ),
@@ -117,6 +124,44 @@ class _RepExpensesScreenState extends State<RepExpensesScreen> {
     );
     if (_attachments.length >= 5 && selected.length > 5)
       _show('الحد الأقصى للمرفقات خمسة ملفات');
+  }
+
+  ({String name, String type, Uint8List bytes}) _prepareAttachment(
+    String name,
+    String? extension,
+    Uint8List bytes,
+  ) {
+    final isImage = const {
+      'jpg',
+      'jpeg',
+      'png',
+    }.contains((extension ?? '').toLowerCase());
+    if (!isImage) {
+      return (name: name, type: _contentType(extension), bytes: bytes);
+    }
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        return (name: name, type: _contentType(extension), bytes: bytes);
+      }
+      final resized = decoded.width > 1600
+          ? img.copyResize(decoded, width: 1600)
+          : decoded;
+      var quality = 82;
+      var compressed = Uint8List.fromList(
+        img.encodeJpg(resized, quality: quality),
+      );
+      while (compressed.length > 1_800_000 && quality > 45) {
+        quality -= 10;
+        compressed = Uint8List.fromList(
+          img.encodeJpg(resized, quality: quality),
+        );
+      }
+      final baseName = name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      return (name: '$baseName.jpg', type: 'image/jpeg', bytes: compressed);
+    } catch (_) {
+      return (name: name, type: _contentType(extension), bytes: bytes);
+    }
   }
 
   String _contentType(String? extension) {
