@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
+import 'package:image_picker/image_picker.dart';
 
 import '../data/api_client.dart';
 
@@ -124,6 +125,41 @@ class _RepExpensesScreenState extends State<RepExpensesScreen> {
     );
     if (_attachments.length >= 5 && selected.length > 5)
       _show('الحد الأقصى للمرفقات خمسة ملفات');
+  }
+
+  Future<void> _takePhoto() async {
+    if (_attachments.length >= 5) {
+      _show('الحد الأقصى للمرفقات خمسة ملفات');
+      return;
+    }
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 88,
+      maxWidth: 2200,
+      maxHeight: 2200,
+    );
+    if (photo == null) return;
+    final prepared = _prepareAttachment(
+      'receipt_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      'jpg',
+      await photo.readAsBytes(),
+    );
+    if (!mounted) return;
+    if (prepared.bytes.length > 5 * 1024 * 1024) {
+      _show('حجم الصورة أكبر من 5 ميجابايت');
+      return;
+    }
+    setState(() {
+      _attachments = [
+        ..._attachments,
+        _ExpenseAttachment(
+          name: prepared.name,
+          type: prepared.type,
+          size: prepared.bytes.length,
+          bytes: prepared.bytes,
+        ),
+      ];
+    });
   }
 
   ({String name, String type, Uint8List bytes}) _prepareAttachment(
@@ -376,10 +412,26 @@ class _RepExpensesScreenState extends State<RepExpensesScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: _attachments.length >= 5 ? null : _pickAttachments,
-              icon: const Icon(Icons.attach_file),
-              label: Text('إضافة مرفق (${_attachments.length}/5)'),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _attachments.length >= 5 ? null : _takePhoto,
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('تصوير إيصال'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _attachments.length >= 5
+                        ? null
+                        : _pickAttachments,
+                    icon: const Icon(Icons.attach_file),
+                    label: Text('ملف (${_attachments.length}/5)'),
+                  ),
+                ),
+              ],
             ),
             if (_attachments.isNotEmpty) ...[
               const SizedBox(height: 8),
