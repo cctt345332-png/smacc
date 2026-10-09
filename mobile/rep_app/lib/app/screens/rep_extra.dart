@@ -514,11 +514,17 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
   List<Map<String, dynamic>> statements = [];
   bool loadingAll = false;
 
+  bool get canFilterByRep =>
+      widget.apiClient.sessionStore.isCompanyManager ||
+      widget.apiClient.sessionStore.isSupervisor;
+
   @override
   void initState() {
     super.initState();
     customers = widget.apiClient.getList('/sales/customers');
-    reps = widget.apiClient.getList('/reps');
+    reps = canFilterByRep
+        ? widget.apiClient.getList('/reps')
+        : Future<List<dynamic>>.value(const []);
     customerSearch.addListener(() => setState(() {}));
   }
 
@@ -812,37 +818,39 @@ class _CustomerStatementsScreenState extends State<CustomerStatementsScreen> {
                   }),
                 ),
                 const SizedBox(height: 10),
-                DropdownButtonFormField<String?>(
-                  initialValue: repId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'المندوب — اختياري',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text('كل المناديب'),
+                if (canFilterByRep) ...[
+                  DropdownButtonFormField<String?>(
+                    initialValue: repId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'المندوب — اختياري',
+                      border: OutlineInputBorder(),
                     ),
-                    ...repSnap.data!.map((x) {
-                      final m = Map<String, dynamic>.from(x as Map);
-                      return DropdownMenuItem<String?>(
-                        value: m['id']?.toString(),
-                        child: Text(
-                          m['full_name']?.toString() ??
-                              m['name_ar']?.toString() ??
-                              '—',
-                        ),
-                      );
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('كل المناديب'),
+                      ),
+                      ...repSnap.data!.map((x) {
+                        final m = Map<String, dynamic>.from(x as Map);
+                        return DropdownMenuItem<String?>(
+                          value: m['id']?.toString(),
+                          child: Text(
+                            m['full_name']?.toString() ??
+                                m['name_ar']?.toString() ??
+                                '—',
+                          ),
+                        );
+                      }),
+                    ],
+                    onChanged: (v) => setState(() {
+                      repId = v;
+                      statements = [];
+                      statement = null;
                     }),
-                  ],
-                  onChanged: (v) => setState(() {
-                    repId = v;
-                    statements = [];
-                    statement = null;
-                  }),
-                ),
-                const SizedBox(height: 10),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     Expanded(
