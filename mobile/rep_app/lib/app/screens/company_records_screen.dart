@@ -134,6 +134,8 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
         'paid_amount': 'المدفوع',
         'amount': 'المبلغ',
         'payment_method': 'طريقة الدفع',
+        'issue_date': 'تاريخ الفاتورة',
+        'payment_date': 'تاريخ السند',
       }[key] ??
       key;
 
@@ -165,6 +167,11 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
       '${double.tryParse('$value')?.toStringAsFixed(2) ?? '0.00'} ر.س';
   String dateText(dynamic value) =>
       DateTime.tryParse('$value')?.toIso8601String().split('T').first ?? '—';
+
+  double get visibleTotal => visible.fold<double>(0, (sum, row) {
+    final value = row[invoices ? 'total' : 'amount'];
+    return sum + (double.tryParse('$value') ?? 0);
+  });
 
   Future<void> chooseDate(bool start) async {
     final selected = await showDatePicker(
@@ -283,6 +290,14 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            'مجموع النتائج المحددة: ${visibleTotal.toStringAsFixed(2)} ر.س',
+            style: const TextStyle(color: _purple, fontWeight: FontWeight.w800),
+          ),
+        ),
       ],
     ),
   );
@@ -316,20 +331,29 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
     final fields = invoices
         ? <String>[
             'buyer_name_ar',
+            'invoice_number',
             'rep_name',
             'status',
             'total',
             'paid_amount',
+            'issue_date',
           ]
         : <String>[
+            'payment_number',
             'payment_type',
             'customer_name_ar',
             'rep_name',
             'amount',
             'payment_method',
+            'payment_date',
           ];
     final titleValue =
-        x[invoices ? 'invoice_number' : 'payment_number']?.toString() ?? '—';
+        (x['buyer_name_ar'] ??
+                x['customer_name_ar'] ??
+                x['customer_name'] ??
+                x['buyer_name'] ??
+                'بدون عميل')
+            .toString();
     return InkWell(
       onTap: !widget.enableDetails || id == null
           ? null
@@ -378,6 +402,8 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
                         key == 'payment_type' ||
                         key == 'payment_method'
                     ? translated(raw)
+                    : key == 'issue_date' || key == 'payment_date'
+                    ? dateText(raw)
                     : ['total', 'paid_amount', 'amount'].contains(key)
                     ? money(raw)
                     : (raw == null || '$raw' == 'null' ? '—' : '$raw');
@@ -402,10 +428,6 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
                   ),
                 );
               }),
-              Text(
-                dateText(x[invoices ? 'issue_date' : 'payment_date']),
-                style: const TextStyle(color: Colors.black45, fontSize: 12),
-              ),
             ],
           ),
         ),

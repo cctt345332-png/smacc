@@ -28,6 +28,9 @@ class RepListScreen extends StatefulWidget {
 
 class _RepListScreenState extends State<RepListScreen> {
   late Future<List<dynamic>> future;
+  final search = TextEditingController();
+  DateTime? from;
+  DateTime? to;
   @override
   void initState() {
     super.initState();
@@ -38,9 +41,63 @@ class _RepListScreenState extends State<RepListScreen> {
     future = widget.apiClient.getList(widget.path);
   }
 
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
+
+  String dateText(dynamic value) =>
+      DateTime.tryParse('$value')?.toIso8601String().split('T').first ?? '—';
+
+  Future<void> chooseDate(bool start) async {
+    final selected = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      initialDate: start ? (from ?? DateTime.now()) : (to ?? DateTime.now()),
+    );
+    if (selected == null) return;
+    setState(() {
+      if (start) {
+        from = selected;
+      } else {
+        to = selected;
+      }
+    });
+  }
+
+  List<Map<String, dynamic>> filterRows(List<dynamic> rows) =>
+      rows.map((x) => Map<String, dynamic>.from(x as Map)).where((x) {
+        final query = search.text.trim().toLowerCase();
+        final text = [
+          x['buyer_name_ar'],
+          x['customer_name_ar'],
+          x['customer_name'],
+          x['invoice_number'],
+          x['payment_number'],
+          x['rep_name'],
+        ].where((v) => v != null).join(' ').toLowerCase();
+        final rawDate =
+            x[widget.path == '/sales/invoices' ? 'issue_date' : 'payment_date'];
+        final date = DateTime.tryParse('$rawDate');
+        return (query.isEmpty || text.contains(query)) &&
+            (from == null ||
+                (date != null &&
+                    !date.isBefore(
+                      DateTime(from!.year, from!.month, from!.day),
+                    ))) &&
+            (to == null ||
+                (date != null &&
+                    !date.isAfter(
+                      DateTime(to!.year, to!.month, to!.day, 23, 59, 59),
+                    )));
+      }).toList();
+
   String value(Map<String, dynamic> x, String key) {
     final v = x[key];
     if (v == null || '$v'.isEmpty) return '—';
+    if (key == 'issue_date' || key == 'payment_date') return dateText(v);
     const translated = {
       'draft': 'مسودة',
       'submitted': 'بانتظار المراجعة',
@@ -92,6 +149,8 @@ class _RepListScreenState extends State<RepListScreen> {
         'invoice_id': 'الفاتورة',
         'amount': 'المبلغ',
         'payment_method': 'طريقة الدفع',
+        'issue_date': 'تاريخ الفاتورة',
+        'payment_date': 'تاريخ السند',
         'item_name': 'الصنف',
         'item_sku': 'رمز الصنف',
         'available_qty': 'الكمية المتاحة',
@@ -167,129 +226,181 @@ class _RepListScreenState extends State<RepListScreen> {
               message: 'تعذر تحميل ${widget.title}\n${snap.error}',
               retry: () => setState(reload),
             );
-          final rows = snap.data ?? [];
-          if (rows.isEmpty) return Center(child: Text(widget.empty));
+          final rows = filterRows(snap.data ?? []);
+          final total = rows.fold<double>(0, (sum, x) {
+            final key = widget.path == '/sales/invoices' ? 'total' : 'amount';
+            return sum + (double.tryParse('${x[key]}') ?? 0);
+          });
+          if (rows.isEmpty && search.text.isEmpty && from == null && to == null)
+            return Center(child: Text(widget.empty));
           return RefreshIndicator(
             onRefresh: () async => setState(reload),
-            child: ListView.separated(
+            child: ListView(
               padding: const EdgeInsets.all(14),
-              itemCount: rows.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, i) {
-                final x = Map<String, dynamic>.from(rows[i] as Map);
-                final path = detailPath(x);
-                final card = Directionality(
+              children: [
+                TextField(
+                  controller: search,
+                  onChanged: (_) => setState(() {}),
                   textDirection: TextDirection.rtl,
-                  child: Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: const BorderSide(color: Color(0xFFE5DDE9)),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  value(x, widget.fields.first),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                              if (widget.path == '/sales/invoices' &&
-                                  [
-                                    'draft',
-                                    'rejected',
-                                  ].contains(x['status']?.toString()))
-                                IconButton(
-                                  tooltip: 'تعديل الفاتورة',
-                                  onPressed: x['id'] == null
-                                      ? null
-                                      : () => editInvoice(x['id'].toString()),
-                                  icon: const Icon(Icons.edit_outlined),
-                                  color: _purple,
-                                ),
-                              Icon(
-                                path == null
-                                    ? Icons.info_outline
-                                    : Icons.chevron_left,
-                                color: _purple,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 9),
-                          ...widget.fields
-                              .skip(1)
-                              .map(
-                                (key) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        '${label(key)}: ',
-                                        style: const TextStyle(
-                                          color: Colors.black54,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: Text(
-                                          value(x, key),
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                          if (widget.path == '/sales/invoices' &&
-                              x['status']?.toString() == 'rejected' &&
-                              '${x['rejection_note'] ?? ''}'.trim().isNotEmpty)
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(top: 8),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFEEEE),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                'سبب الرفض: ${x['rejection_note']}',
-                                style: const TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                        ],
+                  decoration: InputDecoration(
+                    labelText: widget.path == '/sales/invoices'
+                        ? 'بحث باسم العميل أو رقم الفاتورة'
+                        : 'بحث باسم العميل أو رقم السند',
+                    prefixIcon: const Icon(Icons.search),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => chooseDate(true),
+                        icon: const Icon(Icons.event),
+                        label: Text(from == null ? 'من تاريخ' : dateText(from)),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => chooseDate(false),
+                        icon: const Icon(Icons.event),
+                        label: Text(to == null ? 'إلى تاريخ' : dateText(to)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'المجموع المحدد: ${total.toStringAsFixed(2)} ر.س  •  ${rows.length} سجل',
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: _purple,
+                    fontWeight: FontWeight.w800,
                   ),
-                );
-                return InkWell(
-                  onTap: path == null
-                      ? null
-                      : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => DetailScreen(
-                              apiClient: widget.apiClient,
-                              title: 'تفاصيل ${widget.title}',
-                              path: path,
+                ),
+                const SizedBox(height: 10),
+                ...rows.asMap().entries.map((entry) {
+                  final x = entry.value;
+                  final path = detailPath(x);
+                  final card = Directionality(
+                    textDirection: TextDirection.rtl,
+                    child: Card(
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: const BorderSide(color: Color(0xFFE5DDE9)),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    value(x, widget.fields.first),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                                if (widget.path == '/sales/invoices' &&
+                                    [
+                                      'draft',
+                                      'rejected',
+                                    ].contains(x['status']?.toString()))
+                                  IconButton(
+                                    tooltip: 'تعديل الفاتورة',
+                                    onPressed: x['id'] == null
+                                        ? null
+                                        : () => editInvoice(x['id'].toString()),
+                                    icon: const Icon(Icons.edit_outlined),
+                                    color: _purple,
+                                  ),
+                                Icon(
+                                  path == null
+                                      ? Icons.info_outline
+                                      : Icons.chevron_left,
+                                  color: _purple,
+                                ),
+                              ],
                             ),
-                          ),
+                            const SizedBox(height: 9),
+                            ...widget.fields
+                                .skip(1)
+                                .map(
+                                  (key) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          '${label(key)}: ',
+                                          style: const TextStyle(
+                                            color: Colors.black54,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Text(
+                                            value(x, key),
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            if (widget.path == '/sales/invoices' &&
+                                x['status']?.toString() == 'rejected' &&
+                                '${x['rejection_note'] ?? ''}'
+                                    .trim()
+                                    .isNotEmpty)
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(top: 8),
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFEEEE),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'سبب الرفض: ${x['rejection_note']}',
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                  child: card,
-                );
-              },
+                      ),
+                    ),
+                  );
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: path == null
+                          ? null
+                          : () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DetailScreen(
+                                  apiClient: widget.apiClient,
+                                  title: 'تفاصيل ${widget.title}',
+                                  path: path,
+                                ),
+                              ),
+                            ),
+                      child: card,
+                    ),
+                  );
+                }),
+              ],
             ),
           );
         },
