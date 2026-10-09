@@ -330,7 +330,6 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
     final id = x['id']?.toString();
     final fields = invoices
         ? <String>[
-            'buyer_name_ar',
             'invoice_number',
             'rep_name',
             'status',
@@ -341,7 +340,6 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
         : <String>[
             'payment_number',
             'payment_type',
-            'customer_name_ar',
             'rep_name',
             'amount',
             'payment_method',
