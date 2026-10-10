@@ -27,22 +27,33 @@ class PushNotificationService {
   final _messaging = FirebaseMessaging.instance;
   final _local = FlutterLocalNotificationsPlugin();
   ApiClient? _apiClient;
+  Future<void>? _initializationFuture;
   bool _initialized = false;
 
   Future<void> initialize(ApiClient apiClient) async {
     _apiClient = apiClient;
     if (!_initialized) {
-      await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      await _requestPermission();
-      await _configureLocalNotifications();
-      FirebaseMessaging.onMessage.listen(_showForegroundNotification);
-      _messaging.onTokenRefresh.listen(_registerToken);
-      FirebaseMessaging.onMessageOpenedApp.listen(_handleOpenedMessage);
-      _initialized = true;
+      _initializationFuture ??= _initializeFirebase();
+      try {
+        await _initializationFuture;
+      } catch (_) {
+        _initializationFuture = null;
+        rethrow;
+      }
     }
     await _registerCurrentToken();
     unawaited(_retryTokenRegistration());
+  }
+
+  Future<void> _initializeFirebase() async {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await _requestPermission();
+    await _configureLocalNotifications();
+    FirebaseMessaging.onMessage.listen(_showForegroundNotification);
+    _messaging.onTokenRefresh.listen(_registerToken);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleOpenedMessage);
+    _initialized = true;
   }
 
   Future<void> _retryTokenRegistration() async {
