@@ -46,6 +46,7 @@ services:
       SUPER_ADMIN_SECRET: ${SUPER_ADMIN_SECRET:?SUPER_ADMIN_SECRET is required}
       ENABLE_SUPER_ADMIN_BOOTSTRAP: ${ENABLE_SUPER_ADMIN_BOOTSTRAP:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      FIREBASE_SERVICE_ACCOUNT_FILE: /run/secrets/firebase-service-account.json
       PGHOST: postgres
       PGPORT: "5432"
       PGUSER: ${POSTGRES_USER:?POSTGRES_USER is required}
@@ -55,6 +56,7 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - backups_data:/backups
+      - ./secrets/firebase-service-account.json:/run/secrets/firebase-service-account.json:ro
     depends_on:
       postgres:
         condition: service_healthy

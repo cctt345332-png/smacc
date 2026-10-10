@@ -18,6 +18,9 @@ env/
 *.env
 .env.local
 .env.production
+secrets/
+**/firebase-service-account*.json
+**/service-account*.json
 
 # Database
 *.db
