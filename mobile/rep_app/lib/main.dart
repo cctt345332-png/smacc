@@ -18,7 +18,9 @@ Future<void> main() async {
   runApp(MasarApp(apiClient: apiClient, sessionStore: sessionStore));
   // لا ننتظر Firebase قبل عرض الواجهة؛ فشل Push لا يجب أن يعطل تحميل البيانات.
   unawaited(
-    PushNotificationService.instance.initialize(apiClient).catchError((_) {}),
+    PushNotificationService.instance
+        .initialize(apiClient)
+        .catchError((_) => 'firebase_error'),
   );
   unawaited(_requestFirstRunPermissions());
 }

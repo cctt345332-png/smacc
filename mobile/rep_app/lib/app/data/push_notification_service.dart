@@ -30,7 +30,7 @@ class PushNotificationService {
   Future<void>? _initializationFuture;
   bool _initialized = false;
 
-  Future<void> initialize(ApiClient apiClient) async {
+  Future<String> initialize(ApiClient apiClient) async {
     _apiClient = apiClient;
     if (!_initialized) {
       _initializationFuture ??= _initializeFirebase();
@@ -41,8 +41,9 @@ class PushNotificationService {
         rethrow;
       }
     }
-    await _registerCurrentToken();
+    final status = await _registerCurrentToken();
     unawaited(_retryTokenRegistration());
+    return status;
   }
 
   Future<void> _initializeFirebase() async {
@@ -51,7 +52,9 @@ class PushNotificationService {
     await _requestPermission();
     await _configureLocalNotifications();
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
-    _messaging.onTokenRefresh.listen(_registerToken);
+    _messaging.onTokenRefresh.listen(
+      (token) => unawaited(_registerToken(token)),
+    );
     FirebaseMessaging.onMessageOpenedApp.listen(_handleOpenedMessage);
     _initialized = true;
   }
@@ -85,27 +88,31 @@ class PushNotificationService {
     await androidPlugin?.createNotificationChannel(_importantChannel);
   }
 
-  Future<void> _registerCurrentToken() async {
+  Future<String> _registerCurrentToken() async {
     try {
       final token = await _messaging.getToken();
-      if (token != null) await _registerToken(token);
+      if (token == null || token.isEmpty) return 'no_fcm_token';
+      return await _registerToken(token);
     } catch (_) {
-      // لا نوقف التطبيق إذا كان الجهاز بلا Google Play Services أو لم يسجل الدخول بعد.
+      return 'firebase_token_error';
     }
   }
 
-  Future<void> _registerToken(String token) async {
+  Future<String> _registerToken(String token) async {
     final apiClient = _apiClient;
     if (apiClient == null || apiClient.sessionStore.token?.isNotEmpty != true)
-      return;
+      return 'waiting_session';
     try {
       await apiClient.post('/notifications/devices/register', {
         'fcm_token': token,
         'platform': Platform.isAndroid ? 'android' : 'ios',
         'device_name': Platform.operatingSystem,
       });
+      return 'registered';
+    } on ApiException catch (error) {
+      return 'api_error_${error.statusCode}';
     } catch (_) {
-      // يعاد التسجيل عند فتح التطبيق أو عند تحديث الـ token.
+      return 'api_error';
     }
   }
 

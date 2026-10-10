@@ -28,7 +28,17 @@ class _AppState extends State<App> {
   bool get _signedIn => widget.sessionStore.token?.isNotEmpty == true;
   void _onSignedIn() {
     setState(() {});
-    PushNotificationService.instance.initialize(widget.apiClient);
+    unawaited(_registerPushAndReport());
+  }
+
+  Future<void> _registerPushAndReport() async {
+    final status = await PushNotificationService.instance.initialize(
+      widget.apiClient,
+    );
+    if (!mounted || status == 'registered') return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('حالة إشعارات الجهاز: $status')));
   }
 
   @override
