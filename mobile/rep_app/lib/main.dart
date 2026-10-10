@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
@@ -12,12 +15,21 @@ Future<void> main() async {
   final preferences = await SharedPreferences.getInstance();
   final sessionStore = SessionStore(preferences);
   final apiClient = ApiClient(sessionStore: sessionStore);
-  try {
-    await PushNotificationService.instance.initialize(apiClient);
-  } catch (_) {
-    // لا نمنع تشغيل التطبيق إذا لم تكتمل إعدادات Firebase على جهاز معين.
-  }
   runApp(MasarApp(apiClient: apiClient, sessionStore: sessionStore));
+  // لا ننتظر Firebase قبل عرض الواجهة؛ فشل Push لا يجب أن يعطل تحميل البيانات.
+  unawaited(
+    PushNotificationService.instance.initialize(apiClient).catchError((_) {}),
+  );
+  unawaited(_requestFirstRunPermissions());
+}
+
+Future<void> _requestFirstRunPermissions() async {
+  await Future<void>.delayed(const Duration(milliseconds: 700));
+  await [
+    Permission.notification,
+    Permission.locationWhenInUse,
+    Permission.camera,
+  ].request();
 }
 
 class MasarApp extends StatelessWidget {
