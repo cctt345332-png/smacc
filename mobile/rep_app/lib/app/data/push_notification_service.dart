@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -41,6 +42,18 @@ class PushNotificationService {
       _initialized = true;
     }
     await _registerCurrentToken();
+    unawaited(_retryTokenRegistration());
+  }
+
+  Future<void> _retryTokenRegistration() async {
+    for (final delay in const [
+      Duration(seconds: 2),
+      Duration(seconds: 5),
+      Duration(seconds: 10),
+    ]) {
+      await Future<void>.delayed(delay);
+      await _registerCurrentToken();
+    }
   }
 
   Future<void> _requestPermission() async {
