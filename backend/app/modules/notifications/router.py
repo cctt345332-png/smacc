@@ -62,6 +62,16 @@ async def send_manual_notification(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.post("/devices/register")
+async def register_device(data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await service.register_device(db, user, data)
+
+
+@router.post("/devices/unregister")
+async def unregister_device(data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await service.unregister_device(db, user, data)
+
+
 @router.get("/alert-settings")
 async def get_alert_settings(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await service.get_alert_settings(db, tenant_id)

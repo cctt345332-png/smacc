@@ -492,7 +492,8 @@ async def create_manual_notifications(db: AsyncSession, tenant_id: str, sender: 
         ))
     db.add_all(created)
     await db.commit()
-    return {"created": len(created), "recipient_ids": [item.user_id for item in created]}
+    push_result = await dispatch_push(db, tenant_id, created)
+    return {"created": len(created), "recipient_ids": [item.user_id for item in created], "push": push_result}
 
 
 async def get_manual_history(db: AsyncSession, tenant_id: str, limit: int = 100):
@@ -511,3 +512,53 @@ async def get_manual_history(db: AsyncSession, tenant_id: str, limit: int = 100)
         {**{key: getattr(notification, key) for key in fields}, "recipient_name": recipient_name}
         for notification, recipient_name in result.all()
     ]
+
+
+async def register_device(db: AsyncSession, user: dict, data: dict):
+    from app.models.notifications import UserDevice
+
+    token = str(data.get("fcm_token") or "").strip()
+    if not token:
+        raise ValueError("رمز الجهاز مطلوب")
+    result = await db.execute(select(UserDevice).where(UserDevice.fcm_token == token))
+    device = result.scalar_one_or_none()
+    if device:
+        device.tenant_id = user["tenant_id"]
+        device.user_id = user["user_id"]
+        device.platform = str(data.get("platform") or device.platform or "android")
+        device.device_name = data.get("device_name")
+        device.app_version = data.get("app_version")
+        device.is_active = True
+        device.last_seen_at = datetime.utcnow()
+    else:
+        device = UserDevice(
+            id=str(uuid.uuid4()), tenant_id=user["tenant_id"], user_id=user["user_id"],
+            fcm_token=token, platform=str(data.get("platform") or "android"),
+            device_name=data.get("device_name"), app_version=data.get("app_version"),
+            is_active=True, last_seen_at=datetime.utcnow(),
+        )
+        db.add(device)
+    await db.commit()
+    return {"ok": True, "device_id": device.id}
+
+
+async def unregister_device(db: AsyncSession, user: dict, data: dict):
+    from app.models.notifications import UserDevice
+
+    token = str(data.get("fcm_token") or "").strip()
+    if token:
+        result = await db.execute(select(UserDevice).where(
+            UserDevice.fcm_token == token,
+            UserDevice.tenant_id == user["tenant_id"],
+            UserDevice.user_id == user["user_id"],
+        ))
+        device = result.scalar_one_or_none()
+        if device:
+            device.is_active = False
+            await db.commit()
+    return {"ok": True}
+
+
+async def dispatch_push(db: AsyncSession, tenant_id: str, notifications: list[Notification]):
+    from app.modules.notifications.fcm import send_notifications
+    return await send_notifications(db, tenant_id, notifications)

@@ -55,6 +55,20 @@ class Notification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class UserDevice(Base):
+    __tablename__ = "user_devices"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), index=True)
+    fcm_token: Mapped[str] = mapped_column(String(1000), unique=True, index=True)
+    platform: Mapped[str] = mapped_column(String(30), default="android")
+    device_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    app_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class AlertSetting(Base):
     """إعدادات التنبيهات العامة لكل شركة — تشمل كل الأقسام"""
     __tablename__ = "alert_settings"

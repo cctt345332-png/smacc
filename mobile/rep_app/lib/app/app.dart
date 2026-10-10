@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'data/api_client.dart';
+import 'data/push_notification_service.dart';
 import 'data/session_store.dart';
 import 'screens/company_dashboard_screen.dart';
 import 'screens/company_reports_screen.dart';
@@ -25,7 +26,10 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   bool get _signedIn => widget.sessionStore.token?.isNotEmpty == true;
-  void _onSignedIn() => setState(() {});
+  void _onSignedIn() {
+    setState(() {});
+    PushNotificationService.instance.initialize(widget.apiClient);
+  }
 
   @override
   Widget build(BuildContext context) => !_signedIn
