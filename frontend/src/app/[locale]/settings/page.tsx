@@ -136,6 +136,15 @@ export default function SettingsPage(props: { params: Promise<{ locale: string }
       desc_en: "Alerts for inventory, sales, assets and HR",
     },
     {
+      href: `/${locale}/settings/notifications`,
+      icon: <IcBell />,
+      color: "#0891B2", bg: "#ECFEFF",
+      title_ar: "إدارة الإشعارات",
+      title_en: "Notification Center",
+      desc_ar: "إرسال إشعارات مخصصة ومتابعة سجل الإرسال",
+      desc_en: "Send targeted notifications and review delivery history",
+    },
+    {
       href: `/${locale}/settings/backup`,
       icon: <IcBackup />,
       color: "#6F4A84", bg: "#F4EFF7",

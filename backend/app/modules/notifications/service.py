@@ -4,7 +4,8 @@ Notifications Service — تنبيهات عامة لكل الأقسام
 import uuid
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, or_
+from app.models.user import User
 
 from app.models.notifications import (
     Notification, AlertSetting, NotificationType, NotificationSeverity
@@ -13,8 +14,10 @@ from app.models.notifications import (
 
 # ─── CRUD ────────────────────────────────────────────────────────────
 
-async def get_notifications(db: AsyncSession, tenant_id: str, unread_only: bool = False):
+async def get_notifications(db: AsyncSession, tenant_id: str, unread_only: bool = False, user: dict | None = None):
     q = select(Notification).where(Notification.tenant_id == tenant_id)
+    if user:
+        q = q.where(or_(Notification.user_id == user["user_id"], Notification.user_id.is_(None)))
     if unread_only:
         q = q.where(Notification.is_read == False)
     q = q.order_by(Notification.created_at.desc()).limit(50)
@@ -22,28 +25,28 @@ async def get_notifications(db: AsyncSession, tenant_id: str, unread_only: bool 
     return r.scalars().all()
 
 
-async def get_unread_count(db: AsyncSession, tenant_id: str) -> int:
-    r = await db.execute(
-        select(func.count()).where(
-            Notification.tenant_id == tenant_id,
-            Notification.is_read == False,
-        )
-    )
+async def get_unread_count(db: AsyncSession, tenant_id: str, user: dict | None = None) -> int:
+    conditions = [Notification.tenant_id == tenant_id, Notification.is_read == False]
+    if user:
+        conditions.append(or_(Notification.user_id == user["user_id"], Notification.user_id.is_(None)))
+    r = await db.execute(select(func.count()).where(*conditions))
     return r.scalar() or 0
 
 
-async def mark_read(db: AsyncSession, tenant_id: str, notification_id: str):
+async def mark_read(db: AsyncSession, tenant_id: str, notification_id: str, user: dict | None = None):
     n = await db.get(Notification, notification_id)
-    if n and n.tenant_id == tenant_id:
+    if n and n.tenant_id == tenant_id and (not user or n.user_id in (None, user["user_id"])):
         n.is_read = True
         await db.commit()
 
 
-async def mark_all_read(db: AsyncSession, tenant_id: str):
+async def mark_all_read(db: AsyncSession, tenant_id: str, user: dict | None = None):
+    conditions = [Notification.tenant_id == tenant_id, Notification.is_read == False]
+    if user:
+        conditions.append(or_(Notification.user_id == user["user_id"], Notification.user_id.is_(None)))
     r = await db.execute(
         select(Notification).where(
-            Notification.tenant_id == tenant_id,
-            Notification.is_read == False,
+            *conditions,
         )
     )
     for n in r.scalars().all():
@@ -438,3 +441,73 @@ async def _check_accounting_alerts(db: AsyncSession, tenant_id: str, settings: A
             pass
 
     return created
+
+
+async def list_recipients(db: AsyncSession, tenant_id: str):
+    result = await db.execute(
+        select(User.id, User.full_name, User.email, User.role)
+        .where(User.tenant_id == tenant_id, User.is_active == True)
+        .order_by(User.full_name.asc())
+    )
+    return [
+        {"id": row.id, "full_name": row.full_name, "email": row.email, "role": row.role}
+        for row in result.all()
+    ]
+
+
+async def create_manual_notifications(db: AsyncSession, tenant_id: str, sender: dict, data: dict):
+    title_ar = str(data.get("title_ar") or data.get("title") or "").strip()
+    title_en = str(data.get("title_en") or title_ar).strip()
+    message_ar = str(data.get("message_ar") or data.get("message") or "").strip()
+    message_en = str(data.get("message_en") or message_ar).strip()
+    if not title_ar or not message_ar:
+        raise ValueError("العنوان والرسالة مطلوبان")
+
+    requested_ids = {str(value) for value in (data.get("user_ids") or []) if value}
+    requested_roles = {str(value) for value in (data.get("roles") or []) if value}
+    query = select(User).where(User.tenant_id == tenant_id, User.is_active == True)
+    if requested_ids and requested_roles:
+        query = query.where(or_(User.id.in_(requested_ids), User.role.in_(requested_roles)))
+    elif requested_ids:
+        query = query.where(User.id.in_(requested_ids))
+    elif requested_roles:
+        query = query.where(User.role.in_(requested_roles))
+    else:
+        raise ValueError("حدد مستخدماً واحداً على الأقل أو دوراً مستهدفاً")
+
+    recipients = (await db.execute(query)).scalars().all()
+    if not recipients:
+        raise ValueError("لم يتم العثور على مستلمين نشطين")
+
+    severity_value = str(data.get("severity") or "info").lower()
+    severity = next((item for item in NotificationSeverity if item.value == severity_value), NotificationSeverity.INFO)
+    created = []
+    for recipient in recipients:
+        created.append(Notification(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, user_id=recipient.id,
+            type=NotificationType.GENERAL, severity=severity,
+            title_ar=title_ar, title_en=title_en, message_ar=message_ar, message_en=message_en,
+            reference_id=data.get("reference_id"), reference_type=data.get("reference_type"),
+            created_by_id=sender["user_id"], is_manual=True,
+        ))
+    db.add_all(created)
+    await db.commit()
+    return {"created": len(created), "recipient_ids": [item.user_id for item in created]}
+
+
+async def get_manual_history(db: AsyncSession, tenant_id: str, limit: int = 100):
+    result = await db.execute(
+        select(Notification, User.full_name.label("recipient_name"))
+        .outerjoin(User, User.id == Notification.user_id)
+        .where(Notification.tenant_id == tenant_id, Notification.is_manual == True)
+        .order_by(Notification.created_at.desc())
+        .limit(min(max(limit, 1), 500))
+    )
+    fields = (
+        "id", "user_id", "title_ar", "title_en", "message_ar", "message_en",
+        "severity", "is_read", "created_at", "created_by_id", "reference_id", "reference_type",
+    )
+    return [
+        {**{key: getattr(notification, key) for key in fields}, "recipient_name": recipient_name}
+        for notification, recipient_name in result.all()
+    ]

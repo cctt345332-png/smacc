@@ -49,6 +49,8 @@ class Notification(Base):
     message_en: Mapped[str] = mapped_column(Text)
     reference_id: Mapped[str | None] = mapped_column(String, nullable=True)   # asset_id مثلاً
     reference_type: Mapped[str | None] = mapped_column(String(50), nullable=True)  # "asset"
+    created_by_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True, index=True)
+    is_manual: Mapped[bool] = mapped_column(Boolean, default=False)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
