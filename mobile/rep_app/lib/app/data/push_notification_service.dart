@@ -38,7 +38,7 @@ class PushNotificationService {
         await _initializationFuture;
       } catch (_) {
         _initializationFuture = null;
-        rethrow;
+        return 'firebase_init_error';
       }
     }
     final status = await _registerCurrentToken();
@@ -93,8 +93,8 @@ class PushNotificationService {
       final token = await _messaging.getToken();
       if (token == null || token.isEmpty) return 'no_fcm_token';
       return await _registerToken(token);
-    } catch (_) {
-      return 'firebase_token_error';
+    } catch (error) {
+      return 'firebase_token_error_${error.runtimeType}';
     }
   }
 
