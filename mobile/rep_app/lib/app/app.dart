@@ -26,16 +26,32 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   bool get _signedIn => widget.sessionStore.token?.isNotEmpty == true;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_signedIn) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _registerPushAndReport(),
+      );
+    }
+  }
+
   void _onSignedIn() {
     setState(() {});
     unawaited(_registerPushAndReport());
   }
 
   Future<void> _registerPushAndReport() async {
-    final status = await PushNotificationService.instance.initialize(
-      widget.apiClient,
-    );
-    if (!mounted || status == 'registered') return;
+    String status;
+    try {
+      status = await PushNotificationService.instance.initialize(
+        widget.apiClient,
+      );
+    } catch (_) {
+      status = 'firebase_error';
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('حالة إشعارات الجهاز: $status')));
