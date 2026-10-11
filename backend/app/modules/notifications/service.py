@@ -2,6 +2,7 @@
 Notifications Service — تنبيهات عامة لكل الأقسام
 """
 import uuid
+import logging
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, or_
@@ -10,6 +11,8 @@ from app.models.user import User
 from app.models.notifications import (
     Notification, AlertSetting, NotificationType, NotificationSeverity
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ─── CRUD ────────────────────────────────────────────────────────────
@@ -132,7 +135,8 @@ async def run_all_alerts(db: AsyncSession, tenant_id: str) -> dict:
     """فحص كل الأقسام وإنشاء التنبيهات المطلوبة"""
     settings = await get_alert_settings(db, tenant_id)
     now = datetime.utcnow()
-    run_started_at = now
+    before_result = await db.execute(select(Notification.id).where(Notification.tenant_id == tenant_id))
+    before_ids = set(before_result.scalars().all())
     created = 0
 
     # 1. تنبيهات الأصول الثابتة
@@ -154,13 +158,14 @@ async def run_all_alerts(db: AsyncSession, tenant_id: str) -> dict:
     created += await _check_accounting_alerts(db, tenant_id, settings, now)
 
     await db.flush()
-    new_result = await db.execute(select(Notification).where(
-        Notification.tenant_id == tenant_id,
-        Notification.created_at >= run_started_at,
-    ))
+    new_query = select(Notification).where(Notification.tenant_id == tenant_id)
+    if before_ids:
+        new_query = new_query.where(Notification.id.not_in(before_ids))
+    new_result = await db.execute(new_query)
     new_notifications = new_result.scalars().all()
     await db.commit()
     push = await dispatch_push(db, tenant_id, new_notifications) if new_notifications else {"sent": 0}
+    logger.info("Automatic notifications tenant=%s created=%s push=%s", tenant_id, len(new_notifications), push)
     return {"alerts_created": created, "push": push}
 
 
