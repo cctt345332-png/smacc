@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getItems, getWarehouses, getSerials, createStockCount, updateSerial, getCountHistory } from "@/lib/inventory";
+import { getItems, getWarehouses, getSerials, getStockByWarehouse, createStockCount, updateSerial, getCountHistory } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
@@ -21,6 +21,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
 
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
+  const [allWarehouseStock, setAllWarehouseStock] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [selectedWarehouse, setSelectedWarehouse] = useState("");
   const [itemSearch, setItemSearch] = useState("");
@@ -60,6 +61,13 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       .then(({ data }) => setItems(data))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
+    if (selectedWarehouse === "all") {
+      getStockByWarehouse()
+        .then(({ data }) => setAllWarehouseStock(Array.isArray(data) ? data : []))
+        .catch(() => setAllWarehouseStock([]));
+    } else {
+      setAllWarehouseStock([]);
+    }
   }, [selectedWarehouse]);
 
   useEffect(() => {
@@ -162,7 +170,34 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   // الطباعة لا تعتمد على countMap وحده؛ لأنه يُصفّر بعد حفظ الجرد.
   // نطبع كل الأصناف الظاهرة، مع استخدام الكمية المدخلة عند وجودها،
   // وإلا نعرض كمية النظام الحالية حتى لا يخرج التقرير فارغاً.
-  const printRows = visibleItems.map((item: any) => {
+  const printRows = selectedWarehouse === "all"
+    ? allWarehouseStock
+      .filter((row: any) => {
+        const q = itemSearch.trim().toLowerCase();
+        const qty = Number(row.quantity || 0);
+        const reorder = Number(row.reorder_point || 0);
+        const matchesSearch = !q || [row.item_name, row.item_sku].some(v => String(v || "").toLowerCase().includes(q));
+        const matchesQuantity = quantityFilter === "all"
+          || (quantityFilter === "zero" && qty === 0)
+          || (quantityFilter === "available" && qty > 0)
+          || (quantityFilter === "low" && qty > 0 && qty <= reorder);
+        return matchesSearch && matchesQuantity;
+      })
+      .sort((a: any, b: any) => {
+        const warehouseSort = String(a.warehouse_name || "").localeCompare(String(b.warehouse_name || ""), "ar");
+        if (warehouseSort !== 0) return warehouseSort;
+        if (quantitySort === "high") return Number(b.quantity || 0) - Number(a.quantity || 0);
+        if (quantitySort === "low") return Number(a.quantity || 0) - Number(b.quantity || 0);
+        return String(a.item_name || "").localeCompare(String(b.item_name || ""), "ar");
+      })
+      .map((row: any) => [
+        String(row.warehouse_name || (ar ? "بدون مستودع" : "Unassigned warehouse")),
+        String(row.item_name || "—"),
+        String(TRACKING_AR[row.item_tracking] || row.item_tracking || "—"),
+        fmt(row.quantity),
+        fmt(row.quantity),
+      ])
+    : visibleItems.map((item: any) => {
     const isSerial = item.tracking_type === "serial";
     const systemQty = Number(isSerial ? (item.serial_count ?? item.quantity_on_hand ?? 0) : (item.quantity_on_hand ?? 0));
     const countedValue = countMap[item.id];
@@ -174,6 +209,10 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       String(countedQty),
     ];
   });
+
+  const printHeaders = selectedWarehouse === "all"
+    ? [ar ? "المستودع" : "Warehouse", ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"]
+    : [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"];
 
   if (loading) return <div className="empty-state" style={{ minHeight: "60vh" }}><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>;
 
@@ -196,7 +235,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
           <button className="btn btn-secondary btn-sm" onClick={handleOpenHistory}>
             <Icon name="view" size={14} /> {ar ? "سجل الجرد السابق" : "Count History"}
           </button>
-          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={ar ? "كميات الأصناف الحالية والمجردة" : "Current and counted item quantities"} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: selectedWarehouse === "all" ? (ar ? "كل المستودعات" : "All warehouses") : warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "الأصناف" : "Items", value: String(visibleItems.length), tone: "amber" }, { label: ar ? "التغييرات غير المحفوظة" : "Unsaved changes", value: String(changedCount), tone: "neutral" }]} tables={[{ headers: [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"], rows: printRows, note: notes || undefined }]} />
+          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={selectedWarehouse === "all" ? (ar ? "تفصيل كميات الأصناف حسب المستودع" : "Item quantities by warehouse") : (ar ? "كميات الأصناف الحالية والمجردة" : "Current and counted item quantities")} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: selectedWarehouse === "all" ? (ar ? "كل المستودعات" : "All warehouses") : warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "صفوف التقرير" : "Report rows", value: String(printRows.length), tone: "amber" }, { label: ar ? "التغييرات غير المحفوظة" : "Unsaved changes", value: String(changedCount), tone: "neutral" }]} tables={[{ headers: printHeaders, rows: printRows, note: notes || undefined }]} />
           {changedCount > 0 && (
             <button className="btn btn-primary" onClick={handleSaveCount} disabled={saving}>
               <Icon name="check" size={16} />
