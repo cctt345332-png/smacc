@@ -475,34 +475,25 @@ async def get_top_customers(
 
 async def get_overdue_invoices(tenant_id: str, db: AsyncSession) -> dict:
     now = datetime.utcnow()
-
-    r = await db.execute(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id,
-            Invoice.status.in_([InvoiceStatus.CONFIRMED, InvoiceStatus.PARTIAL]),
-            Invoice.due_date < now,
-            Invoice.due_date.isnot(None),
-        ).order_by(Invoice.due_date)
-    )
-    invoices = r.scalars().all()
-
-    total_overdue = sum(float(inv.total) - float(inv.paid_amount) for inv in invoices)
+    from app.modules.sales.service import get_unified_aging
+    rows = [row for row in await get_unified_aging(db, tenant_id, as_of=now) if row["overdue_days"] > 0]
+    total_overdue = sum(float(row["outstanding"]) for row in rows)
 
     return {
         "tool": "get_overdue_invoices",
-        "count": len(invoices),
+        "count": len(rows),
         "total_overdue": _fmt(total_overdue),
         "invoices": [
             {
-                "number": inv.invoice_number,
-                "customer": inv.buyer_name_ar,
-                "total": _fmt(inv.total),
-                "paid": _fmt(inv.paid_amount),
-                "remaining": _fmt(float(inv.total) - float(inv.paid_amount)),
-                "due_date": inv.due_date.strftime("%Y-%m-%d") if inv.due_date else "",
-                "days_overdue": (now - inv.due_date).days if inv.due_date else 0,
+                "number": row["invoice_number"],
+                "customer": row["customer_name"],
+                "total": _fmt(row["invoice_total"]),
+                "paid": _fmt(row["paid_amount"]),
+                "remaining": _fmt(row["outstanding"]),
+                "due_date": (datetime.fromisoformat(row["issue_date"]) + timedelta(days=21)).strftime("%Y-%m-%d"),
+                "days_overdue": row["overdue_days"],
             }
-            for inv in invoices[:10]
+            for row in rows[:10]
         ],
     }
 

@@ -315,40 +315,36 @@ async def _check_sales_alerts(db: AsyncSession, tenant_id: str, settings: AlertS
 
     if settings.sales_overdue_alert:
         try:
-            from app.models.sales import Invoice, InvoiceStatus
             from app.models.reps import SalesRep
-            overdue_date = now - timedelta(days=settings.sales_overdue_days)
-            r = await db.execute(
-                select(Invoice).where(
-                    Invoice.tenant_id == tenant_id,
-                    Invoice.status.in_([InvoiceStatus.CONFIRMED, InvoiceStatus.PARTIAL]),
-                    Invoice.due_date < now,
-                    Invoice.due_date.isnot(None),
-                )
-            )
-            invoices = r.scalars().all()
+            # المصدر الوحيد للحالة المالية: نفس تقرير أعمار الديون الموحد.
+            # هذا يطبق FIFO، الرصيد الافتتاحي، السداد العام، السداد المرتبط
+            # بالفاتورة، سندات الخصم، ومهلة 21 يوماً من تاريخ الإصدار.
+            from app.modules.sales.service import get_unified_aging
+            aging_rows = await get_unified_aging(db, tenant_id, as_of=now)
             management_ids = await _management_user_ids(db, tenant_id)
-            for inv in invoices:
-                days_overdue = (now - inv.due_date).days if inv.due_date else 0
-                remaining = float(inv.total) - float(inv.paid_amount)
+            for row in aging_rows:
+                days_overdue = int(row.get("overdue_days") or 0)
+                if days_overdue <= 0:
+                    continue
+                invoice_id = row["invoice_id"]
                 rep_user_id = None
-                if inv.rep_id:
+                if row.get("rep_id"):
                     rep_user_id = await db.scalar(select(SalesRep.user_id).where(
-                        SalesRep.id == inv.rep_id, SalesRep.tenant_id == tenant_id,
+                        SalesRep.id == row["rep_id"], SalesRep.tenant_id == tenant_id,
                     ))
                 recipients = list(dict.fromkeys(
                     ([rep_user_id] if rep_user_id else []) + management_ids
                 ))
                 for recipient_id in recipients:
-                    if await _exists(db, tenant_id, inv.id, NotificationType.SALES_OVERDUE_INVOICE, recipient_id):
+                    if await _exists(db, tenant_id, invoice_id, NotificationType.SALES_OVERDUE_INVOICE, recipient_id):
                         continue
                     db.add(_notif(
                         tenant_id, NotificationType.SALES_OVERDUE_INVOICE,
                         NotificationSeverity.CRITICAL if days_overdue > 30 else NotificationSeverity.WARNING,
-                        f"فاتورة متأخرة: {inv.buyer_name_ar}", f"Overdue Invoice: {inv.buyer_name_ar}",
-                        f"الفاتورة {inv.invoice_number} للعميل '{inv.buyer_name_ar}' متأخرة {days_overdue} يوم. المبلغ المستحق: {remaining:.2f} ر.س",
-                        f"Invoice {inv.invoice_number} for '{inv.buyer_name_ar}' is {days_overdue} days overdue. Amount: {remaining:.2f} SAR",
-                        inv.id, "invoice", recipient_id,
+                        f"فاتورة متأخرة: {row['customer_name']}", f"Overdue Invoice: {row['customer_name']}",
+                        f"الفاتورة {row['invoice_number']} للعميل '{row['customer_name']}' متأخرة {days_overdue} يوم. المبلغ المتبقي: {float(row['outstanding']):.2f} ر.س",
+                        f"Invoice {row['invoice_number']} for '{row['customer_name']}' is {days_overdue} days overdue. Remaining: {float(row['outstanding']):.2f} SAR",
+                        invoice_id, "invoice", recipient_id,
                     ))
                     created += 1
         except Exception:
