@@ -25,7 +25,7 @@ class PushNotificationService {
   PushNotificationService._();
   static final instance = PushNotificationService._();
 
-  final _messaging = FirebaseMessaging.instance;
+  FirebaseMessaging get _messaging => FirebaseMessaging.instance;
   final _local = FlutterLocalNotificationsPlugin();
   ApiClient? _apiClient;
   Future<void>? _initializationFuture;
