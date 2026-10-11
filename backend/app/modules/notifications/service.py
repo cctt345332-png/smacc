@@ -17,7 +17,10 @@ from app.models.notifications import (
 async def get_notifications(db: AsyncSession, tenant_id: str, unread_only: bool = False, user: dict | None = None):
     q = select(Notification).where(Notification.tenant_id == tenant_id)
     if user:
-        q = q.where(or_(Notification.user_id == user["user_id"], Notification.user_id.is_(None)))
+        visible = [Notification.user_id == user["user_id"]]
+        if user.get("role") in {"super_admin", "admin", "manager", "accountant"}:
+            visible.append(Notification.user_id.is_(None))
+        q = q.where(or_(*visible))
     if unread_only:
         q = q.where(Notification.is_read == False)
     q = q.order_by(Notification.created_at.desc()).limit(50)
@@ -28,14 +31,18 @@ async def get_notifications(db: AsyncSession, tenant_id: str, unread_only: bool 
 async def get_unread_count(db: AsyncSession, tenant_id: str, user: dict | None = None) -> int:
     conditions = [Notification.tenant_id == tenant_id, Notification.is_read == False]
     if user:
-        conditions.append(or_(Notification.user_id == user["user_id"], Notification.user_id.is_(None)))
+        visible = [Notification.user_id == user["user_id"]]
+        if user.get("role") in {"super_admin", "admin", "manager", "accountant"}:
+            visible.append(Notification.user_id.is_(None))
+        conditions.append(or_(*visible))
     r = await db.execute(select(func.count()).where(*conditions))
     return r.scalar() or 0
 
 
 async def mark_read(db: AsyncSession, tenant_id: str, notification_id: str, user: dict | None = None):
     n = await db.get(Notification, notification_id)
-    if n and n.tenant_id == tenant_id and (not user or n.user_id in (None, user["user_id"])):
+    can_read_global = user and user.get("role") in {"super_admin", "admin", "manager", "accountant"}
+    if n and n.tenant_id == tenant_id and (not user or n.user_id == user["user_id"] or (n.user_id is None and can_read_global)):
         n.is_read = True
         await db.commit()
 
@@ -43,7 +50,10 @@ async def mark_read(db: AsyncSession, tenant_id: str, notification_id: str, user
 async def mark_all_read(db: AsyncSession, tenant_id: str, user: dict | None = None):
     conditions = [Notification.tenant_id == tenant_id, Notification.is_read == False]
     if user:
-        conditions.append(or_(Notification.user_id == user["user_id"], Notification.user_id.is_(None)))
+        visible = [Notification.user_id == user["user_id"]]
+        if user.get("role") in {"super_admin", "admin", "manager", "accountant"}:
+            visible.append(Notification.user_id.is_(None))
+        conditions.append(or_(*visible))
     r = await db.execute(
         select(Notification).where(
             *conditions,
