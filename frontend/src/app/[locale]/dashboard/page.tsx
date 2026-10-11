@@ -7,6 +7,7 @@ import AppLayout from "@/components/layout/AppLayout";
 import { Icon } from "@/components/ui/Icons";
 import { getCompany } from "@/lib/settings";
 import { getExpiryAlerts } from "@/lib/inventory";
+import { getExpenses, approveExpense, rejectExpense } from "@/lib/expenses";
 import api from "@/lib/api";
 
 const formatAmount = (value: unknown) => Number(value || 0).toLocaleString("en-US", {
@@ -43,6 +44,16 @@ type PendingInvoice = {
   rep_zone?: string;
 };
 
+type PendingExpense = {
+  id: string;
+  expense_number: string;
+  rep_name?: string;
+  amount: number;
+  category?: string;
+  expense_date?: string;
+  description?: string;
+};
+
 function Metric({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: "default" | "alert" | "success" | "neutral" }) {
   return (
     <div className={`ops-metric ops-metric-${tone}`}>
@@ -69,19 +80,23 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
   const [systemSummary, setSystemSummary] = useState<any>(null);
   const [recentTx, setRecentTx] = useState<any[]>([]);
   const [pendingInvoices, setPendingInvoices] = useState<PendingInvoice[]>([]);
+  const [pendingExpenses, setPendingExpenses] = useState<PendingExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyInvoiceId, setBusyInvoiceId] = useState<string | null>(null);
   const [rejectingInvoiceId, setRejectingInvoiceId] = useState<string | null>(null);
   const [rejectionNote, setRejectionNote] = useState("");
   const [actionError, setActionError] = useState("");
+  const [rejectingExpenseId, setRejectingExpenseId] = useState<string | null>(null);
+  const [expenseRejectionReason, setExpenseRejectionReason] = useState("");
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
-    const [companyRes, systemRes, journalRes, pendingRes] = await Promise.all([
+    const [companyRes, systemRes, journalRes, pendingRes, pendingExpensesRes] = await Promise.all([
       getCompany().catch(() => ({ data: null })),
       api.get("/sales/invoices/system-summary").catch(() => ({ data: null })),
       api.get("/accounting/journal-entries?status=posted").catch(() => ({ data: [] })),
       api.get("/sales/invoices-pending").catch(() => ({ data: [] })),
+      getExpenses({ status: "pending" }).catch(() => ({ data: [] })),
     ]);
 
     const type = companyRes.data?.business_type || "general";
@@ -100,6 +115,7 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
         ? pendingRes.data.filter((invoice: PendingInvoice) => invoice.status === "submitted")
         : []
     );
+    setPendingExpenses(Array.isArray(pendingExpensesRes.data) ? pendingExpensesRes.data : []);
     setLoading(false);
   }, []);
 
@@ -137,6 +153,31 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
       setActionError(error?.response?.data?.detail || "تعذر رفض الفاتورة. حاول مرة أخرى.");
     } finally {
       setBusyInvoiceId(null);
+    }
+  };
+
+  const approvePendingExpense = async (expense: PendingExpense) => {
+    setActionError("");
+    try {
+      await approveExpense(expense.id);
+      setPendingExpenses((current) => current.filter((item) => item.id !== expense.id));
+      loadDashboard();
+    } catch (error: any) {
+      setActionError(error?.response?.data?.detail || "تعذر اعتماد المصروف. حاول مرة أخرى.");
+    }
+  };
+
+  const rejectPendingExpense = async (expense: PendingExpense) => {
+    const reason = expenseRejectionReason.trim();
+    if (!reason) { setActionError("اكتب سبب رفض المصروف."); return; }
+    try {
+      await rejectExpense(expense.id, reason);
+      setPendingExpenses((current) => current.filter((item) => item.id !== expense.id));
+      setRejectingExpenseId(null);
+      setExpenseRejectionReason("");
+      loadDashboard();
+    } catch (error: any) {
+      setActionError(error?.response?.data?.detail || "تعذر رفض المصروف. حاول مرة أخرى.");
     }
   };
 
@@ -196,6 +237,24 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
                     <td><div className="ops-row-actions"><Link href={`${base}/sales/invoices/${invoice.id}`} className="ops-view-link">{ar ? "مراجعة" : "Review"}</Link><button type="button" className="ops-approve-button" disabled={busyInvoiceId === invoice.id} onClick={() => approveInvoice(invoice)}>{busyInvoiceId === invoice.id ? (ar ? "جارٍ الحفظ" : "Saving") : (ar ? "اعتماد" : "Approve")}</button><button type="button" className="ops-reject-button" disabled={busyInvoiceId === invoice.id} onClick={() => { setRejectingInvoiceId(rejectingInvoiceId === invoice.id ? null : invoice.id); setActionError(""); }}>{ar ? "إعادة" : "Return"}</button></div></td>
                   </tr>
                   {rejectingInvoiceId === invoice.id && <tr key={`${invoice.id}-reject`} className="ops-rejection-row"><td colSpan={7}><div className="ops-rejection-form"><label htmlFor={`reason-${invoice.id}`}>{ar ? "سبب إعادة الفاتورة إلى المندوب" : "Reason for returning the invoice"}</label><input id={`reason-${invoice.id}`} value={rejectionNote} onChange={(event) => setRejectionNote(event.target.value)} placeholder={ar ? "مثال: راجع الصنف أو طريقة الدفع أو بيانات العميل" : "Example: review item, payment method, or customer data"} /><button type="button" className="ops-reject-confirm" disabled={busyInvoiceId === invoice.id} onClick={() => rejectInvoice(invoice)}>{ar ? "تأكيد الإعادة" : "Confirm return"}</button><button type="button" className="ops-cancel-button" onClick={() => { setRejectingInvoiceId(null); setRejectionNote(""); }}>{ar ? "إلغاء" : "Cancel"}</button></div></td></tr>}
+                </Fragment>)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="ops-panel ops-approval-panel" aria-label={ar ? "طلبات اعتماد مصروفات المناديب" : "Rep expense approval queue"}>
+          <div className="ops-panel-head">
+            <div className="ops-panel-title"><span className="ops-panel-icon ops-panel-icon-alert"><Icon name="journal" size={16} /></span><div><h2>{ar ? "طلبات اعتماد مصروفات المناديب" : "Rep expense approvals"}</h2><p>{ar ? "مراجعة المصروف قبل اعتماده وترحيله محاسبياً." : "Review expenses before approval and accounting posting."}</p></div></div>
+            <Link href={`${base}/treasury/rep-expenses`} className="ops-text-link">{ar ? "إدارة المصروفات" : "Manage expenses"}</Link>
+          </div>
+          <div className="ops-table-wrap">
+            <table className="ops-table">
+              <thead><tr><th>{ar ? "رقم المصروف" : "Expense"}</th><th>{ar ? "المندوب" : "Rep"}</th><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "الوصف" : "Description"}</th><th>{ar ? "المبلغ" : "Amount"}</th><th>{ar ? "القرار" : "Decision"}</th></tr></thead>
+              <tbody>
+                {loading ? <tr><td colSpan={6} className="ops-empty-row">{ar ? "جارٍ تحميل طلبات المصروفات…" : "Loading expense requests…"}</td></tr> : pendingExpenses.length === 0 ? <tr><td colSpan={6} className="ops-empty-row"><div className="ops-empty-copy"><Icon name="journal" size={20} /><strong>{ar ? "لا توجد مصروفات بانتظار الاعتماد" : "No expenses await approval"}</strong><span>{ar ? "ستظهر هنا مصروفات المندوبين الجديدة." : "New representative expenses will appear here."}</span></div></td></tr> : pendingExpenses.map((expense) => <Fragment key={expense.id}>
+                  <tr><td><span className="ops-doc-number">{expense.expense_number}</span></td><td><strong>{expense.rep_name || "مندوب"}</strong></td><td className="ops-date">{formatDate(expense.expense_date)}</td><td>{expense.description || expense.category || "—"}</td><td className="ops-amount">{formatAmount(expense.amount)} {tc("currency")}</td><td><div className="ops-row-actions"><button type="button" className="ops-approve-button" onClick={() => approvePendingExpense(expense)}>{ar ? "اعتماد" : "Approve"}</button><button type="button" className="ops-reject-button" onClick={() => { setRejectingExpenseId(rejectingExpenseId === expense.id ? null : expense.id); setActionError(""); }}>{ar ? "رفض" : "Reject"}</button></div></td></tr>
+                  {rejectingExpenseId === expense.id && <tr className="ops-rejection-row"><td colSpan={6}><div className="ops-rejection-form"><label htmlFor={`expense-reason-${expense.id}`}>{ar ? "سبب رفض المصروف" : "Expense rejection reason"}</label><input id={`expense-reason-${expense.id}`} value={expenseRejectionReason} onChange={(event) => setExpenseRejectionReason(event.target.value)} placeholder={ar ? "اكتب سبب الرفض ليصل للمندوب" : "Reason sent to the representative"} /><button type="button" className="ops-reject-confirm" onClick={() => rejectPendingExpense(expense)}>{ar ? "تأكيد الرفض" : "Confirm rejection"}</button><button type="button" className="ops-cancel-button" onClick={() => { setRejectingExpenseId(null); setExpenseRejectionReason(""); }}>{ar ? "إلغاء" : "Cancel"}</button></div></td></tr>}
                 </Fragment>)}
               </tbody>
             </table>
