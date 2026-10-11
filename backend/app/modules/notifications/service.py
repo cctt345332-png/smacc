@@ -614,11 +614,11 @@ async def notify_management_event(
     reference_type: str | None = None,
     severity: NotificationSeverity = NotificationSeverity.INFO,
 ):
-    """إرسال إشعار تشغيلي للمديرين والمحاسبين بعد نجاح العملية."""
+    """إرسال إشعار تشغيلي للإدارة والمشرفين بعد نجاح العملية."""
     recipients = (await db.execute(select(User).where(
         User.tenant_id == tenant_id,
         User.is_active == True,
-        User.role.in_(["admin", "manager", "accountant"]),
+        User.role.in_(["admin", "manager", "accountant", "supervisor"]),
         User.id != actor_id,
     ))).scalars().all()
     if not recipients:
