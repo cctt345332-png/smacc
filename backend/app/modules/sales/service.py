@@ -1005,6 +1005,17 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
                  invoice_number=invoice.invoice_number, customer_id=invoice.customer_id,
                  line_count=len(lines_data), total=invoice.total, rep_id=invoice.rep_id)
     await db.commit()
+    from app.modules.notifications.service import notify_management_event
+    actor = await db.scalar(select(User).where(User.id == user_id))
+    actor_name = actor.full_name if actor else "مستخدم النظام"
+    await notify_management_event(
+        db, tenant_id, user_id,
+        f"فاتورة مبيعات جديدة: {invoice.invoice_number}",
+        f"New sales invoice: {invoice.invoice_number}",
+        f"أنشأ {actor_name} فاتورة للعميل {customer.name_ar} بمبلغ {float(invoice.total):.2f} ر.س.",
+        f"{actor_name} created an invoice for {customer.name_ar}, total {float(invoice.total):.2f} SAR.",
+        invoice.id, "sales_invoice",
+    )
     return await get_invoice(db, tenant_id, invoice_id)
 
 
@@ -1622,6 +1633,18 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
 
     await db.commit()
     await db.refresh(payment)
+    from app.modules.notifications.service import notify_management_event
+    actor = await db.scalar(select(User).where(User.id == user_id))
+    actor_name = actor.full_name if actor else "مستخدم النظام"
+    payment_label = "سند قبض" if data.payment_type == "receipt" else "سند خصم"
+    await notify_management_event(
+        db, tenant_id, user_id,
+        f"{payment_label} جديد: {payment.payment_number}",
+        f"New {payment_label}: {payment.payment_number}",
+        f"أنشأ {actor_name} {payment_label} للعميل {customer.name_ar} بمبلغ {float(payment.amount):.2f} ر.س.",
+        f"{actor_name} created a {payment_label} for {customer.name_ar}, amount {float(payment.amount):.2f} SAR.",
+        payment.id, "payment",
+    )
     return payment
 
 

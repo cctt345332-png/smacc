@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-
 import 'data/api_client.dart';
 import 'data/push_notification_service.dart';
 import 'data/session_store.dart';
@@ -44,22 +42,12 @@ class _AppState extends State<App> {
   }
 
   Future<void> _registerPushAndReport() async {
-    String status;
+    // التسجيل يتم بصمت؛ لا نعرض رسائل فحص للمستخدم بعد نجاح إعداد Firebase.
     try {
-      status = await PushNotificationService.instance.initialize(
-        widget.apiClient,
-      );
-    } catch (error) {
-      if (error is FirebaseException) {
-        status = 'firebase_error_${error.plugin}_${error.code}';
-      } else {
-        status = 'firebase_error_${error.runtimeType}';
-      }
+      await PushNotificationService.instance.initialize(widget.apiClient);
+    } catch (_) {
+      // يبقى التطبيق قابلاً للاستخدام حتى لو تعذر التسجيل مؤقتاً.
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('حالة إشعارات الجهاز: $status')));
   }
 
   @override

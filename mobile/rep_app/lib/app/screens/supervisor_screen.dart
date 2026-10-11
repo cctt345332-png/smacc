@@ -3,6 +3,7 @@ import '../data/api_client.dart';
 import 'company_records_screen.dart';
 import 'supervisor_statements.dart';
 import 'stock_count_screen.dart';
+import 'notifications_screen.dart';
 
 const _supervisorPurple = Color(0xFF3E0865);
 
@@ -131,7 +132,10 @@ class _SupervisorDashboardScreenState extends State<SupervisorDashboardScreen> {
           'لوحة المشرف',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
-        actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))],
+        actions: [
+          NotificationBell(apiClient: widget.apiClient),
+          IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())

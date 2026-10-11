@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../data/api_client.dart';
+import 'notifications_screen.dart';
 import 'rep_forms.dart';
 import 'rep_lists.dart';
 
@@ -450,6 +451,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
+          NotificationBell(apiClient: widget.apiClient),
           IconButton(
             onPressed: loading ? null : _load,
             icon: const Icon(Icons.refresh),

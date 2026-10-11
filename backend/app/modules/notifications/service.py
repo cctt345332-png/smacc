@@ -562,3 +562,42 @@ async def unregister_device(db: AsyncSession, user: dict, data: dict):
 async def dispatch_push(db: AsyncSession, tenant_id: str, notifications: list[Notification]):
     from app.modules.notifications.fcm import send_notifications
     return await send_notifications(db, tenant_id, notifications)
+
+
+async def notify_management_event(
+    db: AsyncSession,
+    tenant_id: str,
+    actor_id: str,
+    title_ar: str,
+    title_en: str,
+    message_ar: str,
+    message_en: str,
+    reference_id: str | None = None,
+    reference_type: str | None = None,
+    severity: NotificationSeverity = NotificationSeverity.INFO,
+):
+    """إرسال إشعار تشغيلي للمديرين والمحاسبين بعد نجاح العملية."""
+    recipients = (await db.execute(select(User).where(
+        User.tenant_id == tenant_id,
+        User.is_active == True,
+        User.role.in_(["admin", "manager", "accountant"]),
+        User.id != actor_id,
+    ))).scalars().all()
+    if not recipients:
+        return {"created": 0, "push": {"sent": 0}}
+
+    notifications = [Notification(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, user_id=recipient.id,
+        type=NotificationType.GENERAL, severity=severity,
+        title_ar=title_ar, title_en=title_en,
+        message_ar=message_ar, message_en=message_en,
+        reference_id=reference_id, reference_type=reference_type,
+        created_by_id=actor_id, is_manual=False,
+    ) for recipient in recipients]
+    db.add_all(notifications)
+    await db.commit()
+    try:
+        push = await dispatch_push(db, tenant_id, notifications)
+    except Exception:
+        push = {"sent": 0, "error": "push_dispatch_failed"}
+    return {"created": len(notifications), "push": push}

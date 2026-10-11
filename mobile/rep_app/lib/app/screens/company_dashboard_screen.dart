@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/api_client.dart';
+import 'notifications_screen.dart';
 
 const _purple = Color(0xFF3E0865);
 const _green = Color(0xFF147D58);
@@ -73,7 +74,10 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
           'لوحة مدير الشركة',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
-        actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh))],
+        actions: [
+          NotificationBell(apiClient: widget.apiClient),
+          IconButton(onPressed: load, icon: const Icon(Icons.refresh)),
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
