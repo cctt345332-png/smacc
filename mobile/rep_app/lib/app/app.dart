@@ -48,8 +48,8 @@ class _AppState extends State<App> {
       status = await PushNotificationService.instance.initialize(
         widget.apiClient,
       );
-    } catch (_) {
-      status = 'firebase_error';
+    } catch (error) {
+      status = 'firebase_error_${error.runtimeType}';
     }
     if (!mounted) return;
     ScaffoldMessenger.of(
