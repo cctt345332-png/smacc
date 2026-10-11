@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'data/api_client.dart';
 import 'data/push_notification_service.dart';
@@ -49,7 +50,11 @@ class _AppState extends State<App> {
         widget.apiClient,
       );
     } catch (error) {
-      status = 'firebase_error_${error.runtimeType}';
+      if (error is FirebaseException) {
+        status = 'firebase_error_${error.plugin}_${error.code}';
+      } else {
+        status = 'firebase_error_${error.runtimeType}';
+      }
     }
     if (!mounted) return;
     ScaffoldMessenger.of(
