@@ -170,6 +170,39 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   // الطباعة لا تعتمد على countMap وحده؛ لأنه يُصفّر بعد حفظ الجرد.
   // نطبع كل الأصناف الظاهرة، مع استخدام الكمية المدخلة عند وجودها،
   // وإلا نعرض كمية النظام الحالية حتى لا يخرج التقرير فارغاً.
+  const summaryRows = selectedWarehouse === "all"
+    ? allWarehouseStock
+      .filter((row: any) => {
+        const q = itemSearch.trim().toLowerCase();
+        const qty = Number(row.quantity || 0);
+        const reorder = Number(row.reorder_point || 0);
+        const matchesSearch = !q || [row.item_name, row.item_sku].some(v => String(v || "").toLowerCase().includes(q));
+        const matchesQuantity = quantityFilter === "all"
+          || (quantityFilter === "zero" && qty === 0)
+          || (quantityFilter === "available" && qty > 0)
+          || (quantityFilter === "low" && qty > 0 && qty <= reorder);
+        return matchesSearch && matchesQuantity;
+      })
+      .map((row: any) => {
+        const quantity = Number(row.quantity || 0);
+        const value = quantity * Number(row.sale_price || 0);
+        return { quantity, value };
+      })
+    : visibleItems.map((item: any) => {
+      const isSerial = item.tracking_type === "serial";
+      const systemQty = Number(isSerial ? (item.serial_count ?? item.quantity_on_hand ?? 0) : (item.quantity_on_hand ?? 0));
+      const countedValue = countMap[item.id];
+      const quantity = countedValue !== undefined && countedValue !== "" ? Number(countedValue) : systemQty;
+      return { quantity, value: quantity * Number(item.sale_price || 0) };
+    });
+
+  const positiveSummary = summaryRows.reduce((acc, row) => row.quantity > 0 ? { quantity: acc.quantity + row.quantity, value: acc.value + row.value } : acc, { quantity: 0, value: 0 });
+  const negativeSummary = summaryRows.reduce((acc, row) => row.quantity < 0 ? { quantity: acc.quantity + row.quantity, value: acc.value + row.value } : acc, { quantity: 0, value: 0 });
+  const finalSummary = {
+    quantity: positiveSummary.quantity + negativeSummary.quantity,
+    value: positiveSummary.value + negativeSummary.value,
+  };
+
   const printRows = selectedWarehouse === "all"
     ? allWarehouseStock
       .filter((row: any) => {
@@ -196,6 +229,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
         String(TRACKING_AR[row.item_tracking] || row.item_tracking || "—"),
         fmt(row.quantity),
         fmt(row.quantity),
+        fmt(Number(row.quantity || 0) * Number(row.sale_price || 0)),
       ])
     : visibleItems.map((item: any) => {
     const isSerial = item.tracking_type === "serial";
@@ -207,12 +241,19 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       String(TRACKING_AR[item.tracking_type] || item.tracking_type || "—"),
       fmt(systemQty),
       String(countedQty),
+      fmt((countedValue !== undefined && countedValue !== "" ? Number(countedValue) : systemQty) * Number(item.sale_price || 0)),
     ];
   });
 
   const printHeaders = selectedWarehouse === "all"
-    ? [ar ? "المستودع" : "Warehouse", ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"]
-    : [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"];
+    ? [ar ? "المستودع" : "Warehouse", ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty", ar ? "القيمة" : "Value"]
+    : [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty", ar ? "القيمة" : "Value"];
+
+  const summaryTableRows = [
+    [ar ? "مجموع الموجب" : "Positive total", fmt(positiveSummary.quantity), fmt(positiveSummary.value)],
+    [ar ? "مجموع السالب" : "Negative total", fmt(negativeSummary.quantity), fmt(negativeSummary.value)],
+    [ar ? "المجموع النهائي" : "Final total", fmt(finalSummary.quantity), fmt(finalSummary.value)],
+  ];
 
   if (loading) return <div className="empty-state" style={{ minHeight: "60vh" }}><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>;
 
@@ -235,7 +276,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
           <button className="btn btn-secondary btn-sm" onClick={handleOpenHistory}>
             <Icon name="view" size={14} /> {ar ? "سجل الجرد السابق" : "Count History"}
           </button>
-          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={selectedWarehouse === "all" ? (ar ? "تفصيل كميات الأصناف حسب المستودع" : "Item quantities by warehouse") : (ar ? "كميات الأصناف الحالية والمجردة" : "Current and counted item quantities")} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: selectedWarehouse === "all" ? (ar ? "كل المستودعات" : "All warehouses") : warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "صفوف التقرير" : "Report rows", value: String(printRows.length), tone: "amber" }, { label: ar ? "التغييرات غير المحفوظة" : "Unsaved changes", value: String(changedCount), tone: "neutral" }]} tables={[{ headers: printHeaders, rows: printRows, note: notes || undefined }]} />
+          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={selectedWarehouse === "all" ? (ar ? "تفصيل كميات الأصناف حسب المستودع" : "Item quantities by warehouse") : (ar ? "كميات الأصناف الحالية والمجردة" : "Current and counted item quantities")} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: selectedWarehouse === "all" ? (ar ? "كل المستودعات" : "All warehouses") : warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "صفوف التقرير" : "Report rows", value: String(printRows.length), tone: "amber" }, { label: ar ? "المجموع النهائي" : "Final total", value: `${fmt(finalSummary.quantity)} / ${fmt(finalSummary.value)}`, tone: "neutral" }]} tables={[{ headers: printHeaders, rows: printRows, note: notes || undefined }, { title: ar ? "ملخص الإجماليات" : "Totals summary", headers: [ar ? "البيان" : "Summary", ar ? "الكميات" : "Quantities", ar ? "القيمة السعرية" : "Value"], rows: summaryTableRows }]} />
           {changedCount > 0 && (
             <button className="btn btn-primary" onClick={handleSaveCount} disabled={saving}>
               <Icon name="check" size={16} />
@@ -514,6 +555,27 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
             </button>
           </div>
         )}
+      </div>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-header">
+          <span className="card-title">{ar ? "ملخص إجماليات الجرد" : "Stock Count Totals"}</span>
+          <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "الكميات والقيمة السعرية" : "Quantities and value"}</span>
+        </div>
+        <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
+          <table>
+            <thead><tr>
+              <th>{ar ? "البيان" : "Summary"}</th>
+              <th style={{ textAlign: "end" }}>{ar ? "الكميات" : "Quantities"}</th>
+              <th style={{ textAlign: "end" }}>{ar ? "القيمة السعرية" : "Value"}</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style={{ fontWeight: 700 }}>{ar ? "مجموع الموجب" : "Positive total"}</td><td style={{ textAlign: "end", color: "#6F4A84", fontWeight: 700 }}>{fmt(positiveSummary.quantity)}</td><td style={{ textAlign: "end", color: "#6F4A84", fontWeight: 700 }}>{fmt(positiveSummary.value)} SAR</td></tr>
+              <tr><td style={{ fontWeight: 700 }}>{ar ? "مجموع السالب" : "Negative total"}</td><td style={{ textAlign: "end", color: negativeSummary.quantity < 0 ? "#DC2626" : "var(--text-secondary)", fontWeight: 700 }}>{fmt(negativeSummary.quantity)}</td><td style={{ textAlign: "end", color: negativeSummary.value < 0 ? "#DC2626" : "var(--text-secondary)", fontWeight: 700 }}>{fmt(negativeSummary.value)} SAR</td></tr>
+              <tr style={{ background: "#F1EBF5" }}><td style={{ fontWeight: 800, color: "#3E0865" }}>{ar ? "المجموع النهائي" : "Final total"}</td><td style={{ textAlign: "end", fontWeight: 800, color: "#3E0865" }}>{fmt(finalSummary.quantity)}</td><td style={{ textAlign: "end", fontWeight: 800, color: "#3E0865" }}>{fmt(finalSummary.value)} SAR</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );
