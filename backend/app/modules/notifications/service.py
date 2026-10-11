@@ -124,7 +124,7 @@ async def _management_user_ids(db: AsyncSession, tenant_id: str) -> list[str]:
     result = await db.execute(select(User.id).where(
         User.tenant_id == tenant_id,
         User.is_active == True,
-        User.role.in_(["admin", "manager", "accountant"]),
+        User.role.in_(["admin", "manager", "accountant", "supervisor"]),
     ))
     return list(result.scalars().all())
 

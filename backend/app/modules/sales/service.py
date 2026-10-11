@@ -2767,6 +2767,21 @@ async def reject_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     record_audit(db, tenant_id, user_id, "reject", "invoice", invoice.id,
                  invoice_number=invoice.invoice_number, reason=invoice.rejection_note)
     await db.commit()
+    rep_user_id = await db.scalar(select(SalesRep.user_id).where(
+        SalesRep.id == invoice.rep_id,
+        SalesRep.tenant_id == tenant_id,
+    )) if invoice.rep_id else None
+    if rep_user_id:
+        from app.models.notifications import NotificationSeverity
+        from app.modules.notifications.service import notify_users_event
+        await notify_users_event(
+            db, tenant_id, user_id, [rep_user_id],
+            f"تم رفض الفاتورة: {invoice.invoice_number}",
+            f"Invoice rejected: {invoice.invoice_number}",
+            f"تم رفض فاتورتك رقم {invoice.invoice_number}. السبب: {invoice.rejection_note}",
+            f"Your invoice {invoice.invoice_number} was rejected. Reason: {invoice.rejection_note}",
+            invoice.id, "sales_invoice", NotificationSeverity.WARNING,
+        )
     return await get_invoice(db, tenant_id, invoice_id)
 
 
