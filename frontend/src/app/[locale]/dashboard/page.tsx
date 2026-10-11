@@ -29,6 +29,20 @@ const paymentLabel = (method?: string) => {
   return labels[method || ""] || "غير محددة";
 };
 
+const expenseCategoryLabel = (category?: string, ar = true) => {
+  const labels: Record<string, { ar: string; en: string }> = {
+    fuel: { ar: "وقود", en: "Fuel" },
+    vehicle_maintenance: { ar: "صيانة سيارة", en: "Vehicle maintenance" },
+    shipping: { ar: "شحن وتوصيل", en: "Shipping" },
+    hospitality: { ar: "ضيافة", en: "Hospitality" },
+    communications: { ar: "اتصالات", en: "Communications" },
+    parking: { ar: "مواقف", en: "Parking" },
+    travel: { ar: "سفر", en: "Travel" },
+    other: { ar: "مصروفات أخرى", en: "Other" },
+  };
+  return labels[category || ""]?.[ar ? "ar" : "en"] || category || "—";
+};
+
 type PendingInvoice = {
   id: string;
   invoice_number: string;
@@ -253,7 +267,7 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
               <thead><tr><th>{ar ? "رقم المصروف" : "Expense"}</th><th>{ar ? "المندوب" : "Rep"}</th><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "الوصف" : "Description"}</th><th>{ar ? "المبلغ" : "Amount"}</th><th>{ar ? "القرار" : "Decision"}</th></tr></thead>
               <tbody>
                 {loading ? <tr><td colSpan={6} className="ops-empty-row">{ar ? "جارٍ تحميل طلبات المصروفات…" : "Loading expense requests…"}</td></tr> : pendingExpenses.length === 0 ? <tr><td colSpan={6} className="ops-empty-row"><div className="ops-empty-copy"><Icon name="journal" size={20} /><strong>{ar ? "لا توجد مصروفات بانتظار الاعتماد" : "No expenses await approval"}</strong><span>{ar ? "ستظهر هنا مصروفات المندوبين الجديدة." : "New representative expenses will appear here."}</span></div></td></tr> : pendingExpenses.map((expense) => <Fragment key={expense.id}>
-                  <tr><td><span className="ops-doc-number">{expense.expense_number}</span></td><td><strong>{expense.rep_name || "مندوب"}</strong></td><td className="ops-date">{formatDate(expense.expense_date)}</td><td>{expense.description || expense.category || "—"}</td><td className="ops-amount">{formatAmount(expense.amount)} {tc("currency")}</td><td><div className="ops-row-actions"><button type="button" className="ops-approve-button" onClick={() => approvePendingExpense(expense)}>{ar ? "اعتماد" : "Approve"}</button><button type="button" className="ops-reject-button" onClick={() => { setRejectingExpenseId(rejectingExpenseId === expense.id ? null : expense.id); setActionError(""); }}>{ar ? "رفض" : "Reject"}</button></div></td></tr>
+                  <tr><td><span className="ops-doc-number">{expense.expense_number}</span></td><td><strong>{expense.rep_name || "مندوب"}</strong></td><td className="ops-date">{formatDate(expense.expense_date)}</td><td>{expense.description || expenseCategoryLabel(expense.category, ar)}</td><td className="ops-amount">{formatAmount(expense.amount)} {tc("currency")}</td><td><div className="ops-row-actions"><button type="button" className="ops-approve-button" onClick={() => approvePendingExpense(expense)}>{ar ? "اعتماد" : "Approve"}</button><button type="button" className="ops-reject-button" onClick={() => { setRejectingExpenseId(rejectingExpenseId === expense.id ? null : expense.id); setActionError(""); }}>{ar ? "رفض" : "Reject"}</button></div></td></tr>
                   {rejectingExpenseId === expense.id && <tr className="ops-rejection-row"><td colSpan={6}><div className="ops-rejection-form"><label htmlFor={`expense-reason-${expense.id}`}>{ar ? "سبب رفض المصروف" : "Expense rejection reason"}</label><input id={`expense-reason-${expense.id}`} value={expenseRejectionReason} onChange={(event) => setExpenseRejectionReason(event.target.value)} placeholder={ar ? "اكتب سبب الرفض ليصل للمندوب" : "Reason sent to the representative"} /><button type="button" className="ops-reject-confirm" onClick={() => rejectPendingExpense(expense)}>{ar ? "تأكيد الرفض" : "Confirm rejection"}</button><button type="button" className="ops-cancel-button" onClick={() => { setRejectingExpenseId(null); setExpenseRejectionReason(""); }}>{ar ? "إلغاء" : "Cancel"}</button></div></td></tr>}
                 </Fragment>)}
               </tbody>
