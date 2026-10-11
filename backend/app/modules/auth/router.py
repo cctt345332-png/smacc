@@ -225,7 +225,33 @@ class UpdateUserRequest(BaseModel):
     is_active: Optional[bool] = None
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 VALID_ROLES = {"admin", "manager", "accountant", "sales", "purchaser", "cashier", "warehouse", "hr", "viewer", "user", "sales_rep"}
+
+
+@router.post("/change-password")
+async def change_password(data: ChangePasswordRequest, current_user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """تغيير كلمة مرور المستخدم الحالي بعد التحقق من كلمة المرور الحالية."""
+    if len(data.new_password) < 8:
+        raise HTTPException(400, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
+    if data.new_password == data.current_password:
+        raise HTTPException(400, "كلمة المرور الجديدة يجب أن تختلف عن الحالية")
+
+    result = await db.execute(select(User).where(User.id == current_user["user_id"], User.tenant_id == current_user["tenant_id"]))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+    if not verify_password(data.current_password, user.hashed_password):
+        raise HTTPException(400, "كلمة المرور الحالية غير صحيحة")
+
+    user.hashed_password = hash_password(data.new_password)
+    await db.commit()
+    logger.info("Password changed successfully user_id=%s", user.id)
+    return {"message": "تم تغيير كلمة المرور بنجاح"}
 
 
 @router.get("/users")

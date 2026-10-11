@@ -86,8 +86,7 @@ export default function ProfilePage(props: { params: Promise<{ locale: string }>
     }
     setSavingPwd(true);
     try {
-      // endpoint تغيير كلمة المرور — يُضاف لاحقاً في الـ backend
-      // await api.post("/auth/change-password", { current_password: pwdForm.current, new_password: pwdForm.new_pwd });
+      await api.post("/auth/change-password", { current_password: pwdForm.current, new_password: pwdForm.new_pwd });
       setSavedPwd(true);
       setPwdForm({ current: "", new_pwd: "", confirm: "" });
       setTimeout(() => setSavedPwd(false), 2500);
