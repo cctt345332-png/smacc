@@ -500,14 +500,18 @@
 .legacy-app-shell .legacy-notification-dropdown {
   position: fixed !important;
   top: 33px !important;
-  inset-inline-start: 8px !important;
+  left: 8px !important;
+  right: auto !important;
+  inset-inline-start: auto !important;
   inset-inline-end: auto !important;
   z-index: 10080 !important;
 }
 @media (max-width: 768px) {
   .legacy-app-shell .legacy-notification-dropdown {
     top: 32px !important;
-    inset-inline: 8px auto !important;
+    left: 8px !important;
+    right: auto !important;
+    inset-inline: auto !important;
     width: min(320px, calc(100vw - 16px));
     min-width: 0 !important;
   }

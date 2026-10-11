@@ -43,6 +43,11 @@ const expenseCategoryLabel = (category?: string, ar = true) => {
   return labels[category || ""]?.[ar ? "ar" : "en"] || category || "—";
 };
 
+const expenseAttachmentUrl = (attachment: { content_type?: string; file_data: string }) =>
+  attachment.file_data.startsWith("data:")
+    ? attachment.file_data
+    : `data:${attachment.content_type || "application/octet-stream"};base64,${attachment.file_data}`;
+
 type PendingInvoice = {
   id: string;
   invoice_number: string;
@@ -66,6 +71,7 @@ type PendingExpense = {
   category?: string;
   expense_date?: string;
   description?: string;
+  attachments?: Array<{ id: string; file_name: string; content_type?: string; file_data: string }>;
 };
 
 function Metric({ label, value, hint, tone = "default" }: { label: string; value: string; hint: string; tone?: "default" | "alert" | "success" | "neutral" }) {
@@ -102,6 +108,7 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
   const [actionError, setActionError] = useState("");
   const [rejectingExpenseId, setRejectingExpenseId] = useState<string | null>(null);
   const [expenseRejectionReason, setExpenseRejectionReason] = useState("");
+  const [previewExpense, setPreviewExpense] = useState<PendingExpense | null>(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -267,7 +274,7 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
               <thead><tr><th>{ar ? "رقم المصروف" : "Expense"}</th><th>{ar ? "المندوب" : "Rep"}</th><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "الوصف" : "Description"}</th><th>{ar ? "المبلغ" : "Amount"}</th><th>{ar ? "القرار" : "Decision"}</th></tr></thead>
               <tbody>
                 {loading ? <tr><td colSpan={6} className="ops-empty-row">{ar ? "جارٍ تحميل طلبات المصروفات…" : "Loading expense requests…"}</td></tr> : pendingExpenses.length === 0 ? <tr><td colSpan={6} className="ops-empty-row"><div className="ops-empty-copy"><Icon name="journal" size={20} /><strong>{ar ? "لا توجد مصروفات بانتظار الاعتماد" : "No expenses await approval"}</strong><span>{ar ? "ستظهر هنا مصروفات المندوبين الجديدة." : "New representative expenses will appear here."}</span></div></td></tr> : pendingExpenses.map((expense) => <Fragment key={expense.id}>
-                  <tr><td><span className="ops-doc-number">{expense.expense_number}</span></td><td><strong>{expense.rep_name || "مندوب"}</strong></td><td className="ops-date">{formatDate(expense.expense_date)}</td><td>{expense.description || expenseCategoryLabel(expense.category, ar)}</td><td className="ops-amount">{formatAmount(expense.amount)} {tc("currency")}</td><td><div className="ops-row-actions"><button type="button" className="ops-approve-button" onClick={() => approvePendingExpense(expense)}>{ar ? "اعتماد" : "Approve"}</button><button type="button" className="ops-reject-button" onClick={() => { setRejectingExpenseId(rejectingExpenseId === expense.id ? null : expense.id); setActionError(""); }}>{ar ? "رفض" : "Reject"}</button></div></td></tr>
+                  <tr><td><span className="ops-doc-number">{expense.expense_number}</span></td><td><strong>{expense.rep_name || "مندوب"}</strong></td><td className="ops-date">{formatDate(expense.expense_date)}</td><td>{expense.description || expenseCategoryLabel(expense.category, ar)}</td><td className="ops-amount">{formatAmount(expense.amount)} {tc("currency")}</td><td><div className="ops-row-actions"><button type="button" className="ops-view-link" onClick={() => setPreviewExpense(expense)}>{ar ? "معاينة" : "Preview"}</button><button type="button" className="ops-approve-button" onClick={() => approvePendingExpense(expense)}>{ar ? "اعتماد" : "Approve"}</button><button type="button" className="ops-reject-button" onClick={() => { setRejectingExpenseId(rejectingExpenseId === expense.id ? null : expense.id); setActionError(""); }}>{ar ? "رفض" : "Reject"}</button></div></td></tr>
                   {rejectingExpenseId === expense.id && <tr className="ops-rejection-row"><td colSpan={6}><div className="ops-rejection-form"><label htmlFor={`expense-reason-${expense.id}`}>{ar ? "سبب رفض المصروف" : "Expense rejection reason"}</label><input id={`expense-reason-${expense.id}`} value={expenseRejectionReason} onChange={(event) => setExpenseRejectionReason(event.target.value)} placeholder={ar ? "اكتب سبب الرفض ليصل للمندوب" : "Reason sent to the representative"} /><button type="button" className="ops-reject-confirm" onClick={() => rejectPendingExpense(expense)}>{ar ? "تأكيد الرفض" : "Confirm rejection"}</button><button type="button" className="ops-cancel-button" onClick={() => { setRejectingExpenseId(null); setExpenseRejectionReason(""); }}>{ar ? "إلغاء" : "Cancel"}</button></div></td></tr>}
                 </Fragment>)}
               </tbody>
@@ -286,6 +293,15 @@ export default function DashboardPage(props: { params: Promise<{ locale: string 
             <article className="ops-panel ops-system-panel"><div className="ops-panel-head"><div className="ops-panel-title"><span className="ops-panel-icon"><Icon name="settings" size={16} /></span><div><h2>{ar ? "تهيئة النظام" : "System setup"}</h2><p>{ar ? "الوصول إلى الإعدادات التي تحفظ جاهزية التشغيل." : "Access the settings that keep operations ready."}</p></div></div></div><div className="ops-system-links"><Link href={`${base}/settings/company`}><Icon name="building" size={14} /><span>{ar ? "بيانات الشركة" : "Company profile"}</span></Link><Link href={`${base}/accounting/fiscal-years`}><Icon name="calendar" size={14} /><span>{ar ? "السنة المالية" : "Fiscal year"}</span></Link><Link href={`${base}/settings/users`}><Icon name="users" size={14} /><span>{ar ? "المستخدمون والصلاحيات" : "Users & roles"}</span></Link><Link href={`${base}/settings/tax`}><Icon name="tax" size={14} /><span>{ar ? "الفوترة الإلكترونية" : "E-invoicing"}</span></Link></div></article>
           </aside>
         </section>
+        {previewExpense && <div role="dialog" aria-modal="true" aria-label={ar ? "معاينة المصروف" : "Expense preview"} style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(20, 10, 28, .58)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }} onClick={() => setPreviewExpense(null)}>
+          <div className="card" style={{ width: "min(920px, 100%)", maxHeight: "92vh", overflow: "auto", padding: 18 }} onClick={(event) => event.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #D5C8DD", paddingBottom: 10, marginBottom: 14 }}><div><h2 style={{ margin: 0, color: "#3E0865", fontSize: 18 }}>{ar ? "معاينة المصروف" : "Expense preview"}</h2><div style={{ color: "#75617F", fontSize: 12, marginTop: 3 }}>{previewExpense.expense_number} — {previewExpense.rep_name || (ar ? "مندوب" : "Representative")}</div></div><button type="button" className="btn btn-secondary btn-sm" onClick={() => setPreviewExpense(null)}>{ar ? "إغلاق" : "Close"}</button></div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 16 }}><div><small>{ar ? "التاريخ" : "Date"}</small><strong style={{ display: "block", marginTop: 3 }}>{formatDate(previewExpense.expense_date)}</strong></div><div><small>{ar ? "التصنيف" : "Category"}</small><strong style={{ display: "block", marginTop: 3 }}>{expenseCategoryLabel(previewExpense.category, ar)}</strong></div><div><small>{ar ? "المبلغ" : "Amount"}</small><strong style={{ display: "block", marginTop: 3 }}>{formatAmount(previewExpense.amount)} {tc("currency")}</strong></div></div>
+            <div style={{ padding: 10, background: "#F8F5FA", border: "1px solid #E5DCEA", marginBottom: 14 }}><strong>{ar ? "الوصف" : "Description"}</strong><div style={{ marginTop: 5 }}>{previewExpense.description || expenseCategoryLabel(previewExpense.category, ar)}</div></div>
+            <h3 style={{ margin: "0 0 10px", color: "#3E0865", fontSize: 14 }}>{ar ? "المرفقات" : "Attachments"}</h3>
+            {!previewExpense.attachments?.length ? <div style={{ color: "#75617F" }}>{ar ? "لا توجد مرفقات" : "No attachments"}</div> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 12 }}>{previewExpense.attachments.map((attachment) => { const url = expenseAttachmentUrl(attachment); const isImage = (attachment.content_type || "").startsWith("image/"); const isPdf = attachment.content_type === "application/pdf" || attachment.file_name.toLowerCase().endsWith(".pdf"); return <div key={attachment.id} style={{ border: "1px solid #D5C8DD", background: "#fff", padding: 8 }}><div style={{ fontSize: 11, fontWeight: 700, color: "#4C126D", marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={attachment.file_name}>{attachment.file_name}</div>{isImage ? <img src={url} alt={attachment.file_name} style={{ width: "100%", height: 260, objectFit: "contain", background: "#F8F5FA" }} /> : isPdf ? <iframe title={attachment.file_name} src={url} style={{ width: "100%", height: 300, border: 0, background: "#F8F5FA" }} /> : <div style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center", color: "#75617F" }}>{ar ? "هذا النوع لا يدعم المعاينة المباشرة" : "This file type cannot be previewed"}</div>}</div>; })}</div>}
+          </div>
+        </div>}
       </div>
     </AppLayout>
   );
