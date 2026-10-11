@@ -138,7 +138,7 @@ export default function Header({ locale, collapsed, onMobileMenuClick }: { local
             {notifOpen && <div className="dropdown legacy-dropdown" style={{ minWidth: 300, maxHeight: 400, overflow: "auto" }}>
               <div className="dropdown-header legacy-dropdown-header"><span>{locale === "ar" ? "التنبيهات" : "Notifications"}</span>{unreadCount > 0 && <button className="btn btn-ghost btn-sm" onClick={handleMarkAll}>{locale === "ar" ? "تحديد الكل" : "Mark all"}</button>}</div>
               {notifications.length === 0 ? <div className="legacy-dropdown-empty">{locale === "ar" ? "لا توجد تنبيهات" : "No notifications"}</div> : notifications.map(item => <div key={item.id} className={`legacy-notification-row${item.is_read ? "" : " unread"}`} onClick={() => handleMarkRead(item.id)}><strong>{locale === "ar" ? item.title_ar : item.title_en}</strong><span>{new Date(item.created_at).toLocaleDateString(locale === "ar" ? "ar-SA" : "en-SA")}</span></div>)}
-              <Link href={`${base}/settings/alerts`} className="legacy-dropdown-footer" onClick={() => setNotifOpen(false)}>{locale === "ar" ? "سجل التنبيهات" : "Alert register"}</Link>
+              <Link href={`${base}/settings/notifications`} className="legacy-dropdown-footer" onClick={() => setNotifOpen(false)}>{locale === "ar" ? "إدارة الإشعارات والإرسال اليدوي" : "Notification center & manual sending"}</Link>
             </div>}
           </div>
           <div className="legacy-header-popup" ref={profileRef}>

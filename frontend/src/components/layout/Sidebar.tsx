@@ -231,6 +231,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "المستخدمون" : "Users",                  href: `${base}/settings/users` },
           { label: ar ? "الصلاحيات" : "Roles",                   href: `${base}/settings/roles` },
           { label: ar ? "إعدادات التنبيهات" : "Alert Settings",  href: `${base}/settings/alerts` },
+          { label: ar ? "إدارة الإشعارات والإرسال" : "Notification Center", href: `${base}/settings/notifications` },
           { label: ar ? "الفروع" : "Branches",                   href: `${base}/settings/branches` },
           { label: ar ? "العملات" : "Currencies",                href: `${base}/settings/currencies` },
           { label: ar ? "النسخ الاحتياطي" : "Backup",           href: `${base}/settings/backup` },

@@ -32,6 +32,7 @@ export default function NotificationsAdminPage(props: { params: Promise<{ locale
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [recipientQuery, setRecipientQuery] = useState("");
   const [form, setForm] = useState({ title: "", body: "", severity: "info", roles: [] as string[], user_ids: [] as string[] });
 
   const load = async () => {
@@ -51,6 +52,11 @@ export default function NotificationsAdminPage(props: { params: Promise<{ locale
   useEffect(() => { load(); }, []);
 
   const roles = useMemo(() => Array.from(new Set(recipients.map(item => item.role))).sort(), [recipients]);
+  const filteredRecipients = useMemo(() => {
+    const query = recipientQuery.trim().toLowerCase();
+    if (!query) return recipients;
+    return recipients.filter(item => [item.full_name, item.email, item.role].filter(Boolean).join(" ").toLowerCase().includes(query));
+  }, [recipients, recipientQuery]);
   const selectedCount = new Set([
     ...form.user_ids,
     ...recipients.filter(item => form.roles.includes(item.role)).map(item => item.id),
@@ -59,6 +65,9 @@ export default function NotificationsAdminPage(props: { params: Promise<{ locale
   const toggle = (key: "roles" | "user_ids", value: string) => {
     setForm(current => ({ ...current, [key]: current[key].includes(value) ? current[key].filter(item => item !== value) : [...current[key], value] }));
   };
+
+  const selectVisibleRecipients = () => setForm(current => ({ ...current, user_ids: Array.from(new Set([...current.user_ids, ...filteredRecipients.map(item => item.id)])) }));
+  const clearRecipients = () => setForm(current => ({ ...current, roles: [], user_ids: [] }));
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -95,7 +104,7 @@ export default function NotificationsAdminPage(props: { params: Promise<{ locale
           <label className="form-label">{ar ? "الرسالة" : "Message"}<textarea className="form-input" rows={5} value={form.body} onChange={e => setForm({ ...form, body: e.target.value })} /></label>
           <label className="form-label">{ar ? "الأهمية" : "Priority"}<select className="form-input" value={form.severity} onChange={e => setForm({ ...form, severity: e.target.value })}><option value="info">{ar ? "عادي" : "Normal"}</option><option value="warning">{ar ? "مهم" : "Important"}</option><option value="critical">{ar ? "عاجل" : "Urgent"}</option></select></label>
           <div><div className="form-label" style={{ marginBottom: 8 }}>{ar ? `الأدوار (${form.roles.length})` : `Roles (${form.roles.length})`}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{roles.map(role => <label key={role} style={{ display: "inline-flex", gap: 6, alignItems: "center", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px", fontSize: 12 }}><input type="checkbox" checked={form.roles.includes(role)} onChange={() => toggle("roles", role)} />{ar ? ROLE_LABELS[role]?.ar || role : ROLE_LABELS[role]?.en || role}</label>)}</div></div>
-          <div><div className="form-label" style={{ marginBottom: 8 }}>{ar ? `مستخدمون محددون (${form.user_ids.length})` : `Specific users (${form.user_ids.length})`}</div><div style={{ maxHeight: 190, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>{recipients.map(item => <label key={item.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 4px", fontSize: 12, borderBottom: "1px solid var(--border-light)" }}><input type="checkbox" checked={form.user_ids.includes(item.id)} onChange={() => toggle("user_ids", item.id)} /><span style={{ flex: 1 }}>{item.full_name}</span><span style={{ color: "var(--text-muted)" }}>{ROLE_LABELS[item.role]?.[ar ? "ar" : "en"] || item.role}</span></label>)}</div></div>
+          <div><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}><div className="form-label">{ar ? `مستخدمون محددون (${form.user_ids.length})` : `Specific users (${form.user_ids.length})`}</div><div style={{ display: "flex", gap: 6 }}><button type="button" className="btn btn-ghost btn-sm" onClick={selectVisibleRecipients}>{ar ? "تحديد الظاهر" : "Select visible"}</button><button type="button" className="btn btn-ghost btn-sm" onClick={clearRecipients}>{ar ? "مسح" : "Clear"}</button></div></div><input className="form-input" value={recipientQuery} onChange={e => setRecipientQuery(e.target.value)} placeholder={ar ? "ابحث بالاسم أو البريد أو الدور..." : "Search by name, email or role..."} style={{ marginBottom: 8 }} /><div style={{ maxHeight: 190, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>{filteredRecipients.map(item => <label key={item.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 4px", fontSize: 12, borderBottom: "1px solid var(--border-light)" }}><input type="checkbox" checked={form.user_ids.includes(item.id)} onChange={() => toggle("user_ids", item.id)} /><span style={{ flex: 1 }}>{item.full_name}<small style={{ display: "block", color: "var(--text-muted)" }}>{item.email || ""}</small></span><span style={{ color: "var(--text-muted)" }}>{ROLE_LABELS[item.role]?.[ar ? "ar" : "en"] || item.role}</span></label>)}</div></div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}><span style={{ color: "var(--text-muted)", fontSize: 12 }}>{ar ? `سيصل حالياً إلى ${selectedCount} مستخدم` : `Will target ${selectedCount} users`}</span><button className="btn btn-primary" type="submit" disabled={sending || loading}><IcSend />{sending ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "إرسال الآن" : "Send now")}</button></div>
         </div>
       </form>
