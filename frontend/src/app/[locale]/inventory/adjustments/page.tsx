@@ -159,6 +159,22 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
 
   const changedCount = Object.values(countMap).filter(v => v !== "").length + Object.keys(serialChanges).length;
 
+  // الطباعة لا تعتمد على countMap وحده؛ لأنه يُصفّر بعد حفظ الجرد.
+  // نطبع كل الأصناف الظاهرة، مع استخدام الكمية المدخلة عند وجودها،
+  // وإلا نعرض كمية النظام الحالية حتى لا يخرج التقرير فارغاً.
+  const printRows = visibleItems.map((item: any) => {
+    const isSerial = item.tracking_type === "serial";
+    const systemQty = Number(isSerial ? (item.serial_count ?? item.quantity_on_hand ?? 0) : (item.quantity_on_hand ?? 0));
+    const countedValue = countMap[item.id];
+    const countedQty = countedValue !== undefined && countedValue !== "" ? countedValue : fmt(systemQty);
+    return [
+      String(item.name_ar || item.name_en || "—"),
+      String(TRACKING_AR[item.tracking_type] || item.tracking_type || "—"),
+      fmt(systemQty),
+      String(countedQty),
+    ];
+  });
+
   if (loading) return <div className="empty-state" style={{ minHeight: "60vh" }}><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>;
 
   return (
@@ -180,7 +196,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
           <button className="btn btn-secondary btn-sm" onClick={handleOpenHistory}>
             <Icon name="view" size={14} /> {ar ? "سجل الجرد السابق" : "Count History"}
           </button>
-          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={ar ? "الكميات المدخلة قبل الحفظ" : "Entered counts before posting"} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: selectedWarehouse === "all" ? (ar ? "كل المستودعات" : "All warehouses") : warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "الأصناف المعدلة" : "Adjusted items", value: String(changedCount), tone: "amber" }]} tables={[{ headers: [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"], rows: items.filter(item => countMap[item.id] !== undefined && countMap[item.id] !== "").map(item => [String(item.name_ar), String(TRACKING_AR[item.tracking_type] || item.tracking_type), fmt(item.quantity_on_hand), String(countMap[item.id])]), note: notes || undefined }]} />
+          <StructuredReportPrintButton locale={locale} title={ar ? "ورقة جرد وتسوية المخزون" : "Inventory Count & Adjustment Sheet"} subtitle={ar ? "كميات الأصناف الحالية والمجردة" : "Current and counted item quantities"} period={new Date().toLocaleDateString("en-SA")} reportCode={`IC-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} metrics={[{ label: ar ? "المستودع" : "Warehouse", value: selectedWarehouse === "all" ? (ar ? "كل المستودعات" : "All warehouses") : warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—", tone: "green" }, { label: ar ? "الأصناف" : "Items", value: String(visibleItems.length), tone: "amber" }, { label: ar ? "التغييرات غير المحفوظة" : "Unsaved changes", value: String(changedCount), tone: "neutral" }]} tables={[{ headers: [ar ? "الصنف" : "Item", ar ? "نوع التتبع" : "Tracking", ar ? "الكمية الحالية" : "Current qty", ar ? "الكمية المجردة" : "Counted qty"], rows: printRows, note: notes || undefined }]} />
           {changedCount > 0 && (
             <button className="btn btn-primary" onClick={handleSaveCount} disabled={saving}>
               <Icon name="check" size={16} />
