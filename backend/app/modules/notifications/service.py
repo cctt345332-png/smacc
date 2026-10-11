@@ -82,9 +82,10 @@ async def update_alert_settings(db: AsyncSession, tenant_id: str, data: dict) ->
 
 def _notif(tenant_id: str, ntype: NotificationType, severity: NotificationSeverity,
            title_ar: str, title_en: str, msg_ar: str, msg_en: str,
-           ref_id: str | None = None, ref_type: str | None = None) -> Notification:
+           ref_id: str | None = None, ref_type: str | None = None,
+           user_id: str | None = None) -> Notification:
     return Notification(
-        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        id=str(uuid.uuid4()), tenant_id=tenant_id, user_id=user_id,
         type=ntype, severity=severity,
         title_ar=title_ar, title_en=title_en,
         message_ar=msg_ar, message_en=msg_en,
@@ -92,16 +93,27 @@ def _notif(tenant_id: str, ntype: NotificationType, severity: NotificationSeveri
     )
 
 
-async def _exists(db: AsyncSession, tenant_id: str, ref_id: str, ntype: NotificationType) -> bool:
+async def _exists(db: AsyncSession, tenant_id: str, ref_id: str, ntype: NotificationType,
+                  user_id: str | None = None) -> bool:
     r = await db.execute(
         select(Notification).where(
             Notification.tenant_id == tenant_id,
             Notification.reference_id == ref_id,
             Notification.type == ntype,
-            Notification.is_read == False,
+            Notification.user_id == user_id,
+            Notification.created_at >= datetime.utcnow() - timedelta(days=1),
         )
     )
     return r.scalar_one_or_none() is not None
+
+
+async def _management_user_ids(db: AsyncSession, tenant_id: str) -> list[str]:
+    result = await db.execute(select(User.id).where(
+        User.tenant_id == tenant_id,
+        User.is_active == True,
+        User.role.in_(["admin", "manager", "accountant"]),
+    ))
+    return list(result.scalars().all())
 
 
 # ─── Run All Alerts ───────────────────────────────────────────────────
@@ -110,6 +122,7 @@ async def run_all_alerts(db: AsyncSession, tenant_id: str) -> dict:
     """فحص كل الأقسام وإنشاء التنبيهات المطلوبة"""
     settings = await get_alert_settings(db, tenant_id)
     now = datetime.utcnow()
+    run_started_at = now
     created = 0
 
     # 1. تنبيهات الأصول الثابتة
@@ -130,8 +143,15 @@ async def run_all_alerts(db: AsyncSession, tenant_id: str) -> dict:
     # 6. تنبيهات المحاسبة
     created += await _check_accounting_alerts(db, tenant_id, settings, now)
 
+    await db.flush()
+    new_result = await db.execute(select(Notification).where(
+        Notification.tenant_id == tenant_id,
+        Notification.created_at >= run_started_at,
+    ))
+    new_notifications = new_result.scalars().all()
     await db.commit()
-    return {"alerts_created": created}
+    push = await dispatch_push(db, tenant_id, new_notifications) if new_notifications else {"sent": 0}
+    return {"alerts_created": created, "push": push}
 
 
 # للتوافق مع الكود القديم
@@ -286,6 +306,7 @@ async def _check_sales_alerts(db: AsyncSession, tenant_id: str, settings: AlertS
     if settings.sales_overdue_alert:
         try:
             from app.models.sales import Invoice, InvoiceStatus
+            from app.models.reps import SalesRep
             overdue_date = now - timedelta(days=settings.sales_overdue_days)
             r = await db.execute(
                 select(Invoice).where(
@@ -296,17 +317,28 @@ async def _check_sales_alerts(db: AsyncSession, tenant_id: str, settings: AlertS
                 )
             )
             invoices = r.scalars().all()
+            management_ids = await _management_user_ids(db, tenant_id)
             for inv in invoices:
-                if not await _exists(db, tenant_id, inv.id, NotificationType.SALES_OVERDUE_INVOICE):
-                    days_overdue = (now - inv.due_date).days if inv.due_date else 0
-                    remaining = float(inv.total) - float(inv.paid_amount)
+                days_overdue = (now - inv.due_date).days if inv.due_date else 0
+                remaining = float(inv.total) - float(inv.paid_amount)
+                rep_user_id = None
+                if inv.rep_id:
+                    rep_user_id = await db.scalar(select(SalesRep.user_id).where(
+                        SalesRep.id == inv.rep_id, SalesRep.tenant_id == tenant_id,
+                    ))
+                recipients = list(dict.fromkeys(
+                    ([rep_user_id] if rep_user_id else []) + management_ids
+                ))
+                for recipient_id in recipients:
+                    if await _exists(db, tenant_id, inv.id, NotificationType.SALES_OVERDUE_INVOICE, recipient_id):
+                        continue
                     db.add(_notif(
                         tenant_id, NotificationType.SALES_OVERDUE_INVOICE,
                         NotificationSeverity.CRITICAL if days_overdue > 30 else NotificationSeverity.WARNING,
                         f"فاتورة متأخرة: {inv.buyer_name_ar}", f"Overdue Invoice: {inv.buyer_name_ar}",
                         f"الفاتورة {inv.invoice_number} للعميل '{inv.buyer_name_ar}' متأخرة {days_overdue} يوم. المبلغ المستحق: {remaining:.2f} ر.س",
                         f"Invoice {inv.invoice_number} for '{inv.buyer_name_ar}' is {days_overdue} days overdue. Amount: {remaining:.2f} SAR",
-                        inv.id, "invoice",
+                        inv.id, "invoice", recipient_id,
                     ))
                     created += 1
         except Exception:
@@ -594,6 +626,31 @@ async def notify_management_event(
         reference_id=reference_id, reference_type=reference_type,
         created_by_id=actor_id, is_manual=False,
     ) for recipient in recipients]
+    db.add_all(notifications)
+    await db.commit()
+    try:
+        push = await dispatch_push(db, tenant_id, notifications)
+    except Exception:
+        push = {"sent": 0, "error": "push_dispatch_failed"}
+    return {"created": len(notifications), "push": push}
+
+
+async def notify_users_event(
+    db: AsyncSession, tenant_id: str, actor_id: str, recipient_ids: list[str],
+    title_ar: str, title_en: str, message_ar: str, message_en: str,
+    reference_id: str | None = None, reference_type: str | None = None,
+    severity: NotificationSeverity = NotificationSeverity.INFO,
+):
+    recipients = list(dict.fromkeys(str(item) for item in recipient_ids if item and str(item) != str(actor_id)))
+    if not recipients:
+        return {"created": 0, "push": {"sent": 0}}
+    notifications = [Notification(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, user_id=recipient_id,
+        type=NotificationType.GENERAL, severity=severity,
+        title_ar=title_ar, title_en=title_en, message_ar=message_ar, message_en=message_en,
+        reference_id=reference_id, reference_type=reference_type,
+        created_by_id=actor_id, is_manual=False,
+    ) for recipient_id in recipients]
     db.add_all(notifications)
     await db.commit()
     try:

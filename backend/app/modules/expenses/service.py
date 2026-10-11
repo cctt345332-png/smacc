@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
 from app.modules.expenses.schemas import ExpenseCreate, ExpenseReject
 from app.modules.accounting import service as accounting_service
+from app.models.notifications import NotificationSeverity
 
 CATEGORY_LABELS = {
     "fuel": "وقود", "vehicle_maintenance": "صيانة سيارة", "shipping": "شحن وتوصيل",
@@ -79,6 +80,15 @@ async def create_expense(db: AsyncSession, tenant_id: str, user_id: str, data: E
         db.add(RepExpenseAttachment(id=str(uuid.uuid4()), expense_id=expense.id, file_name=a.file_name,
                                     content_type=a.content_type, file_size=a.file_size, file_data=a.file_data))
     await db.commit()
+    from app.modules.notifications.service import notify_management_event
+    await notify_management_event(
+        db, tenant_id, user_id,
+        f"مصروف جديد بانتظار الاعتماد: {expense.expense_number}",
+        f"Expense awaiting approval: {expense.expense_number}",
+        f"أرسل مندوب مصروفاً بقيمة {float(expense.amount):.2f} ر.س ويحتاج مراجعة الإدارة.",
+        f"A representative submitted an expense of {float(expense.amount):.2f} SAR for approval.",
+        expense.id, "rep_expense",
+    )
     return await get_expense(db, tenant_id, expense.id)
 
 
@@ -127,6 +137,15 @@ async def approve_expense(db: AsyncSession, tenant_id: str, user_id: str, expens
     db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=credit_account.id, description=expense.description, debit=0, credit=amount, line_order=1))
     expense.status = "approved"; expense.journal_entry_id = entry.id; expense.approved_by = user_id; expense.approved_at = datetime.utcnow(); expense.updated_at = datetime.utcnow(); expense.rejection_reason = None
     await db.commit()
+    from app.modules.notifications.service import notify_users_event
+    await notify_users_event(
+        db, tenant_id, user_id, [expense.submitted_by],
+        f"تم اعتماد المصروف: {expense.expense_number}",
+        f"Expense approved: {expense.expense_number}",
+        f"تم اعتماد مصروفك بمبلغ {float(expense.amount):.2f} ر.س.",
+        f"Your expense of {float(expense.amount):.2f} SAR was approved.",
+        expense.id, "rep_expense",
+    )
     return await get_expense(db, tenant_id, expense_id)
 
 
@@ -137,4 +156,13 @@ async def reject_expense(db: AsyncSession, tenant_id: str, user_id: str, expense
     if expense.status != "pending": raise HTTPException(400, "لا يمكن رفض هذا المصروف في حالته الحالية")
     expense.status = "rejected"; expense.rejection_reason = data.reason; expense.approved_by = user_id; expense.updated_at = datetime.utcnow()
     await db.commit()
+    from app.modules.notifications.service import notify_users_event
+    await notify_users_event(
+        db, tenant_id, user_id, [expense.submitted_by],
+        f"تم رفض المصروف: {expense.expense_number}",
+        f"Expense rejected: {expense.expense_number}",
+        f"تم رفض مصروفك. السبب: {data.reason}",
+        f"Your expense was rejected. Reason: {data.reason}",
+        expense.id, "rep_expense", NotificationSeverity.WARNING,
+    )
     return await get_expense(db, tenant_id, expense_id)

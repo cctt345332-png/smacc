@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request
 import os
+import asyncio
+from sqlalchemy import select
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.core.config import settings
@@ -24,6 +26,30 @@ from app.modules.maintenance.router import router as maintenance_router
 from app.modules.expenses.router import router as expenses_router
 
 app = FastAPI(title="ERP System", version="1.0.0")
+_notification_scheduler_task: asyncio.Task | None = None
+
+
+async def _notification_scheduler() -> None:
+    """يفحص التنبيهات دورياً؛ التكرار محكوم بمنع التكرار داخل خدمة الإشعارات."""
+    from app.core.database import AsyncSessionLocal
+    from app.models.tenant import Tenant
+    from app.modules.notifications.service import run_all_alerts
+    first_run = True
+    while True:
+        try:
+            await asyncio.sleep(30 if first_run else 6 * 60 * 60)
+            first_run = False
+            async with AsyncSessionLocal() as session:
+                tenants = (await session.execute(select(Tenant.id))).scalars().all()
+                for tenant_id in tenants:
+                    try:
+                        await run_all_alerts(session, tenant_id)
+                    except Exception:
+                        await session.rollback()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await asyncio.sleep(60)
 
 
 @app.on_event("startup")
@@ -35,6 +61,24 @@ async def initialise_preview_ai() -> None:
     from app.modules.ai.service import ensure_preview_internal_ai
     async with AsyncSessionLocal() as session:
         await ensure_preview_internal_ai(session)
+
+
+@app.on_event("startup")
+async def start_notification_scheduler() -> None:
+    global _notification_scheduler_task
+    _notification_scheduler_task = asyncio.create_task(_notification_scheduler())
+
+
+@app.on_event("shutdown")
+async def stop_notification_scheduler() -> None:
+    global _notification_scheduler_task
+    if _notification_scheduler_task:
+        _notification_scheduler_task.cancel()
+        try:
+            await _notification_scheduler_task
+        except asyncio.CancelledError:
+            pass
+        _notification_scheduler_task = None
 
 
 def configured_origins() -> list[str]:

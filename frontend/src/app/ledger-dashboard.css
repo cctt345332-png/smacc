@@ -494,3 +494,21 @@
 .legacy-app-shell .legacy-quickbar-items { overflow-x:auto; overflow-y:visible; }
 .legacy-app-shell .legacy-quickbar-config-wrap { z-index:10061; }
 .legacy-app-shell .legacy-quickbar-settings-panel { z-index:10062; }
+
+/* Notification popover belongs to the global titlebar, never to the quick-actions row. */
+.legacy-app-shell .legacy-global-titlebar { position: relative; z-index: 10070; }
+.legacy-app-shell .legacy-notification-dropdown {
+  position: fixed !important;
+  top: 33px !important;
+  inset-inline-start: 8px !important;
+  inset-inline-end: auto !important;
+  z-index: 10080 !important;
+}
+@media (max-width: 768px) {
+  .legacy-app-shell .legacy-notification-dropdown {
+    top: 32px !important;
+    inset-inline: 8px auto !important;
+    width: min(320px, calc(100vw - 16px));
+    min-width: 0 !important;
+  }
+}
