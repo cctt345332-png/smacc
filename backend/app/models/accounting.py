@@ -210,7 +210,7 @@ class VATSetting(Base):
     zatca_env: Mapped[str] = mapped_column(String(20), default="sandbox")       # sandbox / production
     zatca_cert: Mapped[str | None] = mapped_column(Text, nullable=True)
     zatca_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_zatca_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_zatca_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # إعدادات المرحلة الثانية — تحفظ الأسرار مشفرة بواسطة مفتاح التطبيق
     zatca_branch_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     zatca_activity: Mapped[str | None] = mapped_column(String(300), nullable=True)

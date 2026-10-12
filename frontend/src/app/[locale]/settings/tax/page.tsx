@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getVATSettings, saveVATSettings, getAccounts, getZATCAStatus, prepareZATCA, requestComplianceCSID } from "@/lib/accounting";
-import { Icon } from "@/components/ui/Icons";
+import { getVATSettings, saveVATSettings, getZATCAStatus, prepareZATCA, requestComplianceCSID } from "@/lib/accounting";
 
 export default function TaxSettingsPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
@@ -12,7 +11,6 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
   } = params;
 
   const ar = locale === "ar";
-  const [accounts, setAccounts] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [zatcaStatus, setZatcaStatus] = useState<any>(null);
@@ -22,11 +20,10 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
   const [phase2Setup, setPhase2Setup] = useState(false);
   const [form, setForm] = useState({
     vat_number: "", cr_number: "", vat_rate: "15", zatca_branch_name: "الفرع الرئيسي",
-    zatca_activity: "", zatca_invoice_type_map: "both", vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: false,
+    zatca_activity: "", zatca_invoice_type_map: "both", vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: true,
   });
 
   useEffect(() => {
-    getAccounts().then(({ data }) => setAccounts(data));
     getVATSettings().then(({ data }) => {
       setForm({
         vat_number: data.vat_number || "",
@@ -37,7 +34,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         zatca_invoice_type_map: data.zatca_invoice_type_map || "both",
         vat_account_id: data.vat_account_id || "",
         zatca_env: data.zatca_env || "sandbox",
-        is_zatca_enabled: data.is_zatca_enabled,
+        is_zatca_enabled: true,
       });
     }).catch(() => {});
     getZATCAStatus().then(({ data }) => setZatcaStatus(data)).catch(() => {});
@@ -95,9 +92,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
           <h1 className="page-title">{ar ? "إعدادات الضريبة وزاتكا" : "Tax & ZATCA Settings"}</h1>
           <p className="page-subtitle">{ar ? "متطلبات هيئة الزكاة والضريبة والجمارك" : "ZATCA compliance settings"}</p>
         </div>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الإعدادات" : "Save Settings")}
-        </button>
+        <span />
       </div>
 
       {saved && (
@@ -106,51 +101,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         </div>
       )}
 
-      <div className="grid-2" style={{ marginBottom: 20 }}>
-        {/* VAT Info */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">{ar ? "بيانات الشركة الضريبية" : "Company Tax Info"}</span>
-          </div>
-          <div className="card-body">
-            <div className="form-group">
-              <label className="form-label">
-                {ar ? "الرقم الضريبي" : "VAT Number"} <span className="required">*</span>
-              </label>
-              <input className="form-input" value={form.vat_number}
-                onChange={e => setForm(f => ({ ...f, vat_number: e.target.value }))}
-                placeholder="300XXXXXXXXX1003" maxLength={15} />
-              <p className="form-hint">{ar ? "15 رقم — يبدأ بـ 3 وينتهي بـ 3" : "15 digits — starts and ends with 3"}</p>
-            </div>
-            <div className="form-group">
-              <label className="form-label">{ar ? "رقم السجل التجاري" : "CR Number"}</label>
-              <input className="form-input" value={form.cr_number}
-                onChange={e => setForm(f => ({ ...f, cr_number: e.target.value }))}
-                placeholder="1010XXXXXX" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">{ar ? "نسبة ضريبة القيمة المضافة" : "VAT Rate"}</label>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <input type="number" className="form-input" style={{ width: 90 }} value={form.vat_rate}
-                  onChange={e => setForm(f => ({ ...f, vat_rate: e.target.value }))} min="0" max="100" step="0.01" />
-                <span style={{ fontWeight: 700, fontSize: 20, color: "var(--primary)" }}>%</span>
-                <span className="badge badge-info">
-                  {ar ? "السعودية: 15%" : "Saudi: 15%"}
-                </span>
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">{ar ? "حساب ضريبة القيمة المضافة" : "VAT GL Account"}</label>
-              <select className="form-input form-select" value={form.vat_account_id}
-                onChange={e => setForm(f => ({ ...f, vat_account_id: e.target.value }))}>
-                <option value="">{ar ? "اختر حساب..." : "Select account..."}</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* ZATCA */}
+      <div style={{ marginBottom: 20 }}>
         <div className="card">
           <div className="card-header">
             <span className="card-title">{ar ? "ربط زاتكا" : "ZATCA Integration"}</span>
@@ -177,7 +128,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                 <span><strong>{ar ? "المرحلة الثانية" : "Phase 2"}</strong> <span style={{ color: "#64748B" }}>({ar ? "مرحلة الربط والتكامل" : "Integration"})</span></span>
               </label>
             </div>
-            {!zatcaStatus?.has_csr && !phase2Setup && (
+            {!zatcaStatus?.has_csr && phase2Setup && (
               <button className="btn btn-primary" type="button" style={{ marginTop: 14, background: "#5546D9" }} onClick={() => setPhase2Setup(true)}>
                 {ar ? "ابدأ التهيئة" : "Start setup"}
               </button>
@@ -195,6 +146,14 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                   <strong style={{ display: "block", color: form.zatca_env === option.value ? "#5546D9" : "#C26B2D", marginBottom: 6 }}>{option.title}</strong>
                   <span style={{ color: "#64748B", fontSize: 11, lineHeight: 1.7 }}>{option.text}</span>
                 </button>)}
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "الرقم الضريبي" : "VAT Number"} <span className="required">*</span></label>
+                <input className="form-input" value={form.vat_number} onChange={e => setForm(f => ({ ...f, vat_number: e.target.value }))} placeholder="300XXXXXXXXX1003" maxLength={15} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "رقم السجل التجاري" : "CR Number"}</label>
+                <input className="form-input" value={form.cr_number} onChange={e => setForm(f => ({ ...f, cr_number: e.target.value }))} placeholder="1010XXXXXX" />
               </div>
               <div className="form-group">
                 <label className="form-label">{ar ? "اسم الفرع في زاتكا" : "ZATCA branch name"}</label>
@@ -229,35 +188,14 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
             </div>
             }
           </div>
-        </div>
-      </div>
-
-      {/* VAT summary */}
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">{ar ? "ملخص الإقرار الضريبي — الربع الحالي" : "VAT Return Summary — Current Quarter"}</span>
-          <Link href={`/${locale}/reports/accounting/vat`} style={{ fontSize: 12, color: "var(--primary)", textDecoration: "none", fontWeight: 600 }}>
-            {ar ? "عرض التقرير الكامل ←" : "View Full Report →"}
-          </Link>
-        </div>
-        <div className="card-body">
-          <div className="grid-3">
-            {[
-              { label: ar ? "ضريبة المبيعات (مخرجات)" : "Output VAT", value: "0.00", color: "#6F4A84", icon: "vatOut" as const },
-              { label: ar ? "ضريبة المشتريات (مدخلات)" : "Input VAT", value: "0.00", color: "#5A187E", icon: "vatIn" as const },
-              { label: ar ? "صافي الضريبة المستحقة" : "Net VAT Payable", value: "0.00", color: "#D97706", icon: "money" as const },
-            ].map(item => (
-              <div key={item.label} className="stat-card">
-                <div className="stat-icon" style={{ background: item.color + "18", color: item.color }}><Icon name={item.icon} size={20} /></div>
-                <div className="stat-content">
-                  <div className="stat-label">{item.label}</div>
-                  <div className="stat-value">{item.value} {ar ? "ر.س" : "SAR"}</div>
-                </div>
-              </div>
-            ))}
+          <div className="card-footer" style={{ display: "flex", justifyContent: "flex-start" }}>
+            <button className="btn btn-success" type="button" onClick={handleSave} disabled={saving}>
+              {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ" : "Save")}
+            </button>
           </div>
         </div>
       </div>
+
     </>
   );
 }

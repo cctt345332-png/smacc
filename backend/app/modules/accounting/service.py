@@ -718,6 +718,26 @@ async def upsert_vat_settings(db: AsyncSession, tenant_id: str, data: VATSetting
         db.add(vat)
     for k, v in data.model_dump(exclude_none=True).items():
         setattr(vat, k, v)
+    # الربط المحاسبي تلقائي: نستخدم حسابات الشجرة القياسية ولا نطلب اختيارها
+    # من هذه الشاشة. لا ننشئ حساباً جديداً ولا نغير أي قيد موجود.
+    accounts_result = await db.execute(
+            select(Account).where(
+                Account.tenant_id == tenant_id,
+                Account.is_active.is_(True),
+                Account.is_posting.is_(True),
+            )
+        )
+    accounts = list(accounts_result.scalars().all())
+    output = next((a for a in accounts if a.code in {"02141", "212"}), None)
+    input_account = next((a for a in accounts if a.code in {"01151", "115"}), None)
+    if not output:
+        output = next((a for a in accounts if "ضريبة القيمة المضافة المخرجات" in (a.name_ar or "")), None)
+    if not input_account:
+        input_account = next((a for a in accounts if "ضريبة القيمة المضافة المدخلات" in (a.name_ar or "")), None)
+    if output:
+        vat.vat_account_id = output.id
+    if input_account:
+        vat.vat_receivable_account_id = input_account.id
     vat.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(vat)
