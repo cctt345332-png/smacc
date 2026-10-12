@@ -255,6 +255,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         num.tryParse('${summary?['commission_pct'] ?? 0}') ?? 0;
     final commission =
         num.tryParse('${summary?['monthly_commission'] ?? 0}') ?? 0;
+    final targetCommission = target * commissionPct / 100;
+    final motivation = reached
+        ? 'ممتاز! حققت هدفك والعمولة أصبحت مستحقة لك هذا الشهر.'
+        : percentage >= 90
+        ? 'باقي القليل جداً! أنت قريب من استحقاق العمولة.'
+        : percentage >= 75
+        ? 'أداء رائع! واصل التقدم لتصل إلى العمولة.'
+        : percentage >= 50
+        ? 'أحسنت! تجاوزت نصف الهدف، استمر لتحصل على العمولة.'
+        : 'ابدأ بقوة، كل عملية بيع تقربك من هدفك وعمولتك.';
     final accent = reached ? const Color(0xFF147D58) : const Color(0xFF3E0865);
 
     return Card(
@@ -313,16 +323,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (target > 0 && !reached) ...[
               const SizedBox(height: 5),
               Text(
-                'المتبقي: ${money(remaining)}',
-                style: const TextStyle(color: Colors.black54, fontSize: 12),
+                'متبقي لاستحقاق العمولة: ${money(remaining)}',
+                style: TextStyle(
+                  color: percentage >= 75
+                      ? const Color(0xFFB06A00)
+                      : Colors.black54,
+                  fontSize: 12,
+                  fontWeight: percentage >= 75 ? FontWeight.w700 : null,
+                ),
               ),
             ],
-            if (reached) ...[
+            if (target > 0) ...[
               const SizedBox(height: 5),
-              const Text(
-                'تم تحقيق الهدف الشهري',
+              Text(
+                motivation,
                 style: TextStyle(
-                  color: Color(0xFF147D58),
+                  color: reached
+                      ? const Color(0xFF147D58)
+                      : const Color(0xFF5A187E),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -341,8 +359,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 child: Text(
                   reached
-                      ? 'العمولة المستحقة هذا الشهر: ${money(commission)} (${commissionPct.toStringAsFixed(2)}%)'
-                      : 'نسبة العمولة ${commissionPct.toStringAsFixed(2)}% وتُحتسب بعد تجاوز الهدف الشهري',
+                      ? 'العمولة المستحقة هذا الشهر: ${money(commission)}\nنسبة العمولة: ${commissionPct.toStringAsFixed(2)}%'
+                      : 'العمولة عند تحقيق الهدف: ${money(targetCommission)}\nنسبة العمولة: ${commissionPct.toStringAsFixed(2)}%',
                   style: TextStyle(
                     color: reached
                         ? const Color(0xFF147D58)
