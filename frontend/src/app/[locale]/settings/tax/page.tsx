@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getVATSettings, saveVATSettings, getAccounts } from "@/lib/accounting";
+import { getVATSettings, saveVATSettings, getAccounts, getZATCAStatus, prepareZATCA, requestComplianceCSID } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 
 export default function TaxSettingsPage(props: { params: Promise<{ locale: string }> }) {
@@ -15,9 +15,13 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
   const [accounts, setAccounts] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [zatcaStatus, setZatcaStatus] = useState<any>(null);
+  const [zatcaBusy, setZatcaBusy] = useState(false);
+  const [zatcaMessage, setZatcaMessage] = useState("");
+  const [otp, setOtp] = useState("");
   const [form, setForm] = useState({
-    vat_number: "", cr_number: "", vat_rate: "15",
-    vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: false,
+    vat_number: "", cr_number: "", vat_rate: "15", zatca_branch_name: "الفرع الرئيسي",
+    zatca_activity: "", zatca_invoice_type_map: "both", vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: false,
   });
 
   useEffect(() => {
@@ -27,12 +31,44 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         vat_number: data.vat_number || "",
         cr_number: data.cr_number || "",
         vat_rate: String(data.vat_rate),
+        zatca_branch_name: data.zatca_branch_name || "الفرع الرئيسي",
+        zatca_activity: data.zatca_activity || "",
+        zatca_invoice_type_map: data.zatca_invoice_type_map || "both",
         vat_account_id: data.vat_account_id || "",
         zatca_env: data.zatca_env || "sandbox",
         is_zatca_enabled: data.is_zatca_enabled,
       });
     }).catch(() => {});
+    getZATCAStatus().then(({ data }) => setZatcaStatus(data)).catch(() => {});
   }, []);
+
+  const prepareZatca = async () => {
+    setZatcaBusy(true); setZatcaMessage("");
+    try {
+      const { data } = await prepareZATCA({
+        vat_number: form.vat_number,
+        branch_name: form.zatca_branch_name,
+        activity: form.zatca_activity,
+        environment: form.zatca_env,
+        invoice_type_map: form.zatca_invoice_type_map,
+      });
+      setZatcaMessage(ar ? "تم تجهيز CSR بنجاح. انسخه إلى بوابة فاتورة عند طلبه، والمفتاح الخاص محفوظ داخل السيرفر." : "CSR prepared. The private key is kept on the server.");
+      setZatcaStatus((await getZATCAStatus()).data);
+      void data;
+    } catch (e: any) { setZatcaMessage(e?.response?.data?.detail || (ar ? "تعذر تجهيز الربط" : "Unable to prepare integration")); }
+    finally { setZatcaBusy(false); }
+  };
+
+  const requestCsid = async () => {
+    setZatcaBusy(true); setZatcaMessage("");
+    try {
+      await requestComplianceCSID(otp);
+      setOtp("");
+      setZatcaMessage(ar ? "تم إصدار Compliance CSID بنجاح." : "Compliance CSID issued successfully.");
+      setZatcaStatus((await getZATCAStatus()).data);
+    } catch (e: any) { setZatcaMessage(e?.response?.data?.detail || (ar ? "رفضت زاتكا طلب Compliance CSID" : "ZATCA rejected the Compliance CSID request")); }
+    finally { setZatcaBusy(false); }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -160,6 +196,38 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                 {ar ? "يجب رفع الشهادة الرقمية والمفتاح الخاص من بوابة زاتكا لإتمام الربط" : "Upload the digital certificate and private key from ZATCA portal to complete integration"}
               </div>
             )}
+            <div style={{ borderTop: "1px solid #E5E7EB", marginTop: 18, paddingTop: 18 }}>
+              <div className="form-group">
+                <label className="form-label">{ar ? "اسم الفرع في زاتكا" : "ZATCA branch name"}</label>
+                <input className="form-input" value={form.zatca_branch_name} onChange={e => setForm(f => ({ ...f, zatca_branch_name: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "تصنيف النشاط" : "Business activity"}</label>
+                <input className="form-input" value={form.zatca_activity} onChange={e => setForm(f => ({ ...f, zatca_activity: e.target.value }))} placeholder={ar ? "اسم المنشأة أو النشاط" : "Company or activity name"} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "نوع المستندات" : "Document type"}</label>
+                <select className="form-input form-select" value={form.zatca_invoice_type_map} onChange={e => setForm(f => ({ ...f, zatca_invoice_type_map: e.target.value }))}>
+                  <option value="both">{ar ? "قياسية ومبسطة" : "Standard and simplified"}</option>
+                  <option value="standard">{ar ? "قياسية فقط" : "Standard only"}</option>
+                  <option value="simplified">{ar ? "مبسطة فقط" : "Simplified only"}</option>
+                </select>
+              </div>
+              <button className="btn btn-secondary" type="button" onClick={prepareZatca} disabled={zatcaBusy || !form.vat_number}>
+                {zatcaBusy ? (ar ? "جاري التنفيذ..." : "Working...") : (ar ? "تجهيز CSR والربط" : "Prepare CSR")}
+              </button>
+              {zatcaStatus?.has_csr && !zatcaStatus?.has_compliance_credentials && (
+                <div style={{ marginTop: 14 }}>
+                  <label className="form-label">{ar ? "رمز OTP من بوابة فاتورة" : "Fatoora OTP"}</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="form-input" value={otp} onChange={e => setOtp(e.target.value)} maxLength={6} inputMode="numeric" placeholder="0000" />
+                    <button className="btn btn-primary" type="button" onClick={requestCsid} disabled={zatcaBusy || otp.length < 4}>{ar ? "طلب CSID" : "Request CSID"}</button>
+                  </div>
+                </div>
+              )}
+              {zatcaStatus && <p className="form-hint">{ar ? "الحالة الحالية: " : "Current status: "}{zatcaStatus.status}</p>}
+              {zatcaMessage && <p className="form-hint" style={{ color: zatcaMessage.includes("تعذر") || zatcaMessage.includes("رفض") ? "#B91C1C" : "#166534" }}>{zatcaMessage}</p>}
+            </div>
           </div>
         </div>
       </div>

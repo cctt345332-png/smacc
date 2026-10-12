@@ -40,6 +40,9 @@ export const createBudget = (data: any) => api.post("/accounting/budgets", data)
 // VAT
 export const getVATSettings = () => api.get("/accounting/vat-settings");
 export const saveVATSettings = (data: any) => api.put("/accounting/vat-settings", data);
+export const getZATCAStatus = () => api.get("/zatca/status");
+export const prepareZATCA = (data: any) => api.post("/zatca/prepare", data);
+export const requestComplianceCSID = (otp: string) => api.post("/zatca/compliance-csid", { otp });
 
 // Reports
 export const getTrialBalance = (from_date: string, to_date: string, account_id?: string) =>

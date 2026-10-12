@@ -211,6 +211,20 @@ class VATSetting(Base):
     zatca_cert: Mapped[str | None] = mapped_column(Text, nullable=True)
     zatca_private_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_zatca_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # إعدادات المرحلة الثانية — تحفظ الأسرار مشفرة بواسطة مفتاح التطبيق
+    zatca_branch_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    zatca_activity: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    zatca_invoice_type_map: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    zatca_onboarding_status: Mapped[str] = mapped_column(String(40), default="not_started")
+    zatca_csr: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_private_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_compliance_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_compliance_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_production_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_production_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_compliance_request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    zatca_certificate_expiry: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    zatca_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

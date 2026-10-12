@@ -218,6 +218,9 @@ class VATSettingUpdate(BaseModel):
     vat_account_id: Optional[str] = None
     zatca_env: Optional[str] = None
     is_zatca_enabled: Optional[bool] = None
+    zatca_branch_name: Optional[str] = None
+    zatca_activity: Optional[str] = None
+    zatca_invoice_type_map: Optional[str] = None
 
 
 class VATSettingOut(BaseModel):
@@ -227,6 +230,10 @@ class VATSettingOut(BaseModel):
     vat_rate: Decimal
     zatca_env: str
     is_zatca_enabled: bool
+    zatca_branch_name: Optional[str] = None
+    zatca_activity: Optional[str] = None
+    zatca_invoice_type_map: Optional[str] = None
+    zatca_onboarding_status: str = "not_started"
     model_config = {"from_attributes": True}
 
 
