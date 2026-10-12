@@ -44,7 +44,6 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
   const [items, setItems] = useState<any[]>([]);
   const [businessType, setBusinessType] = useState<string>("general");
   const printColumnDefs = [
-    { key: "warehouse", label: ar ? "المستودع" : "Warehouse" },
     { key: "item", label: ar ? "الصنف" : "Item" },
     { key: "sku", label: "SKU" },
     { key: "tracking", label: ar ? "التتبع" : "Tracking" },
@@ -152,6 +151,21 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
     if (key === "profit") return `${fmt(row.potential_profit)} SAR`;
     return row.is_low_stock ? (ar ? "منخفض" : "Low stock") : (ar ? "متاح" : "Available");
   };
+  const printColumnsWithoutWarehouse = selectedPrintColumns.filter(column => column.key !== "warehouse");
+  const printTables = Array.from(
+    filtered.reduce((groups: Map<string, any[]>, row: any) => {
+      const warehouseName = row.warehouse_name || (ar ? "كل المستودعات" : "All Warehouses");
+      const rows = groups.get(warehouseName) || [];
+      rows.push(row);
+      groups.set(warehouseName, rows);
+      return groups;
+    }, new Map<string, any[]>()).entries(),
+  ).map(([warehouseName, rows]) => ({
+    title: `${ar ? "المستودع" : "Warehouse"}: ${warehouseName}`,
+    headers: printColumnsWithoutWarehouse.map(column => column.label),
+    rows: rows.map(row => printColumnsWithoutWarehouse.map(column => printCell(row, column.key))),
+    totals: printColumnsWithoutWarehouse.map((column, index) => index === 0 ? (ar ? "إجمالي المستودع" : "Warehouse total") : ""),
+  }));
 
   return (
     <>
@@ -169,7 +183,7 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
           {extraReports.map(r => (
             <Link key={r.href} href={r.href} className="btn btn-secondary btn-sm">{r.label}</Link>
           ))}
-          {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المخزون" : "Inventory Report"} subtitle={ar ? "قيمة الأصناف وحالة المخزون حسب التتبع" : "Item valuation and stock status by tracking type"} period={ar ? "حتى تاريخ الطباعة" : "As of print date"} reportCode={`INV-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الأصناف" : "Total items", value: String(reportSummary.total_items), tone: "blue" }, { label: ar ? "إجمالي الكمية" : "Total quantity", value: fmt(reportSummary.total_quantity), tone: "blue" }, { label: ar ? "يحتاج صيانة" : "Needs maintenance", value: fmt(reportSummary.total_maintenance_qty), tone: "red" }, { label: ar ? "القابلة للبيع" : "Saleable", value: fmt(reportSummary.total_saleable_quantity), tone: "green" }, { label: ar ? "قيمة التكلفة" : "Cost value", value: `${fmt(reportSummary.total_cost_value)} SAR`, tone: "blue" }, { label: ar ? "الربح المتوقع" : "Potential profit", value: `${fmt(reportSummary.total_potential_profit)} SAR`, tone: "green" }]} tables={[{ title: ar ? "تفاصيل الأصناف" : "Item details", headers: selectedPrintColumns.map(column => column.label), rows: filtered.map((row: any) => selectedPrintColumns.map(column => printCell(row, column.key))), totals: selectedPrintColumns.map((column, index) => index === 0 ? (ar ? "الإجمالي" : "TOTAL") : column.key === "quantity" ? fmt(reportSummary.total_quantity) : column.key === "maintenance" ? fmt(reportSummary.total_maintenance_qty) : column.key === "saleable" ? fmt(reportSummary.total_saleable_quantity) : column.key === "value" ? `${fmt(reportSummary.total_cost_value)} SAR` : column.key === "profit" ? `${fmt(reportSummary.total_potential_profit)} SAR` : "") }]} />}
+          {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المخزون" : "Inventory Report"} subtitle={ar ? "قيمة الأصناف وحالة المخزون حسب التتبع" : "Item valuation and stock status by tracking type"} period={ar ? "حتى تاريخ الطباعة" : "As of print date"} reportCode={`INV-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الأصناف" : "Total items", value: String(reportSummary.total_items), tone: "blue" }, { label: ar ? "إجمالي الكمية" : "Total quantity", value: fmt(reportSummary.total_quantity), tone: "blue" }, { label: ar ? "يحتاج صيانة" : "Needs maintenance", value: fmt(reportSummary.total_maintenance_qty), tone: "red" }, { label: ar ? "القابلة للبيع" : "Saleable", value: fmt(reportSummary.total_saleable_quantity), tone: "green" }, { label: ar ? "قيمة التكلفة" : "Cost value", value: `${fmt(reportSummary.total_cost_value)} SAR`, tone: "blue" }, { label: ar ? "الربح المتوقع" : "Potential profit", value: `${fmt(reportSummary.total_potential_profit)} SAR`, tone: "green" }]} tables={printTables} />}
         </div>
       </div>
 
