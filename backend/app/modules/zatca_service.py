@@ -45,7 +45,7 @@ def _decrypt(value: str | None) -> str | None:
 
 
 def _api_base(env: str) -> str:
-    if env == "sandbox":
+    if env in {"sandbox", "simulation"}:
         return "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal"
     return "https://gw-fatoora.zatca.gov.sa/e-invoicing/core"
 
@@ -106,8 +106,8 @@ async def status(db: AsyncSession, tenant_id: str) -> dict[str, Any]:
 
 async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name: str, activity: str, env: str, invoice_type_map: str) -> dict[str, Any]:
     _validate_vat(vat_number)
-    if env not in {"sandbox", "production"}:
-        raise HTTPException(400, "بيئة زاتكا يجب أن تكون sandbox أو production")
+    if env not in {"simulation", "sandbox", "production"}:
+        raise HTTPException(400, "بيئة زاتكا يجب أن تكون simulation أو production")
     if invoice_type_map not in {"standard", "simplified", "both"}:
         raise HTTPException(400, "نوع الفواتير يجب أن يكون standard أو simplified أو both")
     tenant_result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))

@@ -19,6 +19,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
   const [zatcaBusy, setZatcaBusy] = useState(false);
   const [zatcaMessage, setZatcaMessage] = useState("");
   const [otp, setOtp] = useState("");
+  const [phase2Setup, setPhase2Setup] = useState(false);
   const [form, setForm] = useState({
     vat_number: "", cr_number: "", vat_rate: "15", zatca_branch_name: "الفرع الرئيسي",
     zatca_activity: "", zatca_invoice_type_map: "both", vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: false,
@@ -158,45 +159,43 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
             </span>
           </div>
           <div className="card-body">
-            {/* Phase 2 info */}
-            <div style={{ background: "linear-gradient(135deg,#EFF6FF,#DBEAFE)", border: "1px solid #BFDBFE", borderRadius: 10, padding: 16, marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "#1E40AF", marginBottom: 8 }}>
-                {ar ? "المرحلة الثانية — الفوترة الإلكترونية" : "Phase 2 — e-Invoicing"}
-              </div>
-              <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, color: "#3B82F6", lineHeight: 2 }}>
-                <li>• {ar ? "ربط النظام بمنصة فاتورة" : "Connect to Fatoora platform"}</li>
-                <li>• {ar ? "إرسال الفواتير للهيئة فورياً" : "Real-time invoice submission"}</li>
-                <li>• {ar ? "توليد QR Code معتمد" : "Certified QR Code generation"}</li>
-                <li>• {ar ? "أرشفة الفواتير الإلكترونية" : "Electronic invoice archiving"}</li>
-              </ul>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">{ar ? "بيئة التشغيل" : "Environment"}</label>
-              <select className="form-input form-select" value={form.zatca_env}
-                onChange={e => setForm(f => ({ ...f, zatca_env: e.target.value }))}>
-                <option value="sandbox">{ar ? "اختبار (Sandbox)" : "Sandbox"}</option>
-                <option value="simulation">{ar ? "محاكاة (Simulation)" : "Simulation"}</option>
-                <option value="production">{ar ? "إنتاج (Production)" : "Production"}</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+            <div className="form-group" style={{ marginBottom: 18 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                 <input type="checkbox" checked={form.is_zatca_enabled}
                   onChange={e => setForm(f => ({ ...f, is_zatca_enabled: e.target.checked }))}
-                  style={{ width: 16, height: 16, accentColor: "var(--primary)" }} />
-                {ar ? "تفعيل ربط زاتكا" : "Enable ZATCA Integration"}
+                  style={{ width: 16, height: 16, accentColor: "#5546D9" }} />
+                {ar ? "تفعيل الفاتورة الإلكترونية السعودية (هيئة الزكاة والضريبة والجمارك)." : "Enable Saudi e-invoicing (ZATCA)."}
               </label>
-              <p className="form-hint">{ar ? "يتطلب شهادة رقمية من هيئة الزكاة" : "Requires digital certificate from ZATCA"}</p>
             </div>
-
-            {form.is_zatca_enabled && (
-              <div style={{ background: "#FEF9C3", border: "1px solid #FDE047", borderRadius: 8, padding: 12, fontSize: 12, color: "#854D0E" }}>
-                {ar ? "يجب رفع الشهادة الرقمية والمفتاح الخاص من بوابة زاتكا لإتمام الربط" : "Upload the digital certificate and private key from ZATCA portal to complete integration"}
-              </div>
+            <div style={{ display: "grid", gap: 12, fontSize: 13 }}>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, cursor: "pointer" }}>
+                <input type="radio" name="zatca-phase" checked={!phase2Setup && !zatcaStatus?.has_csr} onChange={() => setPhase2Setup(false)} />
+                <span><strong>{ar ? "المرحلة الأولى" : "Phase 1"}</strong> <span style={{ color: "#64748B" }}>({ar ? "مرحلة الإصدار والحفظ" : "Issue and save"})</span></span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, cursor: "pointer" }}>
+                <input type="radio" name="zatca-phase" checked={phase2Setup || Boolean(zatcaStatus?.has_csr)} onChange={() => setPhase2Setup(true)} />
+                <span><strong>{ar ? "المرحلة الثانية" : "Phase 2"}</strong> <span style={{ color: "#64748B" }}>({ar ? "مرحلة الربط والتكامل" : "Integration"})</span></span>
+              </label>
+            </div>
+            {!zatcaStatus?.has_csr && !phase2Setup && (
+              <button className="btn btn-primary" type="button" style={{ marginTop: 14, background: "#5546D9" }} onClick={() => setPhase2Setup(true)}>
+                {ar ? "ابدأ التهيئة" : "Start setup"}
+              </button>
             )}
-            <div style={{ borderTop: "1px solid #E5E7EB", marginTop: 18, paddingTop: 18 }}>
+            {(zatcaStatus?.has_csr || phase2Setup) && <div style={{ marginTop: 16 }}>
+              <div style={{ background: "#DBEAFE", borderRadius: 8, padding: "12px 14px", color: "#1D4ED8", fontSize: 12, marginBottom: 18 }}>
+                <strong>{ar ? "فيديو توضيحي" : "Guidance video"}</strong>
+                <div style={{ marginTop: 4, textDecoration: "underline" }}>{ar ? "مشاهدة شرح تهيئة المرحلة الثانية" : "Watch Phase 2 setup guide"}</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginBottom: 18 }}>
+                {[
+                  { value: "production", title: ar ? "منصة فاتورة" : "Fatoora platform", text: ar ? "التهيئة لإصدار الفواتير الإلكترونية وإرسالها بشكل فعلي إلى الهيئة." : "Issue and submit e-invoices to ZATCA." },
+                  { value: "simulation", title: ar ? "منصة محاكاة فاتورة" : "Fatoora simulation", text: ar ? "التهيئة لتجربة الفواتير الإلكترونية وإرسالها بشكل تجريبي إلى منصة المحاكاة." : "Test e-invoices through the simulation platform." },
+                ].map(option => <button key={option.value} type="button" onClick={() => setForm(f => ({ ...f, zatca_env: option.value }))} style={{ textAlign: ar ? "right" : "left", border: form.zatca_env === option.value ? "2px solid #5546D9" : "1px solid #CBD5E1", borderRadius: 10, background: "white", padding: 14, cursor: "pointer" }}>
+                  <strong style={{ display: "block", color: form.zatca_env === option.value ? "#5546D9" : "#C26B2D", marginBottom: 6 }}>{option.title}</strong>
+                  <span style={{ color: "#64748B", fontSize: 11, lineHeight: 1.7 }}>{option.text}</span>
+                </button>)}
+              </div>
               <div className="form-group">
                 <label className="form-label">{ar ? "اسم الفرع في زاتكا" : "ZATCA branch name"}</label>
                 <input className="form-input" value={form.zatca_branch_name} onChange={e => setForm(f => ({ ...f, zatca_branch_name: e.target.value }))} />
@@ -213,7 +212,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                   <option value="simplified">{ar ? "مبسطة فقط" : "Simplified only"}</option>
                 </select>
               </div>
-              <button className="btn btn-secondary" type="button" onClick={prepareZatca} disabled={zatcaBusy || !form.vat_number}>
+              <button className="btn btn-primary" type="button" style={{ background: "#5546D9" }} onClick={prepareZatca} disabled={zatcaBusy || !form.vat_number}>
                 {zatcaBusy ? (ar ? "جاري التنفيذ..." : "Working...") : (ar ? "تجهيز CSR والربط" : "Prepare CSR")}
               </button>
               {zatcaStatus?.has_csr && !zatcaStatus?.has_compliance_credentials && (
@@ -228,6 +227,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
               {zatcaStatus && <p className="form-hint">{ar ? "الحالة الحالية: " : "Current status: "}{zatcaStatus.status}</p>}
               {zatcaMessage && <p className="form-hint" style={{ color: zatcaMessage.includes("تعذر") || zatcaMessage.includes("رفض") ? "#B91C1C" : "#166534" }}>{zatcaMessage}</p>}
             </div>
+            }
           </div>
         </div>
       </div>
