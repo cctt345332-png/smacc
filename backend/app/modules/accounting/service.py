@@ -717,7 +717,9 @@ async def upsert_vat_settings(db: AsyncSession, tenant_id: str, data: VATSetting
         vat = VATSetting(id=str(uuid.uuid4()), tenant_id=tenant_id)
         db.add(vat)
     for k, v in data.model_dump(exclude_none=True).items():
-        setattr(vat, k, v)
+        # الحقول الاختيارية القادمة من الواجهة قد تصل كسلسلة فارغة؛
+        # يجب حفظها NULL لا كمعرّف حساب فارغ يخالف المفتاح الأجنبي.
+        setattr(vat, k, None if v == "" else v)
     # الربط المحاسبي تلقائي: نستخدم حسابات الشجرة القياسية ولا نطلب اختيارها
     # من هذه الشاشة. لا ننشئ حساباً جديداً ولا نغير أي قيد موجود.
     accounts_result = await db.execute(select(Account).where(Account.tenant_id == tenant_id))
