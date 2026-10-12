@@ -720,14 +720,8 @@ async def upsert_vat_settings(db: AsyncSession, tenant_id: str, data: VATSetting
         setattr(vat, k, v)
     # الربط المحاسبي تلقائي: نستخدم حسابات الشجرة القياسية ولا نطلب اختيارها
     # من هذه الشاشة. لا ننشئ حساباً جديداً ولا نغير أي قيد موجود.
-    accounts_result = await db.execute(
-            select(Account).where(
-                Account.tenant_id == tenant_id,
-                Account.is_active.is_(True),
-                Account.is_posting.is_(True),
-            )
-        )
-    accounts = list(accounts_result.scalars().all())
+    accounts_result = await db.execute(select(Account).where(Account.tenant_id == tenant_id))
+    accounts = [a for a in accounts_result.scalars().all() if a.is_active and a.is_posting]
     output = next((a for a in accounts if a.code in {"02141", "212"}), None)
     input_account = next((a for a in accounts if a.code in {"01151", "115"}), None)
     if not output:

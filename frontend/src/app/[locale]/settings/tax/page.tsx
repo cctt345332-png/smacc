@@ -133,7 +133,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                 {ar ? "ابدأ التهيئة" : "Start setup"}
               </button>
             )}
-            {(zatcaStatus?.has_csr || phase2Setup) && <div style={{ marginTop: 16 }}>
+            {phase2Setup && <div style={{ marginTop: 16 }}>
               <div style={{ background: "#DBEAFE", borderRadius: 8, padding: "12px 14px", color: "#1D4ED8", fontSize: 12, marginBottom: 18 }}>
                 <strong>{ar ? "فيديو توضيحي" : "Guidance video"}</strong>
                 <div style={{ marginTop: 4, textDecoration: "underline" }}>{ar ? "مشاهدة شرح تهيئة المرحلة الثانية" : "Watch Phase 2 setup guide"}</div>
