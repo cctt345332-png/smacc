@@ -2,7 +2,9 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
-import { getInvoices, getInvoice, getSalesSummary, confirmInvoice, cancelInvoice, deleteInvoiceDraft } from "@/lib/sales";
+import { getInvoices, getInvoice, confirmInvoice, cancelInvoice, deleteInvoiceDraft } from "@/lib/sales";
+import { getReps } from "@/lib/reps";
+import SearchableSelect from "@/components/ui/SearchableSelect";
 import { Icon } from "@/components/ui/Icons";
 import {
   FINANCIAL_INVOICE_STATUSES,
@@ -25,24 +27,45 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
 
   const ar = locale === "ar";
   const [invoices, setInvoices] = useState<any[]>([]);
-  const [summary, setSummary] = useState<any>(null);
+  const [reps, setReps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterRep, setFilterRep] = useState("");
+  const [search, setSearch] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [acting, setActing] = useState<string | null>(null);
   const [serialExporting, setSerialExporting] = useState<string | null>(null);
 
   const load = async () => {
     try {
-      const [invRes, sumRes] = await Promise.all([
-        getInvoices(filterStatus ? { status: filterStatus } : undefined),
-        getSalesSummary(),
-      ]);
+      const invRes = await getInvoices({ ...(filterStatus ? { status: filterStatus } : {}), ...(filterRep ? { rep_id: filterRep } : {}) });
       setInvoices(invRes.data);
-      setSummary(sumRes.data);
     } catch { } finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [filterStatus]);
+  useEffect(() => {
+    getReps().then(({ data }) => setReps(Array.isArray(data) ? data : [])).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [filterStatus, filterRep]);
+
+  const filteredInvoices = invoices.filter((invoice) => {
+    const q = search.trim().toLowerCase();
+    const haystack = [invoice.invoice_number, invoice.buyer_name_ar, invoice.customer?.name_ar, invoice.rep_name, invoice.rep_code]
+      .filter(Boolean).join(" ").toLowerCase();
+    const issueDate = String(invoice.issue_date || "").slice(0, 10);
+    return (!q || haystack.includes(q)) && (!fromDate || issueDate >= fromDate) && (!toDate || issueDate <= toDate);
+  });
+  const displaySummary = {
+    total_invoiced: filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.total || 0), 0),
+    total_paid: filteredInvoices.reduce((sum, invoice) => sum + Number(invoice.paid_amount || 0), 0),
+    total_outstanding: filteredInvoices.reduce((sum, invoice) => sum + Math.max(0, Number(invoice.total || 0) - Number(invoice.paid_amount || 0)), 0),
+    overdue_count: filteredInvoices.filter((invoice) => {
+      const due = invoice.due_date ? new Date(invoice.due_date) : null;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      return due && due < today && !["paid", "cancelled"].includes(invoice.status);
+    }).length,
+  };
 
   const handleConfirm = async (id: string) => {
     if (!confirm(ar ? "تأكيد الفاتورة؟" : "Confirm this invoice?")) return;
@@ -135,7 +158,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
           </div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "إجمالي الفواتير" : "Total Invoiced"}</div>
-            <div className="stat-value">{fmt(summary?.total_invoiced)}</div>
+            <div className="stat-value">{fmt(displaySummary.total_invoiced)}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>SAR</div>
           </div>
         </div>
@@ -145,7 +168,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
           </div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "المحصّل" : "Total Paid"}</div>
-            <div className="stat-value">{fmt(summary?.total_paid)}</div>
+            <div className="stat-value">{fmt(displaySummary.total_paid)}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>SAR</div>
           </div>
         </div>
@@ -155,7 +178,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
           </div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "المستحق" : "Outstanding"}</div>
-            <div className="stat-value">{fmt(summary?.total_outstanding)}</div>
+            <div className="stat-value">{fmt(displaySummary.total_outstanding)}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>SAR</div>
           </div>
         </div>
@@ -165,7 +188,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
           </div>
           <div className="stat-content">
             <div className="stat-label">{ar ? "متأخرة السداد" : "Overdue"}</div>
-            <div className="stat-value">{summary?.overdue_count ?? 0}</div>
+            <div className="stat-value">{displaySummary.overdue_count}</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{ar ? "فاتورة" : "invoices"}</div>
           </div>
         </div>
@@ -174,6 +197,8 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
       {/* Filter */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-body" style={{ padding: "12px 16px", display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <input className="form-input" style={{ width: 250 }} value={search} onChange={e => setSearch(e.target.value)} placeholder={ar ? "بحث برقم الفاتورة أو العميل" : "Search invoice or customer"} />
+          <SearchableSelect locale={locale} value={filterRep} onChange={setFilterRep} placeholder={ar ? "اختر المندوب" : "Choose sales rep"} options={[{ value: "", label: ar ? "كل المناديب" : "All reps" }, ...reps.map(rep => ({ value: rep.id, label: `${rep.full_name || rep.name_ar || "—"}${rep.rep_code ? ` · ${rep.rep_code}` : ""}`, searchText: `${rep.full_name || ""} ${rep.name_ar || ""} ${rep.rep_code || ""}` }))]} style={{ width: 230 }} />
           <select
             className="form-input form-select"
             style={{ width: 200 }}
@@ -185,8 +210,10 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
               <option key={status} value={status}>{INVOICE_STATUS_PRESENTATION[status].ar}</option>
             ))}
           </select>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>{ar ? "من" : "From"}<input type="date" className="form-input" value={fromDate} onChange={e => setFromDate(e.target.value)} /></label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>{ar ? "إلى" : "To"}<input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} /></label>
           <span style={{ fontSize: 13, color: "var(--text-secondary)", marginInlineStart: "auto" }}>
-            {invoices.length} {ar ? "فاتورة" : "invoices"}
+            {filteredInvoices.length} {ar ? "فاتورة" : "invoices"}
           </span>
         </div>
       </div>
@@ -196,7 +223,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
         <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
           {loading ? (
             <div className="empty-state"><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>
-          ) : invoices.length === 0 ? (
+          ) : filteredInvoices.length === 0 ? (
             <div className="empty-state">
               <div style={{ width: 48, height: 48, borderRadius: 12, background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", margin: "0 auto 12px" }}>
                 <Icon name="invoice" size={24} />
@@ -224,7 +251,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                 </tr>
               </thead>
               <tbody>
-                {invoices.map(inv => {
+                {filteredInvoices.map(inv => {
                   const status = INVOICE_STATUS_PRESENTATION[inv.status] || { ar: "حالة غير معروفة", badge: "badge-gray" };
                   const itype = INVOICE_TYPES[inv.invoice_type] || { ar: inv.invoice_type, badge: "badge-gray" };
                   const today = new Date(); today.setHours(0,0,0,0);
