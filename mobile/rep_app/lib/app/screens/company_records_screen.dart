@@ -265,13 +265,21 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
                 }),
               ),
             const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => chooseDate(false),
-                icon: const Icon(Icons.event),
-                label: Text(to == null ? 'إلى تاريخ' : dateText(to)),
+            if (invoices)
+              Expanded(
+                child: _dropdown('المندوب', rep, reps, (v) {
+                  setState(() => rep = v ?? '');
+                  applyFilters();
+                }),
+              )
+            else
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => chooseDate(false),
+                  icon: const Icon(Icons.event),
+                  label: Text(to == null ? 'إلى تاريخ' : dateText(to)),
+                ),
               ),
-            ),
           ],
         ),
         Row(
@@ -284,13 +292,31 @@ class _CompanyRecordsScreenState extends State<CompanyRecordsScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              '${visible.length} سجل',
-              style: const TextStyle(color: Colors.black54),
-            ),
+            if (invoices)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => chooseDate(false),
+                  icon: const Icon(Icons.event),
+                  label: Text(to == null ? 'إلى تاريخ' : dateText(to)),
+                ),
+              )
+            else
+              Text(
+                '${visible.length} سجل',
+                style: const TextStyle(color: Colors.black54),
+              ),
           ],
         ),
         const SizedBox(height: 8),
+        if (invoices)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '${visible.length} سجل',
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ),
+        if (invoices) const SizedBox(height: 4),
         Align(
           alignment: Alignment.centerRight,
           child: Text(
