@@ -786,7 +786,28 @@ async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = No
         q = q.where(Invoice.rep_id == rep_id)
     q = q.order_by(Invoice.issue_date.desc())
     r = await db.execute(q)
-    return r.scalars().all()
+    invoices = list(r.scalars().all())
+    if not invoices:
+        return invoices
+
+    # حقول العرض لا تُحفظ داخل Invoice؛ نملؤها من دليل المناديب حتى تظهر
+    # في الويب وFlutter وتعمل فلترة المندوب بشكل صحيح.
+    rep_ids = {invoice.rep_id for invoice in invoices if invoice.rep_id}
+    if rep_ids:
+        rep_rows = await db.execute(
+            select(SalesRep, User.full_name)
+            .join(User, User.id == SalesRep.user_id)
+            .where(SalesRep.tenant_id == tenant_id, SalesRep.id.in_(rep_ids))
+        )
+        rep_directory = {
+            rep.id: (full_name, rep.rep_code, rep.zone)
+            for rep, full_name in rep_rows.all()
+        }
+        for invoice in invoices:
+            rep_data = rep_directory.get(invoice.rep_id)
+            if rep_data:
+                invoice.rep_name, invoice.rep_code, invoice.rep_zone = rep_data
+    return invoices
 
 
 async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):

@@ -902,6 +902,13 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
         )
     )
     monthly_sales = monthly_sales_r.scalar() or Decimal("0")
+    target_monthly = Decimal(str(rep.target_monthly or 0))
+    commission_pct = Decimal(str(rep.commission_pct or 0))
+    target_reached = target_monthly > 0 and monthly_sales >= target_monthly
+    monthly_commission = (
+        monthly_sales * commission_pct / Decimal("100")
+        if target_reached and commission_pct > 0 else Decimal("0")
+    )
 
     # المقبوضات
     pay_r = await db.execute(
@@ -930,8 +937,10 @@ async def get_my_summary(db: AsyncSession, tenant_id: str, user_id: str) -> dict
         "operational_outstanding": float(operational_outstanding),
         "outstanding": float(opening_balance + operational_outstanding),
         "stock_qty": float(stock_qty),
-        "target_monthly": float(rep.target_monthly or 0),
-        "commission_pct": float(rep.commission_pct or 0),
+        "target_monthly": float(target_monthly),
+        "commission_pct": float(commission_pct),
+        "target_reached": target_reached,
+        "monthly_commission": float(monthly_commission),
     }
 
 

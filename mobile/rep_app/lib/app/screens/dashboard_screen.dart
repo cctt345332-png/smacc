@@ -251,6 +251,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final percentage = target > 0 ? (sales / target * 100).round() : 0;
     final remaining = target > sales ? target - sales : 0;
     final reached = target > 0 && sales >= target;
+    final commissionPct =
+        num.tryParse('${summary?['commission_pct'] ?? 0}') ?? 0;
+    final commission =
+        num.tryParse('${summary?['monthly_commission'] ?? 0}') ?? 0;
     final accent = reached ? const Color(0xFF147D58) : const Color(0xFF3E0865);
 
     return Card(
@@ -321,6 +325,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Color(0xFF147D58),
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            if (commissionPct > 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: reached
+                      ? const Color(0xFFEAF8F1)
+                      : const Color(0xFFF7F2F8),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  reached
+                      ? 'العمولة المستحقة هذا الشهر: ${money(commission)} (${commissionPct.toStringAsFixed(2)}%)'
+                      : 'نسبة العمولة ${commissionPct.toStringAsFixed(2)}% وتُحتسب بعد تجاوز الهدف الشهري',
+                  style: TextStyle(
+                    color: reached
+                        ? const Color(0xFF147D58)
+                        : const Color(0xFF5A187E),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
