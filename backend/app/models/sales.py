@@ -378,5 +378,9 @@ class CreditNoteLine(Base):
     variant_id: Mapped[str | None] = mapped_column(String, nullable=True)
     # قائمة IDs للسيريالات المعادة؛ تحفظ النص الأصلي لتدقيق كل وحدة.
     serial_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # تصنيف الكمية المعادة: قابلة للبيع أو غير قابلة للبيع وتحتاج صيانة.
+    return_condition: Mapped[str] = mapped_column(String(30), default="resalable", server_default="resalable")
+    # المستودع الذي دخلت إليه الكمية المعادة، لاستخدامه في تقارير المخزون.
+    warehouse_id: Mapped[str | None] = mapped_column(String, ForeignKey("warehouses.id"), nullable=True, index=True)
 
     credit_note: Mapped["CreditNote"] = relationship("CreditNote", back_populates="lines")

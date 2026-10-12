@@ -58,7 +58,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
   const [customers, setCustomers] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [loadingLines, setLoadingLines] = useState(false);
-  const [form, setForm] = useState({ original_invoice_id: "", issue_date: today(), reason: "" });
+  const [form, setForm] = useState({ original_invoice_id: "", issue_date: today(), reason: "", return_condition: "resalable" });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [serialSearch, setSerialSearch] = useState("");
   const [returnMode, setReturnMode] = useState<"invoice" | "customer">("invoice");
@@ -77,7 +77,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         if (!cn.original_invoice_id) {
           setReturnMode("customer");
           setCustomerId(cn.customer_id || "");
-          setForm({ original_invoice_id: "", issue_date: String(cn.issue_date).slice(0, 10), reason: cn.reason || "" });
+          setForm({ original_invoice_id: "", issue_date: String(cn.issue_date).slice(0, 10), reason: cn.reason || "", return_condition: cn.lines?.[0]?.return_condition || "resalable" });
           setLines((cn.lines || []).map((line: any) => {
             let serialIds: string[] = [];
             try { serialIds = JSON.parse(line.serial_ids_json || "[]").map(String); } catch { serialIds = []; }
@@ -98,7 +98,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         }
         const { data: inv } = await getInvoice(cn.original_invoice_id);
         const byLine = new Map<string, any>((cn.lines || []).map((line: any) => [String(line.original_invoice_line_id), line] as [string, any]));
-        setForm({ original_invoice_id: inv.id, issue_date: String(cn.issue_date).slice(0, 10), reason: cn.reason || "" });
+        setForm({ original_invoice_id: inv.id, issue_date: String(cn.issue_date).slice(0, 10), reason: cn.reason || "", return_condition: cn.lines?.[0]?.return_condition || "resalable" });
         setLines((inv.lines || []).map((l: any) => {
           const old = byLine.get(String(l.id));
           const original_serial_ids = parseSerialIds(l);
@@ -200,6 +200,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         vat_rate: 0,
         serial_ids: Array.from(new Set((l.manual_serials || "").split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))),
         line_order: i,
+        return_condition: form.return_condition,
       }));
       if (customerLines.some(l => !l.serial_ids.length && lines.find(x => x.picked.inventory_item_id === l.inventory_item_id)?.picked.mode === "serial")) return alert(ar ? "أدخل سيريالات كل مادة متسلسلة" : "Enter serials for every serial-tracked item");
       setSaving(true);
@@ -231,6 +232,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
           inventory_item_id: l.picked.inventory_item_id || null,
           serial_item_id: l.picked.serial_item_id || null,
           serial_ids: (l.original_serial_ids || []).length ? l.return_serial_ids || [] : undefined,
+          return_condition: form.return_condition,
         })),
       };
       if (editId) await updateCreditNote(editId, payload);
@@ -286,6 +288,14 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
             <div className="form-group">
               <label className="form-label">{ar ? "سبب الإرجاع" : "Return Reason"} <span className="required">*</span></label>
               <input className="form-input" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder={ar ? "سبب إرجاع البضاعة..." : "Reason for return..."} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{ar ? "حالة المرتجع" : "Return condition"} <span className="required">*</span></label>
+              <select className="form-input form-select" value={form.return_condition} onChange={e => setForm(f => ({ ...f, return_condition: e.target.value }))}>
+                <option value="resalable">{ar ? "قابل لإعادة البيع" : "Resalable"}</option>
+                <option value="maintenance">{ar ? "غير قابل للبيع — يحتاج صيانة" : "Not resalable — needs maintenance"}</option>
+              </select>
+              <div className="form-hint">{ar ? "سيظهر غير القابل للبيع في عمود مستقل في تقارير المخزون والجرد." : "Non-resalable quantities appear separately in inventory and stock count reports."}</div>
             </div>
           </div>
         </div>

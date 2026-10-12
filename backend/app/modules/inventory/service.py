@@ -17,7 +17,7 @@ from app.models.inventory import (
     TrackingType, SerialStatus, MovementType
 )
 from app.models.purchases import Bill, BillLine
-from app.models.sales import Invoice, InvoiceLine
+from app.models.sales import Invoice, InvoiceLine, CreditNote, CreditNoteLine
 from app.core.audit import record_audit
 from app.models.reps import SalesRep
 from app.models.user import User
@@ -860,6 +860,7 @@ async def get_serial_profit_report(
 async def get_stock_value_report(db: AsyncSession, tenant_id: str):
     """تقرير قيمة المخزون — لكل الأنشطة"""
     from sqlalchemy import select as sa_select
+    maintenance_totals = await _get_maintenance_return_totals(db, tenant_id)
 
     items_r = await db.execute(
         sa_select(InventoryItem).where(
@@ -872,6 +873,8 @@ async def get_stock_value_report(db: AsyncSession, tenant_id: str):
     rows = []
     total_cost_value = Decimal("0")
     total_sale_value = Decimal("0")
+    total_quantity = Decimal("0")
+    total_maintenance = Decimal("0")
 
     for item in items:
         if item.tracking_type == "serial":
@@ -912,6 +915,12 @@ async def get_stock_value_report(db: AsyncSession, tenant_id: str):
 
         total_cost_value += cost_val
         total_sale_value += sale_val
+        item_maintenance = sum(
+            value for (item_id, _warehouse_id), value in maintenance_totals.items()
+            if item_id == str(item.id)
+        )
+        total_quantity += Decimal(str(qty))
+        total_maintenance += item_maintenance
 
         rows.append({
             "id": item.id,
@@ -927,6 +936,8 @@ async def get_stock_value_report(db: AsyncSession, tenant_id: str):
             "potential_profit": float(sale_val - cost_val),
             "reorder_point": float(item.reorder_point),
             "is_low_stock": item.tracking_type == "quantity" and qty <= item.reorder_point,
+            "maintenance_qty": float(item_maintenance),
+            "saleable_quantity": float(max(Decimal("0"), Decimal(str(qty)) - item_maintenance)),
         })
 
     rows.sort(key=lambda x: x["cost_value"], reverse=True)
@@ -939,6 +950,9 @@ async def get_stock_value_report(db: AsyncSession, tenant_id: str):
             "total_sale_value": float(total_sale_value),
             "total_potential_profit": float(total_sale_value - total_cost_value),
             "low_stock_count": sum(1 for r in rows if r["is_low_stock"]),
+            "total_quantity": float(total_quantity),
+            "total_maintenance_qty": float(total_maintenance),
+            "total_saleable_quantity": float(max(Decimal("0"), total_quantity - total_maintenance)),
         }
     }
 
@@ -1139,6 +1153,27 @@ async def delete_serials_bulk(
 
 # ─── Inventory Stock (كمية لكل مستودع) ───────────────────────────────
 
+async def _get_maintenance_return_totals(
+    db: AsyncSession, tenant_id: str, warehouse_id: str | None = None
+):
+    """إجمالي المرتجعات المصنفة غير قابلة للبيع وتحتاج صيانة."""
+    q = select(
+        CreditNoteLine.inventory_item_id,
+        CreditNoteLine.warehouse_id,
+        func.coalesce(func.sum(CreditNoteLine.quantity), 0),
+    ).join(CreditNote, CreditNote.id == CreditNoteLine.credit_note_id).where(
+        CreditNote.tenant_id == tenant_id,
+        CreditNoteLine.return_condition == "maintenance",
+        CreditNoteLine.inventory_item_id.isnot(None),
+    ).group_by(CreditNoteLine.inventory_item_id, CreditNoteLine.warehouse_id)
+    if warehouse_id:
+        q = q.where(CreditNoteLine.warehouse_id == warehouse_id)
+    rows = (await db.execute(q)).all()
+    return {
+        (str(item_id), str(row_warehouse) if row_warehouse else None): Decimal(str(quantity or 0))
+        for item_id, row_warehouse, quantity in rows
+    }
+
 async def _get_or_create_stock(
     db: AsyncSession, tenant_id: str, item_id: str, warehouse_id: str
 ):
@@ -1170,6 +1205,7 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
     from sqlalchemy.orm import selectinload as sil
 
     results = []
+    maintenance_totals = await _get_maintenance_return_totals(db, tenant_id, warehouse_id)
 
     # ── 1. الأصناف العادية (quantity/batch/variant) من inventory_stock ──
     q = select(InventoryStock).options(
@@ -1203,6 +1239,7 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
             "cost_price": float(s.item.cost_price) if s.item else 0,
             "sale_price": float(s.item.sale_price) if s.item else 0,
             "stock_value": float(s.quantity * s.item.cost_price) if s.item else 0,
+            "maintenance_qty": float(maintenance_totals.get((str(s.item_id), str(s.warehouse_id)), 0)),
         })
 
     # ── 2. أصناف السيريال — تُجمع من serial_items ──────────────────────
@@ -1270,6 +1307,7 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
                 "cost_price": effective_cost,
                 "sale_price": effective_sale,
                 "stock_value": float(row.qty) * effective_cost,
+                "maintenance_qty": float(maintenance_totals.get((str(row.product_id), str(row.warehouse_id)), 0)),
             })
 
     results.sort(key=lambda x: x["item_name"])

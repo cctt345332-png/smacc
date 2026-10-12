@@ -312,6 +312,7 @@ class CreditNoteLineCreate(InvoiceLineCreate):
     """
     original_invoice_line_id: Optional[str] = None
     serial_ids: Optional[list[str]] = None
+    return_condition: str = "resalable"  # resalable | maintenance
 
 
 class CreditNoteCreate(BaseModel):

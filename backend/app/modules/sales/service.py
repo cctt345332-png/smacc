@@ -1963,11 +1963,14 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
             continue
 
     from app.modules.inventory.service import get_item
-    validated_lines: list[tuple[object, InvoiceLine, list[str], Decimal, Decimal, Decimal]] = []
+    validated_lines: list[tuple[object, InvoiceLine, list[str], Decimal, Decimal, Decimal, str]] = []
     taxable_total = Decimal("0")
     total_vat = Decimal("0")
     total = Decimal("0")
     for line in data.lines:
+        return_condition = str(line.return_condition or "resalable").strip().lower()
+        if return_condition not in {"resalable", "maintenance"}:
+            raise HTTPException(400, "حالة المرتجع يجب أن تكون قابلة للبيع أو غير قابلة للبيع وتحتاج صيانة")
         original_line = original_by_id.get(line.original_invoice_line_id)
         if not original_line:
             raise HTTPException(400, "سطر المرتجع لا ينتمي إلى الفاتورة الأصلية")
@@ -2017,14 +2020,21 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
         taxable_total += taxable
         total_vat += vat
         total += total_line
-        validated_lines.append((line, original_line, serial_ids, taxable, vat, total_line))
+        validated_lines.append((line, original_line, serial_ids, taxable, vat, total_line, return_condition))
 
     cn_id = str(uuid.uuid4())
     issue_date = data.issue_date.replace(tzinfo=None)
     from app.models.tenant import Tenant
     tenant = await db.get(Tenant, tenant_id)
     from app.modules.accounting.service import get_vat_settings
+    from app.models.reps import SalesRep
+    from app.modules.inventory.service import _get_default_warehouse_id
     vat_settings = await get_vat_settings(db, tenant_id)
+    return_warehouse_id = None
+    if original.rep_id:
+        rep = await db.get(SalesRep, original.rep_id)
+        return_warehouse_id = rep.warehouse_id if rep else None
+    return_warehouse_id = return_warehouse_id or await _get_default_warehouse_id(db, tenant_id)
     cn = CreditNote(
         id=cn_id, tenant_id=tenant_id, credit_note_number=await _next_credit_note_number(db, tenant_id),
         uuid=str(uuid.uuid4()), original_invoice_id=data.original_invoice_id, customer_id=original.customer_id,
@@ -2034,7 +2044,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
 
     try:
         db.add(cn)
-        for i, (line, original_line, serial_ids, taxable, vat, total_line) in enumerate(validated_lines):
+        for i, (line, original_line, serial_ids, taxable, vat, total_line, return_condition) in enumerate(validated_lines):
             db.add(CreditNoteLine(
                 id=str(uuid.uuid4()), credit_note_id=cn_id, original_invoice_line_id=original_line.id,
                 line_order=i, description_ar=original_line.description_ar, quantity=Decimal(str(line.quantity)),
@@ -2042,6 +2052,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
                 subtotal=taxable, vat_amount=vat, total=total_line,
                 inventory_item_id=original_line.inventory_item_id, variant_id=original_line.variant_id,
                 serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
+                return_condition=return_condition, warehouse_id=return_warehouse_id,
             ))
         await _return_credit_note_inventory(db, tenant_id, user_id, cn, original, validated_lines)
         record_audit(db, tenant_id, user_id, "create", "credit_note", cn.id,
@@ -2238,13 +2249,16 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
             raise HTTPException(400, f"المادة {item.name_ar} ليست مادة سيريال")
         if qty <= 0 or price <= 0:
             raise HTTPException(400, "يجب اختيار الكمية وإدخال سعر المادة أكبر من صفر لكل سطر")
+        return_condition = str(line.return_condition or "resalable").strip().lower()
+        if return_condition not in {"resalable", "maintenance"}:
+            raise HTTPException(400, "حالة المرتجع يجب أن تكون قابلة للبيع أو غير قابلة للبيع وتحتاج صيانة")
         # مرتجع العميل ليس إشعاراً ضريبياً؛ لا نضيف ضريبة تلقائية عليه.
         vat_rate = Decimal("0")
         line_subtotal = (qty * price).quantize(Decimal("0.01"))
         line_vat = Decimal("0.00")
         subtotal += line_subtotal
         vat_amount += line_vat
-        prepared.append((line, item, serials, qty, price, vat_rate, line_subtotal, line_vat))
+        prepared.append((line, item, serials, qty, price, vat_rate, line_subtotal, line_vat, return_condition))
 
     total = subtotal + vat_amount
     if total <= 0:
@@ -2257,12 +2271,13 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
     )
     db.add(cn)
     await db.flush()
-    for index, (line, item, serials, qty, price, vat_rate, line_subtotal, line_vat) in enumerate(prepared):
+    for index, (line, item, serials, qty, price, vat_rate, line_subtotal, line_vat, return_condition) in enumerate(prepared):
         db.add(CreditNoteLine(
             id=str(uuid.uuid4()), credit_note_id=cn.id, original_invoice_line_id=None, line_order=index,
             description_ar=line.description_ar or item.name_ar, quantity=qty, unit_price=price,
             vat_rate=vat_rate, subtotal=line_subtotal, vat_amount=line_vat, total=line_subtotal + line_vat,
             inventory_item_id=item.id, serial_ids_json=json.dumps([serial.id for serial in serials]),
+            return_condition=return_condition, warehouse_id=warehouse_id,
         ))
         for serial in serials:
             serial.status = SerialStatus.IN_STOCK
@@ -2291,7 +2306,7 @@ async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, ori
         rep = await db.get(SalesRep, original_invoice.rep_id)
         warehouse_id = rep.warehouse_id if rep else None
 
-    for _line, original_line, serial_ids, _taxable, _vat, _total_line in validated_lines:
+    for _line, original_line, serial_ids, _taxable, _vat, _total_line, _return_condition in validated_lines:
         if not original_line.inventory_item_id:
             continue
         item = await get_item(db, tenant_id, original_line.inventory_item_id)

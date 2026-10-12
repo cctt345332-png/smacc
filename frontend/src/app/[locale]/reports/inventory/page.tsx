@@ -43,6 +43,25 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [businessType, setBusinessType] = useState<string>("general");
+  const printColumnDefs = [
+    { key: "warehouse", label: ar ? "المستودع" : "Warehouse" },
+    { key: "item", label: ar ? "الصنف" : "Item" },
+    { key: "sku", label: "SKU" },
+    { key: "tracking", label: ar ? "التتبع" : "Tracking" },
+    { key: "quantity", label: ar ? "الكمية" : "Qty" },
+    { key: "maintenance", label: ar ? "مرتجع يحتاج صيانة" : "Maintenance returns" },
+    { key: "saleable", label: ar ? "القابلة للبيع" : "Saleable" },
+    { key: "cost", label: ar ? "سعر التكلفة" : "Cost" },
+    { key: "sale", label: ar ? "سعر البيع" : "Sale" },
+    { key: "value", label: ar ? "قيمة التكلفة" : "Cost value" },
+    { key: "profit", label: ar ? "الربح المتوقع" : "Potential profit" },
+    { key: "status", label: ar ? "الحالة" : "Status" },
+  ];
+  const [printColumns, setPrintColumns] = useState<Record<string, boolean>>({
+    warehouse: true, item: true, sku: true, tracking: true, quantity: true,
+    maintenance: true, saleable: true, cost: true, sale: true, value: true,
+    profit: true, status: true,
+  });
 
   // جلب نوع النشاط لإظهار التقارير المناسبة
   useEffect(() => {
@@ -87,10 +106,12 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
             potential_profit: Number(row.quantity || 0) * Number(row.sale_price || 0) - Number(row.stock_value || 0),
             is_low_stock: Boolean(row.is_low_stock),
             warehouse_name: row.warehouse_name || "بدون مستودع",
+            maintenance_qty: Number(row.maintenance_qty || 0),
+            saleable_quantity: Math.max(0, Number(row.quantity || 0) - Number(row.maintenance_qty || 0)),
           }));
         const totalCost = normalized.reduce((s: number, r: any) => s + r.cost_value, 0);
         const totalSale = normalized.reduce((s: number, r: any) => s + r.sale_value, 0);
-        setData({ rows: normalized, summary: { total_items: normalized.length, total_cost_value: totalCost, total_sale_value: totalSale, total_potential_profit: totalSale - totalCost, low_stock_count: normalized.filter((r: any) => r.is_low_stock).length } });
+        setData({ rows: normalized, summary: { total_items: normalized.length, total_cost_value: totalCost, total_sale_value: totalSale, total_potential_profit: totalSale - totalCost, low_stock_count: normalized.filter((r: any) => r.is_low_stock).length, total_quantity: normalized.reduce((s: number, r: any) => s + r.quantity, 0), total_maintenance_qty: normalized.reduce((s: number, r: any) => s + r.maintenance_qty, 0), total_saleable_quantity: normalized.reduce((s: number, r: any) => s + r.saleable_quantity, 0) } });
       }
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setLoading(false); }
@@ -112,6 +133,24 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
     total_sale_value: filtered.reduce((s: number, r: any) => s + Number(r.sale_value || 0), 0),
     total_potential_profit: filtered.reduce((s: number, r: any) => s + Number(r.potential_profit || 0), 0),
     low_stock_count: filtered.filter((r: any) => r.is_low_stock).length,
+    total_quantity: filtered.reduce((s: number, r: any) => s + Number(r.quantity || 0), 0),
+    total_maintenance_qty: filtered.reduce((s: number, r: any) => s + Number(r.maintenance_qty || 0), 0),
+    total_saleable_quantity: filtered.reduce((s: number, r: any) => s + Number(r.saleable_quantity ?? (Number(r.quantity || 0) - Number(r.maintenance_qty || 0))), 0),
+  };
+  const selectedPrintColumns = printColumnDefs.filter(column => printColumns[column.key]);
+  const printCell = (row: any, key: string) => {
+    if (key === "warehouse") return row.warehouse_name || (ar ? "كل المستودعات" : "All Warehouses");
+    if (key === "item") return row.name_ar || "—";
+    if (key === "sku") return row.sku || "—";
+    if (key === "tracking") return ar ? TRACKING_AR[row.tracking_type] || row.tracking_type : row.tracking_type;
+    if (key === "quantity") return fmt(row.quantity);
+    if (key === "maintenance") return fmt(row.maintenance_qty);
+    if (key === "saleable") return fmt(row.saleable_quantity ?? (Number(row.quantity || 0) - Number(row.maintenance_qty || 0)));
+    if (key === "cost") return fmt(row.cost_price);
+    if (key === "sale") return fmt(row.sale_price);
+    if (key === "value") return `${fmt(row.cost_value)} SAR`;
+    if (key === "profit") return `${fmt(row.potential_profit)} SAR`;
+    return row.is_low_stock ? (ar ? "منخفض" : "Low stock") : (ar ? "متاح" : "Available");
   };
 
   return (
@@ -130,7 +169,7 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
           {extraReports.map(r => (
             <Link key={r.href} href={r.href} className="btn btn-secondary btn-sm">{r.label}</Link>
           ))}
-          {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المخزون" : "Inventory Report"} subtitle={ar ? "قيمة الأصناف وحالة المخزون حسب التتبع" : "Item valuation and stock status by tracking type"} period={ar ? "حتى تاريخ الطباعة" : "As of print date"} reportCode={`INV-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الأصناف" : "Total items", value: String(reportSummary.total_items), tone: "blue" }, { label: ar ? "قيمة المخزون بالتكلفة" : "Cost value", value: `${fmt(reportSummary.total_cost_value)} SAR`, tone: "blue" }, { label: ar ? "قيمة المخزون بالبيع" : "Sale value", value: `${fmt(reportSummary.total_sale_value)} SAR`, tone: "green" }, { label: ar ? "الربح المتوقع" : "Potential profit", value: `${fmt(reportSummary.total_potential_profit)} SAR`, tone: "green" }, { label: ar ? "منخفض المخزون" : "Low stock", value: String(reportSummary.low_stock_count || 0), tone: reportSummary.low_stock_count ? "red" : "green" }]} tables={[{ title: ar ? "تفاصيل الأصناف" : "Item details", headers: [ar ? "المستودع" : "Warehouse", ar ? "الصنف" : "Item", "SKU", ar ? "التتبع" : "Tracking", ar ? "الكمية" : "Qty", ar ? "سعر التكلفة" : "Cost", ar ? "سعر البيع" : "Sale", ar ? "قيمة التكلفة" : "Cost value", ar ? "الربح المتوقع" : "Potential profit", ar ? "الحالة" : "Status"], rows: filtered.map((row: any) => [row.warehouse_name || (ar ? "كل المستودعات" : "All Warehouses"), row.name_ar || "—", row.sku || "—", ar ? TRACKING_AR[row.tracking_type] || row.tracking_type : row.tracking_type, fmt(row.quantity), fmt(row.cost_price), fmt(row.sale_price), `${fmt(row.cost_value)} SAR`, `${fmt(row.potential_profit)} SAR`, row.is_low_stock ? (ar ? "منخفض" : "Low stock") : (ar ? "متاح" : "Available")]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", "", "", "", "", `${fmt(filtered.reduce((s: number, r: any) => s + Number(r.cost_value || 0), 0))} SAR`, `${fmt(filtered.reduce((s: number, r: any) => s + Number(r.potential_profit || 0), 0))} SAR`, ""] }]} />}
+          {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير المخزون" : "Inventory Report"} subtitle={ar ? "قيمة الأصناف وحالة المخزون حسب التتبع" : "Item valuation and stock status by tracking type"} period={ar ? "حتى تاريخ الطباعة" : "As of print date"} reportCode={`INV-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي الأصناف" : "Total items", value: String(reportSummary.total_items), tone: "blue" }, { label: ar ? "إجمالي الكمية" : "Total quantity", value: fmt(reportSummary.total_quantity), tone: "blue" }, { label: ar ? "يحتاج صيانة" : "Needs maintenance", value: fmt(reportSummary.total_maintenance_qty), tone: "red" }, { label: ar ? "القابلة للبيع" : "Saleable", value: fmt(reportSummary.total_saleable_quantity), tone: "green" }, { label: ar ? "قيمة التكلفة" : "Cost value", value: `${fmt(reportSummary.total_cost_value)} SAR`, tone: "blue" }, { label: ar ? "الربح المتوقع" : "Potential profit", value: `${fmt(reportSummary.total_potential_profit)} SAR`, tone: "green" }]} tables={[{ title: ar ? "تفاصيل الأصناف" : "Item details", headers: selectedPrintColumns.map(column => column.label), rows: filtered.map((row: any) => selectedPrintColumns.map(column => printCell(row, column.key))), totals: selectedPrintColumns.map((column, index) => index === 0 ? (ar ? "الإجمالي" : "TOTAL") : column.key === "quantity" ? fmt(reportSummary.total_quantity) : column.key === "maintenance" ? fmt(reportSummary.total_maintenance_qty) : column.key === "saleable" ? fmt(reportSummary.total_saleable_quantity) : column.key === "value" ? `${fmt(reportSummary.total_cost_value)} SAR` : column.key === "profit" ? `${fmt(reportSummary.total_potential_profit)} SAR` : "") }]} />}
         </div>
       </div>
 
@@ -152,6 +191,13 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
         </div>
       </div>
 
+      {data && <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header"><span className="card-title">{ar ? "أعمدة الطباعة" : "Print columns"}</span><span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{ar ? "اختر الأعمدة التي تريد ظهورها في الكشف المطبوع" : "Choose which columns appear in the printed report"}</span></div>
+        <div className="card-body" style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "12px 16px" }}>
+          {printColumnDefs.map(column => <label key={column.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}><input type="checkbox" checked={Boolean(printColumns[column.key])} onChange={e => setPrintColumns(previous => ({ ...previous, [column.key]: e.target.checked }))} />{column.label}</label>)}
+        </div>
+      </div>}
+
       {data && (
         <>
           {/* Summary */}
@@ -161,6 +207,8 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
               { label: ar ? "قيمة المخزون (تكلفة)" : "Stock Value (Cost)", value: reportSummary.total_cost_value, color: "#75617F", isMoney: true },
               { label: ar ? "قيمة المخزون (بيع)" : "Stock Value (Sale)", value: reportSummary.total_sale_value, color: "#6F4A84", isMoney: true },
               { label: ar ? "الربح المتوقع" : "Potential Profit", value: reportSummary.total_potential_profit, color: "#D97706", isMoney: true },
+              { label: ar ? "كمية تحتاج صيانة" : "Maintenance Qty", value: reportSummary.total_maintenance_qty, color: "#DC2626", isMoney: false },
+              { label: ar ? "الكمية القابلة للبيع" : "Saleable Qty", value: reportSummary.total_saleable_quantity, color: "#15803D", isMoney: false },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -189,6 +237,8 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
                       <th>{ar ? "SKU" : "SKU"}</th>
                       <th>{ar ? "نوع التتبع" : "Tracking"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "الكمية" : "Qty"}</th>
+                      <th style={{ textAlign: "end", color: "#B91C1C" }}>{ar ? "مرتجع يحتاج صيانة" : "Maintenance returns"}</th>
+                      <th style={{ textAlign: "end", color: "#15803D" }}>{ar ? "القابلة للبيع" : "Saleable"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "سعر التكلفة" : "Cost Price"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "سعر البيع" : "Sale Price"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "قيمة المخزون" : "Stock Value"}</th>
@@ -215,6 +265,8 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
                           {row.tracking_type === "serial" ? `${row.quantity} ${ar ? "وحدة" : "units"}` : fmt(row.quantity)}
                           {row.is_low_stock && <span style={{ display: "block", fontSize: 10, color: "var(--danger)" }}>{ar ? "منخفض" : "Low"}</span>}
                         </td>
+                        <td style={{ textAlign: "end", color: "#B91C1C", fontWeight: 600 }}>{fmt(row.maintenance_qty)}</td>
+                        <td style={{ textAlign: "end", color: "#15803D", fontWeight: 600 }}>{fmt(row.saleable_quantity ?? (Number(row.quantity || 0) - Number(row.maintenance_qty || 0)))}</td>
                         <td style={{ textAlign: "end" }}>{fmt(row.cost_price)}</td>
                         <td style={{ textAlign: "end" }}>{fmt(row.sale_price)}</td>
                         <td style={{ textAlign: "end", fontWeight: 600, color: "#75617F" }}>{fmt(row.cost_value)} SAR</td>
@@ -232,7 +284,9 @@ export default function InventoryReportPage(props: { params: Promise<{ locale: s
                   </tbody>
                   <tfoot>
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
-                      <td colSpan={7} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                      <td colSpan={5} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#B91C1C" }}>{fmt(reportSummary.total_maintenance_qty)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#15803D" }}>{fmt(reportSummary.total_saleable_quantity)}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#75617F" }}>
                         {fmt(filtered.reduce((s: number, r: any) => s + r.cost_value, 0))} SAR
                       </td>
