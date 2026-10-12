@@ -346,7 +346,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ],
-            if (commissionPct > 0) ...[
+            if (target > 0) ...[
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
@@ -358,11 +358,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  reached
+                  commissionPct <= 0
+                      ? 'لم تُحدد نسبة العمولة بعد\nاطلب من الإدارة ضبط نسبة العمولة للمندوب'
+                      : reached
                       ? 'العمولة المستحقة هذا الشهر: ${money(commission)}\nنسبة العمولة: ${commissionPct.toStringAsFixed(2)}%'
                       : 'العمولة عند تحقيق الهدف: ${money(targetCommission)}\nنسبة العمولة: ${commissionPct.toStringAsFixed(2)}%',
                   style: TextStyle(
-                    color: reached
+                    color: commissionPct <= 0
+                        ? const Color(0xFFB06A00)
+                        : reached
                         ? const Color(0xFF147D58)
                         : const Color(0xFF5A187E),
                     fontSize: 12,
