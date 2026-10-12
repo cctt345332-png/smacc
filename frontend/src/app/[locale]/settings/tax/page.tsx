@@ -120,11 +120,11 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
             </div>
             <div style={{ display: "grid", gap: 12, fontSize: 13 }}>
               <label style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, cursor: "pointer" }}>
-                <input type="radio" name="zatca-phase" checked={!phase2Setup && !zatcaStatus?.has_csr} onChange={() => setPhase2Setup(false)} />
+                <input type="radio" name="zatca-phase" checked={!phase2Setup} onChange={() => setPhase2Setup(false)} />
                 <span><strong>{ar ? "المرحلة الأولى" : "Phase 1"}</strong> <span style={{ color: "#64748B" }}>({ar ? "مرحلة الإصدار والحفظ" : "Issue and save"})</span></span>
               </label>
               <label style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 10, cursor: "pointer" }}>
-                <input type="radio" name="zatca-phase" checked={phase2Setup || Boolean(zatcaStatus?.has_csr)} onChange={() => setPhase2Setup(true)} />
+                <input type="radio" name="zatca-phase" checked={phase2Setup} onChange={() => setPhase2Setup(true)} />
                 <span><strong>{ar ? "المرحلة الثانية" : "Phase 2"}</strong> <span style={{ color: "#64748B" }}>({ar ? "مرحلة الربط والتكامل" : "Integration"})</span></span>
               </label>
             </div>
