@@ -2177,13 +2177,58 @@ async def _reverse_credit_note_effects(db: AsyncSession, tenant_id: str, user_id
 
 
 async def update_credit_note(db: AsyncSession, tenant_id: str, user_id: str, credit_note_id: str, data: CreditNoteCreate):
-    """تعديل مرتجع مرتبط بفاتورة: عكس القديم ثم إنشاء النسخة الجديدة داخل نفس المعاملة."""
+    """تعديل المرتجع مع عدم لمس المخزون إذا لم تتغير بيانات الإرجاع."""
     cn = await get_credit_note(db, tenant_id, credit_note_id)
     refund_count = (await db.execute(select(func.count(RefundRequest.id)).where(
         RefundRequest.tenant_id == tenant_id, RefundRequest.credit_note_id == cn.id,
     ))).scalar() or 0
     if refund_count:
         raise HTTPException(409, "لا يمكن تعديل مرتجع مرتبط بطلب استرداد؛ أنشئ مرتجعًا جديدًا بدلًا منه")
+
+    # تغيير السبب/التاريخ/الوصف لا يحتاج عكس المرتجع وإدخاله مرة أخرى.
+    # المسار القديم كان يحذف المستند ويعيد إنشاءه في كل حفظ، فيضيف حركة
+    # return_in جديدة حتى عندما لم تتغير السيريالات أو الكمية.
+    existing_lines = (await db.execute(select(CreditNoteLine).where(
+        CreditNoteLine.credit_note_id == cn.id
+    ).order_by(CreditNoteLine.line_order.asc()))).scalars().all()
+    incoming_lines = list(data.lines or [])
+
+    def _serial_key(values):
+        return tuple(sorted({str(value) for value in (values or [])}))
+
+    unchanged_inventory = len(existing_lines) == len(incoming_lines)
+    if unchanged_inventory:
+        for old, new in zip(existing_lines, incoming_lines):
+            try:
+                old_serials = json.loads(old.serial_ids_json or "[]")
+            except (TypeError, ValueError):
+                old_serials = []
+            old_key = (
+                old.original_invoice_line_id, old.inventory_item_id, old.variant_id,
+                Decimal(str(old.quantity or 0)), _serial_key(old_serials),
+            )
+            new_key = (
+                new.original_invoice_line_id, new.inventory_item_id, new.variant_id,
+                Decimal(str(new.quantity or 0)),
+                _serial_key(new.serial_ids),
+            )
+            if old_key != new_key:
+                unchanged_inventory = False
+                break
+
+    if unchanged_inventory:
+        cn.reason = data.reason
+        cn.issue_date = data.issue_date.replace(tzinfo=None)
+        for old, new in zip(existing_lines, incoming_lines):
+            # المرتجع المرتبط بفاتورة يحتفظ بوصف سطر الفاتورة؛ أما المرتجع
+            # المستقل فيسمح بتعديل وصف السطر دون حركة مخزون جديدة.
+            if not cn.original_invoice_id and new.description_ar:
+                old.description_ar = new.description_ar
+            old.return_condition = str(new.return_condition or old.return_condition or "resalable").strip().lower()
+        await db.commit()
+        await db.refresh(cn)
+        return cn
+
     await _reverse_credit_note_effects(db, tenant_id, user_id, cn)
     await db.delete(cn)
     await db.flush()
