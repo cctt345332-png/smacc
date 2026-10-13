@@ -1040,6 +1040,35 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
     return await get_invoice(db, tenant_id, invoice_id)
 
 
+async def _settle_cash_invoice(
+    db: AsyncSession, tenant_id: str, user_id: str, invoice: Invoice
+):
+    """إنشاء سند قبض حقيقي للفواتير النقدية بعد اعتمادها.
+
+    وجود Payment فعلي ضروري حتى تدخل العملية في كشف العميل وأعمار الديون
+    وتوزيع FIFO الموحد، وليس فقط تعديل paid_amount.
+    """
+    if invoice.invoice_payment_method != InvoicePaymentMethod.CASH:
+        return
+    total = Decimal(str(invoice.total or 0))
+    if Decimal(str(invoice.paid_amount or 0)) >= total - Decimal("0.01"):
+        return
+    await create_payment(
+        db,
+        tenant_id,
+        user_id,
+        PaymentCreate(
+            invoice_id=invoice.id,
+            payment_type="receipt",
+            payment_date=invoice.issue_date,
+            amount=total,
+            payment_method=PaymentMethod.CASH,
+            reference=f"فاتورة نقدية {invoice.invoice_number}",
+            notes=f"سند قبض تلقائي للفاتورة النقدية {invoice.invoice_number}",
+        ),
+    )
+
+
 async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
     """تأكيد الفاتورة — تقبل draft أو approved"""
     invoice = await get_invoice(db, tenant_id, invoice_id)
@@ -1057,6 +1086,7 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
         raise
 
     invoice.status = InvoiceStatus.CONFIRMED
+    await _settle_cash_invoice(db, tenant_id, user_id, invoice)
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
@@ -2780,6 +2810,7 @@ async def approve_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
         raise
 
     invoice.status = InvoiceStatus.CONFIRMED
+    await _settle_cash_invoice(db, tenant_id, user_id, invoice)
     record_audit(db, tenant_id, user_id, "approve_and_confirm", "invoice", invoice.id,
                  invoice_number=invoice.invoice_number, total=invoice.total)
     await db.commit()
@@ -2835,6 +2866,7 @@ async def confirm_approved_invoice(db: AsyncSession, tenant_id: str, user_id: st
     await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
 
     invoice.status = InvoiceStatus.CONFIRMED
+    await _settle_cash_invoice(db, tenant_id, user_id, invoice)
     await db.commit()
     return await get_invoice(db, tenant_id, invoice_id)
 
