@@ -710,6 +710,43 @@ async def create_stock_document(
                     )
                 )).scalar_one_or_none()
                 if duplicate:
+                    # سند الإخراج لا يحذف السيريال؛ ينقله إلى حالة "تالف"
+                    # ويتركه بلا مستودع حتى تبقى سلسلة التدقيق محفوظة.
+                    # إذا كان آخر إخراج هو سند إخراج مخزني فعلي، فالإدخال
+                    # اللاحق يعيد استخدام نفس السجل بدلاً من رفضه كتكرار.
+                    duplicate_status = getattr(duplicate.status, "value", duplicate.status)
+                    if duplicate_status == SerialStatus.DAMAGED.value:
+                        latest_result = await db.execute(
+                            select(StockMovement)
+                            .where(StockMovement.serial_item_id == duplicate.id)
+                            .order_by(StockMovement.created_at.desc())
+                            .limit(1)
+                        )
+                        latest = latest_result.scalar_one_or_none()
+                        latest_type = getattr(latest.movement_type, "value", latest.movement_type) if latest else None
+                        latest_quantity = Decimal(str(latest.quantity or 0)) if latest else Decimal("0")
+                        if (
+                            latest
+                            and latest_type == MovementType.ADJUSTMENT.value
+                            and latest_quantity == Decimal("-1")
+                            and latest.reference_type == "stock_document"
+                        ):
+                            duplicate.status = SerialStatus.IN_STOCK
+                            duplicate.warehouse_id = warehouse.id
+                            duplicate.cost_price = unit_cost
+                            duplicate.sale_price = duplicate.sale_price or item.sale_price
+                            db.add(StockMovement(
+                                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                                product_id=item.id, warehouse_id=warehouse.id,
+                                movement_type=MovementType.ADJUSTMENT,
+                                quantity=Decimal("1"), unit_cost=unit_cost,
+                                serial_item_id=duplicate.id,
+                                reference_type="stock_document", notes=(
+                                    f"إعادة إدخال سيريال سبق إخراجه — {notes}"
+                                    if notes else "إعادة إدخال سيريال سبق إخراجه"
+                                ), created_by=user_id,
+                            ))
+                            continue
                     raise HTTPException(400, f"السيريال {serial_number} موجود مسبقًا")
                 serial = SerialItem(
                     id=str(uuid.uuid4()), product_id=item.id, warehouse_id=warehouse.id,

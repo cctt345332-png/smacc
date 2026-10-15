@@ -214,3 +214,41 @@ def test_rejects_price_edit_on_sold_serial(monkeypatch):
             await service.update_serial(db, "tenant-1", sold.id, {"cost_price": "120"})
 
     asyncio.run(run())
+
+
+def test_stock_document_reactivates_serial_previously_removed_by_stock_document(monkeypatch):
+    async def run():
+        item = serial_item(cost="100", sale="150")
+        removed = SerialItem(
+            id="serial-removed", product_id=item.id, serial_number="IMEI-REMOVED",
+            status=SerialStatus.DAMAGED, warehouse_id=None,
+            cost_price=Decimal("100"), sale_price=Decimal("150"),
+        )
+        latest_out = StockMovement(
+            id="movement-out", serial_item_id=removed.id,
+            movement_type="adjustment", quantity=Decimal("-1"),
+            reference_type="stock_document",
+        )
+        db = FakeSession(results=[FakeResult(one=removed), FakeResult(one=latest_out)])
+        db.get = lambda _model, _record_id: asyncio.sleep(0, result=SimpleNamespace(id="warehouse-1", tenant_id="tenant-1", is_active=True))
+
+        async def fake_get_item(_db, _tenant_id, _item_id):
+            return item
+
+        monkeypatch.setattr(service, "get_item", fake_get_item)
+        result = await service.create_stock_document(
+            db, "tenant-1", "user-1", {
+                "direction": "in", "item_id": item.id,
+                "warehouse_id": "warehouse-1", "unit_cost": 110,
+                "serial_numbers": ["IMEI-REMOVED"],
+            },
+        )
+
+        assert result["serial_count"] == 1
+        assert removed.status == SerialStatus.IN_STOCK
+        assert removed.warehouse_id == "warehouse-1"
+        movement = next(record for record in db.records if isinstance(record, StockMovement))
+        assert movement.quantity == Decimal("1")
+        assert movement.serial_item_id == removed.id
+
+    asyncio.run(run())
