@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
-import { getItems, getWarehouses, getSerials, getSerialsByWarehouse, validateSerials, getStockByWarehouse, createStockCount, updateSerial, getCountHistory } from "@/lib/inventory";
+import { getItems, getWarehouses, getSerials, validateSerials, getStockByWarehouse, createStockCount, updateSerial, getCountHistory } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
@@ -180,18 +180,18 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     XLSX.writeFile(wb, `جرد-سيريالات-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const exportSerialList = async () => {
+  const exportProductSerials = async (productId: string, productName: string) => {
     if (selectedWarehouse === "all") return alert(ar ? "اختر مستودعاً محدداً أولاً" : "Choose a warehouse first");
     try {
-      const { data } = await getSerialsByWarehouse(selectedWarehouse);
+      const { data } = await getSerials(productId, "in_stock", selectedWarehouse);
       const rows = (Array.isArray(data) ? data : []).map((x: any) => ({
-        السيريال: x.serial_number, الصنف: x.product_name, المنتج_id: x.product_id,
+        السيريال: x.serial_number, الصنف: productName, المنتج_id: productId,
         الحالة: "متاح", المستودع: warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—",
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "كل السيريالات");
-      XLSX.writeFile(wb, `سيريالات-مخزون-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, "سيريالات المنتج");
+      XLSX.writeFile(wb, `سيريالات-${productName}-${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (error: any) { alert(error?.response?.data?.detail || (ar ? "تعذر تحميل السيريالات" : "Could not download serials")); }
   };
 
@@ -416,7 +416,6 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                 {serialAuditLoading ? (ar ? "جاري المطابقة..." : "Matching...") : (ar ? "رفع ملف Excel للجرد" : "Upload Count Excel")}
                 <input type="file" accept=".xlsx,.xls,.csv" hidden disabled={serialAuditLoading} onChange={e => { handleSerialAuditFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
               </label>
-              <button className="btn btn-secondary btn-sm" onClick={exportSerialList} disabled={selectedWarehouse === "all"}>{ar ? "تحميل كل سيريالات المستودع" : "Download Warehouse Serials"}</button>
               {serialAudit && <button className="btn btn-secondary btn-sm" onClick={exportSerialAudit}>{ar ? "تصدير النتيجة Excel" : "Export Result Excel"}</button>}
             </div>
           </div>
@@ -641,12 +640,21 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                       </td>
                       <td>
                         {isSerial && (
-                          <button
-                            className={`btn btn-sm ${openSerials === item.id ? "btn-primary" : "btn-secondary"}`}
-                            onClick={() => handleOpenSerials(item.id)}
-                            style={{ fontSize: 12 }}>
-                            {openSerials === item.id ? (ar ? "إخفاء" : "Hide") : (ar ? "عرض السيريالات" : "View Serials")}
-                          </button>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            <button
+                              className={`btn btn-sm ${openSerials === item.id ? "btn-primary" : "btn-secondary"}`}
+                              onClick={() => handleOpenSerials(item.id)}
+                              style={{ fontSize: 12 }}>
+                              {openSerials === item.id ? (ar ? "إخفاء" : "Hide") : (ar ? "عرض السيريالات" : "View Serials")}
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => exportProductSerials(item.id, item.name_ar || item.sku || "product")}
+                              disabled={selectedWarehouse === "all"}
+                              style={{ fontSize: 12 }}>
+                              {ar ? "تحميل Excel" : "Download Excel"}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
