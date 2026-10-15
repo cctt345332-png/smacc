@@ -20,10 +20,12 @@ CATEGORY_LABELS = {
     "travel": "سفر", "other": "مصروفات أخرى",
 }
 CATEGORY_MAPPING = {
-    "fuel": "shipping_expense", "vehicle_maintenance": "maintenance_expense",
-    "shipping": "shipping_expense", "hospitality": "other_expense",
-    "communications": "utilities_expense", "parking": "shipping_expense",
-    "travel": "shipping_expense", "other": "other_expense",
+    # خريطة الحسابات الحالية تستخدم مفتاحاً موحداً للمصروفات التشغيلية؛
+    # المفاتيح القديمة مثل shipping_expense غير معرفة في DEFAULT_MAPPING_CODES.
+    "fuel": "operating_expenses", "vehicle_maintenance": "operating_expenses",
+    "shipping": "operating_expenses", "hospitality": "operating_expenses",
+    "communications": "operating_expenses", "parking": "operating_expenses",
+    "travel": "operating_expenses", "other": "operating_expenses",
 }
 PAYMENT_MAPPING = {
     "cash": "default_cash", "bank_transfer": "default_bank", "credit_card": "default_card",
@@ -120,7 +122,7 @@ async def approve_expense(db: AsyncSession, tenant_id: str, user_id: str, expens
     if not expense: raise HTTPException(404, "المصروف غير موجود")
     if expense.status == "approved" or expense.journal_entry_id: raise HTTPException(409, "تم اعتماد هذا المصروف مسبقًا ولا يجوز إنشاء قيد مكرر")
     if expense.status != "pending": raise HTTPException(400, "لا يمكن اعتماد مصروف إلا وهو بانتظار المراجعة")
-    expense_account = await accounting_service.get_operational_account(db, tenant_id, CATEGORY_MAPPING.get(expense.category, "other_expense"))
+    expense_account = await accounting_service.get_operational_account(db, tenant_id, CATEGORY_MAPPING.get(expense.category, "operating_expenses"))
     credit_account = await accounting_service.get_operational_account(db, tenant_id, PAYMENT_MAPPING.get(expense.payment_method, "employee_advances"))
     fy_result = await db.execute(select(FiscalYear).where(FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()))
     fiscal_year = fy_result.scalars().first()
