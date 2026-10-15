@@ -1342,6 +1342,27 @@ async def get_operational_account(db: AsyncSession, tenant_id: str, mapping_key:
         )
     )
     mapping = result.scalar_one_or_none()
+    # توافق آمن للشركات التي سبقت إضافة ربط المصروفات التشغيلية: لا ننشئ
+    # حسابًا جديدًا، بل نضيف سطر الربط للحساب النهائي الموجود مسبقًا.
+    if not mapping and mapping_key == "operating_expenses":
+        account_result = await db.execute(
+            select(Account).where(
+                Account.tenant_id == tenant_id,
+                Account.is_active.is_(True),
+                Account.is_posting.is_(True),
+                or_(Account.code.in_(["584000", "0584"]), Account.name_ar == "مصروفات أخرى"),
+            ).order_by(Account.code.desc())
+        )
+        existing_account = account_result.scalars().first()
+        if existing_account:
+            mapping = AccountingAccountMapping(
+                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                mapping_key=mapping_key, account_id=existing_account.id,
+                updated_at=datetime.utcnow(),
+            )
+            mapping.account = existing_account
+            db.add(mapping)
+            await db.flush()
     if not mapping or not mapping.account:
         raise HTTPException(409, f"حساب الربط '{mapping_key}' غير مهيأ لهذه الشركة")
     account = mapping.account
