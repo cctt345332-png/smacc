@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getItems, getWarehouses, getSerials, getStockByWarehouse, createStockCount, updateSerial, getCountHistory } from "@/lib/inventory";
+import * as XLSX from "xlsx";
+import { getItems, getWarehouses, getSerials, getSerialsByWarehouse, validateSerials, getStockByWarehouse, createStockCount, updateSerial, getCountHistory } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
@@ -43,6 +44,8 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   const [serialsData, setSerialsData] = useState<any[]>([]);
   const [loadingSerials, setLoadingSerials] = useState(false);
   const [serialChanges, setSerialChanges] = useState<Record<string, string>>({});
+  const [serialAudit, setSerialAudit] = useState<any | null>(null);
+  const [serialAuditLoading, setSerialAuditLoading] = useState(false);
 
   useEffect(() => {
     getWarehouses()
@@ -110,6 +113,64 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       const { data } = await getSerials(itemId, "in_stock", selectedWarehouse === "all" ? undefined : selectedWarehouse);
       setSerialsData(data);
     } catch {} finally { setLoadingSerials(false); }
+  };
+
+  const normalizeSerial = (value: any) => String(value ?? "").trim().replace(/\s+/g, "");
+
+  const handleSerialAuditFile = async (file?: File) => {
+    if (!file) return;
+    if (selectedWarehouse === "all") {
+      alert(ar ? "اختر مستودعاً محدداً أولاً لجرد السيريالات" : "Choose a specific warehouse first");
+      return;
+    }
+    setSerialAuditLoading(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array", cellText: true, cellDates: false });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: "", raw: false });
+      const header = (rows[0] || []).map((v: any) => normalizeSerial(v).toLowerCase());
+      const serialColumn = header.findIndex((v: string) => /serial|سيريال|imei|رقم/.test(v));
+      const values = rows.slice(serialColumn >= 0 ? 1 : 0)
+        .map((row: any[]) => normalizeSerial(row[serialColumn >= 0 ? serialColumn : 0]))
+        .filter(Boolean);
+      const unique = [...new Set(values)];
+      const duplicateSerials = [...new Set(values.filter((v, i) => values.indexOf(v) !== i))];
+      if (!unique.length) throw new Error(ar ? "لم يتم العثور على أرقام سيريال في الملف" : "No serial numbers found in the file");
+
+      const [{ data: validation }, { data: warehouseSerials }] = await Promise.all([
+        validateSerials({ serial_numbers: unique, warehouse_id: selectedWarehouse }),
+        getSerialsByWarehouse(selectedWarehouse),
+      ]);
+      const systemRows = Array.isArray(warehouseSerials) ? warehouseSerials : [];
+      const uploadedSet = new Set(unique);
+      const foundSet = new Set((validation.found || []).map((x: any) => normalizeSerial(x.serial_number)));
+      const missingFromFile = systemRows.filter((x: any) => !uploadedSet.has(normalizeSerial(x.serial_number)));
+      setSerialAudit({
+        fileName: file.name, uploaded: unique, found: validation.found || [],
+        wrongWarehouse: validation.wrong_warehouse || [], notFound: validation.not_found || [],
+        missingFromFile, duplicateSerials, warehouseName: warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—",
+        totalSystem: systemRows.length, checkedAt: new Date().toISOString(), foundCount: foundSet.size,
+      });
+    } catch (error: any) {
+      alert(error?.response?.data?.detail || error?.message || (ar ? "تعذر قراءة ملف السيريالات" : "Could not read serial file"));
+    } finally { setSerialAuditLoading(false); }
+  };
+
+  const exportSerialAudit = () => {
+    if (!serialAudit) return;
+    const rows = [
+      ...serialAudit.found.map((x: any) => ({ الحالة: "موجود في المستودع", السيريال: x.serial_number, المستودع: serialAudit.warehouseName })),
+      ...serialAudit.missingFromFile.map((x: any) => ({ الحالة: "موجود بالنظام ولم يظهر في الملف", السيريال: x.serial_number, الصنف: x.product_name, المستودع: serialAudit.warehouseName })),
+      ...serialAudit.wrongWarehouse.map((x: any) => ({ الحالة: "موجود في مستودع آخر", السيريال: x.serial_number, المستودع: x.actual_warehouse })),
+      ...serialAudit.notFound.map((x: any) => ({ الحالة: "غير موجود بالنظام", السيريال: x })),
+      ...serialAudit.duplicateSerials.map((x: any) => ({ الحالة: "مكرر في الملف", السيريال: x })),
+    ];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 30 }, { wch: 24 }, { wch: 36 }, { wch: 24 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "نتيجة الجرد");
+    XLSX.writeFile(wb, `جرد-سيريالات-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const handleSaveCount = async () => {
@@ -291,6 +352,51 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
           {ar ? "تم حفظ الجرد بنجاح" : "Stock count saved successfully"}
         </div>
       )}
+
+      <div className="card" style={{ marginBottom: 16, border: "1px solid #D8C5E2", background: "linear-gradient(135deg, #FCFAFD, #F7F1FA)" }}>
+        <div className="card-body" style={{ padding: "14px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div className="card-title" style={{ color: "#4C1768" }}>{ar ? "جرد السيريالات الذكي" : "Smart Serial Count"}</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
+                {ar ? "ارفع ملف Excel بالسيريالات لمطابقة الموجود، المفقود، الموجود في مستودع آخر، والمكرر" : "Upload an Excel serial list to match found, missing, wrong-warehouse, and duplicate serials"}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label className="btn btn-primary btn-sm" style={{ cursor: serialAuditLoading ? "wait" : "pointer" }}>
+                {serialAuditLoading ? (ar ? "جاري المطابقة..." : "Matching...") : (ar ? "رفع ملف Excel للجرد" : "Upload Count Excel")}
+                <input type="file" accept=".xlsx,.xls,.csv" hidden disabled={serialAuditLoading} onChange={e => { handleSerialAuditFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
+              </label>
+              {serialAudit && <button className="btn btn-secondary btn-sm" onClick={exportSerialAudit}>{ar ? "تصدير النتيجة Excel" : "Export Result Excel"}</button>}
+            </div>
+          </div>
+          {selectedWarehouse === "all" && <div style={{ marginTop: 10, color: "#92400E", fontSize: 12, fontWeight: 600 }}>{ar ? "اختر مستودعاً محدداً قبل رفع ملف السيريالات" : "Choose a specific warehouse before uploading serials"}</div>}
+          {serialAudit && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+                {[
+                  ["موجود في المستودع", serialAudit.found.length, "#166534"],
+                  ["موجود بالنظام ولم يرد", serialAudit.missingFromFile.length, "#92400E"],
+                  ["في مستودع آخر", serialAudit.wrongWarehouse.length, "#1D4ED8"],
+                  ["غير موجود بالنظام", serialAudit.notFound.length, "#B91C1C"],
+                  ["مكرر في الملف", serialAudit.duplicateSerials.length, "#7C2D12"],
+                ].map(([label, value, color]) => <div key={String(label)} style={{ background: "white", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 10px" }}><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{ar ? label : label}</div><strong style={{ color: String(color), fontSize: 20 }}>{value}</strong></div>)}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>{ar ? `الملف: ${serialAudit.fileName} — المستودع: ${serialAudit.warehouseName} — إجمالي النظام: ${serialAudit.totalSystem}` : `File: ${serialAudit.fileName} — Warehouse: ${serialAudit.warehouseName} — System total: ${serialAudit.totalSystem}`}</div>
+              <div className="table-wrapper" style={{ marginTop: 10, maxHeight: 260, overflow: "auto" }}>
+                <table><thead><tr><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "السيريال" : "Serial"}</th><th>{ar ? "المستودع / الصنف" : "Warehouse / Item"}</th></tr></thead><tbody>
+                  {[
+                    ...serialAudit.found.map((x: any) => ({ status: "موجود", serial: x.serial_number, detail: serialAudit.warehouseName, color: "#166534" })),
+                    ...serialAudit.missingFromFile.map((x: any) => ({ status: "موجود بالنظام ولم يرد بالملف", serial: x.serial_number, detail: x.product_name || serialAudit.warehouseName, color: "#92400E" })),
+                    ...serialAudit.wrongWarehouse.map((x: any) => ({ status: "في مستودع آخر", serial: x.serial_number, detail: x.actual_warehouse, color: "#1D4ED8" })),
+                    ...serialAudit.notFound.map((x: any) => ({ status: "غير موجود", serial: x, detail: "—", color: "#B91C1C" })),
+                  ].map((row: any, index) => <tr key={`${row.serial}-${index}`}><td style={{ color: row.color, fontWeight: 700 }}>{row.status}</td><td><code>{row.serial}</code></td><td>{row.detail}</td></tr>)}
+                </tbody></table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* إعدادات الجرد */}
       <div className="card" style={{ marginBottom: 16 }}>
