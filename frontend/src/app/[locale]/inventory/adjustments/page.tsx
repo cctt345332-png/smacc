@@ -211,8 +211,11 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
 
   const exportMissingSerials = () => {
     if (!serialAudit) return;
-    const rows = serialAudit.missingFromFile.map((x: any) => ({ السيريال: x.serial_number, الصنف: x.product_name, الحالة: "موجود بالنظام ولم يظهر في ملف الجرد", المستودع: serialAudit.warehouseName }));
+    const rows = serialAudit.missingFromFile.length
+      ? serialAudit.missingFromFile.map((x: any) => ({ السيريال: x.serial_number, الصنف: x.product_name, الحالة: "موجود بالنظام ولم يظهر في ملف الجرد", المستودع: serialAudit.warehouseName }))
+      : [{ السيريال: "—", الصنف: "—", الحالة: "لا توجد سيريالات ناقصة — الملف مطابق لمخزون المنتج", المستودع: serialAudit.warehouseName }];
     const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 24 }, { wch: 36 }, { wch: 52 }, { wch: 34 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "السيريالات غير الموجودة");
     XLSX.writeFile(wb, `سيريالات-غير-موجودة-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -425,7 +428,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
             <div style={{ marginTop: 14 }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                 <button className="btn btn-secondary btn-sm" onClick={exportSerialCountSheet}>{ar ? "تحميل ورقة الجرد" : "Download Count Sheet"}</button>
-                <button className="btn btn-secondary btn-sm" onClick={exportMissingSerials} disabled={!serialAudit.missingFromFile.length}>{ar ? "تحميل السيريالات غير الموجودة" : "Download Missing Serials"}</button>
+                <button className="btn btn-secondary btn-sm" onClick={exportMissingSerials}>{ar ? "تحميل السيريالات غير الموجودة" : "Download Missing Serials"}</button>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
                 {[
