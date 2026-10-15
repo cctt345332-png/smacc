@@ -45,6 +45,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   const [loadingSerials, setLoadingSerials] = useState(false);
   const [serialChanges, setSerialChanges] = useState<Record<string, string>>({});
   const [serialAudit, setSerialAudit] = useState<any | null>(null);
+  const [selectedSerialProduct, setSelectedSerialProduct] = useState("");
   const [serialAuditLoading, setSerialAuditLoading] = useState(false);
 
   useEffect(() => {
@@ -77,6 +78,8 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     setCountMap({});
     setSerialChanges({});
     setOpenSerials(null);
+    setSelectedSerialProduct("");
+    setSerialAudit(null);
   }, [selectedWarehouse]);
 
   const visibleItems = items.filter((item: any) => {
@@ -119,8 +122,8 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
 
   const handleSerialAuditFile = async (file?: File) => {
     if (!file) return;
-    if (selectedWarehouse === "all") {
-      alert(ar ? "اختر مستودعاً محدداً أولاً لجرد السيريالات" : "Choose a specific warehouse first");
+    if (selectedWarehouse === "all" || !selectedSerialProduct) {
+      alert(ar ? "اختر المستودع والمنتج أولاً لجرد السيريالات" : "Choose a warehouse and product first");
       return;
     }
     setSerialAuditLoading(true);
@@ -138,16 +141,19 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
       const duplicateSerials = [...new Set(values.filter((v, i) => values.indexOf(v) !== i))];
       if (!unique.length) throw new Error(ar ? "لم يتم العثور على أرقام سيريال في الملف" : "No serial numbers found in the file");
 
-      const [{ data: validation }, { data: warehouseSerials }] = await Promise.all([
+      const [{ data: validation }, { data: productSerials }] = await Promise.all([
         validateSerials({ serial_numbers: unique, warehouse_id: selectedWarehouse }),
-        getSerialsByWarehouse(selectedWarehouse),
+        getSerials(selectedSerialProduct, "in_stock", selectedWarehouse),
       ]);
-      const systemRows = Array.isArray(warehouseSerials) ? warehouseSerials : [];
+      const systemRows = Array.isArray(productSerials) ? productSerials : [];
       const uploadedSet = new Set(unique);
-      const foundSet = new Set((validation.found || []).map((x: any) => normalizeSerial(x.serial_number)));
+      const systemSet = new Set(systemRows.map((x: any) => normalizeSerial(x.serial_number)));
+      const found = (validation.found || []).filter((x: any) => systemSet.has(normalizeSerial(x.serial_number)));
+      const wrongProduct = (validation.found || []).filter((x: any) => !systemSet.has(normalizeSerial(x.serial_number)));
+      const foundSet = new Set(found.map((x: any) => normalizeSerial(x.serial_number)));
       const missingFromFile = systemRows.filter((x: any) => !uploadedSet.has(normalizeSerial(x.serial_number)));
       setSerialAudit({
-        fileName: file.name, uploaded: unique, found: validation.found || [],
+        fileName: file.name, uploaded: unique, found, wrongProduct, systemRows,
         wrongWarehouse: validation.wrong_warehouse || [], notFound: validation.not_found || [],
         missingFromFile, duplicateSerials, warehouseName: warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—",
         totalSystem: systemRows.length, checkedAt: new Date().toISOString(), foundCount: foundSet.size,
@@ -162,6 +168,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     const rows = [
       ...serialAudit.found.map((x: any) => ({ الحالة: "موجود في المستودع", السيريال: x.serial_number, المستودع: serialAudit.warehouseName })),
       ...serialAudit.missingFromFile.map((x: any) => ({ الحالة: "موجود بالنظام ولم يظهر في الملف", السيريال: x.serial_number, الصنف: x.product_name, المستودع: serialAudit.warehouseName })),
+      ...serialAudit.wrongProduct.map((x: any) => ({ الحالة: "موجود في المستودع لكنه يخص منتجاً آخر", السيريال: x.serial_number, المستودع: serialAudit.warehouseName })),
       ...serialAudit.wrongWarehouse.map((x: any) => ({ الحالة: "موجود في مستودع آخر", السيريال: x.serial_number, المستودع: x.actual_warehouse })),
       ...serialAudit.notFound.map((x: any) => ({ الحالة: "غير موجود بالنظام", السيريال: x })),
       ...serialAudit.duplicateSerials.map((x: any) => ({ الحالة: "مكرر في الملف", السيريال: x })),
@@ -171,6 +178,44 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "نتيجة الجرد");
     XLSX.writeFile(wb, `جرد-سيريالات-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const exportSerialList = async () => {
+    if (selectedWarehouse === "all") return alert(ar ? "اختر مستودعاً محدداً أولاً" : "Choose a warehouse first");
+    try {
+      const { data } = await getSerialsByWarehouse(selectedWarehouse);
+      const rows = (Array.isArray(data) ? data : []).map((x: any) => ({
+        السيريال: x.serial_number, الصنف: x.product_name, المنتج_id: x.product_id,
+        الحالة: "متاح", المستودع: warehouses.find(w => w.id === selectedWarehouse)?.name_ar || "—",
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "كل السيريالات");
+      XLSX.writeFile(wb, `سيريالات-مخزون-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (error: any) { alert(error?.response?.data?.detail || (ar ? "تعذر تحميل السيريالات" : "Could not download serials")); }
+  };
+
+  const exportSerialCountSheet = () => {
+    if (!serialAudit) return;
+    const foundSet = new Set(serialAudit.found.map((x: any) => normalizeSerial(x.serial_number)));
+    const rows = serialAudit.systemRows.map((x: any) => ({
+      السيريال: x.serial_number, الصنف: x.product_name,
+      حالة_الجرد: foundSet.has(normalizeSerial(x.serial_number)) ? "موجود وتمت مطابقته" : "غير موجود في الملف",
+      المستودع: serialAudit.warehouseName, ملاحظات: "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "ورقة جرد السيريالات");
+    XLSX.writeFile(wb, `ورقة-جرد-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const exportMissingSerials = () => {
+    if (!serialAudit) return;
+    const rows = serialAudit.missingFromFile.map((x: any) => ({ السيريال: x.serial_number, الصنف: x.product_name, الحالة: "موجود بالنظام ولم يظهر في ملف الجرد", المستودع: serialAudit.warehouseName }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "السيريالات غير الموجودة");
+    XLSX.writeFile(wb, `سيريالات-غير-موجودة-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const handleSaveCount = async () => {
@@ -359,24 +404,35 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
             <div>
               <div className="card-title" style={{ color: "#4C1768" }}>{ar ? "جرد السيريالات الذكي" : "Smart Serial Count"}</div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-                {ar ? "ارفع ملف Excel بالسيريالات لمطابقة الموجود، المفقود، الموجود في مستودع آخر، والمكرر" : "Upload an Excel serial list to match found, missing, wrong-warehouse, and duplicate serials"}
+                {ar ? "اختر منتجاً واحداً، ثم ارفع ملف Excel بسيريالاته لمطابقة الجرد بدقة" : "Choose one product, then upload its serial Excel file for an accurate count"}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <select className="form-input form-select" style={{ minWidth: 240 }} value={selectedSerialProduct} onChange={e => { setSelectedSerialProduct(e.target.value); setSerialAudit(null); }} disabled={selectedWarehouse === "all"}>
+                <option value="">{ar ? "اختر المنتج المراد جرده" : "Choose product to count"}</option>
+                {items.filter((item: any) => item.tracking_type === "serial").map((item: any) => <option key={item.id} value={item.id}>{item.name_ar}{item.sku ? ` — ${item.sku}` : ""}</option>)}
+              </select>
               <label className="btn btn-primary btn-sm" style={{ cursor: serialAuditLoading ? "wait" : "pointer" }}>
                 {serialAuditLoading ? (ar ? "جاري المطابقة..." : "Matching...") : (ar ? "رفع ملف Excel للجرد" : "Upload Count Excel")}
                 <input type="file" accept=".xlsx,.xls,.csv" hidden disabled={serialAuditLoading} onChange={e => { handleSerialAuditFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
               </label>
+              <button className="btn btn-secondary btn-sm" onClick={exportSerialList} disabled={selectedWarehouse === "all"}>{ar ? "تحميل كل سيريالات المستودع" : "Download Warehouse Serials"}</button>
               {serialAudit && <button className="btn btn-secondary btn-sm" onClick={exportSerialAudit}>{ar ? "تصدير النتيجة Excel" : "Export Result Excel"}</button>}
             </div>
           </div>
-          {selectedWarehouse === "all" && <div style={{ marginTop: 10, color: "#92400E", fontSize: 12, fontWeight: 600 }}>{ar ? "اختر مستودعاً محدداً قبل رفع ملف السيريالات" : "Choose a specific warehouse before uploading serials"}</div>}
+          {selectedWarehouse === "all" && <div style={{ marginTop: 10, color: "#92400E", fontSize: 12, fontWeight: 600 }}>{ar ? "اختر مستودعاً محدداً ثم منتجاً واحداً قبل رفع ملف السيريالات" : "Choose a warehouse and one product before uploading serials"}</div>}
+          {selectedSerialProduct && <div style={{ marginTop: 8, fontSize: 12, color: "#4C1768", fontWeight: 700 }}>{ar ? "الجرد الحالي لمنتج واحد فقط — ارفع ملف هذا المنتج" : "Current count is for one product only — upload this product's file"}</div>}
           {serialAudit && (
             <div style={{ marginTop: 14 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                <button className="btn btn-secondary btn-sm" onClick={exportSerialCountSheet}>{ar ? "تحميل ورقة الجرد" : "Download Count Sheet"}</button>
+                <button className="btn btn-secondary btn-sm" onClick={exportMissingSerials} disabled={!serialAudit.missingFromFile.length}>{ar ? "تحميل السيريالات غير الموجودة" : "Download Missing Serials"}</button>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
                 {[
                   ["موجود في المستودع", serialAudit.found.length, "#166534"],
                   ["موجود بالنظام ولم يرد", serialAudit.missingFromFile.length, "#92400E"],
+                  ["منتج آخر", serialAudit.wrongProduct.length, "#6D28D9"],
                   ["في مستودع آخر", serialAudit.wrongWarehouse.length, "#1D4ED8"],
                   ["غير موجود بالنظام", serialAudit.notFound.length, "#B91C1C"],
                   ["مكرر في الملف", serialAudit.duplicateSerials.length, "#7C2D12"],
@@ -388,6 +444,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                   {[
                     ...serialAudit.found.map((x: any) => ({ status: "موجود", serial: x.serial_number, detail: serialAudit.warehouseName, color: "#166534" })),
                     ...serialAudit.missingFromFile.map((x: any) => ({ status: "موجود بالنظام ولم يرد بالملف", serial: x.serial_number, detail: x.product_name || serialAudit.warehouseName, color: "#92400E" })),
+                    ...serialAudit.wrongProduct.map((x: any) => ({ status: "سيريال لمنتج آخر", serial: x.serial_number, detail: serialAudit.warehouseName, color: "#6D28D9" })),
                     ...serialAudit.wrongWarehouse.map((x: any) => ({ status: "في مستودع آخر", serial: x.serial_number, detail: x.actual_warehouse, color: "#1D4ED8" })),
                     ...serialAudit.notFound.map((x: any) => ({ status: "غير موجود", serial: x, detail: "—", color: "#B91C1C" })),
                   ].map((row: any, index) => <tr key={`${row.serial}-${index}`}><td style={{ color: row.color, fontWeight: 700 }}>{row.status}</td><td><code>{row.serial}</code></td><td>{row.detail}</td></tr>)}
