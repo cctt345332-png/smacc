@@ -211,9 +211,9 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
 
   const exportMissingSerials = () => {
     if (!serialAudit) return;
-    const rows = serialAudit.missingFromFile.length
-      ? serialAudit.missingFromFile.map((x: any) => ({ السيريال: x.serial_number, الصنف: x.product_name, الحالة: "موجود بالنظام ولم يظهر في ملف الجرد", المستودع: serialAudit.warehouseName }))
-      : [{ السيريال: "—", الصنف: "—", الحالة: "لا توجد سيريالات ناقصة — الملف مطابق لمخزون المنتج", المستودع: serialAudit.warehouseName }];
+    const rows = serialAudit.notFound.length
+      ? serialAudit.notFound.map((serial: string) => ({ السيريال: serial, الصنف: "المنتج الجاري جرده", الحالة: "غير موجود بالنظام", المستودع: serialAudit.warehouseName }))
+      : [{ السيريال: "—", الصنف: "—", الحالة: "لا توجد سيريالات غير موجودة بالنظام", المستودع: serialAudit.warehouseName }];
     const ws = XLSX.utils.json_to_sheet(rows);
     ws["!cols"] = [{ wch: 24 }, { wch: 36 }, { wch: 52 }, { wch: 34 }];
     const wb = XLSX.utils.book_new();
