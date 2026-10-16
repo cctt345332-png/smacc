@@ -311,11 +311,8 @@ class _RepShellState extends State<RepShell> {
       final current = await widget.apiClient.getMap(
         '/inventory/mandatory-stocktake/rep/current',
       );
-      if (!mounted || current['locked'] != true) return;
-      final run = current['run'];
-      if (run is Map && run['status'] != 'submitted') {
-        setState(() => _mandatoryStocktake = Future.value(current));
-      }
+      if (!mounted) return;
+      setState(() => _mandatoryStocktake = Future.value(current));
     } catch (_) {}
   }
 
@@ -374,7 +371,7 @@ class _RepShellState extends State<RepShell> {
           );
         }
         final stocktake = snapshot.data ?? const <String, dynamic>{};
-        if (stocktake['locked'] == true && stocktake['run']?['status'] != 'submitted') {
+        if (stocktake['locked'] == true) {
           return MandatoryStocktakeScreen(
             apiClient: widget.apiClient,
             onSubmitted: () => setState(() => _mandatoryStocktake = widget.apiClient.getMap('/inventory/mandatory-stocktake/rep/current')),

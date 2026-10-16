@@ -28,6 +28,7 @@ from app.modules.zatca.router import router as zatca_router
 
 app = FastAPI(title="ERP System", version="1.0.0")
 _notification_scheduler_task: asyncio.Task | None = None
+_stocktake_scheduler_task: asyncio.Task | None = None
 
 
 async def _notification_scheduler() -> None:
@@ -53,6 +54,27 @@ async def _notification_scheduler() -> None:
             await asyncio.sleep(60)
 
 
+async def _mandatory_stocktake_scheduler() -> None:
+    """ينشئ جلسات الجرد تلقائيًا حتى لو لم يفتح أحد لوحة الإدارة."""
+    from app.core.database import AsyncSessionLocal
+    from app.models.tenant import Tenant
+    from app.modules.inventory.mandatory_stocktake_service import ensure_current_run
+    while True:
+        try:
+            async with AsyncSessionLocal() as session:
+                tenants = (await session.execute(select(Tenant.id))).scalars().all()
+                for tenant_id in tenants:
+                    try:
+                        await ensure_current_run(session, tenant_id)
+                    except Exception:
+                        await session.rollback()
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await asyncio.sleep(60)
+
+
 @app.on_event("startup")
 async def initialise_preview_ai() -> None:
     """تهيئة اختيارية وحصرية لمعاينة الذكاء؛ لا تعمل إلا بعلم بيئة صريح."""
@@ -70,6 +92,12 @@ async def start_notification_scheduler() -> None:
     _notification_scheduler_task = asyncio.create_task(_notification_scheduler())
 
 
+@app.on_event("startup")
+async def start_stocktake_scheduler() -> None:
+    global _stocktake_scheduler_task
+    _stocktake_scheduler_task = asyncio.create_task(_mandatory_stocktake_scheduler())
+
+
 @app.on_event("shutdown")
 async def stop_notification_scheduler() -> None:
     global _notification_scheduler_task
@@ -80,6 +108,18 @@ async def stop_notification_scheduler() -> None:
         except asyncio.CancelledError:
             pass
         _notification_scheduler_task = None
+
+
+@app.on_event("shutdown")
+async def stop_stocktake_scheduler() -> None:
+    global _stocktake_scheduler_task
+    if _stocktake_scheduler_task:
+        _stocktake_scheduler_task.cancel()
+        try:
+            await _stocktake_scheduler_task
+        except asyncio.CancelledError:
+            pass
+        _stocktake_scheduler_task = None
 
 
 def configured_origins() -> list[str]:

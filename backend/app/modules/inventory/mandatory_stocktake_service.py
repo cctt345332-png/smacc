@@ -12,6 +12,7 @@ from app.models.inventory import (
     InventoryItem,
     InventoryStock,
     SerialItem,
+    StockMovement,
     Warehouse,
     MandatoryStocktakeConfig,
     MandatoryStocktakeRun,
@@ -157,7 +158,7 @@ async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dic
     if not run:
         return {"locked": False, "run": None, "lines": []}
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep.id).order_by(InventoryItem.name_ar))).all()
-    return {"locked": run.status != "submitted", "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
+    return {"locked": run.status in ("pending", "reopened", "submitted"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
 
 
 async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
@@ -201,6 +202,15 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
     run.submitted_at = datetime.utcnow()
     run.submitted_by = user_id
     await db.commit()
+    from app.modules.notifications.service import notify_management_event
+    await notify_management_event(
+        db, tenant_id, user_id,
+        "تم رفع جرد مخزون جديد",
+        "New stocktake submitted",
+        "رفع المندوب جرد مستودعه، وهو بانتظار مراجعة الإدارة.",
+        "A representative submitted a warehouse stocktake awaiting management review.",
+        reference_id=run.id, reference_type="mandatory_stocktake",
+    )
     return await get_rep_current(db, tenant_id, user_id)
 
 
@@ -232,12 +242,103 @@ async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str
     action = data.get("action")
     if action not in ("approved", "reopened"):
         raise HTTPException(400, "الإجراء يجب أن يكون approved أو reopened")
+    if action == "approved" and run.status != "submitted":
+        raise HTTPException(409, "لا يمكن اعتماد الجرد قبل رفعه من المندوب")
+    if action == "approved" and run.adjustments_applied_at:
+        raise HTTPException(409, "تم تطبيق تسوية هذا الجرد مسبقًا")
+    if action == "reopened" and run.status == "approved":
+        raise HTTPException(409, "لا يمكن إعادة فتح جرد تم اعتماد تسويته")
+    if action == "approved":
+        await _apply_run_adjustments(db, tenant_id, user_id, run)
     run.status = action
     run.reviewed_at = datetime.utcnow()
     run.reviewed_by = user_id
     run.review_note = data.get("note")
     await db.commit()
+    if action == "approved":
+        await _notify_review_result(db, tenant_id, user_id, run, approved=True)
+    elif action == "reopened":
+        await _notify_review_result(db, tenant_id, user_id, run, approved=False)
     return await get_run(db, tenant_id, run_id)
+
+
+async def _apply_run_adjustments(
+    db: AsyncSession, tenant_id: str, user_id: str, run: MandatoryStocktakeRun
+) -> None:
+    """تطبيق الفروقات مرة واحدة فقط بعد مراجعة الإدارة واعتمادها."""
+    from app.modules.inventory.service import _get_or_create_stock
+
+    lines = (await db.execute(
+        select(MandatoryStocktakeLine).where(MandatoryStocktakeLine.run_id == run.id)
+    )).scalars().all()
+    for line in lines:
+        if line.counted_qty is None:
+            raise HTTPException(409, "لا يمكن اعتماد جرد يحتوي على صنف غير مكتمل")
+        diff = Decimal(str(line.diff_qty or 0))
+        if diff == 0:
+            continue
+        item = await db.get(InventoryItem, line.item_id)
+        if not item:
+            raise HTTPException(409, "صنف الجرد غير موجود")
+        if line.tracking_type == "serial":
+            expected = set(json.loads(line.expected_serials_json or "[]"))
+            counted = set(json.loads(line.counted_serials_json or "[]"))
+            missing = expected - counted
+            serial_rows = (await db.execute(select(SerialItem).where(
+                SerialItem.product_id == line.item_id,
+                SerialItem.warehouse_id == line.warehouse_id,
+                SerialItem.serial_number.in_(missing),
+                SerialItem.status == "in_stock",
+            ))).scalars().all()
+            for serial in serial_rows:
+                serial.status = "damaged"
+                serial.warehouse_id = None
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    product_id=line.item_id, warehouse_id=line.warehouse_id,
+                    movement_type="adjustment", quantity=Decimal("-1"),
+                    unit_cost=serial.cost_price, serial_item_id=serial.id,
+                    reference_type="mandatory_stocktake", reference_id=run.id,
+                    created_by=user_id,
+                    notes="تسوية جرد إلزامي — سيريال غير موجود في الجرد الفعلي",
+                ))
+        else:
+            stock = await _get_or_create_stock(db, tenant_id, line.item_id, line.warehouse_id)
+            stock.quantity = Decimal(str(line.counted_qty))
+            stock.updated_at = datetime.utcnow()
+            item.quantity_on_hand += diff
+            if item.quantity_on_hand < 0:
+                item.quantity_on_hand = Decimal("0")
+            db.add(StockMovement(
+                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                product_id=line.item_id, warehouse_id=line.warehouse_id,
+                movement_type="adjustment", quantity=diff,
+                unit_cost=item.cost_price, reference_type="mandatory_stocktake",
+                reference_id=run.id, created_by=user_id,
+                notes=f"تسوية جرد إلزامي — الكمية الفعلية: {line.counted_qty}",
+            ))
+    run.adjustments_applied_at = datetime.utcnow()
+    run.adjustments_applied_by = user_id
+
+
+async def _notify_review_result(
+    db: AsyncSession, tenant_id: str, actor_id: str,
+    run: MandatoryStocktakeRun, approved: bool,
+) -> None:
+    rep_ids = (await db.execute(
+        select(SalesRep.user_id).join(
+            MandatoryStocktakeLine, MandatoryStocktakeLine.rep_id == SalesRep.id
+        ).where(MandatoryStocktakeLine.run_id == run.id, SalesRep.user_id.is_not(None))
+    )).scalars().all()
+    from app.modules.notifications.service import notify_users_event
+    await notify_users_event(
+        db, tenant_id, actor_id, list(rep_ids),
+        "تم اعتماد جرد المخزون" if approved else "تمت إعادة جرد المخزون للمراجعة",
+        "Stocktake approved" if approved else "Stocktake reopened",
+        "تم اعتماد جرد مستودعك وتطبيق التسوية المخزنية." if approved else "أعادت الإدارة جرد مستودعك للمراجعة، يرجى إعادة الرفع.",
+        "Your warehouse stocktake was approved and adjustments were applied." if approved else "Management reopened your warehouse stocktake for review.",
+        reference_id=run.id, reference_type="mandatory_stocktake",
+    )
 
 
 async def assert_rep_unlocked(db: AsyncSession, tenant_id: str, user_id: str) -> None:
@@ -245,5 +346,5 @@ async def assert_rep_unlocked(db: AsyncSession, tenant_id: str, user_id: str) ->
     if not rep:
         return
     run = await _run_for_rep(db, tenant_id, rep.id)
-    if run and run.status not in ("submitted", "approved"):
+    if run and run.status != "approved":
         raise HTTPException(423, "التطبيق مقفل حتى إكمال الجرد الأسبوعي ورفعه للإدارة")
