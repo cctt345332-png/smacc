@@ -40,8 +40,6 @@ def _scheduled_at(now: datetime, config: MandatoryStocktakeConfig) -> datetime:
     candidate_date = local_now.date() - timedelta(days=days_back)
     hour, minute = (config.start_time or "11:00").split(":", 1)
     candidate = datetime.combine(candidate_date, time(int(hour), int(minute)), tzinfo=tz)
-    if candidate > local_now:
-        candidate -= timedelta(days=7)
     return candidate.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
 
