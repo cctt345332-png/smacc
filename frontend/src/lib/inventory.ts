@@ -113,6 +113,13 @@ export const createStockCount = (data: any) => api.post("/inventory/stock-count"
 export const getCountHistory = (params?: any) =>
   api.get("/inventory/stock-count/history", { params });
 
+// Mandatory weekly stocktake (الجرد الإلزامي الأسبوعي)
+export const getMandatoryStocktakeConfig = () => api.get("/inventory/mandatory-stocktake/config");
+export const saveMandatoryStocktakeConfig = (data: any) => api.put("/inventory/mandatory-stocktake/config", data);
+export const getMandatoryStocktakeRuns = (params?: any) => api.get("/inventory/mandatory-stocktake/runs", { params });
+export const getMandatoryStocktakeRun = (runId: string) => api.get(`/inventory/mandatory-stocktake/runs/${runId}`);
+export const reviewMandatoryStocktakeRun = (runId: string, data: any) => api.post(`/inventory/mandatory-stocktake/runs/${runId}/review`, data);
+
 // Available serials for invoice picker
 export const getAvailableSerials = (productId: string) =>
   api.get(`/inventory/items/${productId}/available-serials`);

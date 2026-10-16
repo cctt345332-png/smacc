@@ -13,6 +13,7 @@ import 'screens/rep_extra.dart';
 import 'screens/rep_expenses_screen.dart';
 import 'screens/rep_lists.dart';
 import 'screens/stock_count_screen.dart';
+import 'screens/mandatory_stocktake_screen.dart';
 import 'screens/supervisor_screen.dart';
 
 class App extends StatefulWidget {
@@ -213,16 +214,21 @@ class _RepShellState extends State<RepShell> {
   int _index = 0;
   Timer? _attendanceTimer;
   bool _attendancePromptShown = false;
+  late Future<Map<String, dynamic>> _mandatoryStocktake;
 
   @override
   void initState() {
     super.initState();
+    _mandatoryStocktake = widget.apiClient.getMap('/inventory/mandatory-stocktake/rep/current');
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _checkAttendancePrompt(),
     );
     _attendanceTimer = Timer.periodic(
       const Duration(minutes: 1),
-      (_) => _checkAttendancePrompt(),
+      (_) {
+        _checkAttendancePrompt();
+        _refreshMandatoryStocktake();
+      },
     );
   }
 
@@ -300,6 +306,19 @@ class _RepShellState extends State<RepShell> {
     } catch (_) {}
   }
 
+  Future<void> _refreshMandatoryStocktake() async {
+    try {
+      final current = await widget.apiClient.getMap(
+        '/inventory/mandatory-stocktake/rep/current',
+      );
+      if (!mounted || current['locked'] != true) return;
+      final run = current['run'];
+      if (run is Map && run['status'] != 'submitted') {
+        setState(() => _mandatoryStocktake = Future.value(current));
+      }
+    } catch (_) {}
+  }
+
   void _openMore() => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -331,8 +350,38 @@ class _RepShellState extends State<RepShell> {
       CustomersScreen(apiClient: widget.apiClient),
       StockCountScreen(apiClient: widget.apiClient),
     ];
-    return Scaffold(
-      body: IndexedStack(index: _index, children: pages),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _mandatoryStocktake,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('تعذر التحقق من حالة الجرد. تحقق من الاتصال ثم أعد المحاولة.', textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    FilledButton(onPressed: () => setState(() => _mandatoryStocktake = widget.apiClient.getMap('/inventory/mandatory-stocktake/rep/current')), child: const Text('إعادة المحاولة')),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        final stocktake = snapshot.data ?? const <String, dynamic>{};
+        if (stocktake['locked'] == true && stocktake['run']?['status'] != 'submitted') {
+          return MandatoryStocktakeScreen(
+            apiClient: widget.apiClient,
+            onSubmitted: () => setState(() => _mandatoryStocktake = widget.apiClient.getMap('/inventory/mandatory-stocktake/rep/current')),
+          );
+        }
+        return Scaffold(
+          body: IndexedStack(index: _index, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {
@@ -367,7 +416,8 @@ class _RepShellState extends State<RepShell> {
             label: 'المزيد',
           ),
         ],
-      ),
+        );
+      },
     );
   }
 }

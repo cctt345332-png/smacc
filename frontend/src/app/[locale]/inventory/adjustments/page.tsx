@@ -382,6 +382,9 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
           <Link href={`/${locale}/inventory/movements`} className="btn btn-secondary btn-sm">
             <Icon name="ledger" size={14} /> {ar ? "سجل الحركات" : "Movement Log"}
           </Link>
+          <Link href={`/${locale}/inventory/mandatory-stocktake`} className="btn btn-primary btn-sm">
+            {ar ? "الجرد الإلزامي" : "Mandatory stocktake"}
+          </Link>
           <button className="btn btn-secondary btn-sm" onClick={handleOpenHistory}>
             <Icon name="view" size={14} /> {ar ? "سجل الجرد السابق" : "Count History"}
           </button>
