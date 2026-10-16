@@ -9,6 +9,8 @@ import {
   getMandatoryStocktakeRuns,
   getMandatoryStocktakeRun,
   reviewMandatoryStocktakeRun,
+  createMandatoryStocktakeTest,
+  cancelMandatoryStocktakeTest,
 } from "@/lib/inventory";
 
 const DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"];
@@ -64,6 +66,21 @@ export default function MandatoryStocktakePage(props: { params: Promise<{ locale
     } catch (err: any) { setError(err?.response?.data?.detail || "تعذر تنفيذ الإجراء"); }
   };
 
+  const runImmediateTest = async () => {
+    if (!window.confirm(ar ? "سيتم فتح جرد تجريبي فوري للمندوبين، ولن يغيّر المخزون عند اعتماده. هل تريد المتابعة؟" : "Start an immediate test stocktake? It will not change inventory when approved.")) return;
+    try {
+      const { data } = await createMandatoryStocktakeTest();
+      setSelected(data); await load();
+      setMessage(ar ? "تم تشغيل الاختبار الفوري. افتح تطبيق المندوب الآن." : "Immediate test started. Open the rep app now.");
+    } catch (err: any) { setError(err?.response?.data?.detail || "تعذر تشغيل الاختبار"); }
+  };
+
+  const cancelTest = async () => {
+    if (!selected?.is_test) return;
+    try { await cancelMandatoryStocktakeTest(selected.id); setSelected(null); await load(); setMessage(ar ? "تم إلغاء جلسة الاختبار." : "Test run cancelled."); }
+    catch (err: any) { setError(err?.response?.data?.detail || "تعذر إلغاء الاختبار"); }
+  };
+
   const detailLines = selected?.lines || [];
   const reps = Array.from(new Map(detailLines.map((line: any) => [line.rep_id, line.rep_name])).entries());
   const warehouses = Array.from(new Map(detailLines.map((line: any) => [line.warehouse_id, line.warehouse_name])).entries());
@@ -104,7 +121,7 @@ export default function MandatoryStocktakePage(props: { params: Promise<{ locale
         <h1 className="page-title">{ar ? "الجرد الأسبوعي الإلزامي" : "Mandatory Weekly Stocktake"}</h1>
         <p className="page-subtitle">{ar ? "إدارة موعد جرد المناديب ومراجعة المطابقة حسب المستودع والسيريال" : "Schedule representative stocktakes and review warehouse and serial matching"}</p>
       </div>
-      <Link className="btn btn-ghost" href={`/${locale}/inventory/adjustments`}>{ar ? "الجرد اليدوي" : "Manual count"}</Link>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button className="btn btn-ghost" onClick={runImmediateTest}>{ar ? "تشغيل اختبار فوري" : "Run immediate test"}</button><Link className="btn btn-ghost" href={`/${locale}/inventory/adjustments`}>{ar ? "الجرد اليدوي" : "Manual count"}</Link></div>
     </div>
 
     {(error || message) && <div style={{ background: error ? "#FEF2F2" : "#ECFDF5", color: error ? "#B91C1C" : "#047857", border: `1px solid ${error ? "#FECACA" : "#A7F3D0"}`, borderRadius: 10, padding: "11px 14px", marginBottom: 16 }}>{error || message}</div>}

@@ -520,6 +520,7 @@ class MandatoryStocktakeRun(Base):
     adjustments_applied_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
     reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     started_notified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

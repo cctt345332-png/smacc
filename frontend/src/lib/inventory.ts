@@ -119,6 +119,8 @@ export const saveMandatoryStocktakeConfig = (data: any) => api.put("/inventory/m
 export const getMandatoryStocktakeRuns = (params?: any) => api.get("/inventory/mandatory-stocktake/runs", { params });
 export const getMandatoryStocktakeRun = (runId: string) => api.get(`/inventory/mandatory-stocktake/runs/${runId}`);
 export const reviewMandatoryStocktakeRun = (runId: string, data: any) => api.post(`/inventory/mandatory-stocktake/runs/${runId}/review`, data);
+export const createMandatoryStocktakeTest = () => api.post("/inventory/mandatory-stocktake/test");
+export const cancelMandatoryStocktakeTest = (runId: string) => api.delete(`/inventory/mandatory-stocktake/test/${runId}`);
 
 // Available serials for invoice picker
 export const getAvailableSerials = (productId: string) =>

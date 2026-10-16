@@ -47,6 +47,27 @@ async def get_config(db: AsyncSession, tenant_id: str) -> MandatoryStocktakeConf
     return await db.scalar(select(MandatoryStocktakeConfig).where(MandatoryStocktakeConfig.tenant_id == tenant_id))
 
 
+async def _snapshot_run_lines(db: AsyncSession, tenant_id: str, run: MandatoryStocktakeRun) -> None:
+    reps = (await db.execute(select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.is_active.is_(True), SalesRep.warehouse_id.is_not(None)))).scalars().all()
+    items = (await db.execute(select(InventoryItem).where(InventoryItem.tenant_id == tenant_id, InventoryItem.is_active.is_(True)))).scalars().all()
+    for rep in reps:
+        for item in items:
+            tracking = _value(item.tracking_type)
+            if tracking == "serial":
+                serials = (await db.execute(select(SerialItem.serial_number).where(SerialItem.product_id == item.id, SerialItem.warehouse_id == rep.warehouse_id, SerialItem.status == "in_stock").order_by(SerialItem.serial_number))).scalars().all()
+                system_qty = Decimal(len(serials))
+                if system_qty == 0:
+                    continue
+                expected_json = json.dumps(list(serials), ensure_ascii=False)
+            else:
+                stock = await db.scalar(select(InventoryStock).where(InventoryStock.tenant_id == tenant_id, InventoryStock.item_id == item.id, InventoryStock.warehouse_id == rep.warehouse_id))
+                system_qty = Decimal(stock.quantity or 0) if stock else Decimal("0")
+                if system_qty == 0:
+                    continue
+                expected_json = None
+            db.add(MandatoryStocktakeLine(id=str(uuid.uuid4()), run_id=run.id, tenant_id=tenant_id, rep_id=rep.id, item_id=item.id, warehouse_id=rep.warehouse_id, tracking_type=tracking, system_qty=system_qty, expected_serials_json=expected_json))
+
+
 async def save_config(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
     config = await get_config(db, tenant_id)
     if not config:
@@ -117,24 +138,7 @@ async def ensure_current_run(db: AsyncSession, tenant_id: str, now: datetime | N
         status="pending",
     )
     db.add(run)
-    reps = (await db.execute(select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.is_active.is_(True), SalesRep.warehouse_id.is_not(None)))).scalars().all()
-    items = (await db.execute(select(InventoryItem).where(InventoryItem.tenant_id == tenant_id, InventoryItem.is_active.is_(True)))).scalars().all()
-    for rep in reps:
-        for item in items:
-            tracking = _value(item.tracking_type)
-            if tracking == "serial":
-                serials = (await db.execute(select(SerialItem.serial_number).where(SerialItem.product_id == item.id, SerialItem.warehouse_id == rep.warehouse_id, SerialItem.status == "in_stock").order_by(SerialItem.serial_number))).scalars().all()
-                system_qty = Decimal(len(serials))
-                if system_qty == 0:
-                    continue
-                expected_json = json.dumps(list(serials), ensure_ascii=False)
-            else:
-                stock = await db.scalar(select(InventoryStock).where(InventoryStock.tenant_id == tenant_id, InventoryStock.item_id == item.id, InventoryStock.warehouse_id == rep.warehouse_id))
-                system_qty = Decimal(stock.quantity or 0) if stock else Decimal("0")
-                if system_qty == 0:
-                    continue
-                expected_json = None
-            db.add(MandatoryStocktakeLine(id=str(uuid.uuid4()), run_id=run.id, tenant_id=tenant_id, rep_id=rep.id, item_id=item.id, warehouse_id=rep.warehouse_id, tracking_type=tracking, system_qty=system_qty, expected_serials_json=expected_json))
+    await _snapshot_run_lines(db, tenant_id, run)
     await db.commit()
     await db.refresh(run)
     return run
@@ -167,7 +171,38 @@ async def process_scheduled_notifications(db: AsyncSession, tenant_id: str, now:
         )
 
 
+async def create_test_run(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
+    """جلسة فورية للتجربة؛ اعتمادها لا يغيّر المخزون الحقيقي."""
+    run = MandatoryStocktakeRun(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, scheduled_at=datetime.utcnow(),
+        status="pending", is_test=True, review_note="جلسة اختبار فورية",
+    )
+    db.add(run)
+    await _snapshot_run_lines(db, tenant_id, run)
+    await db.commit()
+    await db.refresh(run)
+    await process_scheduled_notifications(db, tenant_id)
+    return await get_run(db, tenant_id, run.id)
+
+
+async def cancel_test_run(db: AsyncSession, tenant_id: str, run_id: str) -> dict:
+    run = await db.scalar(select(MandatoryStocktakeRun).where(MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.id == run_id))
+    if not run or not run.is_test:
+        raise HTTPException(404, "جلسة الاختبار غير موجودة")
+    if run.status == "approved":
+        raise HTTPException(409, "تم اعتماد الاختبار، لا يمكن حذفه")
+    lines = (await db.execute(select(MandatoryStocktakeLine).where(MandatoryStocktakeLine.run_id == run.id))).scalars().all()
+    for line in lines:
+        await db.delete(line)
+    await db.delete(run)
+    await db.commit()
+    return {"ok": True, "id": run_id}
+
+
 async def _run_for_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> MandatoryStocktakeRun | None:
+    test_run = await db.scalar(select(MandatoryStocktakeRun).join(MandatoryStocktakeLine, MandatoryStocktakeLine.run_id == MandatoryStocktakeRun.id).where(MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.is_test.is_(True), MandatoryStocktakeRun.status.in_(["pending", "submitted", "reopened"]), MandatoryStocktakeLine.rep_id == rep_id).order_by(MandatoryStocktakeRun.created_at.desc()))
+    if test_run:
+        return test_run
     run = await ensure_current_run(db, tenant_id)
     if not run:
         return None
@@ -252,7 +287,7 @@ async def list_runs(db: AsyncSession, tenant_id: str, status: str | None = None,
     result = []
     for run in runs:
         lines = (await db.execute(select(MandatoryStocktakeLine).where(MandatoryStocktakeLine.run_id == run.id))).scalars().all()
-        result.append({"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "total_lines": len(lines), "matched_lines": sum(1 for x in lines if x.status == "matched"), "variance_lines": sum(1 for x in lines if x.status == "variance"), "reps": len({x.rep_id for x in lines})})
+        result.append({"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "is_test": bool(run.is_test), "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "total_lines": len(lines), "matched_lines": sum(1 for x in lines if x.status == "matched"), "variance_lines": sum(1 for x in lines if x.status == "variance"), "reps": len({x.rep_id for x in lines})})
     return result
 
 
@@ -261,7 +296,7 @@ async def get_run(db: AsyncSession, tenant_id: str, run_id: str) -> dict:
     if not run:
         raise HTTPException(404, "جلسة الجرد غير موجودة")
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse, User).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).join(SalesRep, SalesRep.id == MandatoryStocktakeLine.rep_id).join(User, User.id == SalesRep.user_id).where(MandatoryStocktakeLine.run_id == run.id).order_by(MandatoryStocktakeLine.rep_id, InventoryItem.name_ar))).all()
-    return {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "review_note": run.review_note, "adjustments_applied_at": run.adjustments_applied_at.isoformat() if run.adjustments_applied_at else None, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
+    return {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "is_test": bool(run.is_test), "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "review_note": run.review_note, "adjustments_applied_at": run.adjustments_applied_at.isoformat() if run.adjustments_applied_at else None, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
 
 
 async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str, data: dict) -> dict:
@@ -277,8 +312,11 @@ async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str
         raise HTTPException(409, "تم تطبيق تسوية هذا الجرد مسبقًا")
     if action == "reopened" and run.status == "approved":
         raise HTTPException(409, "لا يمكن إعادة فتح جرد تم اعتماد تسويته")
-    if action == "approved":
+    if action == "approved" and not run.is_test:
         await _apply_run_adjustments(db, tenant_id, user_id, run)
+    elif action == "approved" and run.is_test:
+        run.adjustments_applied_at = datetime.utcnow()
+        run.adjustments_applied_by = user_id
     run.status = action
     run.reviewed_at = datetime.utcnow()
     run.reviewed_by = user_id

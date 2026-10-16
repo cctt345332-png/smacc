@@ -41,6 +41,18 @@ async def mandatory_stocktake_save_config(data: dict, user=Depends(require_role(
     return await ms.save_config(db, user["tenant_id"], user["user_id"], data)
 
 
+@router.post("/mandatory-stocktake/test")
+async def mandatory_stocktake_test(user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.create_test_run(db, user["tenant_id"], user["user_id"])
+
+
+@router.delete("/mandatory-stocktake/test/{run_id}")
+async def mandatory_stocktake_cancel_test(run_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.cancel_test_run(db, user["tenant_id"], run_id)
+
+
 @router.get("/mandatory-stocktake/runs")
 async def mandatory_stocktake_runs(status: Optional[str] = None, limit: int = 50, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
     from app.modules.inventory import mandatory_stocktake_service as ms
