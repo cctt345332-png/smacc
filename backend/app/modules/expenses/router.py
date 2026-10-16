@@ -3,10 +3,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.tenant import get_tenant_id, require_role
+from app.core.stocktake_guard import mandatory_stocktake_guard
 from app.modules.expenses import service
 from app.modules.expenses.schemas import ExpenseCreate, ExpenseOut, ExpenseReject
 
-router = APIRouter(prefix="/expenses", tags=["expenses"])
+router = APIRouter(prefix="/expenses", tags=["expenses"], dependencies=[Depends(mandatory_stocktake_guard)])
 
 @router.get("", response_model=list[ExpenseOut])
 async def list_expenses(rep_id: str | None = None, status: str | None = None, category: str | None = None,

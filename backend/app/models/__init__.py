@@ -7,7 +7,8 @@ from app.models.purchases import Vendor, PurchaseOrder, PurchaseOrderLine, Bill,
 from app.models.inventory import (
     Warehouse, InventoryItem, ProductCategory, StockMovement,
     StockCountSession, SerialItem, BatchItem, ProductVariant,
-    ProductOptionGroup, ProductOption, InventoryStock
+    ProductOptionGroup, ProductOption, InventoryStock,
+    MandatoryStocktakeConfig, MandatoryStocktakeRun, MandatoryStocktakeLine
 )
 from app.models.pos import POSTerminal, POSSession, POSTransaction, POSTransactionLine
 from app.models.treasury import Voucher

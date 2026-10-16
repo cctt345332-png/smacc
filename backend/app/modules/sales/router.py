@@ -7,6 +7,7 @@ from datetime import datetime
 from app.core.database import get_db
 from app.core.tenant import get_current_user, get_tenant_id, require_role, get_rep_id_for_user
 from app.core.plan_limits import check_plan_limit
+from app.core.stocktake_guard import mandatory_stocktake_guard
 from app.modules.sales import service
 from app.modules.sales import orders_service
 from app.modules.reps import service as reps_service
@@ -19,7 +20,7 @@ from app.modules.sales.schemas import (
     CreditNoteCreate, RefundRequestCreate, RefundRequestDecision,
 )
 
-router = APIRouter(prefix="/sales", tags=["sales"])
+router = APIRouter(prefix="/sales", tags=["sales"], dependencies=[Depends(mandatory_stocktake_guard)])
 
 
 # ─── Unified receivables aging ───────────────────────────────────────

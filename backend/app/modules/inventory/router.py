@@ -8,10 +8,55 @@ from datetime import datetime
 from app.core.database import get_db
 from app.core.tenant import get_current_user, get_tenant_id, require_role
 from app.core.plan_limits import check_plan_limit
+from app.core.stocktake_guard import mandatory_stocktake_guard
 from app.modules.inventory import service
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem
 
-router = APIRouter(prefix="/inventory", tags=["inventory"])
+router = APIRouter(prefix="/inventory", tags=["inventory"], dependencies=[Depends(mandatory_stocktake_guard)])
+
+
+# ─── Mandatory weekly stocktake (الجرد الإلزامي الأسبوعي) ─────────────
+@router.get("/mandatory-stocktake/rep/current")
+async def mandatory_stocktake_rep_current(user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.get_rep_current(db, user["tenant_id"], user["user_id"])
+
+
+@router.post("/mandatory-stocktake/rep/submit")
+async def mandatory_stocktake_rep_submit(data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.submit_rep_count(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.get("/mandatory-stocktake/config")
+async def mandatory_stocktake_get_config(user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    config = await ms.get_config(db, user["tenant_id"])
+    return ms.serialize_config(config) if config else {"is_enabled": False, "weekday": 4, "start_time": "11:00", "timezone": "Asia/Riyadh", "reminder_minutes": 30}
+
+
+@router.put("/mandatory-stocktake/config")
+async def mandatory_stocktake_save_config(data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.save_config(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.get("/mandatory-stocktake/runs")
+async def mandatory_stocktake_runs(status: Optional[str] = None, limit: int = 50, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.list_runs(db, user["tenant_id"], status, limit)
+
+
+@router.get("/mandatory-stocktake/runs/{run_id}")
+async def mandatory_stocktake_run(run_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.get_run(db, user["tenant_id"], run_id)
+
+
+@router.post("/mandatory-stocktake/runs/{run_id}/review")
+async def mandatory_stocktake_review(run_id: str, data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.review_run(db, user["tenant_id"], user["user_id"], run_id, data)
 
 
 async def _scoped_warehouse_ids(user, db: AsyncSession) -> set[str] | None:

@@ -486,3 +486,55 @@ class StockCountSession(Base):
     counted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     item: Mapped["InventoryItem"] = relationship("InventoryItem", back_populates="count_sessions")
+
+
+# ─── MandatoryStocktake (الجرد الأسبوعي الإلزامي للمناديب) ────────────
+class MandatoryStocktakeConfig(Base):
+    __tablename__ = "mandatory_stocktake_configs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), unique=True, index=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    weekday: Mapped[int] = mapped_column(Integer, default=4)
+    start_time: Mapped[str] = mapped_column(String(5), default="11:00")
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Riyadh")
+    reminder_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MandatoryStocktakeRun(Base):
+    __tablename__ = "mandatory_stocktake_runs"
+    __table_args__ = (Index("ix_mandatory_stocktake_runs_tenant_scheduled", "tenant_id", "scheduled_at", unique=True),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MandatoryStocktakeLine(Base):
+    __tablename__ = "mandatory_stocktake_lines"
+    __table_args__ = (Index("ix_mandatory_stocktake_lines_run_item_warehouse", "run_id", "item_id", "warehouse_id", unique=True),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    run_id: Mapped[str] = mapped_column(String, ForeignKey("mandatory_stocktake_runs.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    rep_id: Mapped[str] = mapped_column(String, ForeignKey("sales_reps.id"), index=True)
+    item_id: Mapped[str] = mapped_column(String, ForeignKey("inventory_items.id"), index=True)
+    warehouse_id: Mapped[str] = mapped_column(String, ForeignKey("warehouses.id"), index=True)
+    tracking_type: Mapped[str] = mapped_column(String(20))
+    system_qty: Mapped[Decimal] = mapped_column(Numeric(18, 3), default=Decimal("0"))
+    counted_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 3), nullable=True)
+    diff_qty: Mapped[Decimal | None] = mapped_column(Numeric(18, 3), nullable=True)
+    expected_serials_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    counted_serials_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    counted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
