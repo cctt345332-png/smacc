@@ -210,10 +210,16 @@ async def _run_for_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> Mandato
     return run if line else None
 
 
+def _norm_serial(value: str) -> str:
+    return "".join(str(value).split()).replace("-", "").lower()
+
+
 def _line_json(line: MandatoryStocktakeLine, item_name: str, sku: str | None, warehouse_name: str, rep_name: str | None = None) -> dict:
     expected = json.loads(line.expected_serials_json) if line.expected_serials_json else []
     counted = json.loads(line.counted_serials_json) if line.counted_serials_json else []
-    return {"id": line.id, "rep_id": line.rep_id, "rep_name": rep_name or "—", "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "missing_serials": sorted(set(expected) - set(counted)), "extra_serials": sorted(set(counted) - set(expected)), "status": line.status, "notes": line.notes}
+    expected_keys = {_norm_serial(x) for x in expected}
+    counted_keys = {_norm_serial(x) for x in counted}
+    return {"id": line.id, "rep_id": line.rep_id, "rep_name": rep_name or "—", "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "missing_serials": sorted(x for x in expected if _norm_serial(x) not in counted_keys), "extra_serials": sorted(x for x in counted if _norm_serial(x) not in expected_keys), "status": line.status, "notes": line.notes}
 
 
 async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
@@ -242,14 +248,15 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
             raise HTTPException(400, "يجب إكمال جميع أصناف الجرد قبل الإرسال")
         if line.tracking_type == "serial":
             serials = [str(x).strip() for x in (row.get("counted_serials") or []) if str(x).strip()]
-            if len(serials) != len(set(serials)):
+            if len({_norm_serial(x) for x in serials}) != len(serials):
                 raise HTTPException(400, "يوجد سيريال مكرر في الجرد")
             expected = set(json.loads(line.expected_serials_json or "[]"))
-            actual = set(serials)
+            expected_keys = {_norm_serial(x) for x in expected}
+            actual_keys = {_norm_serial(x) for x in serials}
             line.counted_serials_json = json.dumps(serials, ensure_ascii=False)
             line.counted_qty = Decimal(len(serials))
             line.diff_qty = line.counted_qty - line.system_qty
-            line.status = "matched" if expected == actual else "variance"
+            line.status = "matched" if expected_keys == actual_keys else "variance"
         else:
             try:
                 counted = Decimal(str(row.get("counted_qty")))
@@ -350,7 +357,8 @@ async def _apply_run_adjustments(
         if line.tracking_type == "serial":
             expected = set(json.loads(line.expected_serials_json or "[]"))
             counted = set(json.loads(line.counted_serials_json or "[]"))
-            missing = expected - counted
+            counted_keys = {_norm_serial(x) for x in counted}
+            missing = {serial for serial in expected if _norm_serial(serial) not in counted_keys}
             serial_rows = (await db.execute(select(SerialItem).where(
                 SerialItem.product_id == line.item_id,
                 SerialItem.warehouse_id == line.warehouse_id,
