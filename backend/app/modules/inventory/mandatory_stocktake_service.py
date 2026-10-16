@@ -19,6 +19,7 @@ from app.models.inventory import (
     MandatoryStocktakeLine,
 )
 from app.models.reps import SalesRep
+from app.models.user import User
 
 
 def _value(value):
@@ -113,7 +114,10 @@ async def ensure_current_run(db: AsyncSession, tenant_id: str, now: datetime | N
     run = await db.scalar(select(MandatoryStocktakeRun).where(MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.scheduled_at == scheduled_at))
     if run:
         return run
-    run = MandatoryStocktakeRun(id=str(uuid.uuid4()), tenant_id=tenant_id, scheduled_at=scheduled_at, status="pending")
+    run = MandatoryStocktakeRun(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, scheduled_at=scheduled_at,
+        status="pending",
+    )
     db.add(run)
     reps = (await db.execute(select(SalesRep).where(SalesRep.tenant_id == tenant_id, SalesRep.is_active.is_(True), SalesRep.warehouse_id.is_not(None)))).scalars().all()
     items = (await db.execute(select(InventoryItem).where(InventoryItem.tenant_id == tenant_id, InventoryItem.is_active.is_(True)))).scalars().all()
@@ -138,6 +142,33 @@ async def ensure_current_run(db: AsyncSession, tenant_id: str, now: datetime | N
     return run
 
 
+async def process_scheduled_notifications(db: AsyncSession, tenant_id: str, now: datetime | None = None) -> None:
+    """يرسل إشعار بدء الجرد تلقائيًا بعد إنشاء الجلسة."""
+    now = now or datetime.utcnow()
+    config = await get_config(db, tenant_id)
+    if not config or not config.is_enabled:
+        return
+    run = await ensure_current_run(db, tenant_id, now)
+    if not run:
+        return
+    rep_user_ids = (await db.execute(
+        select(SalesRep.user_id).join(MandatoryStocktakeLine, MandatoryStocktakeLine.rep_id == SalesRep.id).where(
+            MandatoryStocktakeLine.run_id == run.id, SalesRep.user_id.is_not(None), SalesRep.is_active.is_(True)
+        )
+    )).scalars().all()
+    from app.modules.notifications.service import notify_users_event
+    if run.status == "pending" and not run.started_notified_at:
+        run.started_notified_at = now
+        await db.commit()
+        await notify_users_event(
+            db, tenant_id, "", list(rep_user_ids),
+            "بدأ الجرد الإلزامي", "Mandatory stocktake started",
+            "تم فتح شاشة الجرد الإلزامي. أكمل الجرد وارفعه للإدارة.",
+            "Mandatory stocktake is open. Complete and submit it to management.",
+            reference_id=run.id, reference_type="mandatory_stocktake",
+        )
+
+
 async def _run_for_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> MandatoryStocktakeRun | None:
     run = await ensure_current_run(db, tenant_id)
     if not run:
@@ -146,10 +177,10 @@ async def _run_for_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> Mandato
     return run if line else None
 
 
-def _line_json(line: MandatoryStocktakeLine, item_name: str, sku: str | None, warehouse_name: str) -> dict:
+def _line_json(line: MandatoryStocktakeLine, item_name: str, sku: str | None, warehouse_name: str, rep_name: str | None = None) -> dict:
     expected = json.loads(line.expected_serials_json) if line.expected_serials_json else []
     counted = json.loads(line.counted_serials_json) if line.counted_serials_json else []
-    return {"id": line.id, "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "missing_serials": sorted(set(expected) - set(counted)), "extra_serials": sorted(set(counted) - set(expected)), "status": line.status, "notes": line.notes}
+    return {"id": line.id, "rep_id": line.rep_id, "rep_name": rep_name or "—", "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "missing_serials": sorted(set(expected) - set(counted)), "extra_serials": sorted(set(counted) - set(expected)), "status": line.status, "notes": line.notes}
 
 
 async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
@@ -231,8 +262,8 @@ async def get_run(db: AsyncSession, tenant_id: str, run_id: str) -> dict:
     run = await db.scalar(select(MandatoryStocktakeRun).where(MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.id == run_id))
     if not run:
         raise HTTPException(404, "جلسة الجرد غير موجودة")
-    rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).where(MandatoryStocktakeLine.run_id == run.id).order_by(MandatoryStocktakeLine.rep_id, InventoryItem.name_ar))).all()
-    return {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "review_note": run.review_note, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
+    rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse, User).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).join(SalesRep, SalesRep.id == MandatoryStocktakeLine.rep_id).join(User, User.id == SalesRep.user_id).where(MandatoryStocktakeLine.run_id == run.id).order_by(MandatoryStocktakeLine.rep_id, InventoryItem.name_ar))).all()
+    return {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "review_note": run.review_note, "adjustments_applied_at": run.adjustments_applied_at.isoformat() if run.adjustments_applied_at else None, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
 
 
 async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str, data: dict) -> dict:

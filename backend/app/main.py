@@ -58,7 +58,7 @@ async def _mandatory_stocktake_scheduler() -> None:
     """ينشئ جلسات الجرد تلقائيًا حتى لو لم يفتح أحد لوحة الإدارة."""
     from app.core.database import AsyncSessionLocal
     from app.models.tenant import Tenant
-    from app.modules.inventory.mandatory_stocktake_service import ensure_current_run
+    from app.modules.inventory.mandatory_stocktake_service import ensure_current_run, process_scheduled_notifications
     while True:
         try:
             async with AsyncSessionLocal() as session:
@@ -66,6 +66,7 @@ async def _mandatory_stocktake_scheduler() -> None:
                 for tenant_id in tenants:
                     try:
                         await ensure_current_run(session, tenant_id)
+                        await process_scheduled_notifications(session, tenant_id)
                     except Exception:
                         await session.rollback()
             await asyncio.sleep(60)

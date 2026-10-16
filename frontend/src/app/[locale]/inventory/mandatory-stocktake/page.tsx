@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import * as XLSX from "xlsx";
 import {
   getMandatoryStocktakeConfig,
   saveMandatoryStocktakeConfig,
@@ -22,6 +23,9 @@ export default function MandatoryStocktakePage(props: { params: Promise<{ locale
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [repFilter, setRepFilter] = useState("");
+  const [warehouseFilter, setWarehouseFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const load = async () => {
     setLoading(true); setError("");
@@ -60,6 +64,39 @@ export default function MandatoryStocktakePage(props: { params: Promise<{ locale
     } catch (err: any) { setError(err?.response?.data?.detail || "تعذر تنفيذ الإجراء"); }
   };
 
+  const detailLines = selected?.lines || [];
+  const reps = Array.from(new Map(detailLines.map((line: any) => [line.rep_id, line.rep_name])).entries());
+  const warehouses = Array.from(new Map(detailLines.map((line: any) => [line.warehouse_id, line.warehouse_name])).entries());
+  const filteredLines = detailLines.filter((line: any) =>
+    (!repFilter || line.rep_id === repFilter) &&
+    (!warehouseFilter || line.warehouse_id === warehouseFilter) &&
+    (statusFilter === "all" || line.status === statusFilter)
+  );
+  const exportDetails = () => {
+    if (!selected) return;
+    const rows = filteredLines.map((line: any) => ({
+      المندوب: line.rep_name, المستودع: line.warehouse_name, الصنف: line.item_name,
+      SKU: line.sku || "", نوع_التتبع: line.tracking_type, كمية_النظام: line.system_qty,
+      الكمية_الفعلية: line.counted_qty ?? "", الفرق: line.diff_qty ?? "",
+      الحالة: line.status === "matched" ? "مطابق" : "فرق",
+      السيريالات_الناقصة: (line.missing_serials || []).join(", "),
+      السيريالات_الإضافية: (line.extra_serials || []).join(", "),
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [18, 22, 32, 16, 14, 14, 16, 12, 14, 34, 34].map(wch => ({ wch }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "نتيجة الجرد");
+    XLSX.writeFile(wb, `جرد-إلزامي-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+  const printDetails = () => {
+    if (!selected) return;
+    const popup = window.open("", "_blank", "width=1200,height=800");
+    if (!popup) return;
+    const rows = filteredLines.map((line: any) => `<tr><td>${line.rep_name}</td><td>${line.warehouse_name}</td><td>${line.item_name}</td><td>${line.system_qty}</td><td>${line.counted_qty ?? "—"}</td><td>${line.diff_qty ?? "—"}</td><td>${line.status === "matched" ? "مطابق" : "فرق"}</td></tr>`).join("");
+    popup.document.write(`<html dir="rtl"><head><meta charset="utf-8"><title>ورقة جرد</title><style>body{font-family:Arial;padding:25px}h1{color:#3e0865}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:8px;text-align:right}th{background:#eee}</style></head><body><h1>ورقة الجرد الإلزامي</h1><p>الموعد: ${new Date(selected.scheduled_at).toLocaleString("ar-SA")}</p><table><thead><tr><th>المندوب</th><th>المستودع</th><th>الصنف</th><th>النظام</th><th>الفعلي</th><th>الفرق</th><th>الحالة</th></tr></thead><tbody>${rows}</tbody></table><script>window.print();</script></body></html>`);
+    popup.document.close();
+  };
+
   return <div>
     <div className="page-header">
       <div>
@@ -92,6 +129,6 @@ export default function MandatoryStocktakePage(props: { params: Promise<{ locale
       </div>
     </div>
 
-    {selected && <div className="card" style={{ marginTop: 18 }}><div className="card-header"><span className="card-title">{ar ? "تفاصيل الجرد" : "Stocktake details"}</span><div style={{ display: "flex", gap: 8 }}>{selected.status === "submitted" && <button className="btn btn-primary btn-sm" onClick={() => review("approved")}>{ar ? "اعتماد الجرد" : "Approve"}</button>}{selected.status !== "reopened" && <button className="btn btn-ghost btn-sm" onClick={() => review("reopened")}>{ar ? "إعادة فتح" : "Reopen"}</button>}<button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>{ar ? "إغلاق" : "Close"}</button></div></div><div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "الصنف" : "Item"}</th><th>{ar ? "المستودع" : "Warehouse"}</th><th>{ar ? "النظام" : "System"}</th><th>{ar ? "الفعلي" : "Counted"}</th><th>{ar ? "الفرق" : "Difference"}</th><th>{ar ? "الحالة" : "Status"}</th></tr></thead><tbody>{(selected.lines || []).map((line: any) => <tr key={line.id}><td>{line.item_name}<small style={{ display: "block", color: "var(--text-muted)" }}>{line.sku || ""}</small></td><td>{line.warehouse_name}</td><td>{line.system_qty}</td><td>{line.counted_qty ?? "—"}</td><td style={{ color: Number(line.diff_qty || 0) === 0 ? "#047857" : "#B91C1C", fontWeight: 700 }}>{line.diff_qty ?? "—"}</td><td><span className={`badge ${line.status === "matched" ? "badge-success" : "badge-danger"}`}>{line.status === "matched" ? (ar ? "مطابق" : "Matched") : (ar ? "فرق" : "Variance")}</span>{line.tracking_type === "serial" && <small style={{ display: "block", color: "var(--text-muted)" }}>{ar ? `ناقص ${line.missing_serials?.length || 0} — إضافي ${line.extra_serials?.length || 0}` : `Missing ${line.missing_serials?.length || 0} — Extra ${line.extra_serials?.length || 0}`}</small>}</td></tr>)}</tbody></table></div></div>}
+    {selected && <div className="card" style={{ marginTop: 18 }}><div className="card-header"><span className="card-title">{ar ? "تفاصيل الجرد" : "Stocktake details"}</span><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{selected.status === "submitted" && <button className="btn btn-primary btn-sm" onClick={() => review("approved")}>{ar ? "اعتماد الجرد" : "Approve"}</button>}{selected.status !== "approved" && <button className="btn btn-ghost btn-sm" onClick={() => review("reopened")}>{ar ? "إعادة فتح" : "Reopen"}</button>}<button className="btn btn-ghost btn-sm" onClick={exportDetails}>{ar ? "تصدير Excel" : "Export Excel"}</button><button className="btn btn-ghost btn-sm" onClick={printDetails}>{ar ? "طباعة" : "Print"}</button><button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>{ar ? "إغلاق" : "Close"}</button></div></div><div className="card-body" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><select className="form-input" style={{ maxWidth: 230 }} value={repFilter} onChange={e => setRepFilter(e.target.value)}><option value="">{ar ? "كل المناديب" : "All reps"}</option>{reps.map(([id, name]) => <option key={String(id)} value={String(id)}>{String(name)}</option>)}</select><select className="form-input" style={{ maxWidth: 230 }} value={warehouseFilter} onChange={e => setWarehouseFilter(e.target.value)}><option value="">{ar ? "كل المستودعات" : "All warehouses"}</option>{warehouses.map(([id, name]) => <option key={String(id)} value={String(id)}>{String(name)}</option>)}</select><select className="form-input" style={{ maxWidth: 180 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="all">{ar ? "كل الحالات" : "All statuses"}</option><option value="matched">{ar ? "مطابق" : "Matched"}</option><option value="variance">{ar ? "فيه فرق" : "Variance"}</option></select></div><div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "المندوب" : "Rep"}</th><th>{ar ? "الصنف" : "Item"}</th><th>{ar ? "المستودع" : "Warehouse"}</th><th>{ar ? "النظام" : "System"}</th><th>{ar ? "الفعلي" : "Counted"}</th><th>{ar ? "الفرق" : "Difference"}</th><th>{ar ? "الحالة" : "Status"}</th></tr></thead><tbody>{filteredLines.map((line: any) => <tr key={line.id}><td>{line.rep_name}</td><td>{line.item_name}<small style={{ display: "block", color: "var(--text-muted)" }}>{line.sku || ""}</small></td><td>{line.warehouse_name}</td><td>{line.system_qty}</td><td>{line.counted_qty ?? "—"}</td><td style={{ color: Number(line.diff_qty || 0) === 0 ? "#047857" : "#B91C1C", fontWeight: 700 }}>{line.diff_qty ?? "—"}</td><td><span className={`badge ${line.status === "matched" ? "badge-success" : "badge-danger"}`}>{line.status === "matched" ? (ar ? "مطابق" : "Matched") : (ar ? "فرق" : "Variance")}</span>{line.tracking_type === "serial" && <small style={{ display: "block", color: "var(--text-muted)" }}>{ar ? `ناقص ${line.missing_serials?.length || 0} — إضافي ${line.extra_serials?.length || 0}` : `Missing ${line.missing_serials?.length || 0} — Extra ${line.extra_serials?.length || 0}`}</small>}</td></tr>)}</tbody></table></div></div>}
   </div>;
 }
