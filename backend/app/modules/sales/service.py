@@ -2924,76 +2924,90 @@ async def _assert_rep_owns_invoice(db: AsyncSession, user_id: str, invoice: Invo
 
 async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, data: dict):
     """تعديل مسودة/مرفوضة، أو تعديل مؤكدة غير مسددة بعكس أثرها ثم تطبيق الجديد."""
-    invoice = await get_invoice(db, tenant_id, invoice_id)
-    await _assert_rep_owns_invoice(db, user_id, invoice)
-    confirmed_edit = invoice.status == InvoiceStatus.CONFIRMED
-    if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED, InvoiceStatus.CONFIRMED):
-        raise HTTPException(400, "لا يمكن تعديل الفاتورة بعد إرسالها أو سدادها")
-    if confirmed_edit:
-        paid = Decimal(str(invoice.paid_amount or 0))
-        payment_count = (await db.execute(select(func.count(Payment.id)).where(Payment.invoice_id == invoice.id))).scalar() or 0
-        credit_count = (await db.execute(select(func.count(CreditNote.id)).where(CreditNote.original_invoice_id == invoice.id))).scalar() or 0
-        if paid > 0 or payment_count or credit_count:
-            raise HTTPException(409, "لا يمكن تعديل فاتورة مؤكدة عليها سندات قبض أو مرتجعات")
-        await _reverse_invoice_inventory(db, tenant_id, user_id, invoice)
-        await _reverse_invoice_journal(db, tenant_id, user_id, invoice)
-        invoice.journal_entry_id = None
-    def as_datetime(value):
-        if value is None or value == "": return None
-        if isinstance(value, datetime): return value.replace(tzinfo=None)
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
-    if data.get("customer_id"):
-        customer = await get_customer(db, tenant_id, data["customer_id"])
-        invoice.customer_id = customer.id
-        invoice.buyer_name_ar = customer.name_ar
-        invoice.buyer_vat_number = customer.vat_number
-        invoice.buyer_address = "، ".join(p for p in [customer.address_street, customer.address_district, customer.address_city, customer.address_postal] if p)
-    allowed = {"notes", "terms", "invoice_payment_method", "credit_days", "cheque_number", "cheque_date", "bank_name", "invoice_type"}
-    for key in allowed:
-        if key in data: setattr(invoice, key, data[key])
-    for key in ("issue_date", "supply_date", "due_date"):
-        if key in data: setattr(invoice, key, as_datetime(data[key]))
-    if "lines" in data:
-        rows = data.get("lines") or []
-        if not rows: raise HTTPException(400, "يجب أن تحتوي الفاتورة على صنف واحد على الأقل")
-        await db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))
-        subtotal = total_discount = total_vat = total = Decimal("0")
-        for i, raw in enumerate(rows):
-            quantity = Decimal(str(raw.get("quantity", 1))); unit_price = Decimal(str(raw.get("unit_price", 0)))
-            discount_pct = Decimal(str(raw.get("discount_pct", 0))); vat_rate = Decimal(str(raw.get("vat_rate", 15)))
-            sub, disc, taxable, vat, tot = _calc_line(quantity, unit_price, discount_pct, vat_rate)
-            subtotal += sub; total_discount += disc; total_vat += vat; total += tot
-            serial_ids = raw.get("serial_ids") or None
-            if serial_ids:
-                serial_rows = (await db.execute(select(SerialItem).join(
-                    InventoryItem, SerialItem.product_id == InventoryItem.id
-                ).where(
-                    InventoryItem.tenant_id == tenant_id,
-                    or_(SerialItem.id.in_(serial_ids), SerialItem.serial_number.in_(serial_ids)),
-                ))).scalars().all()
-                serial_by_value = {str(row.id): str(row.id) for row in serial_rows}
-                serial_by_value.update({str(row.serial_number): str(row.id) for row in serial_rows if row.serial_number})
-                serial_ids = [serial_by_value.get(str(value), str(value)) for value in serial_ids]
-                if any(value not in serial_by_value.values() for value in serial_ids):
-                    raise HTTPException(400, "أحد أرقام السيريال غير موجود")
-            db.add(InvoiceLine(id=str(uuid.uuid4()), invoice_id=invoice.id, line_order=i,
-                description_ar=raw.get("description_ar") or "صنف", description_en=raw.get("description_en"),
-                quantity=quantity, unit=raw.get("unit"), unit_price=unit_price, discount_pct=discount_pct,
-                discount_amount=disc, vat_rate=vat_rate, vat_category=raw.get("vat_category") or "S",
-                subtotal=sub, vat_amount=vat, total=tot, inventory_item_id=raw.get("inventory_item_id"),
-                serial_item_id=raw.get("serial_item_id"), serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
-                variant_id=raw.get("variant_id")))
-        invoice.subtotal = subtotal; invoice.discount_amount = total_discount
-        invoice.taxable_amount = subtotal - total_discount; invoice.vat_amount = total_vat; invoice.total = total
-    if confirmed_edit:
-        await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
-        invoice.status = InvoiceStatus.CONFIRMED
-        if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
-            invoice.journal_entry_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
-    record_audit(db, tenant_id, user_id, "update", "invoice", invoice.id,
-                 invoice_number=invoice.invoice_number, confirmed_edit=confirmed_edit, changed_fields=list(data.keys()))
-    await db.commit()
-    return await get_invoice(db, tenant_id, invoice_id)
+    try:
+        invoice = await get_invoice(db, tenant_id, invoice_id)
+        await _assert_rep_owns_invoice(db, user_id, invoice)
+        confirmed_edit = invoice.status == InvoiceStatus.CONFIRMED
+        if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED, InvoiceStatus.CONFIRMED):
+            raise HTTPException(400, "لا يمكن تعديل الفاتورة بعد إرسالها أو سدادها")
+        if confirmed_edit:
+            paid = Decimal(str(invoice.paid_amount or 0))
+            payment_count = (await db.execute(select(func.count(Payment.id)).where(Payment.invoice_id == invoice.id))).scalar() or 0
+            credit_count = (await db.execute(select(func.count(CreditNote.id)).where(CreditNote.original_invoice_id == invoice.id))).scalar() or 0
+            if paid > 0 or payment_count or credit_count:
+                raise HTTPException(409, "لا يمكن تعديل فاتورة مؤكدة عليها سندات قبض أو مرتجعات")
+            # العكس وإعادة التطبيق جزء من نفس المعاملة؛ لا يوجد commit داخل أي من الدالتين.
+            await _reverse_invoice_inventory(db, tenant_id, user_id, invoice)
+            await _reverse_invoice_journal(db, tenant_id, user_id, invoice)
+            # تثبيت العكس مؤقتاً حتى لا يعيد مولد رقم القيد قراءة الرقم القديم.
+            await db.flush()
+            invoice.journal_entry_id = None
+
+        def as_datetime(value):
+            if value is None or value == "": return None
+            if isinstance(value, datetime): return value.replace(tzinfo=None)
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+
+        if data.get("customer_id"):
+            customer = await get_customer(db, tenant_id, data["customer_id"])
+            invoice.customer_id = customer.id
+            invoice.buyer_name_ar = customer.name_ar
+            invoice.buyer_vat_number = customer.vat_number
+            invoice.buyer_address = "، ".join(p for p in [customer.address_street, customer.address_district, customer.address_city, customer.address_postal] if p)
+        allowed = {"notes", "terms", "invoice_payment_method", "credit_days", "cheque_number", "cheque_date", "bank_name", "invoice_type"}
+        for key in allowed:
+            if key in data: setattr(invoice, key, data[key])
+        for key in ("issue_date", "supply_date", "due_date"):
+            if key in data: setattr(invoice, key, as_datetime(data[key]))
+        if "lines" in data:
+            rows = data.get("lines") or []
+            if not rows: raise HTTPException(400, "يجب أن تحتوي الفاتورة على صنف واحد على الأقل")
+            await db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))
+            subtotal = total_discount = total_vat = total = Decimal("0")
+            for i, raw in enumerate(rows):
+                quantity = Decimal(str(raw.get("quantity", 1))); unit_price = Decimal(str(raw.get("unit_price", 0)))
+                discount_pct = Decimal(str(raw.get("discount_pct", 0))); vat_rate = Decimal(str(raw.get("vat_rate", 15)))
+                sub, disc, taxable, vat, tot = _calc_line(quantity, unit_price, discount_pct, vat_rate)
+                subtotal += sub; total_discount += disc; total_vat += vat; total += tot
+                serial_ids = raw.get("serial_ids") or None
+                if serial_ids:
+                    serial_rows = (await db.execute(select(SerialItem).join(
+                        InventoryItem, SerialItem.product_id == InventoryItem.id
+                    ).where(
+                        InventoryItem.tenant_id == tenant_id,
+                        or_(SerialItem.id.in_(serial_ids), SerialItem.serial_number.in_(serial_ids)),
+                    ))).scalars().all()
+                    serial_by_value = {str(row.id): str(row.id) for row in serial_rows}
+                    serial_by_value.update({str(row.serial_number): str(row.id) for row in serial_rows if row.serial_number})
+                    serial_ids = [serial_by_value.get(str(value), str(value)) for value in serial_ids]
+                    if any(value not in serial_by_value.values() for value in serial_ids):
+                        raise HTTPException(400, "أحد أرقام السيريال غير موجود")
+                db.add(InvoiceLine(id=str(uuid.uuid4()), invoice_id=invoice.id, line_order=i,
+                    description_ar=raw.get("description_ar") or "صنف", description_en=raw.get("description_en"),
+                    quantity=quantity, unit=raw.get("unit"), unit_price=unit_price, discount_pct=discount_pct,
+                    discount_amount=disc, vat_rate=vat_rate, vat_category=raw.get("vat_category") or "S",
+                    subtotal=sub, vat_amount=vat, total=tot, inventory_item_id=raw.get("inventory_item_id"),
+                    serial_item_id=raw.get("serial_item_id"), serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
+                    variant_id=raw.get("variant_id")))
+            invoice.subtotal = subtotal; invoice.discount_amount = total_discount
+            invoice.taxable_amount = subtotal - total_discount; invoice.vat_amount = total_vat; invoice.total = total
+
+        if confirmed_edit:
+            # مهم: flush قبل القراءة حتى لا يعيد الخصم خطوط الفاتورة القديمة أو يتجاوز حذفها.
+            await db.flush()
+            await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
+            invoice.status = InvoiceStatus.CONFIRMED
+            if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
+                invoice.journal_entry_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
+                await db.flush()
+        record_audit(db, tenant_id, user_id, "update", "invoice", invoice.id,
+                     invoice_number=invoice.invoice_number, confirmed_edit=confirmed_edit, changed_fields=list(data.keys()))
+        await db.commit()
+        return await get_invoice(db, tenant_id, invoice_id)
+    except Exception:
+        # يمنع بقاء أي عكس أو خصم جزئي إذا فشل القيد أو السيريال أو أي قيد قاعدة بيانات.
+        await db.rollback()
+        raise
 
 
 async def delete_invoice_draft(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):

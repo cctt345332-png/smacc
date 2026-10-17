@@ -676,8 +676,11 @@ async def deduct_stock(
         created_by=user_id,
     ))
 
-    await db.commit()
-    await db.refresh(item)
+    # في مسار الفاتورة تبقى الحركة داخل المعاملة نفسها؛ إذا فشل
+    # سيريال لاحق أو القيد المحاسبي يجب أن يتراجع الخصم كله معاً.
+    if auto_commit:
+        await db.commit()
+        await db.refresh(item)
     return item
 
 
