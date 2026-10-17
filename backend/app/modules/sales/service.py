@@ -1396,7 +1396,9 @@ async def get_payments(
             "invoice_id": payment.invoice_id,
             "customer_id": payment.customer_id,
             "customer_name_ar": customer_name,
-            "rep_id": linked_rep_id,
+            # توحيد المعرف كنص حتى تتطابق قيمة الفلتر في الواجهة مع
+            # معرف المندوب سواء أعادها asyncpg كنص أو كنوع UUID.
+            "rep_id": str(linked_rep_id) if linked_rep_id else None,
             "rep_code": linked_rep_code,
             "rep_name": rep_name,
             "invoice_number": invoice_number,

@@ -109,7 +109,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   };
 
   const filteredPayments = payments.filter((p: any) => {
-    const matchesRep = !filterRep || p.rep_id === filterRep;
+    const matchesRep = !filterRep || String(p.rep_id || "") === String(filterRep);
     const paymentDate = String(p.payment_date || "").slice(0, 10);
     const matchesFrom = !fromDate || paymentDate >= fromDate;
     const matchesTo = !toDate || paymentDate <= toDate;
@@ -198,7 +198,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
             metrics={[
               { label: ar ? "إجمالي التحصيل" : "Total collected", value: `${fmt(total)} SAR`, tone: "green" },
               { label: ar ? "عدد السندات" : "Receipts count", value: String(filteredPayments.length), tone: "blue" },
-              { label: ar ? "المندوب" : "Sales rep", value: reps.find((rep: any) => rep.id === filterRep)?.full_name || (filterRep ? "—" : (ar ? "الكل" : "All")), tone: "neutral" },
+              { label: ar ? "المندوب" : "Sales rep", value: reps.find((rep: any) => String(rep.id) === String(filterRep))?.full_name || (filterRep ? "—" : (ar ? "الكل" : "All")), tone: "neutral" },
             ]}
             tables={[{
               title: ar ? "تفاصيل التحصيل" : "Collection details",
