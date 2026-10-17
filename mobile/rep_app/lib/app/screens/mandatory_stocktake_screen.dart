@@ -369,13 +369,57 @@ class _SerialScannerPageState extends State<_SerialScannerPage> {
     children: [
       MobileScanner(
         controller: _controller,
+        tapToFocus: true,
+        fit: BoxFit.cover,
         onDetect: (capture) {
-          final code = capture.barcodes.isNotEmpty
-              ? capture.barcodes.first.rawValue?.trim()
-              : null;
-          if (code != null && code.isNotEmpty && !_serials.contains(code))
+          // الكرتون يحتوي عدة باركودات؛ نأخذ فقط الباركود الطويل الخاص بـ IMEI 1.
+          final code = capture.barcodes
+              .map((barcode) => barcode.rawValue?.trim())
+              .whereType<String>()
+              .firstWhere(
+                (value) => RegExp(r'^\d{14,16}$').hasMatch(value),
+                orElse: () => '',
+              );
+          if (code.isNotEmpty &&
+              !_serials.any((serial) => _normalize(serial) == _normalize(code)))
             setState(() => _serials.add(code));
         },
+      ),
+      IgnorePointer(
+        child: Center(
+          child: Container(
+            width: 320,
+            height: 120,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.greenAccent, width: 3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        top: 18,
+        left: 16,
+        right: 16,
+        child: SafeArea(
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'امسح باركود IMEI 1 فقط\nالباركود الطويل الموجود بجانب IMEI 1',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _controller.toggleTorch,
+                icon: const Icon(Icons.flash_on, color: Colors.white, size: 30),
+              ),
+            ],
+          ),
+        ),
       ),
       Positioned(
         bottom: 24,
@@ -388,7 +432,7 @@ class _SerialScannerPageState extends State<_SerialScannerPage> {
               children: [
                 Expanded(
                   child: Text(
-                    'النظام: ${widget.expected.length} | تم تصوير: ${_serials.length} | مطابق: ${_serials.where(_existsInSystem).length} | غير موجود: ${_serials.where((s) => !_existsInSystem(s)).length}',
+                    'النظام: ${widget.expected.length} | تم تصوير IMEI 1: ${_serials.length} | مطابق: ${_serials.where(_existsInSystem).length} | غير موجود: ${_serials.where((s) => !_existsInSystem(s)).length}',
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),

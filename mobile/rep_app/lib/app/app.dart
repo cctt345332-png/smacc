@@ -219,17 +219,15 @@ class _RepShellState extends State<RepShell> {
   @override
   void initState() {
     super.initState();
-    _mandatoryStocktake = widget.apiClient.getMap('/inventory/mandatory-stocktake/rep/current');
+    _mandatoryStocktake = widget.apiClient.getMap(
+      '/inventory/mandatory-stocktake/rep/current',
+    );
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _checkAttendancePrompt(),
     );
-    _attendanceTimer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) {
-        _checkAttendancePrompt();
-        _refreshMandatoryStocktake();
-      },
-    );
+    _attendanceTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _checkAttendancePrompt();
+    });
   }
 
   @override
@@ -306,16 +304,6 @@ class _RepShellState extends State<RepShell> {
     } catch (_) {}
   }
 
-  Future<void> _refreshMandatoryStocktake() async {
-    try {
-      final current = await widget.apiClient.getMap(
-        '/inventory/mandatory-stocktake/rep/current',
-      );
-      if (!mounted) return;
-      setState(() => _mandatoryStocktake = Future.value(current));
-    } catch (_) {}
-  }
-
   void _openMore() => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -351,7 +339,9 @@ class _RepShellState extends State<RepShell> {
       future: _mandatoryStocktake,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         if (snapshot.hasError) {
           return Scaffold(
@@ -361,9 +351,19 @@ class _RepShellState extends State<RepShell> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('تعذر التحقق من حالة الجرد. تحقق من الاتصال ثم أعد المحاولة.', textAlign: TextAlign.center),
+                    const Text(
+                      'تعذر التحقق من حالة الجرد. تحقق من الاتصال ثم أعد المحاولة.',
+                      textAlign: TextAlign.center,
+                    ),
                     const SizedBox(height: 12),
-                    FilledButton(onPressed: () => setState(() => _mandatoryStocktake = widget.apiClient.getMap('/inventory/mandatory-stocktake/rep/current')), child: const Text('إعادة المحاولة')),
+                    FilledButton(
+                      onPressed: () => setState(
+                        () => _mandatoryStocktake = widget.apiClient.getMap(
+                          '/inventory/mandatory-stocktake/rep/current',
+                        ),
+                      ),
+                      child: const Text('إعادة المحاولة'),
+                    ),
                   ],
                 ),
               ),
@@ -374,46 +374,50 @@ class _RepShellState extends State<RepShell> {
         if (stocktake['locked'] == true) {
           return MandatoryStocktakeScreen(
             apiClient: widget.apiClient,
-            onSubmitted: () => setState(() => _mandatoryStocktake = widget.apiClient.getMap('/inventory/mandatory-stocktake/rep/current')),
+            onSubmitted: () => setState(
+              () => _mandatoryStocktake = widget.apiClient.getMap(
+                '/inventory/mandatory-stocktake/rep/current',
+              ),
+            ),
           );
         }
         return Scaffold(
           body: IndexedStack(index: _index, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) {
-          if (i == 4)
-            _openMore();
-          else
-            setState(() => _index = i);
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'الرئيسية',
+          bottomNavigationBar: NavigationBar(
+            selectedIndex: _index,
+            onDestinationSelected: (i) {
+              if (i == 4)
+                _openMore();
+              else
+                setState(() => _index = i);
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'الرئيسية',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.receipt_long_outlined),
+                selectedIcon: Icon(Icons.receipt_long_rounded),
+                label: 'الفواتير',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.people_outline),
+                selectedIcon: Icon(Icons.people_rounded),
+                label: 'العملاء',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.inventory_2_outlined),
+                selectedIcon: Icon(Icons.inventory_2_rounded),
+                label: 'المخزون',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.more_horiz_rounded),
+                label: 'المزيد',
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long_rounded),
-            label: 'الفواتير',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people_rounded),
-            label: 'العملاء',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            selectedIcon: Icon(Icons.inventory_2_rounded),
-            label: 'المخزون',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz_rounded),
-            label: 'المزيد',
-          ),
-        ],
-        ),
         );
       },
     );
