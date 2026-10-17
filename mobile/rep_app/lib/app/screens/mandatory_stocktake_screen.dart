@@ -345,6 +345,7 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
 class _SerialScannerPage extends StatefulWidget {
   const _SerialScannerPage({required this.expected});
   final List<String> expected;
+
   @override
   State<_SerialScannerPage> createState() => _SerialScannerPageState();
 }
@@ -352,8 +353,10 @@ class _SerialScannerPage extends StatefulWidget {
 class _SerialScannerPageState extends State<_SerialScannerPage> {
   final _controller = MobileScannerController();
   final _serials = <String>[];
+
   String _normalize(String value) =>
       value.replaceAll(RegExp(r'[\s-]'), '').toLowerCase();
+
   bool _existsInSystem(String value) =>
       widget.expected.any((item) => _normalize(item) == _normalize(value));
 
@@ -363,113 +366,198 @@ class _SerialScannerPageState extends State<_SerialScannerPage> {
     super.dispose();
   }
 
+  void _handleCapture(BarcodeCapture capture) {
+    // نفس منطق شاشة الفاتورة: الكرتون قد يحتوي عدة باركودات،
+    // لذلك نأخذ أول باركود رقمي طويل يمثل IMEI 1 فقط.
+    final code = capture.barcodes
+        .map((barcode) => barcode.rawValue?.trim())
+        .whereType<String>()
+        .firstWhere(
+          (value) => RegExp(r'^\d{14,16}$').hasMatch(value),
+          orElse: () => '',
+        );
+    if (code.isEmpty ||
+        _serials.any((serial) => _normalize(serial) == _normalize(code))) {
+      return;
+    }
+    setState(() => _serials.add(code));
+  }
+
   @override
-  Widget build(BuildContext context) => Stack(
-    fit: StackFit.expand,
+  Widget build(BuildContext context) => Column(
     children: [
-      MobileScanner(
-        controller: _controller,
-        tapToFocus: true,
-        fit: BoxFit.cover,
-        onDetect: (capture) {
-          // الكرتون يحتوي عدة باركودات؛ نأخذ فقط الباركود الطويل الخاص بـ IMEI 1.
-          final code = capture.barcodes
-              .map((barcode) => barcode.rawValue?.trim())
-              .whereType<String>()
-              .firstWhere(
-                (value) => RegExp(r'^\d{14,16}$').hasMatch(value),
-                orElse: () => '',
-              );
-          if (code.isNotEmpty &&
-              !_serials.any((serial) => _normalize(serial) == _normalize(code)))
-            setState(() => _serials.add(code));
-        },
-      ),
-      IgnorePointer(
-        child: Center(
-          child: Container(
-            width: 320,
-            height: 120,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.greenAccent, width: 3),
-              borderRadius: BorderRadius.circular(12),
+      Expanded(
+        flex: 6,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            MobileScanner(
+              controller: _controller,
+              tapToFocus: true,
+              fit: BoxFit.cover,
+              onDetect: _handleCapture,
             ),
-          ),
+            IgnorePointer(
+              child: Center(
+                child: Container(
+                  width: 320,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.greenAccent, width: 3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 14,
+              left: 12,
+              right: 12,
+              child: SafeArea(
+                bottom: false,
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'امسح باركود IMEI 1 فقط\nالباركود الطويل الموجود بجانب IMEI 1',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          shadows: [Shadow(color: Colors.black, blurRadius: 5)],
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _controller.toggleTorch,
+                      icon: const Icon(
+                        Icons.flash_on,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              left: 18,
+              right: 18,
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _controller.setZoomScale(0.8),
+                    icon: const Icon(
+                      Icons.zoom_out,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'قرّب الكاميرا حتى يظهر الباركود واضحاً',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 5)],
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _controller.setZoomScale(2.5),
+                    icon: const Icon(
+                      Icons.zoom_in,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      Positioned(
-        top: 18,
-        left: 16,
-        right: 16,
-        child: SafeArea(
-          child: Row(
+      Expanded(
+        flex: 4,
+        child: Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Expanded(
-                child: Text(
-                  'امسح باركود IMEI 1 فقط\nالباركود الطويل الموجود بجانب IMEI 1',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'تم تصوير ${_serials.length} سيريال',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              IconButton(
-                onPressed: _controller.toggleTorch,
-                icon: const Icon(Icons.flash_on, color: Colors.white, size: 30),
-              ),
-            ],
-          ),
-        ),
-      ),
-      Positioned(
-        bottom: 24,
-        left: 16,
-        right: 16,
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'النظام: ${widget.expected.length} | تم تصوير IMEI 1: ${_serials.length} | مطابق: ${_serials.where(_existsInSystem).length} | غير موجود: ${_serials.where((s) => !_existsInSystem(s)).length}',
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  Text(
+                    'مطابق ${_serials.where(_existsInSystem).length} / غير موجود ${_serials.where((s) => !_existsInSystem(s)).length}',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                ),
-                FilledButton.icon(
+                ],
+              ),
+              const SizedBox(height: 6),
+              Expanded(
+                child: _serials.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'صوّر السيريال وسيظهر هنا فورًا مع حالته',
+                          style: TextStyle(color: Colors.black54),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _serials.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, index) {
+                          final serial = _serials[index];
+                          final exists = _existsInSystem(serial);
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              exists ? Icons.check_circle : Icons.error,
+                              color: exists
+                                  ? Colors.green.shade700
+                                  : Colors.red.shade700,
+                            ),
+                            title: Text(
+                              serial,
+                              textDirection: TextDirection.ltr,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            subtitle: Text(
+                              exists
+                                  ? 'موجود في النظام لهذا الصنف والمستودع'
+                                  : 'غير موجود في النظام لهذا الصنف والمستودع',
+                              style: TextStyle(
+                                color: exists
+                                    ? Colors.green.shade700
+                                    : Colors.red.shade700,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              SizedBox(
+                height: 44,
+                child: FilledButton.icon(
                   onPressed: () =>
                       Navigator.pop(context, List<String>.from(_serials)),
                   icon: const Icon(Icons.check),
                   label: const Text('تم'),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        top: 24,
-        left: 16,
-        right: 16,
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: _serials
-                  .map(
-                    (serial) => Text(
-                      '${_existsInSystem(serial) ? '✓ موجود في النظام' : '✕ غير موجود في مخزون هذا الصنف/المستودع'}: $serial',
-                      style: TextStyle(
-                        color: _existsInSystem(serial)
-                            ? Colors.green.shade800
-                            : Colors.red.shade800,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
+              ),
+            ],
           ),
         ),
       ),
