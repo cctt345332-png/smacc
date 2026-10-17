@@ -210,8 +210,8 @@ async def cancel_test_run(db: AsyncSession, tenant_id: str, run_id: str) -> dict
     run = await db.scalar(select(MandatoryStocktakeRun).where(MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.id == run_id))
     if not run or not run.is_test:
         raise HTTPException(404, "جلسة الاختبار غير موجودة")
-    if run.status == "approved":
-        raise HTTPException(409, "تم اعتماد الاختبار، لا يمكن حذفه")
+    # جلسة الاختبار لا تغيّر المخزون؛ يمكن إيقافها وحذفها في أي حالة
+    # ما دامت جلسة اختبار، حتى بعد رفعها من التطبيق.
     lines = (await db.execute(select(MandatoryStocktakeLine).where(MandatoryStocktakeLine.run_id == run.id))).scalars().all()
     for line in lines:
         await db.delete(line)
