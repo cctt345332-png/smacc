@@ -2956,7 +2956,20 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
             invoice.buyer_address = "، ".join(p for p in [customer.address_street, customer.address_district, customer.address_city, customer.address_postal] if p)
         allowed = {"notes", "terms", "invoice_payment_method", "credit_days", "cheque_number", "cheque_date", "bank_name", "invoice_type"}
         for key in allowed:
-            if key in data: setattr(invoice, key, data[key])
+            if key in data:
+                value = data[key]
+                # تطبيق المندوب يرسل مدة الآجل من حقل الإدخال كنص، بينما
+                # العمود في PostgreSQL من نوع INTEGER. لا نترك SQLAlchemy
+                # يحاول تمرير النص إلى asyncpg.
+                if key == "credit_days":
+                    if value in (None, ""):
+                        value = None
+                    else:
+                        try:
+                            value = int(value)
+                        except (TypeError, ValueError):
+                            raise HTTPException(400, "مدة الآجل يجب أن تكون رقماً صحيحاً")
+                setattr(invoice, key, value)
         for key in ("issue_date", "supply_date", "due_date"):
             if key in data: setattr(invoice, key, as_datetime(data[key]))
         if "lines" in data:

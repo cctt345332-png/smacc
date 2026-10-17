@@ -36,7 +36,7 @@ export default function EditSalesInvoicePage(props: { params: Promise<{ locale: 
     if (!customerId || lines.some(l => !l.description_ar || Number(l.quantity) <= 0 || Number(l.unit_price) < 0)) return alert(ar ? "راجع العميل والأسطر والأسعار" : "Check customer, lines, and prices");
     setSaving(true);
     try {
-      await updateInvoice(id, { customer_id: customerId, ...form, issue_date: `${form.issue_date}T00:00:00`, supply_date: `${form.supply_date}T00:00:00`, due_date: form.due_date ? `${form.due_date}T00:00:00` : null, lines: lines.map((l, i) => ({ ...l, serial_text: undefined, line_order: i, quantity: Number(l.quantity), unit_price: Number(l.unit_price), discount_pct: Number(l.discount_pct), vat_rate: Number(l.vat_rate), serial_ids: l.serial_ids || null })) });
+      await updateInvoice(id, { customer_id: customerId, ...form, credit_days: form.credit_days ? Number(form.credit_days) : null, issue_date: `${form.issue_date}T00:00:00`, supply_date: `${form.supply_date}T00:00:00`, due_date: form.due_date ? `${form.due_date}T00:00:00` : null, lines: lines.map((l, i) => ({ ...l, serial_text: undefined, line_order: i, quantity: Number(l.quantity), unit_price: Number(l.unit_price), discount_pct: Number(l.discount_pct), vat_rate: Number(l.vat_rate), serial_ids: l.serial_ids || null })) });
       router.push(`/${locale}/sales/invoices/${id}`);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); } finally { setSaving(false); }
   };
