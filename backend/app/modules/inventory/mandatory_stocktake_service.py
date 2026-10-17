@@ -5,7 +5,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import (
@@ -33,6 +33,13 @@ def _tz(config: MandatoryStocktakeConfig) -> ZoneInfo:
         return ZoneInfo("Asia/Riyadh")
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    """التواريخ المخزنة للجلسات UTC؛ أضف Z حتى يفسرها المتصفح بشكل صحيح."""
+    if value is None:
+        return None
+    return value.replace(tzinfo=ZoneInfo("UTC")).isoformat().replace("+00:00", "Z")
+
+
 def _scheduled_at(now: datetime, config: MandatoryStocktakeConfig) -> datetime:
     tz = _tz(config)
     local_now = now.astimezone(tz) if now.tzinfo else now.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz)
@@ -40,6 +47,11 @@ def _scheduled_at(now: datetime, config: MandatoryStocktakeConfig) -> datetime:
     candidate_date = local_now.date() - timedelta(days=days_back)
     hour, minute = (config.start_time or "11:00").split(":", 1)
     candidate = datetime.combine(candidate_date, time(int(hour), int(minute)), tzinfo=tz)
+    # نقبل الموعد السابق فقط خلال نافذة تشغيل قصيرة، حتى لو تأخرت دورة
+    # العامل دقائق. أما إذا تغيّر الإعداد بعد الموعد بساعات/أيام، ننتقل
+    # للأسبوع القادم ولا ننشئ جردًا قديمًا يظهر للمندوب على أنه الحالي.
+    if local_now - candidate > timedelta(hours=2):
+        candidate += timedelta(days=7)
     return candidate.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
 
 
@@ -98,6 +110,15 @@ async def save_config(db: AsyncSession, tenant_id: str, user_id: str, data: dict
         config.reminder_minutes = max(0, int(data["reminder_minutes"]))
     config.updated_by = user_id
     config.updated_at = datetime.utcnow()
+    # لا نُبقي جلسات قديمة غير مرفوعة بعد تغيير اليوم أو الساعة.
+    # الجلسات المرفوعة/المعتمدة تبقى كسجل تاريخي، والاختبار الفوري لا يتأثر.
+    await db.execute(
+        delete(MandatoryStocktakeRun).where(
+            MandatoryStocktakeRun.tenant_id == tenant_id,
+            MandatoryStocktakeRun.is_test.is_(False),
+            MandatoryStocktakeRun.status.in_(["pending", "reopened"]),
+        )
+    )
     await db.commit()
     await db.refresh(config)
     return serialize_config(config)
@@ -294,7 +315,7 @@ async def list_runs(db: AsyncSession, tenant_id: str, status: str | None = None,
     result = []
     for run in runs:
         lines = (await db.execute(select(MandatoryStocktakeLine).where(MandatoryStocktakeLine.run_id == run.id))).scalars().all()
-        result.append({"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "is_test": bool(run.is_test), "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "total_lines": len(lines), "matched_lines": sum(1 for x in lines if x.status == "matched"), "variance_lines": sum(1 for x in lines if x.status == "variance"), "reps": len({x.rep_id for x in lines})})
+        result.append({"id": run.id, "scheduled_at": _utc_iso(run.scheduled_at), "status": run.status, "is_test": bool(run.is_test), "submitted_at": _utc_iso(run.submitted_at), "total_lines": len(lines), "matched_lines": sum(1 for x in lines if x.status == "matched"), "variance_lines": sum(1 for x in lines if x.status == "variance"), "reps": len({x.rep_id for x in lines})})
     return result
 
 
@@ -303,7 +324,7 @@ async def get_run(db: AsyncSession, tenant_id: str, run_id: str) -> dict:
     if not run:
         raise HTTPException(404, "جلسة الجرد غير موجودة")
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse, User).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).join(SalesRep, SalesRep.id == MandatoryStocktakeLine.rep_id).join(User, User.id == SalesRep.user_id).where(MandatoryStocktakeLine.run_id == run.id).order_by(MandatoryStocktakeLine.rep_id, InventoryItem.name_ar))).all()
-    return {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "is_test": bool(run.is_test), "submitted_at": run.submitted_at.isoformat() if run.submitted_at else None, "review_note": run.review_note, "adjustments_applied_at": run.adjustments_applied_at.isoformat() if run.adjustments_applied_at else None, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
+    return {"id": run.id, "scheduled_at": _utc_iso(run.scheduled_at), "status": run.status, "is_test": bool(run.is_test), "submitted_at": _utc_iso(run.submitted_at), "review_note": run.review_note, "adjustments_applied_at": _utc_iso(run.adjustments_applied_at), "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
 
 
 async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str, data: dict) -> dict:

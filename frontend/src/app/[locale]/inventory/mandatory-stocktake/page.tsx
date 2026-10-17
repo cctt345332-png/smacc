@@ -46,7 +46,7 @@ export default function MandatoryStocktakePage(props: { params: Promise<{ locale
     event.preventDefault(); setSaving(true); setMessage(""); setError("");
     try {
       await saveMandatoryStocktakeConfig({ ...config, weekday: Number(config.weekday), reminder_minutes: Number(config.reminder_minutes) });
-      setMessage(ar ? "تم حفظ إعدادات الجرد. لن يتم تحديث السيرفر الآن." : "Settings saved. The server has not been updated.");
+      setMessage(ar ? "تم حفظ إعدادات الجرد على السيرفر. سيبدأ الجرد القادم في الموعد المحدد." : "Stocktake settings saved on the server. The next run will start at the selected time.");
       await load();
     } catch (err: any) { setError(err?.response?.data?.detail || (ar ? "تعذر حفظ الإعدادات" : "Could not save settings")); }
     finally { setSaving(false); }
