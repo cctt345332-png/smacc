@@ -138,7 +138,7 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
             );
             if (run['status'] == 'submitted')
               return _message(
-                'تم رفع الجرد للإدارة، وسيعود التطبيق للعمل بعد اعتماد الإدارة.',
+                'تم رفع الجرد للإدارة، ويمكنك الآن متابعة استخدام التطبيق.',
                 done: true,
               );
             return Column(

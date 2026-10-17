@@ -249,7 +249,7 @@ async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dic
     if not run:
         return {"locked": False, "run": None, "lines": []}
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep.id).order_by(InventoryItem.name_ar))).all()
-    return {"locked": run.status in ("pending", "reopened", "submitted"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
+    return {"locked": run.status in ("pending", "reopened"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
 
 
 async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
@@ -442,5 +442,6 @@ async def assert_rep_unlocked(db: AsyncSession, tenant_id: str, user_id: str) ->
     if not rep:
         return
     run = await _run_for_rep(db, tenant_id, rep.id)
-    if run and run.status != "approved":
+    # بعد رفع الجرد يفتح التطبيق فورًا؛ الاعتماد الإداري يطبّق التسوية فقط.
+    if run and run.status in ("pending", "reopened"):
         raise HTTPException(423, "التطبيق مقفل حتى إكمال الجرد الأسبوعي ورفعه للإدارة")
