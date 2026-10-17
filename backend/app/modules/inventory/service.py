@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from app.models.inventory import (
     InventoryItem, SerialItem, BatchItem, ProductVariant,
-    StockMovement, Warehouse, ProductCategory,
+    StockMovement, StockDocument, StockDocumentLine, Warehouse, ProductCategory,
     TrackingType, SerialStatus, MovementType
 )
 from app.models.purchases import Bill, BillLine
@@ -684,7 +684,7 @@ async def deduct_stock(
     return item
 
 
-async def create_stock_document(
+async def _create_stock_document_line(
     db: AsyncSession, tenant_id: str, user_id: str, data: dict,
 ):
     """إنشاء سند إدخال/إخراج مخزني مستقل عن فواتير البيع والشراء."""
@@ -744,7 +744,7 @@ async def create_stock_document(
                                 movement_type=MovementType.ADJUSTMENT,
                                 quantity=Decimal("1"), unit_cost=unit_cost,
                                 serial_item_id=duplicate.id,
-                                reference_type="stock_document", notes=(
+                                reference_type="stock_document", reference_id=data.get("_document_id"), notes=(
                                     f"إعادة إدخال سيريال سبق إخراجه — {notes}"
                                     if notes else "إعادة إدخال سيريال سبق إخراجه"
                                 ), created_by=user_id,
@@ -762,7 +762,7 @@ async def create_stock_document(
                     id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
                     warehouse_id=warehouse.id, movement_type=MovementType.ADJUSTMENT,
                     quantity=Decimal("1"), unit_cost=unit_cost, serial_item_id=serial.id,
-                    reference_type="stock_document", notes=notes, created_by=user_id,
+                    reference_type="stock_document", reference_id=data.get("_document_id"), notes=notes, created_by=user_id,
                 ))
         else:
             rows = (await db.execute(
@@ -784,9 +784,10 @@ async def create_stock_document(
                     id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
                     warehouse_id=warehouse.id, movement_type=MovementType.ADJUSTMENT,
                     quantity=Decimal("-1"), unit_cost=serial.cost_price, serial_item_id=serial.id,
-                    reference_type="stock_document", notes=notes, created_by=user_id,
+                    reference_type="stock_document", reference_id=data.get("_document_id"), notes=notes, created_by=user_id,
                 ))
-        await db.commit()
+        if not data.get("_skip_commit"):
+            await db.commit()
         return {"direction": direction, "item_id": item.id, "item_name": item.name_ar, "warehouse_id": warehouse.id, "quantity": len(serial_numbers), "serial_count": len(serial_numbers)}
 
     quantity = Decimal(str(data.get("quantity") or 0))
@@ -807,10 +808,149 @@ async def create_stock_document(
         id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
         warehouse_id=warehouse.id, movement_type=MovementType.ADJUSTMENT,
         quantity=signed_quantity, unit_cost=unit_cost if direction == "in" else item.cost_price,
-        reference_type="stock_document", notes=notes, created_by=user_id,
+        reference_type="stock_document", reference_id=data.get("_document_id"), notes=notes, created_by=user_id,
     ))
-    await db.commit()
+    if not data.get("_skip_commit"):
+        await db.commit()
     return {"direction": direction, "item_id": item.id, "item_name": item.name_ar, "warehouse_id": warehouse.id, "quantity": float(quantity), "previous_quantity": float(previous_qty), "new_quantity": float(stock.quantity)}
+
+
+
+async def _next_stock_document_number(db: AsyncSession, tenant_id: str, direction: str) -> str:
+    count = (await db.execute(
+        select(func.count(StockDocument.id)).where(StockDocument.tenant_id == tenant_id)
+    )).scalar() or 0
+    prefix = "SD-IN" if direction == "in" else "SD-OUT"
+    return f"{prefix}-{int(count) + 1:06d}"
+
+
+async def create_stock_document(
+    db: AsyncSession, tenant_id: str, user_id: str, data: dict,
+):
+    """إنشاء سند مخزون واحد يضم عدة أصناف، مع حركة تفصيلية لكل سطر."""
+    direction = data.get("direction")
+    if direction not in {"in", "out"}:
+        raise HTTPException(400, "نوع السند يجب أن يكون إدخال أو إخراج")
+    items = data.get("items")
+    if not isinstance(items, list) or not items:
+        # توافق مع الحمولة القديمة ذات الصنف الواحد.
+        if data.get("item_id"):
+            items = [{
+                "item_id": data.get("item_id"),
+                "quantity": data.get("quantity"),
+                "unit_cost": data.get("unit_cost"),
+                "serial_numbers": data.get("serial_numbers") or [],
+            }]
+        else:
+            raise HTTPException(400, "أضف صنفاً واحداً على الأقل إلى السند")
+
+    warehouse_id = data.get("warehouse_id")
+    warehouse = await db.get(Warehouse, warehouse_id)
+    if not warehouse or warehouse.tenant_id != tenant_id or not warehouse.is_active:
+        raise HTTPException(404, "المستودع غير موجود")
+    reason = str(data.get("reason") or "other").strip()[:50]
+    destination_name = (data.get("destination_name") or "").strip() or None
+    notes = (data.get("notes") or "").strip() or None
+    document_id = str(uuid.uuid4())
+    document = StockDocument(
+        id=document_id, tenant_id=tenant_id,
+        document_number=await _next_stock_document_number(db, tenant_id, direction),
+        direction=direction, warehouse_id=warehouse_id,
+        destination_name=destination_name, reason=reason,
+        notes=notes, created_by=user_id,
+    )
+    db.add(document)
+    try:
+        for index, raw in enumerate(items, start=1):
+            item_id = raw.get("item_id")
+            if not item_id:
+                raise HTTPException(400, f"السطر {index}: اختر الصنف")
+            item = await get_item(db, tenant_id, item_id)
+            serial_numbers = [str(v).strip() for v in (raw.get("serial_numbers") or []) if str(v).strip()]
+            line_unit_cost = Decimal(str(raw.get("unit_cost") or item.cost_price or 0))
+            line_data = {
+                "direction": direction,
+                "item_id": item_id,
+                "warehouse_id": warehouse_id,
+                "quantity": raw.get("quantity"),
+                "unit_cost": line_unit_cost,
+                "serial_numbers": serial_numbers,
+                "notes": notes,
+                "_document_id": document_id,
+                "_skip_commit": True,
+            }
+            result = await _create_stock_document_line(db, tenant_id, user_id, line_data)
+            db.add(StockDocumentLine(
+                id=str(uuid.uuid4()), document_id=document_id, line_no=index,
+                item_id=item_id,
+                quantity=Decimal(str(len(serial_numbers) if serial_numbers else raw.get("quantity") or 0)),
+                unit_cost=line_unit_cost,
+                serial_numbers_json=json.dumps(serial_numbers, ensure_ascii=False) if serial_numbers else None,
+            ))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return await get_stock_document(db, tenant_id, document_id)
+
+
+async def list_stock_documents(
+    db: AsyncSession, tenant_id: str, direction: str | None = None, limit: int = 100,
+):
+    q = select(StockDocument).options(
+        selectinload(StockDocument.warehouse),
+        selectinload(StockDocument.lines).selectinload(StockDocumentLine.item),
+    ).where(StockDocument.tenant_id == tenant_id)
+    if direction in {"in", "out"}:
+        q = q.where(StockDocument.direction == direction)
+    q = q.order_by(StockDocument.created_at.desc()).limit(min(max(limit, 1), 500))
+    rows = (await db.execute(q)).scalars().unique().all()
+    return [_serialize_stock_document(row) for row in rows]
+
+
+async def get_stock_document(db: AsyncSession, tenant_id: str, document_id: str):
+    row = (await db.execute(
+        select(StockDocument).options(
+            selectinload(StockDocument.warehouse),
+            selectinload(StockDocument.lines).selectinload(StockDocumentLine.item),
+        ).where(StockDocument.id == document_id, StockDocument.tenant_id == tenant_id)
+    )).scalar_one_or_none()
+    if not row:
+        raise HTTPException(404, "سند المخزون غير موجود")
+    return _serialize_stock_document(row)
+
+
+def _serialize_stock_document(document: StockDocument) -> dict:
+    reason_ar = {
+        "damage": "تالف", "external_transfer": "نقل إلى جهة خارجية",
+        "internal_use": "استخدام داخلي", "inventory_adjustment": "جرد/تسوية",
+        "return": "إرجاع", "other": "أخرى",
+    }
+    lines = []
+    for line in document.lines or []:
+        serials = json.loads(line.serial_numbers_json or "[]")
+        lines.append({
+            "id": line.id, "line_no": line.line_no, "item_id": line.item_id,
+            "item_name": line.item.name_ar if line.item else "",
+            "item_sku": line.item.sku if line.item else "",
+            "tracking_type": _tracking_value(line.item.tracking_type) if line.item else None,
+            "quantity": float(line.quantity), "unit_cost": float(line.unit_cost),
+            "serial_numbers": serials, "serial_count": len(serials),
+            "total_value": float(line.quantity * line.unit_cost),
+        })
+    return {
+        "id": document.id, "document_number": document.document_number,
+        "direction": document.direction,
+        "direction_ar": "إدخال مخزني" if document.direction == "in" else "إخراج مخزني",
+        "warehouse_id": document.warehouse_id,
+        "warehouse_name": document.warehouse.name_ar if document.warehouse else "",
+        "destination_name": document.destination_name,
+        "reason": document.reason, "reason_ar": reason_ar.get(document.reason, document.reason),
+        "notes": document.notes, "created_by": document.created_by,
+        "created_at": document.created_at.isoformat() if document.created_at else None,
+        "lines": lines, "total_quantity": float(sum((line["quantity"] for line in lines), 0)),
+        "total_value": float(sum((line["total_value"] for line in lines), 0)),
+    }
 
 
 # ─── Reports ─────────────────────────────────────────────────────────

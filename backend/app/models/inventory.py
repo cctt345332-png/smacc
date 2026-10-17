@@ -244,6 +244,45 @@ class InventoryStock(Base):
     )
 
 
+# ─── StockDocument (سند مخزون متعدد الأصناف) ─────────────────────────
+class StockDocument(Base):
+    """رأس سند الإدخال/الإخراج؛ الحركة التفصيلية تبقى في StockMovement."""
+    __tablename__ = "stock_documents"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    document_number: Mapped[str] = mapped_column(String(50), index=True)
+    direction: Mapped[str] = mapped_column(String(10))  # in | out
+    warehouse_id: Mapped[str] = mapped_column(String, ForeignKey("warehouses.id"))
+    destination_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    reason: Mapped[str] = mapped_column(String(50), default="other")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    warehouse: Mapped["Warehouse"] = relationship("Warehouse")
+    lines: Mapped[list["StockDocumentLine"]] = relationship(
+        "StockDocumentLine", back_populates="document", cascade="all, delete-orphan",
+        order_by="StockDocumentLine.line_no",
+    )
+
+
+class StockDocumentLine(Base):
+    """سطر سند مخزون؛ يدعم الكمية أو قائمة السيريالات للصنف."""
+    __tablename__ = "stock_document_lines"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    document_id: Mapped[str] = mapped_column(String, ForeignKey("stock_documents.id", ondelete="CASCADE"), index=True)
+    line_no: Mapped[int] = mapped_column(Integer, default=1)
+    item_id: Mapped[str] = mapped_column(String, ForeignKey("inventory_items.id"))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(18, 3))
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"))
+    serial_numbers_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    document: Mapped["StockDocument"] = relationship("StockDocument", back_populates="lines")
+    item: Mapped["InventoryItem"] = relationship("InventoryItem")
+
+
 # ─── SerialItem (وحدة بسيريال) ───────────────────────────────────────
 # يُستخدم عندما tracking_type = SERIAL
 # مثال: جوالات، لابتوبات، أجهزة إلكترونية

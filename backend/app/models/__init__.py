@@ -5,7 +5,7 @@ from app.models.sales import Customer, Invoice, InvoiceLine, Payment, Quotation,
 from app.models.sales_orders import SalesOrder, SalesOrderLine
 from app.models.purchases import Vendor, PurchaseOrder, PurchaseOrderLine, Bill, BillLine, DebitNote, DebitNoteLine
 from app.models.inventory import (
-    Warehouse, InventoryItem, ProductCategory, StockMovement,
+    Warehouse, InventoryItem, ProductCategory, StockMovement, StockDocument, StockDocumentLine,
     StockCountSession, SerialItem, BatchItem, ProductVariant,
     ProductOptionGroup, ProductOption, InventoryStock,
     MandatoryStocktakeConfig, MandatoryStocktakeRun, MandatoryStocktakeLine

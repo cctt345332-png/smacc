@@ -98,13 +98,19 @@ export const getMovements = (params?: any) => api.get("/inventory/movements", { 
 // Manual stock documents
 export const createStockDocument = (data: {
   direction: "in" | "out";
-  item_id: string;
   warehouse_id: string;
+  items?: Array<{ item_id: string; quantity?: number; unit_cost?: number; serial_numbers?: string[] }>;
+  item_id?: string;
   quantity?: number;
   unit_cost?: number;
   serial_numbers?: string[];
+  reason?: string;
+  destination_name?: string;
   notes?: string;
 }) => api.post("/inventory/stock-documents", data);
+export const getStockDocuments = (params?: { direction?: "in" | "out"; limit?: number }) =>
+  api.get("/inventory/stock-documents", { params });
+export const getStockDocument = (id: string) => api.get(`/inventory/stock-documents/${id}`);
 
 // Stock Count (جرد)
 export const createStockCount = (data: any) => api.post("/inventory/stock-count", data);
