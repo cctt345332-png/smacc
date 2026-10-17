@@ -5,6 +5,7 @@ import { getPayments, createPayment, getInvoices, getCustomers, getCustomerState
 import { getReps } from "@/lib/reps";
 import { Icon } from "@/components/ui/Icons";
 import SearchableSelect from "@/components/ui/SearchableSelect";
+import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
@@ -41,7 +42,8 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   const [customers, setCustomers] = useState<any[]>([]);
   const [reps, setReps] = useState<any[]>([]);
   const [filterRep, setFilterRep] = useState("");
-  const [filterMonth, setFilterMonth] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -108,10 +110,25 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
 
   const filteredPayments = payments.filter((p: any) => {
     const matchesRep = !filterRep || p.rep_id === filterRep;
-    const matchesMonth = !filterMonth || String(p.payment_date || "").slice(0, 7) === filterMonth;
-    return matchesRep && matchesMonth;
+    const paymentDate = String(p.payment_date || "").slice(0, 10);
+    const matchesFrom = !fromDate || paymentDate >= fromDate;
+    const matchesTo = !toDate || paymentDate <= toDate;
+    return matchesRep && matchesFrom && matchesTo;
   });
   const total = filteredPayments.reduce((s: number, p: any) => s + (p.payment_type === "discount" ? 0 : Number(p.amount || 0)), 0);
+  const reportRows = filteredPayments.map((p: any) => [
+    p.payment_number || "—",
+    p.payment_type === "discount" ? (ar ? "سند خصم" : "Discount") : (ar ? "سند قبض" : "Receipt"),
+    p.customer_name_ar || p.customer_id || "—",
+    p.rep_name || p.rep_code || "—",
+    p.payment_date ? new Date(p.payment_date).toLocaleDateString(ar ? "ar-SA" : "en-GB") : "—",
+    ar ? METHODS[p.payment_method]?.ar || p.payment_method || "—" : METHODS[p.payment_method]?.en || p.payment_method || "—",
+    p.reference || "—",
+    `${fmt(p.amount)} SAR`,
+  ]);
+  const reportPeriod = fromDate || toDate
+    ? `${fromDate || (ar ? "البداية" : "Start")} — ${toDate || (ar ? "حتى اليوم" : "Today")}`
+    : (ar ? "كل الفترات" : "All periods");
 
   return (
     <>
@@ -158,15 +175,38 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               ))}
             </select>
           </div>
-          <div className="form-group" style={{ margin: 0, minWidth: 170 }}>
-            <label className="form-label">{ar ? "الشهر" : "Month"}</label>
-            <input type="month" className="form-input" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} />
+          <div className="form-group" style={{ margin: 0, minWidth: 155 }}>
+            <label className="form-label">{ar ? "من تاريخ" : "From date"}</label>
+            <input type="date" className="form-input" value={fromDate} onChange={e => setFromDate(e.target.value)} />
           </div>
-          {(filterRep || filterMonth) && (
-            <button className="btn btn-secondary btn-sm" onClick={() => { setFilterRep(""); setFilterMonth(""); }}>
+          <div className="form-group" style={{ margin: 0, minWidth: 155 }}>
+            <label className="form-label">{ar ? "إلى تاريخ" : "To date"}</label>
+            <input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} />
+          </div>
+          {(filterRep || fromDate || toDate) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setFilterRep(""); setFromDate(""); setToDate(""); }}>
               {ar ? "مسح الفرز" : "Clear filters"}
             </button>
           )}
+          <StructuredReportPrintButton
+            locale={locale}
+            title={ar ? "تقرير التحصيل" : "Collection Report"}
+            subtitle={ar ? "سندات القبض والخصم حسب المندوب والفترة" : "Receipts and discounts by representative and period"}
+            period={reportPeriod}
+            orientation="landscape"
+            reportCode={`COL-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}`}
+            metrics={[
+              { label: ar ? "إجمالي التحصيل" : "Total collected", value: `${fmt(total)} SAR`, tone: "green" },
+              { label: ar ? "عدد السندات" : "Receipts count", value: String(filteredPayments.length), tone: "blue" },
+              { label: ar ? "المندوب" : "Sales rep", value: reps.find((rep: any) => rep.id === filterRep)?.full_name || (filterRep ? "—" : (ar ? "الكل" : "All")), tone: "neutral" },
+            ]}
+            tables={[{
+              title: ar ? "تفاصيل التحصيل" : "Collection details",
+              headers: ar ? ["رقم السند", "النوع", "العميل", "المندوب", "التاريخ", "طريقة الدفع", "المرجع", "المبلغ"] : ["Receipt #", "Type", "Customer", "Sales rep", "Date", "Payment method", "Reference", "Amount"],
+              rows: reportRows,
+              totals: [ar ? "الإجمالي" : "Total", "", "", "", "", "", "", `${fmt(total)} SAR`],
+            }]}
+          />
           <div style={{ marginInlineStart: "auto", fontSize: 12, color: "var(--text-muted)" }}>
             {filteredPayments.length} {ar ? "سند معروض" : "receipts shown"}
           </div>
@@ -182,7 +222,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
             </div>
           ) : filteredPayments.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-title">{(filterRep || filterMonth) ? (ar ? "لا توجد سندات بهذا الفرز" : "No receipts match these filters") : (ar ? "لا توجد سندات قبض" : "No receipts yet")}</div>
+              <div className="empty-state-title">{(filterRep || fromDate || toDate) ? (ar ? "لا توجد سندات بهذا الفرز" : "No receipts match these filters") : (ar ? "لا توجد سندات قبض" : "No receipts yet")}</div>
               <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={openModal}>
                 + {ar ? "سند جديد" : "New Receipt"}
               </button>
