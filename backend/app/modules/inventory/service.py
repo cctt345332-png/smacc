@@ -554,6 +554,8 @@ async def sell_serial(
         raise HTTPException(400, "السيريال غير موجود في مخزون مستودع الفاتورة")
 
     serial.status = "sold"
+    # sale_price هنا هو سعر السطر قبل الضريبة؛ توحيد سعر الصنف يتم قبل ذلك
+    # في خدمة الفاتورة حتى تبقى حسابات الربح والتقارير متوافقة.
     serial.sale_price = sale_price
     serial.sale_invoice_id = invoice_id
     serial.sold_at = datetime.utcnow()

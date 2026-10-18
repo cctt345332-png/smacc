@@ -913,6 +913,13 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
 
     lines_data = []
     for i, line in enumerate(data.lines):
+        # السيريالات تستخدم سعر البيع الموحد من بطاقة الصنف، لا سعراً مخصصاً
+        # مرسلاً من التطبيق أو من أي عميل API آخر. السعر في البطاقة شامل الضريبة
+        # بينما unit_price المخزن في الفاتورة قبل الضريبة.
+        if line.inventory_item_id:
+            item = await db.get(InventoryItem, line.inventory_item_id)
+            if item and item.tracking_type == "serial" and item.sale_price and item.sale_price > 0:
+                line.unit_price = item.sale_price / (Decimal("1") + line.vat_rate / Decimal("100"))
         sub, disc, taxable, vat, tot = _calc_line(line.quantity, line.unit_price, line.discount_pct, line.vat_rate)
         subtotal += sub
         total_discount += disc
@@ -2982,6 +2989,11 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
             for i, raw in enumerate(rows):
                 quantity = Decimal(str(raw.get("quantity", 1))); unit_price = Decimal(str(raw.get("unit_price", 0)))
                 discount_pct = Decimal(str(raw.get("discount_pct", 0))); vat_rate = Decimal(str(raw.get("vat_rate", 15)))
+                inventory_item_id = raw.get("inventory_item_id")
+                if inventory_item_id:
+                    item = await db.get(InventoryItem, inventory_item_id)
+                    if item and item.tracking_type == "serial" and item.sale_price and item.sale_price > 0:
+                        unit_price = item.sale_price / (Decimal("1") + vat_rate / Decimal("100"))
                 sub, disc, taxable, vat, tot = _calc_line(quantity, unit_price, discount_pct, vat_rate)
                 subtotal += sub; total_discount += disc; total_vat += vat; total += tot
                 serial_ids = raw.get("serial_ids") or None
@@ -3001,7 +3013,7 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
                     description_ar=raw.get("description_ar") or "صنف", description_en=raw.get("description_en"),
                     quantity=quantity, unit=raw.get("unit"), unit_price=unit_price, discount_pct=discount_pct,
                     discount_amount=disc, vat_rate=vat_rate, vat_category=raw.get("vat_category") or "S",
-                    subtotal=sub, vat_amount=vat, total=tot, inventory_item_id=raw.get("inventory_item_id"),
+                    subtotal=sub, vat_amount=vat, total=tot, inventory_item_id=inventory_item_id,
                     serial_item_id=raw.get("serial_item_id"), serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
                     variant_id=raw.get("variant_id")))
             invoice.subtotal = subtotal; invoice.discount_amount = total_discount

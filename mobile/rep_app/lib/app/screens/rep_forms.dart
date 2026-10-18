@@ -521,8 +521,8 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                     setState(() {
                       line.selectedSerialIds.add(id);
                       line.qty.text = line.selectedSerialIds.length.toString();
-                      if (found.first['sale_price'] != null)
-                        line.price.text = found.first['sale_price'].toString();
+                      // لا نغيّر السعر عند اختيار السيريال؛ السعر الموحد يُملأ
+                      // من بطاقة الصنف ولا يختلف من سيريال لآخر.
                     });
                   }
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -799,11 +799,11 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                  Expanded(
-                    child: TextField(
-                      controller: line.qty,
-                      onChanged: (_) => setState(() {}),
-                      readOnly: line.serialTracking,
+                Expanded(
+                  child: TextField(
+                    controller: line.qty,
+                    onChanged: (_) => setState(() {}),
+                    readOnly: line.serialTracking,
                     decoration: const InputDecoration(
                       labelText: 'الكمية',
                       border: OutlineInputBorder(),
@@ -812,14 +812,16 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: line.price,
-                      onChanged: (_) => setState(() {}),
+                Expanded(
+                  child: TextField(
+                    controller: line.price,
+                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
-                      labelText: 'السعر شامل الضريبة',
+                      labelText: 'السعر الموحد شامل الضريبة',
                       border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.lock_outline, size: 18),
                     ),
+                    readOnly: true,
                     keyboardType: TextInputType.number,
                   ),
                 ),
@@ -828,10 +830,10 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                  Expanded(
-                    child: TextField(
-                      controller: line.discount,
-                      onChanged: (_) => setState(() {}),
+                Expanded(
+                  child: TextField(
+                    controller: line.discount,
+                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: 'الخصم %',
                       border: OutlineInputBorder(),
@@ -840,10 +842,10 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: line.vat,
-                      onChanged: (_) => setState(() {}),
+                Expanded(
+                  child: TextField(
+                    controller: line.vat,
+                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: 'الضريبة %',
                       border: OutlineInputBorder(),
