@@ -414,7 +414,7 @@ async def search_serial(
             "condition": s.condition,
             "status": s.status,
             "cost_price": float(s.cost_price),
-            "sale_price": float(s.sale_price) if s.sale_price else None,
+            "sale_price": float(s.product.sale_price) if s.product and s.product.sale_price else (float(s.sale_price) if s.sale_price else None),
             "product_id": s.product_id,
             "product_name": s.product.name_ar if s.product else "",
             "product_sku": s.product.sku if s.product else "",
@@ -459,6 +459,7 @@ async def available_serials_for_invoice(
     from app.models.inventory import SerialItem
 
     tenant_id = user["tenant_id"]
+    item = await service.get_item(db, tenant_id, product_id)
     warehouse_filter = None
 
     if user["role"] == "sales_rep":
@@ -504,7 +505,7 @@ async def available_serials_for_invoice(
             "serial_number": s.serial_number,
             "condition": s.condition,
             "cost_price": float(s.cost_price),
-            "sale_price": float(s.sale_price) if s.sale_price else None,
+            "sale_price": float(item.sale_price) if item.sale_price else (float(s.sale_price) if s.sale_price else None),
             "warehouse_id": s.warehouse_id,
         }
         for s in serials
@@ -670,7 +671,7 @@ async def serials_by_warehouse(
             "product_name": s.product.name_ar if s.product else "",
             "condition": s.condition,
             "cost_price": float(s.cost_price),
-            "sale_price": float(s.sale_price) if s.sale_price else None,
+            "sale_price": float(s.product.sale_price) if s.product and s.product.sale_price else (float(s.sale_price) if s.sale_price else None),
         }
         for s in serials
     ]
@@ -968,37 +969,40 @@ async def fix_serial_sale_prices(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    يُحدّث sale_price على InventoryItem لكل المنتجات السيريالية
-    من أول سيريال موجود له سعر — لإصلاح البيانات القديمة.
+    يُحدّث سعر السيريالات المتاحة من سعر البيع الموحد في بطاقة المادة.
+    لا يلمس أسعار السيريالات المباعة أو أسعار الفواتير التاريخية.
     """
     from app.models.inventory import InventoryItem, SerialItem
     from sqlalchemy import select
 
     tenant_id = user["tenant_id"]
 
-    # جلب كل المنتجات السيريالية التي sale_price = 0
+    # بطاقة المادة هي المصدر الصحيح؛ لا نأخذ سعرًا قديمًا من سيريال.
     items_r = await db.execute(
         select(InventoryItem).where(
             InventoryItem.tenant_id == tenant_id,
             InventoryItem.tracking_type == "serial",
-            InventoryItem.sale_price == 0,
+            InventoryItem.sale_price > 0,
         )
     )
     items = items_r.scalars().all()
 
     updated = []
     for item in items:
-        # جلب أول سيريال له sale_price > 0
         serial_r = await db.execute(
             select(SerialItem).where(
                 SerialItem.product_id == item.id,
-                SerialItem.sale_price > 0,
-            ).limit(1)
+                SerialItem.status == "in_stock",
+            )
         )
-        serial = serial_r.scalar_one_or_none()
-        if serial and serial.sale_price:
-            item.sale_price = serial.sale_price
-            updated.append({"item_id": item.id, "name": item.name_ar, "sale_price": float(serial.sale_price)})
+        serials = serial_r.scalars().all()
+        changed = 0
+        for serial in serials:
+            if serial.sale_price != item.sale_price:
+                serial.sale_price = item.sale_price
+                changed += 1
+        if changed:
+            updated.append({"item_id": item.id, "name": item.name_ar, "sale_price": float(item.sale_price), "serials_updated": changed})
 
     await db.commit()
     return {"updated": len(updated), "items": updated}

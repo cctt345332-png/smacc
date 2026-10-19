@@ -189,6 +189,14 @@ async def _sync_available_serial_prices(
     return len(serials)
 
 
+def _effective_serial_sale_price(serial: SerialItem, item: InventoryItem | None) -> Decimal:
+    """السعر الموحد للسيريال من بطاقة الصنف، مع fallback للتوافق القديم."""
+    item_price = _decimal_price(item.sale_price) if item is not None else None
+    if item_price is not None and item_price > 0:
+        return item_price
+    return _decimal_price(serial.sale_price) or Decimal("0")
+
+
 async def _get_default_warehouse_id(db: AsyncSession, tenant_id: str) -> str | None:
     """جلب المستودع الرئيسي للـ tenant"""
     r = await db.execute(
@@ -379,7 +387,12 @@ async def get_serials(
         q = q.where(SerialItem.warehouse_id == warehouse_id)
     q = q.order_by(SerialItem.created_at.desc())
     r = await db.execute(q)
-    return r.scalars().all()
+    serials = r.scalars().all()
+    # عرض السعر الموحد الحالي حتى للسيريالات القديمة التي أُدخلت بسعر يدوي.
+    if item.sale_price and item.sale_price > 0:
+        for serial in serials:
+            serial.sale_price = item.sale_price
+    return serials
 
 
 async def add_serial(
@@ -452,7 +465,7 @@ async def add_serial(
                 existing_serial.warehouse_id = warehouse_id
                 existing_serial.condition = condition
                 existing_serial.cost_price = _decimal_price(cost_price) or Decimal("0")
-                existing_serial.sale_price = _decimal_price(sale_price)
+                existing_serial.sale_price = item.sale_price
                 db.add(StockMovement(
                     id=str(uuid.uuid4()), tenant_id=tenant_id,
                     product_id=product_id, warehouse_id=warehouse_id,
@@ -739,7 +752,8 @@ async def _create_stock_document_line(
                             duplicate.status = SerialStatus.IN_STOCK
                             duplicate.warehouse_id = warehouse.id
                             duplicate.cost_price = unit_cost
-                            duplicate.sale_price = duplicate.sale_price or item.sale_price
+                            # السيريال المعاد إدخاله يرث سعر البيع الموحد الحالي.
+                            duplicate.sale_price = item.sale_price
                             db.add(StockMovement(
                                 id=str(uuid.uuid4()), tenant_id=tenant_id,
                                 product_id=item.id, warehouse_id=warehouse.id,
@@ -1070,7 +1084,8 @@ async def get_stock_value_report(db: AsyncSession, tenant_id: str):
             serials = serials_r.scalars().all()
             qty = len(serials)
             cost_val = sum(s.cost_price for s in serials)
-            sale_val = sum(s.sale_price or item.sale_price for s in serials)
+            # قيمة البيع الحالية تعتمد على سعر المادة الموحد، لا على سعر سيريال قديم.
+            sale_val = qty * item.sale_price
         elif item.tracking_type == "batch":
             batches_r = await db.execute(
                 select(BatchItem).where(BatchItem.product_id == item.id)
@@ -1467,11 +1482,12 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
         for row in serial_rows:
             item = items_map.get(row.product_id)
             wh = wh_map.get(row.warehouse_id) if row.warehouse_id else None
-            # السعر: avg من serial_items (الحقيقي) وإلا item.sale_price كـ fallback
+            # السعر الموحد الحالي للصنف هو المرجع لكل السيريالات المتاحة.
+            # لا نستخدم السعر القديم المخزن في السيريال إلا إذا كانت بطاقة الصنف بلا سعر.
             avg_sale = float(row.avg_sale_price) if row.avg_sale_price else 0
             avg_cost = float(row.avg_cost_price) if row.avg_cost_price else 0
-            # إذا avg_sale = 0 استخدم item.sale_price (fallback للأصناف القديمة)
-            effective_sale = avg_sale if avg_sale > 0 else (float(item.sale_price) if item else 0)
+            item_sale = float(item.sale_price) if item and item.sale_price else 0
+            effective_sale = item_sale if item_sale > 0 else avg_sale
             effective_cost = avg_cost if avg_cost > 0 else (float(item.cost_price) if item else 0)
             results.append({
                 "stock_id": f"serial_{row.product_id}_{row.warehouse_id}",
