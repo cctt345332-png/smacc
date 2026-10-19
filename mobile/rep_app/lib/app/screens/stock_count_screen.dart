@@ -370,7 +370,7 @@ class _StockCountScreenState extends State<StockCountScreen> {
                         row['warehouse_name'] ?? '—',
                         _repNameForWarehouse(row['warehouse_id']?.toString()),
                         '${row['quantity'] ?? 0}',
-                        '${row['stock_value'] ?? 0} SAR',
+                        '${row['sale_value'] ?? 0} SAR',
                       ],
                     )
                     .toList(),
@@ -648,7 +648,7 @@ class _StockCountScreenState extends State<StockCountScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('الكمية: ${row['quantity'] ?? 0}'),
-                          Text('قيمة المخزون: ${row['stock_value'] ?? 0} ر.س'),
+                          Text('قيمة البيع: ${row['sale_value'] ?? 0} ر.س'),
                         ],
                       ),
                       const SizedBox(height: 10),

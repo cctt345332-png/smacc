@@ -1421,6 +1421,7 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
             "cost_price": float(s.item.cost_price) if s.item else 0,
             "sale_price": float(s.item.sale_price) if s.item else 0,
             "stock_value": float(s.quantity * s.item.cost_price) if s.item else 0,
+            "sale_value": float(s.quantity * s.item.sale_price) if s.item else 0,
             "maintenance_qty": float(maintenance_totals.get((str(s.item_id), str(s.warehouse_id)), 0)),
         })
 
@@ -1489,6 +1490,7 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
                 "cost_price": effective_cost,
                 "sale_price": effective_sale,
                 "stock_value": float(row.qty) * effective_cost,
+                "sale_value": float(row.qty) * effective_sale,
                 "maintenance_qty": float(maintenance_totals.get((str(row.product_id), str(row.warehouse_id)), 0)),
             })
 
