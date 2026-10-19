@@ -31,7 +31,7 @@ export const updateInvoice = (id: string, data: any) => api.patch(`/sales/invoic
 export const deleteInvoiceDraft = (id: string) => api.delete(`/sales/invoices/${id}`);
 
 // Payments
-export const getPayments = (params?: string | { invoice_id?: string; rep_id?: string }) => {
+export const getPayments = (params?: string | { invoice_id?: string; rep_id?: string; payment_method?: string }) => {
   const query = typeof params === "string" ? { invoice_id: params } : (params || {});
   return api.get("/sales/payments", { params: query });
 };
