@@ -42,6 +42,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   const [customers, setCustomers] = useState<any[]>([]);
   const [reps, setReps] = useState<any[]>([]);
   const [filterRep, setFilterRep] = useState("");
+  const [filterMethod, setFilterMethod] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [loading, setLoading] = useState(true);
@@ -110,10 +111,12 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
 
   const filteredPayments = payments.filter((p: any) => {
     const matchesRep = !filterRep || String(p.rep_id || "") === String(filterRep);
+    const paymentMethod = typeof p.payment_method === "string" ? p.payment_method : p.payment_method?.value;
+    const matchesMethod = !filterMethod || paymentMethod === filterMethod;
     const paymentDate = String(p.payment_date || "").slice(0, 10);
     const matchesFrom = !fromDate || paymentDate >= fromDate;
     const matchesTo = !toDate || paymentDate <= toDate;
-    return matchesRep && matchesFrom && matchesTo;
+    return matchesRep && matchesMethod && matchesFrom && matchesTo;
   });
   const total = filteredPayments.reduce((s: number, p: any) => s + (p.payment_type === "discount" ? 0 : Number(p.amount || 0)), 0);
   const reportRows = filteredPayments.map((p: any) => [
@@ -175,6 +178,15 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
               ))}
             </select>
           </div>
+          <div className="form-group" style={{ margin: 0, minWidth: 180 }}>
+            <label className="form-label">{ar ? "طريقة الدفع" : "Payment method"}</label>
+            <select className="form-input form-select" value={filterMethod} onChange={e => setFilterMethod(e.target.value)}>
+              <option value="">{ar ? "كل طرق الدفع" : "All methods"}</option>
+              {Object.entries(METHODS).map(([value, labels]) => (
+                <option key={value} value={value}>{ar ? labels.ar : labels.en}</option>
+              ))}
+            </select>
+          </div>
           <div className="form-group" style={{ margin: 0, minWidth: 155 }}>
             <label className="form-label">{ar ? "من تاريخ" : "From date"}</label>
             <input type="date" className="form-input" value={fromDate} onChange={e => setFromDate(e.target.value)} />
@@ -183,8 +195,8 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
             <label className="form-label">{ar ? "إلى تاريخ" : "To date"}</label>
             <input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} />
           </div>
-          {(filterRep || fromDate || toDate) && (
-            <button className="btn btn-secondary btn-sm" onClick={() => { setFilterRep(""); setFromDate(""); setToDate(""); }}>
+          {(filterRep || filterMethod || fromDate || toDate) && (
+            <button className="btn btn-secondary btn-sm" onClick={() => { setFilterRep(""); setFilterMethod(""); setFromDate(""); setToDate(""); }}>
               {ar ? "مسح الفرز" : "Clear filters"}
             </button>
           )}
@@ -222,7 +234,7 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
             </div>
           ) : filteredPayments.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-state-title">{(filterRep || fromDate || toDate) ? (ar ? "لا توجد سندات بهذا الفرز" : "No receipts match these filters") : (ar ? "لا توجد سندات قبض" : "No receipts yet")}</div>
+              <div className="empty-state-title">{(filterRep || filterMethod || fromDate || toDate) ? (ar ? "لا توجد سندات بهذا الفرز" : "No receipts match these filters") : (ar ? "لا توجد سندات قبض" : "No receipts yet")}</div>
               <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={openModal}>
                 + {ar ? "سند جديد" : "New Receipt"}
               </button>
