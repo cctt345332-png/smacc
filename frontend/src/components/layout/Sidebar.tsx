@@ -150,6 +150,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "سندات الصرف" : "Payment Vouchers", href: `${base}/treasury/payments` },
           { label: ar ? "المصروفات" : "Expenses", href: `${base}/treasury/expenses` },
           { label: ar ? "مصاريف المناديب" : "Rep expenses", href: `${base}/treasury/rep-expenses` },
+          { label: ar ? "حاسبة تسوية المندوب" : "Rep settlement calculator", href: `${base}/treasury/collection-calculator` },
           { label: ar ? "التحويلات البنكية" : "Bank Transfers", href: `${base}/treasury/transfers` },
         ],
       },
