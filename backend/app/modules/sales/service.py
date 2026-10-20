@@ -15,7 +15,7 @@ from app.models.sales import (
 from app.models.reps import SalesRep
 from app.models.user import User
 from app.models.inventory import (
-    InventoryItem, ProductVariant, SerialItem, BatchItem, StockMovement,
+    InventoryItem, ProductVariant, SerialItem, BatchItem, StockMovement, SerialStatus,
 )
 from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine
 from app.modules.sales.schemas import (
@@ -78,6 +78,101 @@ def _calc_line(qty: Decimal, price: Decimal, disc_pct: Decimal, vat_rate: Decima
     vat = (taxable * vat_rate / 100).quantize(Decimal("0.01"))
     total = taxable + vat
     return subtotal, discount, taxable, vat, total
+
+
+async def _release_invoice_serial_reservations(
+    db: AsyncSession, tenant_id: str, invoice_id: str
+):
+    """تحرير سيريالات فاتورة غير معتمدة دون إنشاء حركة مخزون."""
+    rows = (await db.execute(
+        select(SerialItem).join(InventoryItem, SerialItem.product_id == InventoryItem.id)
+        .where(
+            InventoryItem.tenant_id == tenant_id,
+            SerialItem.sale_invoice_id == invoice_id,
+            SerialItem.status == SerialStatus.RESERVED,
+        ).with_for_update()
+    )).scalars().all()
+    for serial in rows:
+        serial.status = SerialStatus.IN_STOCK
+        serial.sale_invoice_id = None
+
+
+async def _reserve_invoice_serials(
+    db: AsyncSession, tenant_id: str, invoice: Invoice
+):
+    """حجز سيريالات الفاتورة حتى لا تستخدم في فاتورة أخرى قبل الاعتماد.
+
+    الحجز لا يخصم الكمية ولا ينشئ حركة بيع؛ الاعتماد وحده ينقلها إلى SOLD.
+    """
+    warehouse_id = None
+    if invoice.rep_id:
+        rep = await db.scalar(select(SalesRep).where(
+            SalesRep.id == invoice.rep_id, SalesRep.tenant_id == tenant_id
+        ))
+        warehouse_id = rep.warehouse_id if rep else None
+
+    lines = (await db.execute(
+        select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id)
+    )).scalars().all()
+    for line in lines:
+        values = []
+        if line.serial_ids_json:
+            try:
+                values.extend(str(v).strip() for v in json.loads(line.serial_ids_json) if str(v).strip())
+            except (TypeError, ValueError, json.JSONDecodeError):
+                raise HTTPException(400, "بيانات سيريالات الفاتورة غير صحيحة")
+        if line.serial_item_id:
+            values.append(str(line.serial_item_id))
+        if not values:
+            continue
+
+        values = list(dict.fromkeys(values))
+        serial_rows = (await db.execute(
+            select(SerialItem).join(InventoryItem, SerialItem.product_id == InventoryItem.id)
+            .where(
+                InventoryItem.tenant_id == tenant_id,
+                or_(SerialItem.id.in_(values), SerialItem.serial_number.in_(values)),
+            ).with_for_update()
+        )).scalars().all()
+        by_value = {str(row.id): row for row in serial_rows}
+        by_value.update({str(row.serial_number): row for row in serial_rows if row.serial_number})
+        canonical_ids = []
+        for value in values:
+            serial = by_value.get(value)
+            if not serial:
+                raise HTTPException(400, f"السيريال {value} غير موجود في النظام")
+            if line.inventory_item_id and serial.product_id != line.inventory_item_id:
+                raise HTTPException(400, f"السيريال {serial.serial_number} لا يخص الصنف المحدد")
+            status = getattr(serial.status, "value", serial.status)
+            if status == "reserved" and serial.sale_invoice_id == invoice.id:
+                canonical_ids.append(serial.id)
+                continue
+            if status == "sold":
+                linked = await db.scalar(select(Invoice).where(
+                    Invoice.id == serial.sale_invoice_id,
+                    Invoice.tenant_id == tenant_id,
+                )) if serial.sale_invoice_id else None
+                linked_number = linked.invoice_number if linked else "فاتورة أخرى"
+                raise HTTPException(409, f"السيريال {serial.serial_number} مستخدم في {linked_number} ولا يمكن حجزه")
+            if status == "reserved" and serial.sale_invoice_id != invoice.id:
+                linked = await db.scalar(select(Invoice).where(
+                    Invoice.id == serial.sale_invoice_id,
+                    Invoice.tenant_id == tenant_id,
+                )) if serial.sale_invoice_id else None
+                linked_number = linked.invoice_number if linked else "فاتورة تحت المراجعة"
+                raise HTTPException(409, f"السيريال {serial.serial_number} محجوز في {linked_number} ولا يمكن استخدامه")
+            if status != "in_stock":
+                raise HTTPException(400, f"السيريال {serial.serial_number} غير متاح — الحالة: {status}")
+            if warehouse_id and serial.warehouse_id != warehouse_id:
+                raise HTTPException(400, f"السيريال {serial.serial_number} غير موجود في مستودع الفاتورة")
+            serial.status = SerialStatus.RESERVED
+            serial.sale_invoice_id = invoice.id
+            canonical_ids.append(serial.id)
+
+        if line.serial_ids_json:
+            line.serial_ids_json = json.dumps(canonical_ids)
+        elif line.serial_item_id and canonical_ids:
+            line.serial_item_id = canonical_ids[0]
 
 
 # ─── Customers ───────────────────────────────────────────────────────
@@ -1028,6 +1123,9 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
             serial_ids_json=_json.dumps(line.serial_ids) if getattr(line, "serial_ids", None) else None,
             variant_id=getattr(line, "variant_id", None),
         ))
+
+    await db.flush()
+    await _reserve_invoice_serials(db, tenant_id, invoice)
 
     record_audit(db, tenant_id, user_id, "create", "invoice", invoice.id,
                  invoice_number=invoice.invoice_number, customer_id=invoice.customer_id,
@@ -2854,6 +2952,7 @@ async def reject_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     invoice.reviewed_by = user_id
     invoice.reviewed_at = datetime.utcnow()
     invoice.rejection_note = rejection_note.strip()
+    await _release_invoice_serial_reservations(db, tenant_id, invoice.id)
     record_audit(db, tenant_id, user_id, "reject", "invoice", invoice.id,
                  invoice_number=invoice.invoice_number, reason=invoice.rejection_note)
     await db.commit()
@@ -2982,6 +3081,8 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
         for key in ("issue_date", "supply_date", "due_date"):
             if key in data: setattr(invoice, key, as_datetime(data[key]))
         if "lines" in data:
+            if not confirmed_edit:
+                await _release_invoice_serial_reservations(db, tenant_id, invoice.id)
             rows = data.get("lines") or []
             if not rows: raise HTTPException(400, "يجب أن تحتوي الفاتورة على صنف واحد على الأقل")
             await db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id))
@@ -3019,6 +3120,10 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
             invoice.subtotal = subtotal; invoice.discount_amount = total_discount
             invoice.taxable_amount = subtotal - total_discount; invoice.vat_amount = total_vat; invoice.total = total
 
+            if not confirmed_edit:
+                await db.flush()
+                await _reserve_invoice_serials(db, tenant_id, invoice)
+
         if confirmed_edit:
             # مهم: flush قبل القراءة حتى لا يعيد الخصم خطوط الفاتورة القديمة أو يتجاوز حذفها.
             await db.flush()
@@ -3048,6 +3153,7 @@ async def delete_invoice_draft(db: AsyncSession, tenant_id: str, user_id: str, i
             raise HTTPException(409, "لا يمكن حذف فاتورة ملغاة مرتبطة بسداد أو مرتجع")
     elif invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.REJECTED):
         raise HTTPException(400, "يمكن حذف المسودة أو المرفوضة أو الملغاة فقط")
+    await _release_invoice_serial_reservations(db, tenant_id, invoice.id)
     record_audit(db, tenant_id, user_id, "delete", "invoice", invoice.id, invoice_number=invoice.invoice_number)
     await db.delete(invoice)
     await db.commit()

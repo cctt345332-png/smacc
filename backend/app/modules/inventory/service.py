@@ -561,10 +561,12 @@ async def sell_serial(
 
     item = await get_item(db, tenant_id, serial.product_id)
 
-    if serial.status != "in_stock":
+    status_value = getattr(serial.status, "value", serial.status)
+    # الفاتورة المالكة للحجز فقط تستطيع تحويله إلى مباع عند الاعتماد.
+    reservation_owned = status_value == "reserved" and serial.sale_invoice_id == invoice_id
+    if status_value != "in_stock" and not reservation_owned:
         # لا نعرض UUID الداخلي للمستخدم؛ نعرض رقم السيريال والفاتورة التي
         # استحوذت عليه حتى يستطيع المحاسب تتبع سبب الرفض مباشرة.
-        status_value = getattr(serial.status, "value", serial.status)
         sold_invoice_number = None
         sold_invoice_id = serial.sale_invoice_id
         if sold_invoice_id:
