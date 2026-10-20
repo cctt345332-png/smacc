@@ -1204,7 +1204,9 @@ async def _deduct_inventory_for_invoice(
                         auto_commit=False,
                     )
                 except HTTPException as e:
-                    raise HTTPException(400, f"خطأ في خصم السيريال {sid}: {e.detail}")
+                    # لا نعرض UUID الداخلي للسيريال؛ sell_serial يعرض رقم السيريال الحقيقي
+                    # والفاتورة المرتبطة به في تفاصيل الخطأ.
+                    raise HTTPException(400, f"خطأ في خصم السيريال: {e.detail}")
             continue
 
         # ── السيريال الواحد (legacy) ────────────────────────────────────
