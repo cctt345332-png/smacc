@@ -562,7 +562,34 @@ async def sell_serial(
     item = await get_item(db, tenant_id, serial.product_id)
 
     if serial.status != "in_stock":
-        raise HTTPException(400, f"السيريال غير متاح — الحالة: {serial.status}")
+        # لا نعرض UUID الداخلي للمستخدم؛ نعرض رقم السيريال والفاتورة التي
+        # استحوذت عليه حتى يستطيع المحاسب تتبع سبب الرفض مباشرة.
+        status_value = getattr(serial.status, "value", serial.status)
+        sold_invoice_number = None
+        sold_invoice_id = serial.sale_invoice_id
+        if sold_invoice_id:
+            sold_invoice = (await db.execute(
+                select(Invoice).where(
+                    Invoice.id == sold_invoice_id,
+                    Invoice.tenant_id == tenant_id,
+                )
+            )).scalar_one_or_none()
+            sold_invoice_number = sold_invoice.invoice_number if sold_invoice else None
+        if status_value == "sold":
+            invoice_text = (
+                f"الفاتورة {sold_invoice_number}"
+                if sold_invoice_number
+                else "فاتورة سابقة"
+            )
+            raise HTTPException(
+                400,
+                f"السيريال {serial.serial_number or serial_id} مباع مسبقاً في {invoice_text}. "
+                "افتح الفاتورة المرتبطة أو اختر سيريالاً متاحاً.",
+            )
+        raise HTTPException(
+            400,
+            f"السيريال {serial.serial_number or serial_id} غير متاح — الحالة: {status_value}",
+        )
     if warehouse_id and serial.warehouse_id != warehouse_id:
         raise HTTPException(400, "السيريال غير موجود في مخزون مستودع الفاتورة")
 
