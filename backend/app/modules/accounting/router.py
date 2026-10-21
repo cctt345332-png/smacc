@@ -174,6 +174,17 @@ async def accounting_readiness(
     return await service.get_accounting_readiness(db, user["tenant_id"])
 
 
+@router.put("/setup/auto-posting", response_model=AccountingReadinessOut)
+async def set_auto_posting(
+    enabled: bool,
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.set_operational_auto_posting(
+        db, user["tenant_id"], user["user_id"], enabled,
+    )
+
+
 @router.post("/setup/initialize", response_model=AccountingReadinessOut)
 async def initialize_default_chart(
     user=Depends(require_role(["manager"])),

@@ -353,3 +353,29 @@ def test_auto_posting_stays_unchanged_for_existing_companies(monkeypatch):
         assert await service.is_operational_auto_posting_enabled(FakeSession(), "tenant-1") is False
 
     asyncio.run(run())
+
+
+def test_enable_auto_posting_requires_complete_accounting_readiness(monkeypatch):
+    async def run():
+        setup = SimpleNamespace(auto_posting_enabled=False, updated_at=None, created_at=None)
+        db = FakeSession()
+
+        async def existing_setup(*_args):
+            return setup
+
+        async def blocked_readiness(*_args):
+            return {
+                "missing_required_keys": ["default_cash"],
+                "invalid_mapping_keys": [],
+                "customer_without_ar": 0,
+                "vendor_without_ap": 0,
+            }
+
+        monkeypatch.setattr(service, "_get_accounting_setup", existing_setup)
+        monkeypatch.setattr(service, "get_accounting_readiness", blocked_readiness)
+        with pytest.raises(HTTPException, match="لا يمكن تفعيل الترحيل"):
+            await service.set_operational_auto_posting(db, "tenant-1", "user-1", True)
+        assert setup.auto_posting_enabled is False
+        assert db.commits == 0
+
+    asyncio.run(run())

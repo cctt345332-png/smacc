@@ -762,6 +762,7 @@ async def get_trial_balance(db: AsyncSession, tenant_id: str,
             ).join(JournalEntry, JournalEntryLine.entry_id == JournalEntry.id)
             .where(
                 JournalEntryLine.account_id == acc.id,
+                JournalEntry.tenant_id == tenant_id,
                 JournalEntry.status == JournalEntryStatus.POSTED,
                 JournalEntry.entry_date >= from_date,
                 JournalEntry.entry_date <= to_date,
@@ -810,6 +811,7 @@ async def get_ledger(db: AsyncSession, tenant_id: str, account_id: str,
         .join(JournalEntry, JournalEntryLine.entry_id == JournalEntry.id)
         .where(
             JournalEntryLine.account_id == account_id,
+            JournalEntry.tenant_id == tenant_id,
             JournalEntry.status == JournalEntryStatus.POSTED,
             JournalEntry.entry_date >= from_date,
             JournalEntry.entry_date <= to_date,
@@ -1324,6 +1326,33 @@ async def is_operational_auto_posting_enabled(db: AsyncSession, tenant_id: str) 
     التي أنشأت الشجرة حتى تفعّلها صراحة في مرحلة لاحقة."""
     setup = await _get_accounting_setup(db, tenant_id)
     return setup is None or bool(setup.auto_posting_enabled)
+
+
+async def set_operational_auto_posting(
+    db: AsyncSession, tenant_id: str, user_id: str, enabled: bool,
+) -> dict:
+    """تفعيل/إيقاف الترحيل التلقائي مع منع التفعيل قبل اكتمال الربط."""
+    setup = await _get_accounting_setup(db, tenant_id)
+    if not setup:
+        setup = AccountingSetup(id=str(uuid.uuid4()), tenant_id=tenant_id)
+        db.add(setup)
+    if enabled:
+        readiness = await get_accounting_readiness(db, tenant_id)
+        blockers = []
+        if readiness["missing_required_keys"]:
+            blockers.append("مفاتيح ربط محاسبي إلزامية مفقودة")
+        if readiness["invalid_mapping_keys"]:
+            blockers.append("يوجد ربط لحساب غير نشط أو غير قابل للقيد")
+        if readiness["customer_without_ar"] or readiness["vendor_without_ap"]:
+            blockers.append("يوجد عملاء أو موردون بلا حساب ذمم")
+        if blockers:
+            raise HTTPException(409, "لا يمكن تفعيل الترحيل: " + "؛ ".join(blockers))
+    setup.auto_posting_enabled = bool(enabled)
+    setup.updated_at = datetime.utcnow()
+    if not setup.created_at:
+        setup.created_at = datetime.utcnow()
+    await db.commit()
+    return await get_accounting_readiness(db, tenant_id)
 
 
 async def get_operational_account(db: AsyncSession, tenant_id: str, mapping_key: str) -> Account:

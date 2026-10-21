@@ -503,14 +503,16 @@ async def _create_bill_journal(db, tenant_id, user_id, bill: Bill):
     vendor = await db.get(Vendor, bill.vendor_id)
     ap_account_id = vendor.ap_account_id if vendor else None
     if not ap_account_id:
-        ap_account_id = await get_operational_account(db, tenant_id, "default_ap")
+        ap_account = await get_operational_account(db, tenant_id, "default_ap")
+        ap_account_id = ap_account.id if ap_account else None
     if not ap_account_id:
         return None
 
     vat_settings = await get_vat_settings(db, tenant_id)
 
     # الحساب التشغيلي للمخزون من خريطة الشجرة، مع fallback للتوافق القديم.
-    expense_account_id = await get_operational_account(db, tenant_id, "inventory")
+    expense_account = await get_operational_account(db, tenant_id, "inventory")
+    expense_account_id = expense_account.id if expense_account else None
     if not expense_account_id:
         expense_r = await db.execute(
             select(Account).where(

@@ -3,7 +3,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import {
   getAccounts, createAccount, updateAccount, deleteAccount, bulkReparentAccounts,
-  getAccountingReadiness, initializeDefaultChart,
+  getAccountingReadiness, initializeDefaultChart, setAutoPosting,
   applyDefaultPartyMappings,
   getOperationalAccountMappings, updateOperationalAccountMapping,
 } from "@/lib/accounting";
@@ -188,6 +188,20 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } finally { setSetupBusy(false); }
   };
 
+  const handleAutoPosting = async () => {
+    const enabled = !readiness?.auto_posting_enabled;
+    if (enabled && !confirm(ar
+      ? "بعد التفعيل ستُرحّل الفواتير والسندات والمصروفات الجديدة إلى شجرة الحسابات، ولن تُعتمد الفاتورة إذا تعذر إنشاء قيدها. هل تريد المتابعة؟"
+      : "New invoices, receipts and expenses will post to the chart, and an invoice will not be confirmed if its journal fails. Continue?")) return;
+    setSetupBusy(true);
+    try {
+      await setAutoPosting(enabled);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر تغيير حالة الترحيل" : "Unable to change posting status"));
+    } finally { setSetupBusy(false); }
+  };
+
   return (
     <>
       <div className="page-header">
@@ -253,6 +267,9 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   <strong style={{ fontSize: 13, color: readiness.auto_posting_enabled ? "var(--success)" : "var(--warning)" }}>
                     {readiness.auto_posting_enabled ? (ar ? "مفعلة" : "Enabled") : (ar ? "غير مفعلة بأمان" : "Safely disabled")}
                   </strong>
+                  <button className="btn btn-secondary btn-sm" style={{ display: "block", marginTop: 8 }} onClick={handleAutoPosting} disabled={setupBusy || readiness.missing_required_keys?.length > 0 || readiness.invalid_mapping_keys?.length > 0 || readiness.customer_without_ar > 0 || readiness.vendor_without_ap > 0}>
+                    {readiness.auto_posting_enabled ? (ar ? "إيقاف الترحيل" : "Disable posting") : (ar ? "تفعيل الترحيل" : "Enable posting")}
+                  </button>
                 </div>
               </div>
 

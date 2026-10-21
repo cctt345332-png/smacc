@@ -1281,13 +1281,15 @@ async def _create_invoice_journal(db: AsyncSession, tenant_id: str, user_id: str
     customer = await db.get(Customer, invoice.customer_id)
     ar_account_id = customer.ar_account_id if customer else None
     if not ar_account_id:
-        ar_account_id = await get_operational_account(db, tenant_id, "default_ar")
+        ar_account = await get_operational_account(db, tenant_id, "default_ar")
+        ar_account_id = ar_account.id if ar_account else None
 
     if not ar_account_id:
         return None  # لا يمكن إنشاء القيد بدون حساب القبض
 
     # الحساب التشغيلي المحدد من خريطة الشجرة، مع fallback للتوافق القديم.
-    revenue_account_id = await get_operational_account(db, tenant_id, "sales_goods")
+    revenue_account = await get_operational_account(db, tenant_id, "sales_goods")
+    revenue_account_id = revenue_account.id if revenue_account else None
     if not revenue_account_id:
         revenue_r = await db.execute(
             select(Account).where(
@@ -1765,7 +1767,7 @@ async def create_payment(db: AsyncSession, tenant_id: str, user_id: str, data: P
     await db.refresh(payment)
     from app.modules.notifications.service import notify_management_event
     actor = await db.scalar(select(User).where(User.id == user_id))
-    actor_name = actor.full_name if actor else "مستخدم النظام"
+    actor_name = getattr(actor, "full_name", None) or "مستخدم النظام"
     payment_label = "سند قبض" if data.payment_type == "receipt" else "سند خصم"
     await notify_management_event(
         db, tenant_id, user_id,
@@ -2921,11 +2923,11 @@ async def approve_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
 
     # تأكيد الفاتورة تلقائياً بعد الموافقة — يخصم المخزون
     if invoice.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
-        try:
-            journal_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
-            invoice.journal_entry_id = journal_id
-        except Exception:
-            pass  # القيد المحاسبي اختياري
+        # الترحيل جزء من اعتماد الفاتورة؛ لا يجوز تأكيدها إذا فشل القيد.
+        journal_id = await _create_invoice_journal(db, tenant_id, user_id, invoice)
+        if not journal_id:
+            raise HTTPException(409, "تعذر ترحيل الفاتورة: تحقق من ربط حساب العميل والإيرادات والضريبة")
+        invoice.journal_entry_id = journal_id
 
     try:
         await _deduct_inventory_for_invoice(db, tenant_id, user_id, invoice)
