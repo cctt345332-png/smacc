@@ -32,12 +32,14 @@ async def unified_aging(
     rep_id: str | None = Query(None),
     customer_id: str | None = Query(None),
     account_id: str | None = Query(None),
+    include_settled: bool = Query(False),
     user=Depends(require_role(["manager", "accountant"])),
     db: AsyncSession = Depends(get_db),
 ):
     return await service.get_unified_aging(
         db, user["tenant_id"], as_of, from_date, to_date,
         rep_id=rep_id, customer_id=customer_id, account_id=account_id,
+        include_settled=include_settled,
     )
 
 

@@ -630,6 +630,7 @@ async def get_unified_aging(
     customer_id: str | None = None,
     allowed_rep_ids: set[str] | None = None,
     account_id: str | None = None,
+    include_settled: bool = False,
 ) -> list[dict]:
     """المصدر الوحيد لتقرير أعمار الديون في الويب وتطبيقات الهاتف.
 
@@ -822,7 +823,7 @@ async def get_unified_aging(
         total = bucket["total"]
         paid = min(total, bucket["allocated"])
         outstanding = max(Decimal("0"), total - paid)
-        if outstanding <= Decimal("0.01"):
+        if outstanding <= Decimal("0.01") and not include_settled:
             continue
         if invoice.issue_date < start or invoice.issue_date > end:
             continue

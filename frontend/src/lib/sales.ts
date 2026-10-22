@@ -22,6 +22,7 @@ export const getUnifiedAging = (params: {
   rep_id?: string;
   customer_id?: string;
   account_id?: string;
+  include_settled?: boolean;
 }) => api.get("/sales/aging", { params });
 export const getPendingInvoices = (repId?: string) => api.get("/sales/invoices-pending", { params: repId ? { rep_id: repId } : {} });
 export const submitInvoice = (id: string) => api.post(`/sales/invoices/${id}/submit`);

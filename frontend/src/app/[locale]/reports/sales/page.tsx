@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getInvoices, getSalesSummary } from "@/lib/sales";
+import { getInvoices, getUnifiedAging } from "@/lib/sales";
 import { getReps } from "@/lib/reps";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
@@ -26,7 +26,6 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
   const [invoices, setInvoices] = useState<any[]>([]);
   const [reps, setReps] = useState<any[]>([]);
   const [repId, setRepId] = useState("");
-  const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -42,7 +41,17 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
       if (!fromDate || !toDate || fromDate > toDate) {
         throw new Error(ar ? "نطاق التاريخ غير صحيح" : "Invalid date range");
       }
-      const [inv, sum] = await Promise.all([getInvoices(), getSalesSummary()]);
+      const [inv, aging] = await Promise.all([
+        getInvoices(),
+        getUnifiedAging({
+          as_of: `${toDate}T23:59:59`,
+          from_date: `${fromDate}T00:00:00`,
+          to_date: `${toDate}T23:59:59`,
+          ...(repId ? { rep_id: repId } : {}),
+          include_settled: true,
+        } as any),
+      ]);
+      const paidByInvoice = new Map((aging.data || []).map((row: any) => [row.invoice_id, Number(row.paid_amount || 0)]));
       const filtered = inv.data.filter((i: any) => {
         const d = new Date(i.issue_date).getTime();
         const from = new Date(`${fromDate}T00:00:00`).getTime();
@@ -52,8 +61,11 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
           && (!repId || i.rep_id === repId)
           && isFinancialInvoiceStatus(i.status);
       });
-      setInvoices(filtered);
-      setSummary(sum.data);
+      setInvoices(filtered.map((invoice: any) => ({
+        ...invoice,
+        // يشمل السند المرتبط بالفاتورة والسند العام للعميل بعد توزيعه FIFO.
+        paid_amount: paidByInvoice.has(invoice.id) ? paidByInvoice.get(invoice.id) : 0,
+      })));
       setLoaded(true);
     } catch {} finally { setLoading(false); }
   };
