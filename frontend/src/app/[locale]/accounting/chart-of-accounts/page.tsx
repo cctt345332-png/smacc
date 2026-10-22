@@ -59,6 +59,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   const [setupBusy, setSetupBusy] = useState(false);
   const [readiness, setReadiness] = useState<any>(null);
   const [mappings, setMappings] = useState<any[]>([]);
+  const [mappingSearch, setMappingSearch] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     code: "", name_ar: "", name_en: "", account_type: "asset",
     nature: "debit", parent_id: "", opening_balance: "0",
@@ -311,12 +312,27 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                           <tr key={mapping.mapping_key}>
                             <td style={{ fontWeight: 600 }}>{MAPPING_LABELS[mapping.mapping_key] || mapping.mapping_key}</td>
                             <td>
-                              <select className="form-input form-select" style={{ minWidth: 240, maxWidth: 420 }} value={mapping.account_id}
-                                onChange={(e) => handleMappingChange(mapping.mapping_key, e.target.value)} disabled={setupBusy}>
-                                {accounts.filter((account) => account.is_active && account.is_posting).map((account) => (
-                                  <option key={account.id} value={account.id}>{account.code} — {ar ? account.name_ar : account.name_en}</option>
-                                ))}
-                              </select>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                <input
+                                  className="form-input"
+                                  style={{ minWidth: 170, maxWidth: 230 }}
+                                  placeholder={ar ? "ابحث بالكود أو الاسم" : "Search code or name"}
+                                  value={mappingSearch[mapping.mapping_key] || ""}
+                                  onChange={(e) => setMappingSearch((current) => ({ ...current, [mapping.mapping_key]: e.target.value }))}
+                                />
+                                <select className="form-input form-select" style={{ minWidth: 240, maxWidth: 420 }} value={mapping.account_id}
+                                  onChange={(e) => handleMappingChange(mapping.mapping_key, e.target.value)} disabled={setupBusy}>
+                                  {accounts.filter((account) => {
+                                    if (!account.is_active || !account.is_posting) return false;
+                                    const query = (mappingSearch[mapping.mapping_key] || "").trim().toLowerCase();
+                                    return !query || String(account.code).toLowerCase().includes(query)
+                                      || String(account.name_ar || "").toLowerCase().includes(query)
+                                      || String(account.name_en || "").toLowerCase().includes(query);
+                                  }).map((account) => (
+                                    <option key={account.id} value={account.id}>{account.code} — {ar ? account.name_ar : account.name_en}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </td>
                           </tr>
                         ))}
