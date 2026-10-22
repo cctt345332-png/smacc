@@ -21,6 +21,7 @@ from app.modules.accounting.legacy_company_chart import (
 SHORT_DEFAULT_MAPPING_CODES = {
     "default_cash": "01111", "default_bank": "01123", "default_card": "01121",
     "default_wallet": "01122", "default_ar": "01131", "default_ap": "0211",
+    "inventory": "01141",
     "inventory_goods": "01141", "inventory_devices": "01142", "inventory_accessories": "01144",
     "inventory_spare_parts": "01143", "inventory_in_transit": "01145", "inventory_damaged": "01146",
     "vat_input": "01151", "vat_output": "02141", "vat_settlement": "02142",
@@ -860,11 +861,37 @@ async def _get_account_mapping_rows(db: AsyncSession, tenant_id: str) -> list[Ac
     return list(result.scalars().all())
 
 
+async def _ensure_inventory_mapping_alias(db: AsyncSession, tenant_id: str) -> None:
+    """ينشئ مفتاح inventory من حساب مخزون البضائع الموجود، دون إنشاء حساب جديد."""
+    existing = await db.execute(select(AccountingAccountMapping).where(
+        AccountingAccountMapping.tenant_id == tenant_id,
+        AccountingAccountMapping.mapping_key == "inventory",
+    ))
+    if existing.scalar_one_or_none():
+        return
+    account_result = await db.execute(select(Account).where(
+        Account.tenant_id == tenant_id,
+        Account.code.in_(["01141", "114001"]),
+        Account.is_active.is_(True),
+        Account.is_posting.is_(True),
+    ).order_by(Account.code))
+    account = account_result.scalars().first()
+    if not account:
+        return
+    db.add(AccountingAccountMapping(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        mapping_key="inventory", account_id=account.id,
+        updated_at=datetime.utcnow(),
+    ))
+    await db.commit()
+
+
 async def get_accounting_readiness(db: AsyncSession, tenant_id: str) -> dict:
-    """فحص قراءة فقط. لا ينشئ حسابات ولا يغير بيانات الشركات القائمة."""
+    """فحص الجاهزية دون إنشاء حسابات أو تغيير أرصدة؛ يضيف فقط مفتاح توافق للمخزون الموجود."""
     from app.models.sales import Customer, Invoice, Payment, InvoiceStatus
     from app.models.purchases import Vendor, Bill, BillStatus
 
+    await _ensure_inventory_mapping_alias(db, tenant_id)
     setup = await _get_accounting_setup(db, tenant_id)
     mappings = await _get_account_mapping_rows(db, tenant_id)
     mapping_by_key = {mapping.mapping_key: mapping for mapping in mappings}
@@ -1285,6 +1312,7 @@ async def apply_default_party_mappings(db: AsyncSession, tenant_id: str) -> dict
 
 
 async def get_operational_account_mappings(db: AsyncSession, tenant_id: str) -> list[AccountingAccountMapping]:
+    await _ensure_inventory_mapping_alias(db, tenant_id)
     return await _get_account_mapping_rows(db, tenant_id)
 
 
