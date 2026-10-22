@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, delete, update
+from sqlalchemy import select, func, and_, or_, delete, update, case
 from fastapi import HTTPException
 
 from app.models.accounting import (
