@@ -1429,7 +1429,7 @@ async def backfill_historical_posting(db: AsyncSession, tenant_id: str, user_id:
                     invoice = await db.get(Invoice, item.invoice_id) if item.invoice_id else None
                     if not customer:
                         raise HTTPException(409, "العميل غير موجود")
-                    fiscal_year_id = invoice.fiscal_year_id if invoice else (await db.execute(select(FiscalYear.id).where(
+                    fiscal_year_id = invoice.fiscal_year_id if invoice and invoice.fiscal_year_id else (await db.execute(select(FiscalYear.id).where(
                         FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN,
                         FiscalYear.start_date <= item.payment_date, FiscalYear.end_date >= item.payment_date,
                     ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()).limit(1))).scalar_one_or_none()
