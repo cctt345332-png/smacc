@@ -799,6 +799,52 @@ async def get_trial_balance(db: AsyncSession, tenant_id: str,
     return result
 
 
+async def get_profit_loss_report(db: AsyncSession, tenant_id: str,
+                                 from_date: datetime, to_date: datetime,
+                                 account_id: str | None = None):
+    """قائمة أرباح وخسائر من القيود المرحّلة فقط، مع مؤشر مشتريات مستقل."""
+    rows = await get_trial_balance(db, tenant_id, from_date, to_date, account_id)
+    revenues = [r for r in rows if r["account_type"] == AccountType.REVENUE.value]
+    expenses = [r for r in rows if r["account_type"] == AccountType.EXPENSE.value]
+
+    def revenue_value(row):
+        return Decimal(str(row["period_credit"])) - Decimal(str(row["period_debit"]))
+
+    def expense_value(row):
+        return Decimal(str(row["period_debit"])) - Decimal(str(row["period_credit"]))
+
+    total_revenue = sum((revenue_value(r) for r in revenues), Decimal("0"))
+    total_expense = sum((expense_value(r) for r in expenses), Decimal("0"))
+    cogs = [r for r in expenses if str(r["account_code"]).startswith("051")
+            or any(token in (r["account_name_ar"] or "") for token in ("تكلفة", "تكاليف"))]
+    total_cogs = sum((expense_value(r) for r in cogs), Decimal("0"))
+    salary_rows = [r for r in expenses if str(r["account_code"]) in {"0521", "052100"}
+                   or any(token in (r["account_name_ar"] or "") for token in ("رواتب", "أجور"))]
+    salary_expense = sum((expense_value(r) for r in salary_rows), Decimal("0"))
+
+    # شراء المخزون يظهر كمؤشر مستقل ولا يخصم من الربح مرة ثانية؛ الخصم يكون عبر COGS.
+    from app.models.purchases import Bill, BillStatus
+    start = from_date.replace(tzinfo=None)
+    end = to_date.replace(tzinfo=None)
+    purchase_row = await db.execute(
+        select(func.count(Bill.id), func.coalesce(func.sum(Bill.total), 0)).where(
+            Bill.tenant_id == tenant_id, Bill.bill_date >= start, Bill.bill_date <= end,
+            Bill.status.in_((BillStatus.CONFIRMED, BillStatus.PAID, BillStatus.PARTIAL, BillStatus.OVERDUE)),
+        )
+    )
+    purchase_count, purchases_total = purchase_row.one()
+    return {
+        "from_date": start, "to_date": end,
+        "revenues": revenues, "expenses": expenses, "cogs": cogs, "salary_rows": salary_rows,
+        "total_revenue": total_revenue, "total_cogs": total_cogs,
+        "gross_profit": total_revenue - total_cogs,
+        "operating_expenses": total_expense - total_cogs,
+        "salary_expense": salary_expense, "total_expense": total_expense,
+        "net_profit": total_revenue - total_expense,
+        "purchase_count": purchase_count or 0, "purchases_total": Decimal(str(purchases_total or 0)),
+    }
+
+
 async def get_ledger(db: AsyncSession, tenant_id: str, account_id: str,
                      from_date: datetime, to_date: datetime):
     from_date = from_date.replace(tzinfo=None)

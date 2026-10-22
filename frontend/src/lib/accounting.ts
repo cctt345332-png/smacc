@@ -47,6 +47,8 @@ export const requestComplianceCSID = (otp: string) => api.post("/zatca/complianc
 // Reports
 export const getTrialBalance = (from_date: string, to_date: string, account_id?: string) =>
   api.get("/accounting/reports/trial-balance", { params: { from_date, to_date, ...(account_id ? { account_id } : {}) } });
+export const getProfitLossReport = (from_date: string, to_date: string, account_id?: string) =>
+  api.get("/accounting/reports/profit-loss", { params: { from_date, to_date, ...(account_id ? { account_id } : {}) } });
 export const getLedger = (account_id: string, from_date: string, to_date: string) =>
   api.get(`/accounting/reports/ledger/${account_id}`, { params: { from_date, to_date } });
 

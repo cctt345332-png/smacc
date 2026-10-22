@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getTrialBalance, getAccounts } from "@/lib/accounting";
+import { getProfitLossReport, getAccounts } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 import SearchableAccountSelect from "@/components/accounting/SearchableAccountSelect";
@@ -29,12 +29,15 @@ export default function IncomeStatementPage(props: { params: Promise<{ locale: s
   const load = async () => {
     setLoading(true);
     try {
-      const { data: rows } = await getTrialBalance(fromDate + "T00:00:00", toDate + "T23:59:59", accountId || undefined);
-      const revenues = rows.filter((r: any) => r.account_type === "revenue");
-      const expenses = rows.filter((r: any) => r.account_type === "expense");
-      const totalRevenue = revenues.reduce((s: number, r: any) => s + Number(r.period_credit) - Number(r.period_debit), 0);
-      const totalExpense = expenses.reduce((s: number, r: any) => s + Number(r.period_debit) - Number(r.period_credit), 0);
-      setData({ revenues, expenses, totalRevenue, totalExpense, netProfit: totalRevenue - totalExpense });
+      const { data: report } = await getProfitLossReport(fromDate + "T00:00:00", toDate + "T23:59:59", accountId || undefined);
+      setData({
+        revenues: report.revenues || [], expenses: report.expenses || [],
+        totalRevenue: Number(report.total_revenue || 0), totalCogs: Number(report.total_cogs || 0),
+        grossProfit: Number(report.gross_profit || 0), operatingExpenses: Number(report.operating_expenses || 0),
+        salaryExpense: Number(report.salary_expense || 0), totalExpense: Number(report.total_expense || 0),
+        purchasesTotal: Number(report.purchases_total || 0), purchaseCount: Number(report.purchase_count || 0),
+        netProfit: Number(report.net_profit || 0),
+      });
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setLoading(false); }
   };
@@ -48,10 +51,10 @@ export default function IncomeStatementPage(props: { params: Promise<{ locale: s
           <div className="breadcrumb">
             <Link href={`/${locale}/reports`}>{ar ? "التقارير" : "Reports"}</Link>
             <span className="breadcrumb-sep">/</span>
-            <span>{ar ? "قائمة الدخل" : "Income Statement"}</span>
+          <span>{ar ? "تقرير الأرباح والخسائر" : "Profit & Loss Report"}</span>
           </div>
-          <h1 className="page-title">{ar ? "قائمة الدخل" : "Income Statement"}</h1>
-          <p className="page-subtitle">{ar ? "الإيرادات والمصروفات وصافي الربح" : "Revenue, expenses and net profit"}</p>
+          <h1 className="page-title">{ar ? "تقرير الأرباح والخسائر" : "Profit & Loss Report"}</h1>
+          <p className="page-subtitle">{ar ? "المبيعات والتكلفة والمشتريات والمصروفات والرواتب وصافي الربح" : "Sales, cost, purchases, expenses, salaries and net profit"}</p>
         </div>
         {data && <StructuredReportPrintButton locale={locale} title={ar ? "قائمة الدخل" : "Income Statement"} subtitle={ar ? "الإيرادات والمصروفات وصافي الربح" : "Revenue, expenses and net profit"} period={`${fromDate} — ${toDate}`} reportCode={`IS-${toDate.replaceAll("-", "")}`} metrics={[{ label: ar ? "إجمالي الإيرادات" : "Total revenue", value: `${fmt(data.totalRevenue)} SAR`, tone: "green" }, { label: ar ? "إجمالي المصروفات" : "Total expenses", value: `${fmt(data.totalExpense)} SAR`, tone: "red" }, { label: ar ? "صافي الربح / الخسارة" : "Net profit / loss", value: `${fmt(data.netProfit)} SAR`, tone: data.netProfit >= 0 ? "green" : "red" }]} tables={[{ title: ar ? "الإيرادات" : "Revenue", headers: [ar ? "رمز الحساب" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "قيمة الفترة" : "Period amount"], rows: data.revenues.filter((r: any) => Math.abs(Number(r.period_credit) - Number(r.period_debit)) >= 0.01).map((r: any) => [r.account_code, ar ? r.account_name_ar : r.account_name_en, `${fmt(Number(r.period_credit) - Number(r.period_debit))} SAR`]), totals: [ar ? "إجمالي الإيرادات" : "Total revenue", "", `${fmt(data.totalRevenue)} SAR`] }, { title: ar ? "المصروفات" : "Expenses", headers: [ar ? "رمز الحساب" : "Code", ar ? "اسم الحساب" : "Account name", ar ? "قيمة الفترة" : "Period amount"], rows: data.expenses.filter((r: any) => Math.abs(Number(r.period_debit) - Number(r.period_credit)) >= 0.01).map((r: any) => [r.account_code, ar ? r.account_name_ar : r.account_name_en, `${fmt(Number(r.period_debit) - Number(r.period_credit))} SAR`]), totals: [ar ? "صافي الربح / الخسارة" : "Net profit / loss", "", `${fmt(data.netProfit)} SAR`] }]} />}
       </div>
@@ -82,6 +85,11 @@ export default function IncomeStatementPage(props: { params: Promise<{ locale: s
           <div className="grid-3" style={{ marginBottom: 20 }}>
             {[
               { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: data.totalRevenue, color: "#6F4A84", icon: "trending" as const },
+              { label: ar ? "تكلفة البضاعة المباعة" : "Cost of Goods Sold", value: data.totalCogs, color: "#D97706", icon: "trendingDown" as const },
+              { label: ar ? "الربح الإجمالي" : "Gross Profit", value: data.grossProfit, color: data.grossProfit >= 0 ? "#2563EB" : "#DC2626", icon: "profit" as const },
+              { label: ar ? "المشتريات" : "Purchases", value: data.purchasesTotal, color: "#2563EB", icon: "receipt" as const },
+              { label: ar ? "المصروفات التشغيلية" : "Operating Expenses", value: data.operatingExpenses, color: "#DC2626", icon: "trendingDown" as const },
+              { label: ar ? "الرواتب" : "Salaries", value: data.salaryExpense, color: "#B45309", icon: "trendingDown" as const },
               { label: ar ? "إجمالي المصروفات" : "Total Expenses", value: data.totalExpense, color: "#DC2626", icon: "trendingDown" as const },
               { label: ar ? "صافي الربح" : "Net Profit", value: data.netProfit, color: data.netProfit >= 0 ? "#6F4A84" : "#DC2626", icon: "profit" as const },
             ].map(s => (

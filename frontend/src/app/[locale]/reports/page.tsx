@@ -13,7 +13,7 @@ const groups = (base: string, ar: boolean): { title: string; color: string; icon
     reports: [
       { label: ar ? "ميزان المراجعة" : "Trial Balance", href: `${base}/reports/accounting/trial-balance`, desc: ar ? "أرصدة جميع الحسابات" : "All account balances" },
       { label: ar ? "الميزانية العمومية" : "Balance Sheet", href: `${base}/reports/accounting/balance-sheet`, desc: ar ? "الأصول والخصوم وحقوق الملكية" : "Assets, liabilities & equity" },
-      { label: ar ? "قائمة الدخل" : "Income Statement", href: `${base}/reports/accounting/income-statement`, desc: ar ? "الإيرادات والمصروفات" : "Revenue & expenses" },
+      { label: ar ? "تقرير الأرباح والخسائر" : "Profit & Loss Report", href: `${base}/reports/accounting/income-statement`, desc: ar ? "المبيعات والتكلفة والمشتريات والمصروفات وصافي الربح" : "Sales, cost, purchases, expenses and net profit" },
       { label: ar ? "التدفقات النقدية" : "Cash Flow", href: `${base}/reports/accounting/cash-flow`, desc: ar ? "حركة النقدية" : "Cash movements" },
       { label: ar ? "تقرير ضريبة القيمة المضافة" : "VAT Report", href: `${base}/reports/accounting/vat`, desc: ar ? "الإقرار الضريبي الفصلي" : "Quarterly VAT return" },
     ],
