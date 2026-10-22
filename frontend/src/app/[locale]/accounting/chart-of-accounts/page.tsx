@@ -241,7 +241,10 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     setSetupBusy(true);
     try {
       const result = await runHistoricalPosting(kind);
-      alert(ar ? `تم إنشاء ${result.data.created} قيد. المتبقي: ${result.data.remaining}` : `${result.data.created} entries created. Remaining: ${result.data.remaining}`);
+      const failures = (result.data.failed || []).map((item: any) => `${item.number}: ${item.reason}`).join("\n");
+      alert(ar
+        ? `تم إنشاء ${result.data.created} قيد. المتبقي: ${result.data.remaining}${failures ? `\n\nأسباب الفشل:\n${failures}` : ""}`
+        : `${result.data.created} entries created. Remaining: ${result.data.remaining}${failures ? `\n\nFailure reasons:\n${failures}` : ""}`);
       await load();
     } catch (e: any) {
       alert(e?.response?.data?.detail || (ar ? "تعذر تنفيذ الترحيل التاريخي" : "Historical posting failed"));

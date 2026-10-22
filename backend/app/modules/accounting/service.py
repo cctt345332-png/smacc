@@ -1356,7 +1356,7 @@ async def get_historical_posting_preview(db: AsyncSession, tenant_id: str) -> di
                         ).limit(1))
                         if not fiscal:
                             reason = "لا توجد سنة مالية مفتوحة لتاريخ السند"
-                diagnostics.append({"number": payment.payment_number, "reason": reason or "خطأ يحتاج مراجعة"})
+                diagnostics.append({"number": payment.payment_number, "reason": reason or "المتطلبات سليمة؛ الخطأ حدث أثناء إنشاء القيد أو سند الخزينة"})
             rows[key]["diagnostics"] = diagnostics
     result = await db.execute(select(
         func.count(RepExpense.id),
