@@ -1327,6 +1327,37 @@ async def get_historical_posting_preview(db: AsyncSession, tenant_id: str) -> di
         ))
         count, total = result.one()
         rows[key] = {"count": int(count or 0), "amount": str(total or 0)}
+        if key == "receipts" and count:
+            from app.models.sales import Payment, Customer, Invoice
+            from app.models.accounting import FiscalYear, FiscalYearStatus
+            pending = (await db.execute(select(Payment, Customer, Invoice).join(
+                Customer, Customer.id == Payment.customer_id
+            ).outerjoin(Invoice, Invoice.id == Payment.invoice_id).where(
+                Payment.tenant_id == tenant_id, Payment.payment_type == "receipt",
+                Payment.journal_entry_id.is_(None),
+            ).order_by(Payment.payment_date, Payment.payment_number))).all()
+            diagnostics = []
+            for payment, customer, invoice in pending:
+                reason = None
+                if not customer.ar_account_id:
+                    reason = "العميل بلا حساب ذمم"
+                else:
+                    method = payment.payment_method.value if hasattr(payment.payment_method, "value") else str(payment.payment_method)
+                    mapping_key = {"cash": "default_cash", "bank_transfer": "default_bank", "cheque": "default_bank", "credit_card": "default_card", "mada": "default_card", "stc_pay": "default_wallet"}.get(method, "default_cash")
+                    try:
+                        await get_operational_account(db, tenant_id, mapping_key)
+                    except HTTPException:
+                        reason = f"ربط الحساب غير صالح: {mapping_key}"
+                    if not reason:
+                        date = invoice.issue_date if invoice else payment.payment_date
+                        fiscal = await db.scalar(select(FiscalYear.id).where(
+                            FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN,
+                            FiscalYear.start_date <= date, FiscalYear.end_date >= date,
+                        ).limit(1))
+                        if not fiscal:
+                            reason = "لا توجد سنة مالية مفتوحة لتاريخ السند"
+                diagnostics.append({"number": payment.payment_number, "reason": reason or "خطأ يحتاج مراجعة"})
+            rows[key]["diagnostics"] = diagnostics
     result = await db.execute(select(
         func.count(RepExpense.id),
         func.count(RepExpense.id).filter(RepExpense.journal_entry_id.is_(None)),

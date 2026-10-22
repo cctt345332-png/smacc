@@ -397,6 +397,14 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                         );
                       })}
                     </div>
+                    {historicalPreview?.receipts?.diagnostics?.length > 0 && (
+                      <div className="alert alert-warning" style={{ marginTop: 10, marginBottom: 0, fontSize: 12 }}>
+                        <strong>{ar ? "السندات المتبقية وأسباب عدم الترحيل:" : "Remaining receipts and reasons:"}</strong>
+                        <div style={{ marginTop: 5 }}>
+                          {historicalPreview.receipts.diagnostics.map((item: any) => `${item.number}: ${item.reason}`).join(" | ")}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
