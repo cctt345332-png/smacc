@@ -814,10 +814,50 @@ async def get_profit_loss_report(db: AsyncSession, tenant_id: str,
         return Decimal(str(row["period_debit"])) - Decimal(str(row["period_credit"]))
 
     total_revenue = sum((revenue_value(r) for r in revenues), Decimal("0"))
-    total_expense = sum((expense_value(r) for r in expenses), Decimal("0"))
-    cogs = [r for r in expenses if str(r["account_code"]).startswith("051")
-            or any(token in (r["account_name_ar"] or "") for token in ("تكلفة", "تكاليف"))]
-    total_cogs = sum((expense_value(r) for r in cogs), Decimal("0"))
+    operating_expense_total = sum((expense_value(r) for r in expenses), Decimal("0"))
+
+    # تكلفة البيع ليست قيمة المشتريات كلها. تحسب من الكمية التي خرجت فعليًا
+    # بحركات sale المرتبطة بفواتير مؤكدة، مع أولوية تكلفة الحركة ثم السيريال/
+    # التشغيلة/المتغير ثم تكلفة الصنف الحالية للتوافق مع الحركات القديمة.
+    from app.models.sales import Invoice, InvoiceStatus
+    from app.models.inventory import StockMovement, InventoryItem, SerialItem, BatchItem, ProductVariant
+    movement_cost = case(
+        (StockMovement.unit_cost > 0, StockMovement.unit_cost),
+        (SerialItem.cost_price > 0, SerialItem.cost_price),
+        (BatchItem.cost_price > 0, BatchItem.cost_price),
+        (ProductVariant.cost_price > 0, ProductVariant.cost_price),
+        else_=InventoryItem.cost_price,
+    )
+    cogs_result = await db.execute(
+        select(func.coalesce(func.sum((-StockMovement.quantity) * movement_cost), 0))
+        .join(Invoice, Invoice.id == StockMovement.reference_id)
+        .join(InventoryItem, InventoryItem.id == StockMovement.product_id)
+        .outerjoin(SerialItem, SerialItem.id == StockMovement.serial_item_id)
+        .outerjoin(BatchItem, BatchItem.id == StockMovement.batch_item_id)
+        .outerjoin(ProductVariant, ProductVariant.id == StockMovement.variant_id)
+        .where(
+            StockMovement.tenant_id == tenant_id,
+            StockMovement.reference_type == "invoice",
+            StockMovement.movement_type == "sale",
+            StockMovement.quantity < 0,
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_((InvoiceStatus.CONFIRMED, InvoiceStatus.PAID, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE)),
+            Invoice.issue_date >= from_date.replace(tzinfo=None),
+            Invoice.issue_date <= to_date.replace(tzinfo=None),
+        )
+    )
+    total_cogs = Decimal(str(cogs_result.scalar() or 0))
+    # لا نخلط تكلفة البيع مع المصروفات التشغيلية في العرض التفصيلي؛ نضيفها
+    # كسطر مستقل حتى يكون سبب انخفاض الربح ظاهرًا للمستخدم.
+    cogs = []
+    if total_cogs:
+        cogs = [{
+            "account_code": "0511",
+            "account_name_ar": "تكلفة البضاعة المباعة — من حركات المخزون",
+            "account_name_en": "Cost of Goods Sold — inventory movements",
+            "period_debit": total_cogs, "period_credit": Decimal("0"),
+        }]
+    expenses = expenses + cogs
     salary_rows = [r for r in expenses if str(r["account_code"]) in {"0521", "052100"}
                    or any(token in (r["account_name_ar"] or "") for token in ("رواتب", "أجور"))]
     salary_expense = sum((expense_value(r) for r in salary_rows), Decimal("0"))
@@ -838,9 +878,9 @@ async def get_profit_loss_report(db: AsyncSession, tenant_id: str,
         "revenues": revenues, "expenses": expenses, "cogs": cogs, "salary_rows": salary_rows,
         "total_revenue": total_revenue, "total_cogs": total_cogs,
         "gross_profit": total_revenue - total_cogs,
-        "operating_expenses": total_expense - total_cogs,
-        "salary_expense": salary_expense, "total_expense": total_expense,
-        "net_profit": total_revenue - total_expense,
+        "operating_expenses": operating_expense_total,
+        "salary_expense": salary_expense, "total_expense": operating_expense_total + total_cogs,
+        "net_profit": total_revenue - operating_expense_total - total_cogs,
         "purchase_count": purchase_count or 0, "purchases_total": Decimal(str(purchases_total or 0)),
     }
 
