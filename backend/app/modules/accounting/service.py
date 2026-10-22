@@ -1312,8 +1312,100 @@ async def apply_default_party_mappings(db: AsyncSession, tenant_id: str) -> dict
 
 
 async def get_operational_account_mappings(db: AsyncSession, tenant_id: str) -> list[AccountingAccountMapping]:
-    await _ensure_inventory_mapping_alias(db, tenant_id)
     return await _get_account_mapping_rows(db, tenant_id)
+
+
+async def get_historical_posting_preview(db: AsyncSession, tenant_id: str) -> dict:
+    """يعرض ما يمكن ترحيله دون إنشاء أي قيد."""
+    from app.models.sales import Payment, PaymentType
+    from app.models.expenses import RepExpense
+    rows = {}
+    for key, payment_type in (("receipts", "receipt"), ("discounts", "discount")):
+        result = await db.execute(select(func.count(Payment.id), func.coalesce(func.sum(Payment.amount), 0)).where(
+            Payment.tenant_id == tenant_id, Payment.payment_type == payment_type,
+            Payment.journal_entry_id.is_(None),
+        ))
+        count, total = result.one()
+        rows[key] = {"count": int(count or 0), "amount": str(total or 0)}
+    result = await db.execute(select(func.count(RepExpense.id), func.coalesce(func.sum(RepExpense.amount), 0)).where(
+        RepExpense.tenant_id == tenant_id, RepExpense.status == "approved",
+        RepExpense.journal_entry_id.is_(None),
+    ))
+    count, total = result.one()
+    rows["expenses"] = {"count": int(count or 0), "amount": str(total or 0)}
+    return rows
+
+
+async def backfill_historical_posting(db: AsyncSession, tenant_id: str, user_id: str, kind: str) -> dict:
+    """يرحل نوعًا واحدًا فقط، ويعيد تخطي السجلات المرتبطة لمنع التكرار."""
+    from app.models.sales import Payment, Customer, Invoice
+    from app.models.expenses import RepExpense
+    from app.models.accounting import FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
+    if kind not in {"receipts", "discounts", "expenses"}:
+        raise HTTPException(400, "نوع الترحيل غير معروف")
+    preview = await get_historical_posting_preview(db, tenant_id)
+    if kind == "expenses":
+        items = (await db.execute(select(RepExpense).where(
+            RepExpense.tenant_id == tenant_id, RepExpense.status == "approved",
+            RepExpense.journal_entry_id.is_(None),
+        ).order_by(RepExpense.expense_date, RepExpense.created_at))).scalars().all()
+    else:
+        items = (await db.execute(select(Payment).where(
+            Payment.tenant_id == tenant_id, Payment.payment_type == ("receipt" if kind == "receipts" else "discount"),
+            Payment.journal_entry_id.is_(None),
+        ).order_by(Payment.payment_date, Payment.created_at))).scalars().all()
+    created = 0
+    failed = []
+    for item in items:
+        try:
+            async with db.begin_nested():
+                if kind == "expenses":
+                    from app.modules.expenses.service import CATEGORY_MAPPING, PAYMENT_MAPPING, CATEGORY_LABELS
+                    expense_account = await get_operational_account(db, tenant_id, CATEGORY_MAPPING.get(item.category, "operating_expenses"))
+                    credit_account = await get_operational_account(db, tenant_id, PAYMENT_MAPPING.get(item.payment_method, "employee_advances"))
+                    fiscal_year = (await db.execute(select(FiscalYear).where(
+                        FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN,
+                        FiscalYear.start_date <= item.expense_date, FiscalYear.end_date >= item.expense_date,
+                    ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()))).scalars().first()
+                    if not fiscal_year:
+                        raise HTTPException(409, "لا توجد سنة مالية مفتوحة لتاريخ المصروف")
+                    amount = Decimal(str(item.amount))
+                    entry = JournalEntry(id=str(uuid.uuid4()), tenant_id=tenant_id,
+                        entry_number=await _next_entry_number(db, tenant_id), entry_date=item.expense_date,
+                        fiscal_year_id=fiscal_year.id, description_ar=f"مصروف مندوب {item.expense_number} - {CATEGORY_LABELS.get(item.category, item.category)}",
+                        description_en=f"Rep expense {item.expense_number}", status=JournalEntryStatus.POSTED,
+                        reference=item.expense_number, source="rep_expense", total_debit=amount, total_credit=amount,
+                        created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow())
+                    db.add(entry)
+                    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=expense_account.id,
+                        description=item.description, debit=amount, credit=0, line_order=0))
+                    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=credit_account.id,
+                        description=item.description, debit=0, credit=amount, line_order=1))
+                    item.journal_entry_id = entry.id
+                else:
+                    customer = await db.get(Customer, item.customer_id)
+                    invoice = await db.get(Invoice, item.invoice_id) if item.invoice_id else None
+                    if not customer:
+                        raise HTTPException(409, "العميل غير موجود")
+                    fiscal_year_id = invoice.fiscal_year_id if invoice else (await db.execute(select(FiscalYear.id).where(
+                        FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN,
+                        FiscalYear.start_date <= item.payment_date, FiscalYear.end_date >= item.payment_date,
+                    ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()).limit(1))).scalar_one_or_none()
+                    if not fiscal_year_id:
+                        raise HTTPException(409, "لا توجد سنة مالية مفتوحة لتاريخ السند")
+                    from app.modules.sales.service import _create_payment_journal, _create_discount_journal
+                    journal_id = await (_create_discount_journal(db, tenant_id, user_id, item, customer, invoice, fiscal_year_id)
+                        if kind == "discounts" else _create_payment_journal(db, tenant_id, user_id, item, customer, invoice, fiscal_year_id, item.bank_account_id))
+                    if not journal_id:
+                        raise HTTPException(409, "تعذر إنشاء القيد بسبب نقص حساب العميل أو الحساب التشغيلي")
+                    item.journal_entry_id = journal_id
+                await db.flush()
+            created += 1
+        except Exception as exc:
+            failed.append({"id": item.id, "number": getattr(item, "payment_number", None) or getattr(item, "expense_number", None), "reason": str(getattr(exc, "detail", exc))})
+    await db.commit()
+    return {"kind": kind, "preview": preview.get(kind), "created": created, "failed": failed,
+            "remaining": max(0, int((preview.get(kind) or {}).get("count", 0)) - created)}
 
 
 async def update_operational_account_mapping(

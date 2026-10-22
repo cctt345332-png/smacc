@@ -247,6 +247,23 @@ async def update_operational_account_mapping(
     )
 
 
+@router.get("/setup/historical-posting/preview")
+async def historical_posting_preview(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_historical_posting_preview(db, user["tenant_id"])
+
+
+@router.post("/setup/historical-posting/{kind}")
+async def historical_posting(
+    kind: str,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.backfill_historical_posting(db, user["tenant_id"], user["user_id"], kind)
+
+
 # ─── Reports ─────────────────────────────────────────────────────────
 @router.get("/reports/trial-balance")
 async def trial_balance(

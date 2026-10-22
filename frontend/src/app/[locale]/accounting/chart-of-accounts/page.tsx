@@ -6,6 +6,7 @@ import {
   getAccountingReadiness, initializeDefaultChart, setAutoPosting,
   applyDefaultPartyMappings,
   getOperationalAccountMappings, updateOperationalAccountMapping,
+  getHistoricalPostingPreview, runHistoricalPosting,
 } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
@@ -60,6 +61,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
   const [readiness, setReadiness] = useState<any>(null);
   const [mappings, setMappings] = useState<any[]>([]);
   const [mappingSearch, setMappingSearch] = useState<Record<string, string>>({});
+  const [historicalPreview, setHistoricalPreview] = useState<any>(null);
   const [form, setForm] = useState({
     code: "", name_ar: "", name_en: "", account_type: "asset",
     nature: "debit", parent_id: "", opening_balance: "0",
@@ -68,12 +70,12 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
   const load = async () => {
     setLoading(true);
-    const [accountsResult, readinessResult, mappingsResult] = await Promise.allSettled([
-      getAccounts(), getAccountingReadiness(), getOperationalAccountMappings(),
-    ]);
+    const [accountsResult, readinessResult] = await Promise.allSettled([getAccounts(), getAccountingReadiness()]);
+    const [mappingsResult, historicalResult] = await Promise.allSettled([getOperationalAccountMappings(), getHistoricalPostingPreview()]);
     if (accountsResult.status === "fulfilled") setAccounts(accountsResult.value.data);
     if (readinessResult.status === "fulfilled") setReadiness(readinessResult.value.data);
     if (mappingsResult.status === "fulfilled") setMappings(mappingsResult.value.data);
+    if (historicalResult.status === "fulfilled") setHistoricalPreview(historicalResult.value.data);
     setLoading(false);
   };
 
@@ -230,6 +232,22 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } finally { setSetupBusy(false); }
   };
 
+  const handleHistoricalPosting = async (kind: "receipts" | "discounts" | "expenses", label: string) => {
+    const row = historicalPreview?.[kind];
+    if (!row?.count) { alert(ar ? `لا توجد ${label} غير مرحلة` : `No unposted ${label}`); return; }
+    if (!confirm(ar
+      ? `سيتم إنشاء قيود لـ ${row.count} عملية بمبلغ ${Number(row.amount).toLocaleString("en-US")} ريال. لن تتكرر العمليات المرتبطة. هل تريد المتابعة؟`
+      : `This will post ${row.count} items totaling ${Number(row.amount).toLocaleString("en-US")} SAR. Linked items will be skipped. Continue?`)) return;
+    setSetupBusy(true);
+    try {
+      const result = await runHistoricalPosting(kind);
+      alert(ar ? `تم إنشاء ${result.data.created} قيد. المتبقي: ${result.data.remaining}` : `${result.data.created} entries created. Remaining: ${result.data.remaining}`);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر تنفيذ الترحيل التاريخي" : "Historical posting failed"));
+    } finally { setSetupBusy(false); }
+  };
+
   return (
     <>
       <div className="page-header">
@@ -356,6 +374,26 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   </div>
                   <div className="alert alert-info" style={{ marginTop: 12, marginBottom: 0 }}>
                     {ar ? "بياناتك التاريخية لم تتغير. مؤشرات المراجعة تعرض فقط ما يحتاج قرارًا محاسبيًا لاحقًا؛ لن يتم إنشاء قيود بأثر رجعي تلقائيًا." : "Historical data remains unchanged. Review indicators require an accounting decision later; no backdated entries will be created automatically."}
+                  </div>
+                  <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 14 }}>
+                    <h3 style={{ fontSize: 14, margin: 0 }}>{ar ? "الترحيل التاريخي" : "Historical posting"}</h3>
+                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "4px 0 10px" }}>
+                      {ar ? "معاينة مستقلة للعمليات القديمة التي لا تملك قيدًا. لن تتكرر العملية إذا كانت مرتبطة مسبقًا." : "Preview and post old records without journals. Already linked records are never repeated."}
+                    </p>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {([
+                        ["receipts", ar ? "السندات" : "Receipts"],
+                        ["discounts", ar ? "الخصومات" : "Discounts"],
+                        ["expenses", ar ? "المصروفات" : "Expenses"],
+                      ] as const).map(([kind, label]) => {
+                        const row = historicalPreview?.[kind];
+                        return (
+                          <button key={kind} className="btn btn-secondary btn-sm" onClick={() => handleHistoricalPosting(kind, label)} disabled={setupBusy || !historicalPreview}>
+                            {label}: {row?.count ?? "—"} ({row ? Number(row.amount).toLocaleString("en-US") : "—"} {ar ? "ر.س" : "SAR"})
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}

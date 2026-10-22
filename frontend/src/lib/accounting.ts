@@ -62,3 +62,6 @@ export const applyDefaultPartyMappings = () => api.post("/accounting/setup/apply
 export const getOperationalAccountMappings = () => api.get("/accounting/setup/mappings");
 export const updateOperationalAccountMapping = (mappingKey: string, accountId: string) =>
   api.put(`/accounting/setup/mappings/${mappingKey}`, { account_id: accountId });
+export const getHistoricalPostingPreview = () => api.get("/accounting/setup/historical-posting/preview");
+export const runHistoricalPosting = (kind: "receipts" | "discounts" | "expenses") =>
+  api.post(`/accounting/setup/historical-posting/${kind}`);
