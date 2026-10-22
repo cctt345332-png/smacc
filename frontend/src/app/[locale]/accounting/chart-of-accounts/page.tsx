@@ -189,6 +189,23 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } finally { setSetupBusy(false); }
   };
 
+  const handleMappingSearchChange = async (mappingKey: string, value: string) => {
+    setMappingSearch((current) => ({ ...current, [mappingKey]: value }));
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return;
+    const account = accounts.find((item) => {
+      if (!item.is_active || !item.is_posting) return false;
+      const label = `${item.code} — ${ar ? item.name_ar : item.name_en}`.toLowerCase();
+      return value.trim() === String(item.code) || normalized === label
+        || normalized === String(item.name_ar || "").toLowerCase()
+        || normalized === String(item.name_en || "").toLowerCase();
+    });
+    if (account) {
+      await handleMappingChange(mappingKey, account.id);
+      setMappingSearch((current) => ({ ...current, [mappingKey]: `${account.code} — ${ar ? account.name_ar : account.name_en}` }));
+    }
+  };
+
   const handleAutoPosting = async () => {
     const enabled = !readiness?.auto_posting_enabled;
     const blockers = [
@@ -312,27 +329,25 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                           <tr key={mapping.mapping_key}>
                             <td style={{ fontWeight: 600 }}>{MAPPING_LABELS[mapping.mapping_key] || mapping.mapping_key}</td>
                             <td>
-                              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                              <>
                                 <input
                                   className="form-input"
-                                  style={{ minWidth: 170, maxWidth: 230 }}
-                                  placeholder={ar ? "ابحث بالكود أو الاسم" : "Search code or name"}
-                                  value={mappingSearch[mapping.mapping_key] || ""}
-                                  onChange={(e) => setMappingSearch((current) => ({ ...current, [mapping.mapping_key]: e.target.value }))}
+                                  list={`account-options-${mapping.mapping_key}`}
+                                  style={{ minWidth: 300, maxWidth: 520 }}
+                                  placeholder={ar ? "اكتب الكود أو اسم الحساب ثم اختر النتيجة" : "Type code or account name and choose a result"}
+                                  value={mappingSearch[mapping.mapping_key] ?? (() => {
+                                    const current = accounts.find((account) => account.id === mapping.account_id);
+                                    return current ? `${current.code} — ${ar ? current.name_ar : current.name_en}` : "";
+                                  })()}
+                                  onChange={(e) => handleMappingSearchChange(mapping.mapping_key, e.target.value)}
+                                  disabled={setupBusy}
                                 />
-                                <select className="form-input form-select" style={{ minWidth: 240, maxWidth: 420 }} value={mapping.account_id}
-                                  onChange={(e) => handleMappingChange(mapping.mapping_key, e.target.value)} disabled={setupBusy}>
-                                  {accounts.filter((account) => {
-                                    if (!account.is_active || !account.is_posting) return false;
-                                    const query = (mappingSearch[mapping.mapping_key] || "").trim().toLowerCase();
-                                    return !query || String(account.code).toLowerCase().includes(query)
-                                      || String(account.name_ar || "").toLowerCase().includes(query)
-                                      || String(account.name_en || "").toLowerCase().includes(query);
-                                  }).map((account) => (
-                                    <option key={account.id} value={account.id}>{account.code} — {ar ? account.name_ar : account.name_en}</option>
+                                <datalist id={`account-options-${mapping.mapping_key}`}>
+                                  {accounts.filter((account) => account.is_active && account.is_posting).map((account) => (
+                                    <option key={account.id} value={`${account.code} — ${ar ? account.name_ar : account.name_en}`} />
                                   ))}
-                                </select>
-                              </div>
+                                </datalist>
+                              </>
                             </td>
                           </tr>
                         ))}
