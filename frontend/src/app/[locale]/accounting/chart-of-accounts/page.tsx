@@ -378,7 +378,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   <div className="alert alert-info" style={{ marginTop: 12, marginBottom: 0 }}>
                     {ar ? "بياناتك التاريخية لم تتغير. مؤشرات المراجعة تعرض فقط ما يحتاج قرارًا محاسبيًا لاحقًا؛ لن يتم إنشاء قيود بأثر رجعي تلقائيًا." : "Historical data remains unchanged. Review indicators require an accounting decision later; no backdated entries will be created automatically."}
                   </div>
-                  <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 14 }}>
+                  {false && <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 14 }}>
                     <h3 style={{ fontSize: 14, margin: 0 }}>{ar ? "الترحيل التاريخي" : "Historical posting"}</h3>
                     <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "4px 0 10px" }}>
                       {ar ? "معاينة مستقلة للعمليات القديمة التي لا تملك قيدًا. لن تتكرر العملية إذا كانت مرتبطة مسبقًا." : "Preview and post old records without journals. Already linked records are never repeated."}
@@ -409,7 +409,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                         </div>
                       </div>
                     )}
-                  </div>
+                  </div>}
                 </div>
               )}
             </>
