@@ -1317,7 +1317,7 @@ async def get_operational_account_mappings(db: AsyncSession, tenant_id: str) -> 
 
 async def get_historical_posting_preview(db: AsyncSession, tenant_id: str) -> dict:
     """يعرض ما يمكن ترحيله دون إنشاء أي قيد."""
-    from app.models.sales import Payment, PaymentType
+    from app.models.sales import Payment
     from app.models.expenses import RepExpense
     rows = {}
     for key, payment_type in (("receipts", "receipt"), ("discounts", "discount")):
@@ -1327,12 +1327,23 @@ async def get_historical_posting_preview(db: AsyncSession, tenant_id: str) -> di
         ))
         count, total = result.one()
         rows[key] = {"count": int(count or 0), "amount": str(total or 0)}
-    result = await db.execute(select(func.count(RepExpense.id), func.coalesce(func.sum(RepExpense.amount), 0)).where(
-        RepExpense.tenant_id == tenant_id, RepExpense.status == "approved",
-        RepExpense.journal_entry_id.is_(None),
-    ))
-    count, total = result.one()
-    rows["expenses"] = {"count": int(count or 0), "amount": str(total or 0)}
+    result = await db.execute(select(
+        func.count(RepExpense.id),
+        func.count(RepExpense.id).filter(RepExpense.journal_entry_id.is_(None)),
+        func.count(RepExpense.id).filter(RepExpense.journal_entry_id.is_not(None)),
+        func.count(RepExpense.id).filter(RepExpense.status == "approved"),
+        func.count(RepExpense.id).filter(RepExpense.status == "pending"),
+        func.count(RepExpense.id).filter(RepExpense.status == "rejected"),
+        func.count(RepExpense.id).filter(RepExpense.status == "approved", RepExpense.journal_entry_id.is_(None)),
+        func.coalesce(func.sum(RepExpense.amount).filter(RepExpense.status == "approved", RepExpense.journal_entry_id.is_(None)), 0),
+    ).where(RepExpense.tenant_id == tenant_id))
+    all_count, unlinked_count, linked_count, approved_count, pending_count, rejected_count, count, total = result.one()
+    rows["expenses"] = {
+        "count": int(count or 0), "amount": str(total or 0),
+        "all_count": int(all_count or 0), "unlinked_count": int(unlinked_count or 0),
+        "linked_count": int(linked_count or 0), "approved_count": int(approved_count or 0),
+        "pending_count": int(pending_count or 0), "rejected_count": int(rejected_count or 0),
+    }
     return rows
 
 

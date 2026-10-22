@@ -387,9 +387,12 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                         ["expenses", ar ? "المصروفات" : "Expenses"],
                       ] as const).map(([kind, label]) => {
                         const row = historicalPreview?.[kind];
+                        const detail = kind === "expenses" && row
+                          ? ` | معتمد: ${row.approved_count} | مرتبط: ${row.linked_count} | بانتظار الاعتماد: ${row.pending_count}`
+                          : "";
                         return (
                           <button key={kind} className="btn btn-secondary btn-sm" onClick={() => handleHistoricalPosting(kind, label)} disabled={setupBusy || !historicalPreview}>
-                            {label}: {row?.count ?? "—"} ({row ? Number(row.amount).toLocaleString("en-US") : "—"} {ar ? "ر.س" : "SAR"})
+                            {label}: {row?.count ?? "—"} ({row ? Number(row.amount).toLocaleString("en-US") : "—"} {ar ? "ر.س" : "SAR"}){ar ? detail : ""}
                           </button>
                         );
                       })}
