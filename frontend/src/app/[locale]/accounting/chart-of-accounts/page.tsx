@@ -190,6 +190,16 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
 
   const handleAutoPosting = async () => {
     const enabled = !readiness?.auto_posting_enabled;
+    const blockers = [
+      ...(readiness?.missing_required_keys || []).map((key: string) => `${ar ? "ربط مفقود" : "Missing mapping"}: ${MAPPING_LABELS[key] || key}`),
+      ...(readiness?.invalid_mapping_keys || []).map((key: string) => `${ar ? "ربط غير صالح" : "Invalid mapping"}: ${MAPPING_LABELS[key] || key}`),
+      ...(readiness?.customer_without_ar > 0 ? [ar ? `يوجد ${readiness.customer_without_ar} عميل بلا حساب ذمم` : `${readiness.customer_without_ar} customers have no receivable account`] : []),
+      ...(readiness?.vendor_without_ap > 0 ? [ar ? `يوجد ${readiness.vendor_without_ap} مورد بلا حساب ذمم` : `${readiness.vendor_without_ap} vendors have no payable account`] : []),
+    ];
+    if (enabled && blockers.length) {
+      alert(ar ? `لا يمكن التفعيل قبل إصلاح التالي:\n\n${blockers.join("\n")}` : `Cannot enable posting until:\n\n${blockers.join("\n")}`);
+      return;
+    }
     if (enabled && !confirm(ar
       ? "بعد التفعيل ستُرحّل الفواتير والسندات والمصروفات الجديدة إلى شجرة الحسابات، ولن تُعتمد الفاتورة إذا تعذر إنشاء قيدها. هل تريد المتابعة؟"
       : "New invoices, receipts and expenses will post to the chart, and an invoice will not be confirmed if its journal fails. Continue?")) return;
@@ -267,9 +277,16 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                   <strong style={{ fontSize: 13, color: readiness.auto_posting_enabled ? "var(--success)" : "var(--warning)" }}>
                     {readiness.auto_posting_enabled ? (ar ? "مفعلة" : "Enabled") : (ar ? "غير مفعلة بأمان" : "Safely disabled")}
                   </strong>
-                  <button className="btn btn-secondary btn-sm" style={{ display: "block", marginTop: 8 }} onClick={handleAutoPosting} disabled={setupBusy || readiness.missing_required_keys?.length > 0 || readiness.invalid_mapping_keys?.length > 0 || readiness.customer_without_ar > 0 || readiness.vendor_without_ap > 0}>
+                  <button className="btn btn-secondary btn-sm" style={{ display: "block", marginTop: 8 }} onClick={handleAutoPosting} disabled={setupBusy}>
                     {readiness.auto_posting_enabled ? (ar ? "إيقاف الترحيل" : "Disable posting") : (ar ? "تفعيل الترحيل" : "Enable posting")}
                   </button>
+                  {!readiness.auto_posting_enabled && (
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 6 }}>
+                      {readiness.missing_required_keys?.length || readiness.invalid_mapping_keys?.length || readiness.customer_without_ar > 0 || readiness.vendor_without_ap > 0
+                        ? (ar ? "اضغط الزر لمعرفة متطلبات التفعيل الناقصة" : "Click the button to see the remaining requirements")
+                        : (ar ? "جاهز للتفعيل" : "Ready to enable")}
+                    </div>
+                  )}
                 </div>
               </div>
 
