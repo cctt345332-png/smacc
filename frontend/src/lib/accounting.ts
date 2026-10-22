@@ -63,5 +63,5 @@ export const getOperationalAccountMappings = () => api.get("/accounting/setup/ma
 export const updateOperationalAccountMapping = (mappingKey: string, accountId: string) =>
   api.put(`/accounting/setup/mappings/${mappingKey}`, { account_id: accountId });
 export const getHistoricalPostingPreview = () => api.get("/accounting/setup/historical-posting/preview");
-export const runHistoricalPosting = (kind: "receipts" | "discounts" | "expenses") =>
+export const runHistoricalPosting = (kind: "receipts" | "discounts" | "expenses" | "invoices") =>
   api.post(`/accounting/setup/historical-posting/${kind}`);

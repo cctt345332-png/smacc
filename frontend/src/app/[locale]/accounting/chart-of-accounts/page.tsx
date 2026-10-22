@@ -232,7 +232,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
     } finally { setSetupBusy(false); }
   };
 
-  const handleHistoricalPosting = async (kind: "receipts" | "discounts" | "expenses", label: string) => {
+  const handleHistoricalPosting = async (kind: "receipts" | "discounts" | "expenses" | "invoices", label: string) => {
     const row = historicalPreview?.[kind];
     if (!row?.count) { alert(ar ? `لا توجد ${label} غير مرحلة` : `No unposted ${label}`); return; }
     if (!confirm(ar
@@ -388,6 +388,7 @@ export default function ChartOfAccountsPage(props: { params: Promise<{ locale: s
                         ["receipts", ar ? "السندات" : "Receipts"],
                         ["discounts", ar ? "الخصومات" : "Discounts"],
                         ["expenses", ar ? "المصروفات" : "Expenses"],
+                        ["invoices", ar ? "الفواتير" : "Invoices"],
                       ] as const).map(([kind, label]) => {
                         const row = historicalPreview?.[kind];
                         const detail = kind === "expenses" && row

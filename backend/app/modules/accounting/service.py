@@ -1317,7 +1317,7 @@ async def get_operational_account_mappings(db: AsyncSession, tenant_id: str) -> 
 
 async def get_historical_posting_preview(db: AsyncSession, tenant_id: str) -> dict:
     """يعرض ما يمكن ترحيله دون إنشاء أي قيد."""
-    from app.models.sales import Payment
+    from app.models.sales import Payment, Invoice, InvoiceStatus
     from app.models.expenses import RepExpense
     rows = {}
     for key, payment_type in (("receipts", "receipt"), ("discounts", "discount")):
@@ -1375,15 +1375,21 @@ async def get_historical_posting_preview(db: AsyncSession, tenant_id: str) -> di
         "linked_count": int(linked_count or 0), "approved_count": int(approved_count or 0),
         "pending_count": int(pending_count or 0), "rejected_count": int(rejected_count or 0),
     }
+    invoice_statuses = (InvoiceStatus.CONFIRMED, InvoiceStatus.PAID, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE)
+    result = await db.execute(select(func.count(Invoice.id), func.coalesce(func.sum(Invoice.total), 0)).where(
+        Invoice.tenant_id == tenant_id, Invoice.status.in_(invoice_statuses), Invoice.journal_entry_id.is_(None),
+    ))
+    count, total = result.one()
+    rows["invoices"] = {"count": int(count or 0), "amount": str(total or 0)}
     return rows
 
 
 async def backfill_historical_posting(db: AsyncSession, tenant_id: str, user_id: str, kind: str) -> dict:
     """يرحل نوعًا واحدًا فقط، ويعيد تخطي السجلات المرتبطة لمنع التكرار."""
-    from app.models.sales import Payment, Customer, Invoice
+    from app.models.sales import Payment, Customer, Invoice, InvoiceStatus
     from app.models.expenses import RepExpense
     from app.models.accounting import FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
-    if kind not in {"receipts", "discounts", "expenses"}:
+    if kind not in {"receipts", "discounts", "expenses", "invoices"}:
         raise HTTPException(400, "نوع الترحيل غير معروف")
     preview = await get_historical_posting_preview(db, tenant_id)
     if kind == "expenses":
@@ -1391,6 +1397,12 @@ async def backfill_historical_posting(db: AsyncSession, tenant_id: str, user_id:
             RepExpense.tenant_id == tenant_id, RepExpense.status == "approved",
             RepExpense.journal_entry_id.is_(None),
         ).order_by(RepExpense.expense_date, RepExpense.created_at))).scalars().all()
+    elif kind == "invoices":
+        items = (await db.execute(select(Invoice).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.in_((InvoiceStatus.CONFIRMED, InvoiceStatus.PAID, InvoiceStatus.PARTIAL, InvoiceStatus.OVERDUE)),
+            Invoice.journal_entry_id.is_(None),
+        ).order_by(Invoice.issue_date, Invoice.created_at))).scalars().all()
     else:
         items = (await db.execute(select(Payment).where(
             Payment.tenant_id == tenant_id, Payment.payment_type == ("receipt" if kind == "receipts" else "discount"),
@@ -1424,6 +1436,22 @@ async def backfill_historical_posting(db: AsyncSession, tenant_id: str, user_id:
                     db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=credit_account.id,
                         description=item.description, debit=0, credit=amount, line_order=1))
                     item.journal_entry_id = entry.id
+                elif kind == "invoices":
+                    customer = await db.get(Customer, item.customer_id)
+                    if not customer:
+                        raise HTTPException(409, "العميل غير موجود")
+                    if not item.fiscal_year_id:
+                        item.fiscal_year_id = (await db.execute(select(FiscalYear.id).where(
+                            FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN,
+                            FiscalYear.start_date <= item.issue_date, FiscalYear.end_date >= item.issue_date,
+                        ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()).limit(1))).scalar_one_or_none()
+                    if not item.fiscal_year_id:
+                        raise HTTPException(409, "لا توجد سنة مالية مفتوحة لتاريخ الفاتورة")
+                    from app.modules.sales.service import _create_invoice_journal
+                    journal_id = await _create_invoice_journal(db, tenant_id, user_id, item)
+                    if not journal_id:
+                        raise HTTPException(409, "تعذر إنشاء قيد الفاتورة بسبب نقص حساب العميل أو الإيراد أو الضريبة")
+                    item.journal_entry_id = journal_id
                 else:
                     customer = await db.get(Customer, item.customer_id)
                     invoice = await db.get(Invoice, item.invoice_id) if item.invoice_id else None
