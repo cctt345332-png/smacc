@@ -24,6 +24,9 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
   late Future<Map<String, dynamic>> _future;
   final Map<String, TextEditingController> _qtyControllers = {};
   final Map<String, List<String>> _serials = {};
+  final TextEditingController _odometerController = TextEditingController();
+  String? _odometerPhotoData;
+  String? _odometerPhotoName;
   bool _busy = false;
   String? _error;
 
@@ -38,6 +41,7 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
   @override
   void dispose() {
     for (final controller in _qtyControllers.values) controller.dispose();
+    _odometerController.dispose();
     super.dispose();
   }
 
@@ -89,8 +93,19 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
         payload.add({'line_id': id, 'counted_qty': value});
       }
     }
-    final odometerData = await _askOdometer(data['run']?['odometer']);
-    if (odometerData == null) return;
+    final odometer = int.tryParse(_odometerController.text.trim());
+    if (odometer == null || odometer < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('أدخل قراءة عداد صحيحة قبل رفع الجرد')),
+      );
+      return;
+    }
+    if (_odometerPhotoData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('صوّر عداد المركبة قبل رفع الجرد')),
+      );
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -98,9 +113,9 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
     try {
       await widget.apiClient.post('/inventory/mandatory-stocktake/rep/submit', {
         'lines': payload,
-        'odometer': odometerData['odometer'],
-        'odometer_photo_data': odometerData['photo_data'],
-        'odometer_photo_name': odometerData['photo_name'],
+        'odometer': odometer,
+        'odometer_photo_data': _odometerPhotoData,
+        'odometer_photo_name': _odometerPhotoName,
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,67 +129,20 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
     }
   }
 
-  Future<Map<String, dynamic>?> _askOdometer(dynamic previous) async {
+  Future<void> _captureOdometerPhoto() async {
     final photo = await ImagePicker().pickImage(
       source: ImageSource.camera,
       imageQuality: 85,
       maxWidth: 1800,
       maxHeight: 1800,
     );
-    if (photo == null) return null;
+    if (photo == null) return;
     final bytes = await photo.readAsBytes();
-    final photoData = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    final controller = TextEditingController(text: previous?.toString() ?? '');
-    final value = await showDialog<int>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('تسجيل قراءة عداد المركبة'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'أدخل قراءة العداد الحالية. هذه الخطوة مطلوبة لإرسال الجرد وحساب موعد تغيير الزيت القادم.',
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'قراءة العداد بالكيلومتر',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final number = int.tryParse(controller.text.trim());
-                if (number != null && number >= 0)
-                  Navigator.pop(context, number);
-              },
-              child: const Text('تأكيد ورفع الجرد'),
-            ),
-          ],
-        ),
-      ),
-    );
-    controller.dispose();
-    if (value == null) return null;
-    return {
-      'odometer': value,
-      'photo_data': photoData,
-      'photo_name': photo.name,
-    };
+    if (!mounted) return;
+    setState(() {
+      _odometerPhotoData = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      _odometerPhotoName = photo.name;
+    });
   }
 
   @override
@@ -207,6 +175,10 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
             final lines = List<Map<String, dynamic>>.from(
               data['lines'] as List? ?? const [],
             );
+            final previousOdometer = run['odometer'];
+            if (_odometerController.text.isEmpty && previousOdometer != null) {
+              _odometerController.text = previousOdometer.toString();
+            }
             if (run['status'] == 'submitted')
               return _message(
                 'تم رفع الجرد للإدارة، ويمكنك الآن متابعة استخدام التطبيق.',
@@ -231,6 +203,48 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
                       style: const TextStyle(color: Colors.red),
                     ),
                   ),
+                Card(
+                  margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  color: Colors.deepPurple.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'بيانات عداد المركبة مطلوبة قبل رفع الجرد',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _odometerController,
+                          enabled: !_busy,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'قراءة العداد بالكيلومتر',
+                            hintText: 'مثال: 125000',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.speed),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : _captureOdometerPhoto,
+                          icon: Icon(
+                            _odometerPhotoData == null
+                                ? Icons.camera_alt_outlined
+                                : Icons.check_circle,
+                          ),
+                          label: Text(
+                            _odometerPhotoData == null
+                                ? 'تصوير العداد'
+                                : 'تم تصوير العداد — اضغط لإعادة التصوير',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: lines.isEmpty
                       ? const Center(
