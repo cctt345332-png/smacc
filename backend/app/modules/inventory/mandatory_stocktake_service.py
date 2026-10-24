@@ -435,14 +435,20 @@ async def replace_stocktake_serial(
     serial = next((candidate for candidate in serial_candidates if _norm_serial(candidate.serial_number) == _norm_serial(from_serial)), None)
     if not serial:
         raise HTTPException(409, f"السيريال {from_serial} غير موجود كعنصر متاح في مخزون المندوب لهذا الصنف والمستودع")
-    duplicate_candidates = (await db.execute(select(SerialItem).join(
+    duplicate_candidates = (await db.execute(select(SerialItem, Warehouse).join(
         InventoryItem, InventoryItem.id == SerialItem.product_id
-    ).where(
+    ).outerjoin(Warehouse, Warehouse.id == SerialItem.warehouse_id).where(
         InventoryItem.tenant_id == tenant_id,
         SerialItem.product_id == line.item_id,
-    ))).scalars().all()
-    if any(_norm_serial(candidate.serial_number) == _norm_serial(to_serial) for candidate in duplicate_candidates):
-        raise HTTPException(409, f"السيريال المصور {to_serial} موجود مسبقًا لهذا الصنف في النظام")
+    ))).all()
+    duplicate = next(((candidate, warehouse) for candidate, warehouse in duplicate_candidates if _norm_serial(candidate.serial_number) == _norm_serial(to_serial)), None)
+    if duplicate:
+        duplicate_item, duplicate_warehouse = duplicate
+        status = _value(duplicate_item.status)
+        location = duplicate_warehouse.name_ar if duplicate_warehouse else "خارج المستودعات"
+        if duplicate_item.warehouse_id == line.warehouse_id and status == "in_stock":
+            raise HTTPException(409, f"السيريال المصور موجود فعلًا في نفس مخزون المندوب ({location}) لكنه لم يكن ضمن لقطة جلسة الجرد. لا تستبدله؛ أعد فتح الجرد أو حدّث الجلسة لتضمينه.")
+        raise HTTPException(409, f"السيريال المصور موجود مسبقًا لهذا الصنف: الحالة {status}، الموقع {location}. لا يمكن استبداله حتى لا يتكرر الرقم.")
     serial.serial_number = to_serial
     line.expected_serials_json = json.dumps([
         to_serial if _norm_serial(value) == _norm_serial(from_serial) else value
