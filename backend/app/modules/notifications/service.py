@@ -157,6 +157,9 @@ async def run_all_alerts(db: AsyncSession, tenant_id: str) -> dict:
     # 6. تنبيهات المحاسبة
     created += await _check_accounting_alerts(db, tenant_id, settings, now)
 
+    # 7. تنبيهات صيانة مركبات المناديب
+    created += await _check_vehicle_maintenance_alerts(db, tenant_id, now)
+
     await db.flush()
     new_query = select(Notification).where(Notification.tenant_id == tenant_id)
     if before_ids:
@@ -167,6 +170,49 @@ async def run_all_alerts(db: AsyncSession, tenant_id: str) -> dict:
     push = await dispatch_push(db, tenant_id, new_notifications) if new_notifications else {"sent": 0}
     logger.info("Automatic notifications tenant=%s created=%s push=%s", tenant_id, len(new_notifications), push)
     return {"alerts_created": created, "push": push}
+
+
+async def _check_vehicle_maintenance_alerts(db: AsyncSession, tenant_id: str, now: datetime) -> int:
+    """ينبه المندوب المعني والإدارة عند اقتراب أو تأخر موعد الصيانة."""
+    from app.models.vehicle_maintenance import RepVehicle
+    from app.models.reps import SalesRep
+
+    rows = (await db.execute(
+        select(RepVehicle, SalesRep, User)
+        .join(SalesRep, SalesRep.id == RepVehicle.rep_id)
+        .join(User, User.id == SalesRep.user_id)
+        .where(RepVehicle.tenant_id == tenant_id, RepVehicle.is_active.is_(True))
+    )).all()
+    management_ids = await _management_user_ids(db, tenant_id)
+    created = 0
+    for vehicle, rep, rep_user in rows:
+        checks = []
+        current = vehicle.current_odometer or 0
+        for label, due_km, due_date in (
+            ("الزيت", vehicle.next_oil_due_km, vehicle.next_oil_due_date),
+            ("الكفرات", vehicle.next_tire_due_km, None),
+            ("الفرامل", vehicle.next_brake_due_km, None),
+        ):
+            if due_km and current >= due_km - 500:
+                checks.append((label, f"عند العداد {due_km:,} كم", current >= due_km))
+        if vehicle.next_battery_due_date and (vehicle.next_battery_due_date - now.date()).days <= 30:
+            checks.append(("البطارية", f"بتاريخ {vehicle.next_battery_due_date.isoformat()}", (vehicle.next_battery_due_date - now.date()).days < 0))
+        for label, due_text, overdue in checks:
+            ref = f"{vehicle.id}:{label}:{due_text}"
+            recipients = list(dict.fromkeys([rep_user.id, *management_ids]))
+            for recipient_id in recipients:
+                if await _exists(db, tenant_id, ref, NotificationType.GENERAL, recipient_id):
+                    continue
+                db.add(_notif(
+                    tenant_id, NotificationType.GENERAL,
+                    NotificationSeverity.CRITICAL if overdue else NotificationSeverity.WARNING,
+                    f"موعد صيانة المركبة: {label}", f"Vehicle maintenance due: {label}",
+                    f"مركبة المندوب {rep_user.full_name} تحتاج متابعة صيانة {label} ({due_text}).",
+                    f"Rep vehicle requires {label} maintenance ({due_text}).",
+                    ref, "vehicle_maintenance", recipient_id,
+                ))
+                created += 1
+    return created
 
 
 # للتوافق مع الكود القديم

@@ -17,6 +17,7 @@ class _VehicleMaintenanceScreenState extends State<VehicleMaintenanceScreen> {
   final _oilType = TextEditingController();
   final _vendor = TextEditingController();
   final _notes = TextEditingController();
+  String _serviceType = 'oil_change';
   bool _busy = false;
 
   @override
@@ -67,6 +68,7 @@ class _VehicleMaintenanceScreenState extends State<VehicleMaintenanceScreen> {
     setState(() => _busy = true);
     try {
       await widget.apiClient.post('/vehicle-maintenance/me/maintenance', {
+        'service_type': _serviceType,
         'service_date': DateTime.now().toIso8601String().substring(0, 10),
         'odometer': value,
         'amount': double.tryParse(_amount.text) ?? 0,
@@ -79,6 +81,7 @@ class _VehicleMaintenanceScreenState extends State<VehicleMaintenanceScreen> {
       _oilType.clear();
       _vendor.clear();
       _notes.clear();
+      setState(() => _serviceType = 'oil_change');
       setState(_load);
     } catch (e) {
       _error(e);
@@ -126,9 +129,15 @@ class _VehicleMaintenanceScreenState extends State<VehicleMaintenanceScreen> {
                 return Card(
                   child: ListTile(
                     leading: const Icon(Icons.oil_barrel_outlined),
-                    title: Text('تغيير زيت — ${r['service_date'] ?? ''}'),
+                    title: Text(
+                      '${r['service_type'] ?? 'صيانة'} — ${r['service_date'] ?? ''}',
+                    ),
                     subtitle: Text(
-                      'العداد: ${r['odometer'] ?? 0} كم${oil.isNotEmpty ? ' • $oil' : ''}',
+                      'الحالة: ${r['approval_status'] == 'approved'
+                          ? 'معتمد'
+                          : r['approval_status'] == 'rejected'
+                          ? 'مرفوض'
+                          : 'بانتظار اعتماد الإدارة'}\nالعداد: ${r['odometer'] ?? 0} كم${oil.isNotEmpty ? ' • $oil' : ''}',
                     ),
                     trailing: Text('${r['amount'] ?? 0} ر.س'),
                   ),
@@ -186,7 +195,31 @@ class _VehicleMaintenanceScreenState extends State<VehicleMaintenanceScreen> {
                 _button('حفظ قراءة العداد', _saveOdometer),
               ]),
               const SizedBox(height: 12),
-              _section('تسجيل تغيير الزيت', [
+              _section('تسجيل طلب صيانة', [
+                DropdownButtonFormField<String>(
+                  value: _serviceType,
+                  decoration: const InputDecoration(
+                    labelText: 'نوع الصيانة',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'oil_change',
+                      child: Text('تغيير الزيت'),
+                    ),
+                    DropdownMenuItem(value: 'tires', child: Text('الكفرات')),
+                    DropdownMenuItem(value: 'battery', child: Text('البطارية')),
+                    DropdownMenuItem(value: 'brakes', child: Text('الفرامل')),
+                    DropdownMenuItem(value: 'other', child: Text('أخرى')),
+                  ],
+                  onChanged: _busy
+                      ? null
+                      : (value) {
+                          if (value != null)
+                            setState(() => _serviceType = value);
+                        },
+                ),
+                const SizedBox(height: 10),
                 _field(
                   _oilOdometer,
                   'قراءة العداد وقت تغيير الزيت',

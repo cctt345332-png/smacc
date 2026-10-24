@@ -12,6 +12,9 @@ class VehicleCreate(BaseModel):
     current_odometer: int = Field(default=0, ge=0)
     oil_interval_km: int = Field(default=5000, ge=1)
     oil_interval_days: int = Field(default=180, ge=1)
+    tire_interval_km: int = Field(default=40000, ge=1)
+    battery_interval_days: int = Field(default=730, ge=1)
+    brake_interval_km: int = Field(default=30000, ge=1)
     notes: str | None = None
 
 
@@ -22,6 +25,9 @@ class VehicleUpdate(BaseModel):
     color: str | None = None
     oil_interval_km: int | None = Field(default=None, ge=1)
     oil_interval_days: int | None = Field(default=None, ge=1)
+    tire_interval_km: int | None = Field(default=None, ge=1)
+    battery_interval_days: int | None = Field(default=None, ge=1)
+    brake_interval_km: int | None = Field(default=None, ge=1)
     is_active: bool | None = None
     notes: str | None = None
 
@@ -31,12 +37,17 @@ class OdometerUpdate(BaseModel):
 
 
 class MaintenanceCreate(BaseModel):
+    service_type: str = Field(default="oil_change", pattern="^(oil_change|tires|battery|brakes|other)$")
     service_date: date = Field(default_factory=date.today)
     odometer: int = Field(ge=0)
     amount: Decimal = Field(default=Decimal("0"), ge=0)
     oil_type: str | None = None
     vendor_name: str | None = None
     notes: str | None = None
+
+
+class MaintenanceDecision(BaseModel):
+    rejection_reason: str | None = None
 
 
 class VehicleOut(BaseModel):
@@ -73,3 +84,8 @@ class MaintenanceOut(BaseModel):
     next_due_date: date | None
     created_by: str
     created_at: str | None
+    approval_status: str
+    rejection_reason: str | None
+    approved_by: str | None
+    approved_at: str | None
+    journal_entry_id: str | None

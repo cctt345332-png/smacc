@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
 from . import service
-from .schemas import MaintenanceCreate, OdometerUpdate, VehicleCreate, VehicleUpdate
+from .schemas import MaintenanceCreate, MaintenanceDecision, OdometerUpdate, VehicleCreate, VehicleUpdate
 
 router = APIRouter(prefix="/vehicle-maintenance", tags=["vehicle-maintenance"])
 
@@ -47,3 +47,18 @@ async def update_vehicle(vehicle_id: str, data: VehicleUpdate, user=Depends(requ
 @router.get("/vehicles/{vehicle_id}/maintenance")
 async def vehicle_maintenance(vehicle_id: str, user=Depends(require_role(["manager", "accountant", "sales"])), db: AsyncSession = Depends(get_db)):
     return await service.list_vehicle_maintenance(db, user["tenant_id"], vehicle_id)
+
+
+@router.get("/maintenance/requests")
+async def maintenance_requests(user=Depends(require_role(["manager", "accountant", "sales"])), db: AsyncSession = Depends(get_db)):
+    return await service.list_all_maintenance(db, user["tenant_id"])
+
+
+@router.post("/maintenance/{record_id}/approve")
+async def approve_maintenance(record_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.decide_maintenance(db, user["tenant_id"], user["user_id"], record_id, True)
+
+
+@router.post("/maintenance/{record_id}/reject")
+async def reject_maintenance(record_id: str, data: MaintenanceDecision, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.decide_maintenance(db, user["tenant_id"], user["user_id"], record_id, False, data.rejection_reason)
