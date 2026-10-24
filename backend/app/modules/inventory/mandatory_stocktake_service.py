@@ -274,9 +274,11 @@ async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dic
         return {"locked": False, "run": None, "lines": []}
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep.id).order_by(InventoryItem.name_ar))).all()
     odometer_record = await db.scalar(select(MandatoryStocktakeOdometer).where(MandatoryStocktakeOdometer.run_id == run.id, MandatoryStocktakeOdometer.rep_id == rep.id))
+    rep_submitted = bool(rows) and all(line.counted_at is not None for line, _, _ in rows)
     rep_reopened = rep.id in _reopened_rep_ids(run)
-    visible_status = "reopened" if rep_reopened else run.status
-    return {"locked": visible_status in ("pending", "reopened"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": visible_status, "odometer": odometer_record.odometer if odometer_record else None, "odometer_photo_uploaded": bool(odometer_record and odometer_record.photo_data)}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
+    visible_status = "reopened" if rep_reopened else ("submitted" if rep_submitted else run.status)
+    locked = visible_status in ("pending", "reopened")
+    return {"locked": locked, "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": visible_status, "odometer": odometer_record.odometer if odometer_record else None, "odometer_photo_uploaded": bool(odometer_record and odometer_record.photo_data)}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
 
 
 async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
@@ -284,8 +286,6 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
     run = await _run_for_rep(db, tenant_id, rep.id)
     if not run:
         raise HTTPException(409, "لا توجد جلسة جرد حالية")
-    if run.status == "submitted" and rep.id not in _reopened_rep_ids(run):
-        raise HTTPException(409, "تم رفع هذا الجرد مسبقًا")
     try:
         odometer = int(data.get("odometer"))
     except (TypeError, ValueError):
@@ -305,6 +305,9 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
     lines = (await db.execute(select(MandatoryStocktakeLine).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep.id))).scalars().all()
     if not lines:
         raise HTTPException(409, "لا توجد أصناف للجرد في مستودع المندوب")
+    rep_submitted = all(line.counted_at is not None for line in lines)
+    if rep_submitted and rep.id not in _reopened_rep_ids(run):
+        raise HTTPException(409, "تم رفع جرد هذا المندوب مسبقًا")
     for line in lines:
         row = incoming.get(line.id)
         if not row:
