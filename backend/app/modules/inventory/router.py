@@ -65,6 +65,12 @@ async def mandatory_stocktake_run(run_id: str, user=Depends(require_role(["manag
     return await ms.get_run(db, user["tenant_id"], run_id)
 
 
+@router.post("/mandatory-stocktake/runs/{run_id}/replace-serial")
+async def mandatory_stocktake_replace_serial(run_id: str, data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    from app.modules.inventory import mandatory_stocktake_service as ms
+    return await ms.replace_stocktake_serial(db, user["tenant_id"], user["user_id"], run_id, data)
+
+
 @router.post("/mandatory-stocktake/runs/{run_id}/review")
 async def mandatory_stocktake_review(run_id: str, data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
     from app.modules.inventory import mandatory_stocktake_service as ms

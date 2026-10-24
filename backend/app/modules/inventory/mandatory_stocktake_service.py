@@ -394,6 +394,66 @@ async def get_run(db: AsyncSession, tenant_id: str, run_id: str) -> dict:
     return {"id": run.id, "scheduled_at": _utc_iso(run.scheduled_at), "status": run.status, "is_test": bool(run.is_test), "submitted_at": _utc_iso(run.submitted_at), "review_note": run.review_note, "adjustments_applied_at": _utc_iso(run.adjustments_applied_at), "odometers": [{"rep_id": x.rep_id, "odometer": x.odometer, "photo_data": x.photo_data, "photo_name": x.photo_name, "recorded_at": _utc_iso(x.recorded_at)} for x in odometers], "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
 
 
+async def replace_stocktake_serial(
+    db: AsyncSession, tenant_id: str, user_id: str, run_id: str, data: dict
+) -> dict:
+    """استبدال هوية سيريال موجود في مخزون المندوب برقم مصور، دون حركة مخزون."""
+    if not data.get("line_id") or not data.get("from_serial") or not data.get("to_serial"):
+        raise HTTPException(400, "يجب تحديد السطر والسيريال الموجود والسيريال المصور")
+    run = await db.scalar(select(MandatoryStocktakeRun).where(
+        MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.id == run_id
+    ))
+    if not run:
+        raise HTTPException(404, "جلسة الجرد غير موجودة")
+    if run.status == "approved" or run.adjustments_applied_at:
+        raise HTTPException(409, "لا يمكن استبدال سيريال بعد اعتماد تسوية الجرد")
+    line = await db.scalar(select(MandatoryStocktakeLine).where(
+        MandatoryStocktakeLine.id == str(data["line_id"]),
+        MandatoryStocktakeLine.run_id == run.id,
+        MandatoryStocktakeLine.tracking_type == "serial",
+    ))
+    if not line:
+        raise HTTPException(404, "سطر السيريالات غير موجود")
+    from_serial = str(data["from_serial"]).strip()
+    to_serial = str(data["to_serial"]).strip()
+    expected = list(json.loads(line.expected_serials_json or "[]"))
+    counted = list(json.loads(line.counted_serials_json or "[]"))
+    expected_keys = {_norm_serial(x) for x in expected}
+    counted_keys = {_norm_serial(x) for x in counted}
+    if _norm_serial(from_serial) not in expected_keys or _norm_serial(from_serial) in counted_keys:
+        raise HTTPException(409, "السيريال الموجود يجب أن يكون من سيريالات المخزون غير المصورة")
+    if _norm_serial(to_serial) not in counted_keys or _norm_serial(to_serial) in expected_keys:
+        raise HTTPException(409, "السيريال المصور يجب أن يكون غير مطابقًا وغير موجود مسبقًا في المخزون")
+    serial = await db.scalar(select(SerialItem).join(
+        InventoryItem, InventoryItem.id == SerialItem.product_id
+    ).where(
+        InventoryItem.tenant_id == tenant_id,
+        SerialItem.product_id == line.item_id,
+        SerialItem.warehouse_id == line.warehouse_id,
+        SerialItem.serial_number == from_serial,
+        SerialItem.status == "in_stock",
+    ))
+    if not serial:
+        raise HTTPException(409, "السيريال الموجود غير متاح في مخزون المندوب")
+    duplicate = await db.scalar(select(SerialItem.id).join(
+        InventoryItem, InventoryItem.id == SerialItem.product_id
+    ).where(
+        InventoryItem.tenant_id == tenant_id,
+        SerialItem.product_id == line.item_id,
+        SerialItem.serial_number == to_serial,
+    ))
+    if duplicate:
+        raise HTTPException(409, "السيريال المصور موجود مسبقًا في النظام")
+    serial.serial_number = to_serial
+    line.expected_serials_json = json.dumps([
+        to_serial if _norm_serial(value) == _norm_serial(from_serial) else value
+        for value in expected
+    ], ensure_ascii=False)
+    line.notes = (line.notes or "") + f"\nاستبدال سيريال يدويًا: {from_serial} ← {to_serial} بواسطة {user_id}"
+    await db.commit()
+    return await get_run(db, tenant_id, run_id)
+
+
 async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str, data: dict) -> dict:
     run = await db.scalar(select(MandatoryStocktakeRun).where(MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.id == run_id))
     if not run:
