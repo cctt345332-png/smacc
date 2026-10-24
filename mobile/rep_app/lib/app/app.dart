@@ -225,9 +225,6 @@ class _RepShellState extends State<RepShell> {
     _mandatoryStocktake = widget.apiClient.getMap(
       '/inventory/mandatory-stocktake/rep/current',
     );
-    _stocktakeTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      _refreshStocktakeIfStateChanged();
-    });
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _checkAttendancePrompt(),
     );
@@ -398,14 +395,12 @@ class _RepShellState extends State<RepShell> {
         if (stocktake['locked'] == true) {
           return MandatoryStocktakeScreen(
             apiClient: widget.apiClient,
-            onSubmitted: () => setState(
-              () {
-                _stocktakeLocked = false;
-                _mandatoryStocktake = widget.apiClient.getMap(
-                  '/inventory/mandatory-stocktake/rep/current',
-                );
-              },
-            ),
+            onSubmitted: () => setState(() {
+              _stocktakeLocked = false;
+              _mandatoryStocktake = widget.apiClient.getMap(
+                '/inventory/mandatory-stocktake/rep/current',
+              );
+            }),
           );
         }
         return Scaffold(
@@ -518,7 +513,8 @@ class _MoreMenu extends StatelessWidget {
             leading: const Icon(Icons.directions_car_outlined),
             title: const Text('مركبتي وصيانتها'),
             subtitle: const Text('العداد وتغيير الزيت'),
-            onTap: () => _push(context, VehicleMaintenanceScreen(apiClient: apiClient)),
+            onTap: () =>
+                _push(context, VehicleMaintenanceScreen(apiClient: apiClient)),
           ),
           ListTile(
             leading: const Icon(Icons.person_outline),
