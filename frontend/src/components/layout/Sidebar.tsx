@@ -171,6 +171,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
         key: "reps", label: ar ? "المناديب" : "Sales Reps", icon: IC.hr,
         children: [
           { label: ar ? "إدارة المناديب"      : "Manage Reps",       href: `${base}/reps/manage` },
+          { label: ar ? "مركبات وصيانة المناديب" : "Rep Vehicles & Maintenance", href: `${base}/reps/vehicles` },
           { label: ar ? "الحضور والانصراف"     : "Rep Attendance",    href: `${base}/reps/attendance` },
           { label: ar ? "المشرفون"             : "Supervisors",       href: `${base}/supervisors` },
           { label: ar ? "خريطة المناديب"      : "Reps Map",          href: `${base}/reps/tracking` },

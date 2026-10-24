@@ -14,6 +14,7 @@ import 'screens/rep_expenses_screen.dart';
 import 'screens/rep_lists.dart';
 import 'screens/stock_count_screen.dart';
 import 'screens/mandatory_stocktake_screen.dart';
+import 'screens/vehicle_maintenance_screen.dart';
 import 'screens/supervisor_screen.dart';
 
 class App extends StatefulWidget {
@@ -512,6 +513,12 @@ class _MoreMenu extends StatelessWidget {
             leading: const Icon(Icons.fact_check_outlined),
             title: const Text('الحضور والانصراف'),
             onTap: () => _push(context, AttendanceScreen(apiClient: apiClient)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.directions_car_outlined),
+            title: const Text('مركبتي وصيانتها'),
+            subtitle: const Text('العداد وتغيير الزيت'),
+            onTap: () => _push(context, VehicleMaintenanceScreen(apiClient: apiClient)),
           ),
           ListTile(
             leading: const Icon(Icons.person_outline),

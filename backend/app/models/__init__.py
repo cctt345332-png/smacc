@@ -20,5 +20,6 @@ from app.models.ecommerce import Store, StoreCategory, StoreProduct, StoreOrder,
 from app.models.ai import AITenantSettings, AIUsage, AISystemConfig
 from app.models.reps import SalesRep, RepAttendance, RepGeoZone, RepGeoEvent
 from app.models.maintenance import MaintenanceRequest, MaintenanceStatusLog
+from app.models.vehicle_maintenance import RepVehicle, VehicleMaintenanceRecord
 from app.models.expenses import RepExpense, RepExpenseAttachment
 from app.models.audit import AuditLog

@@ -1,0 +1,32 @@
+"use client";
+import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { getReps } from "@/lib/reps";
+import { createVehicle, getVehicleList, updateVehicle } from "@/lib/vehicleMaintenance";
+
+const fmt = (n: any) => Number(n || 0).toLocaleString("en-US");
+const today = () => new Date().toISOString().slice(0, 10);
+
+export default function RepVehiclesPage(props: { params: Promise<{ locale: string }> }) {
+  const { locale } = use(props.params);
+  const ar = locale === "ar";
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [reps, setReps] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any>(null);
+  const [form, setForm] = useState({ rep_id: "", plate_number: "", vehicle_type: "", model: "", color: "", current_odometer: "0", oil_interval_km: "5000", oil_interval_days: "180" });
+  const [oil, setOil] = useState({ service_date: today(), odometer: "", amount: "0", oil_type: "", vendor_name: "", notes: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const load = async () => { setLoading(true); try { const [v, r] = await Promise.all([getVehicleList(), getReps()]); setVehicles(v.data || []); setReps(r.data || []); } catch {} finally { setLoading(false); } };
+  useEffect(() => { load(); }, []);
+  const openCreate = () => { setSelected(null); setForm({ rep_id: reps[0]?.id || "", plate_number: "", vehicle_type: "", model: "", color: "", current_odometer: "0", oil_interval_km: "5000", oil_interval_days: "180" }); };
+  const saveVehicle = async () => { if (!form.rep_id) return; setSaving(true); try { await createVehicle({ ...form, current_odometer: Number(form.current_odometer), oil_interval_km: Number(form.oil_interval_km), oil_interval_days: Number(form.oil_interval_days) }); setMessage(ar ? "تمت إضافة المركبة" : "Vehicle added"); await load(); } catch (e: any) { alert(e?.response?.data?.detail || "Error"); } finally { setSaving(false); } };
+  const editIntervals = async (v: any) => { const km = prompt(ar ? "فترة تغيير الزيت بالكيلومتر" : "Oil interval in km", String(v.oil_interval_km)); if (!km) return; const days = prompt(ar ? "فترة تغيير الزيت بالأيام" : "Oil interval in days", String(v.oil_interval_days)); if (!days) return; try { await updateVehicle(v.id, { oil_interval_km: Number(km), oil_interval_days: Number(days) }); await load(); } catch (e: any) { alert(e?.response?.data?.detail || "Error"); } };
+  return <>
+    <div className="page-header"><div><div className="breadcrumb"><Link href={`/${locale}/reps/manage`}>{ar ? "المناديب" : "Reps"}</Link><span className="breadcrumb-sep">/</span><span>{ar ? "المركبات والصيانة" : "Vehicles & maintenance"}</span></div><h1 className="page-title">{ar ? "مركبات المناديب وصيانتها" : "Rep vehicles & maintenance"}</h1><p className="page-subtitle">{ar ? "متابعة العداد وموعد تغيير الزيت لكل مركبة" : "Track odometers and oil-change schedules"}</p></div><button className="btn btn-primary" onClick={openCreate}>{ar ? "+ إضافة مركبة" : "+ Add vehicle"}</button></div>
+    {message && <div className="alert alert-success" style={{ marginBottom: 16 }}>{message}</div>}
+    <div className="card"><div className="table-wrapper" style={{ border: "none" }}>{loading ? <div className="empty-state">{ar ? "جاري التحميل..." : "Loading..."}</div> : <table><thead><tr><th>{ar ? "المندوب" : "Rep"}</th><th>{ar ? "اللوحة" : "Plate"}</th><th>{ar ? "المركبة" : "Vehicle"}</th><th>{ar ? "العداد" : "Odometer"}</th><th>{ar ? "تغيير الزيت القادم" : "Next oil change"}</th><th>{ar ? "الإجراء" : "Action"}</th></tr></thead><tbody>{vehicles.map(v => <tr key={v.id}><td>{v.rep_name || "—"}</td><td>{v.plate_number || "—"}</td><td>{[v.vehicle_type, v.model, v.color].filter(Boolean).join(" — ") || "—"}</td><td>{fmt(v.current_odometer)} كم</td><td>{v.next_oil_due_km ? `${fmt(v.next_oil_due_km)} كم` : (ar ? "لم يسجل تغيير زيت" : "No oil change recorded")}<br /><small>{v.next_oil_due_date || ""}</small></td><td><button className="btn btn-ghost btn-sm" onClick={() => editIntervals(v)}>{ar ? "إعداد الفترة" : "Set interval"}</button></td></tr>)}</tbody></table>}</div></div>
+    <div className="card" style={{ marginTop: 20, padding: 20 }}><h2 className="card-title">{ar ? "إضافة مركبة" : "Add vehicle"}</h2><div className="grid-3" style={{ marginTop: 14 }}><label className="form-group"><span className="form-label">{ar ? "المندوب" : "Rep"}</span><select className="form-input form-select" value={form.rep_id} onChange={e => setForm({ ...form, rep_id: e.target.value })}><option value="">{ar ? "اختر المندوب" : "Choose rep"}</option>{reps.map(r => <option key={r.id} value={r.id}>{r.full_name || r.rep_code}</option>)}</select></label><label className="form-group"><span className="form-label">{ar ? "رقم اللوحة" : "Plate"}</span><input className="form-input" value={form.plate_number} onChange={e => setForm({ ...form, plate_number: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "نوع المركبة" : "Type"}</span><input className="form-input" value={form.vehicle_type} onChange={e => setForm({ ...form, vehicle_type: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "الموديل" : "Model"}</span><input className="form-input" value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "العداد الحالي" : "Current odometer"}</span><input type="number" className="form-input" value={form.current_odometer} onChange={e => setForm({ ...form, current_odometer: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "فترة الزيت كم" : "Oil interval km"}</span><input type="number" className="form-input" value={form.oil_interval_km} onChange={e => setForm({ ...form, oil_interval_km: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "فترة الزيت أيام" : "Oil interval days"}</span><input type="number" className="form-input" value={form.oil_interval_days} onChange={e => setForm({ ...form, oil_interval_days: e.target.value })} /></label></div><button className="btn btn-primary" style={{ marginTop: 14 }} onClick={saveVehicle} disabled={saving}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ المركبة" : "Save vehicle")}</button></div>
+  </>;
+}
