@@ -264,7 +264,10 @@ def _line_json(line: MandatoryStocktakeLine, item_name: str, sku: str | None, wa
     counted = json.loads(line.counted_serials_json) if line.counted_serials_json else []
     expected_keys = {_norm_serial(x) for x in expected}
     counted_keys = {_norm_serial(x) for x in counted}
-    return {"id": line.id, "rep_id": line.rep_id, "rep_name": rep_name or "—", "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "missing_serials": sorted(x for x in expected if _norm_serial(x) not in counted_keys), "extra_serials": sorted(x for x in counted if _norm_serial(x) not in expected_keys), "status": line.status, "notes": line.notes, "odometer": line.odometer, "odometer_recorded_at": _utc_iso(line.odometer_recorded_at)}
+    matched_serials = sorted(x for x in counted if _norm_serial(x) in expected_keys)
+    unmatched_serials = sorted(x for x in counted if _norm_serial(x) not in expected_keys)
+    missing_serials = sorted(x for x in expected if _norm_serial(x) not in counted_keys)
+    return {"id": line.id, "rep_id": line.rep_id, "rep_name": rep_name or "—", "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "matched_serials": matched_serials, "unmatched_serials": unmatched_serials, "missing_serials": missing_serials, "extra_serials": unmatched_serials, "status": line.status, "notes": line.notes, "odometer": line.odometer, "odometer_recorded_at": _utc_iso(line.odometer_recorded_at)}
 
 
 async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
