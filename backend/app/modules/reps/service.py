@@ -792,6 +792,22 @@ async def update_rep(db: AsyncSession, tenant_id: str, rep_id: str, data: dict) 
         if field in data:
             setattr(rep, field, data[field])
 
+    # صفحة المركبات تعتمد على سجل RepVehicle، لذلك نحدّثه فورًا عند
+    # تعديل بيانات السيارة من صفحة المندوب حتى لا تظهر اللوحة القديمة.
+    if any(field in data for field in ("vehicle_plate", "vehicle_type", "vehicle_color")):
+        from app.models.vehicle_maintenance import RepVehicle
+        vehicle = await db.scalar(select(RepVehicle).where(
+            RepVehicle.tenant_id == tenant_id, RepVehicle.rep_id == rep.id
+        ))
+        if vehicle:
+            if "vehicle_plate" in data:
+                vehicle.plate_number = data["vehicle_plate"]
+            if "vehicle_type" in data:
+                vehicle.vehicle_type = data["vehicle_type"]
+            if "vehicle_color" in data:
+                vehicle.color = data["vehicle_color"]
+            vehicle.updated_at = datetime.utcnow()
+
     await db.commit()
     return await get_rep(db, tenant_id, rep_id)
 

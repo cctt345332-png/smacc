@@ -14,11 +14,11 @@ def _date(value):
     return value.isoformat() if value else None
 
 
-def _vehicle_out(vehicle: RepVehicle, rep_name: str | None = None) -> dict:
+def _vehicle_out(vehicle: RepVehicle, rep_name: str | None = None, rep: SalesRep | None = None) -> dict:
     return {
         "id": vehicle.id, "rep_id": vehicle.rep_id, "rep_name": rep_name,
-        "plate_number": vehicle.plate_number, "vehicle_type": vehicle.vehicle_type,
-        "model": vehicle.model, "color": vehicle.color,
+        "plate_number": rep.vehicle_plate if rep and rep.vehicle_plate is not None else vehicle.plate_number, "vehicle_type": rep.vehicle_type if rep and rep.vehicle_type is not None else vehicle.vehicle_type,
+        "model": vehicle.model, "color": rep.vehicle_color if rep and rep.vehicle_color is not None else vehicle.color,
         "current_odometer": vehicle.current_odometer or 0,
         "odometer_updated_at": vehicle.odometer_updated_at.isoformat() if vehicle.odometer_updated_at else None,
         "oil_interval_km": vehicle.oil_interval_km, "oil_interval_days": vehicle.oil_interval_days,
@@ -75,8 +75,8 @@ async def ensure_rep_vehicle(db: AsyncSession, tenant_id: str, rep: SalesRep) ->
 
 
 async def list_vehicles(db: AsyncSession, tenant_id: str) -> list[dict]:
-    rows = (await db.execute(select(RepVehicle, User).join(SalesRep, SalesRep.id == RepVehicle.rep_id).join(User, User.id == SalesRep.user_id).where(RepVehicle.tenant_id == tenant_id).order_by(User.full_name))).all()
-    return [_vehicle_out(vehicle, user.full_name) for vehicle, user in rows]
+    rows = (await db.execute(select(RepVehicle, SalesRep, User).join(SalesRep, SalesRep.id == RepVehicle.rep_id).join(User, User.id == SalesRep.user_id).where(RepVehicle.tenant_id == tenant_id).order_by(User.full_name))).all()
+    return [_vehicle_out(vehicle, user.full_name, rep) for vehicle, rep, user in rows]
 
 
 async def create_vehicle(db: AsyncSession, tenant_id: str, data: VehicleCreate) -> dict:
@@ -112,7 +112,7 @@ async def get_my_vehicle(db: AsyncSession, tenant_id: str, user_id: str) -> dict
     rep = await _get_rep(db, tenant_id, user_id)
     vehicle = await ensure_rep_vehicle(db, tenant_id, rep)
     records = (await db.execute(select(VehicleMaintenanceRecord).where(VehicleMaintenanceRecord.tenant_id == tenant_id, VehicleMaintenanceRecord.vehicle_id == vehicle.id).order_by(VehicleMaintenanceRecord.service_date.desc(), VehicleMaintenanceRecord.created_at.desc()))).scalars().all()
-    return {"vehicle": _vehicle_out(vehicle, None), "maintenance": [_record_out(r) for r in records]}
+    return {"vehicle": _vehicle_out(vehicle, None, rep), "maintenance": [_record_out(r) for r in records]}
 
 
 async def update_my_odometer(db: AsyncSession, tenant_id: str, user_id: str, data: OdometerUpdate) -> dict:
