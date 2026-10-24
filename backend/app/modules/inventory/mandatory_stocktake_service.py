@@ -159,7 +159,7 @@ async def ensure_current_run(db: AsyncSession, tenant_id: str, now: datetime | N
             .where(
                 MandatoryStocktakeRun.tenant_id == tenant_id,
                 MandatoryStocktakeRun.scheduled_at <= now,
-                MandatoryStocktakeRun.status.in_(["pending", "reopened"]),
+                MandatoryStocktakeRun.status.in_(["pending", "submitted", "reopened"]),
                 MandatoryStocktakeRun.is_test.is_(False),
             )
             .order_by(MandatoryStocktakeRun.scheduled_at.desc())
@@ -244,6 +244,17 @@ async def _run_for_rep(db: AsyncSession, tenant_id: str, rep_id: str) -> Mandato
     return run if line else None
 
 
+def _reopened_rep_ids(run: MandatoryStocktakeRun) -> set[str]:
+    try:
+        return {str(value) for value in (json.loads(run.reopened_rep_ids_json or "[]") or [])}
+    except (TypeError, ValueError):
+        return set()
+
+
+def _set_reopened_rep_ids(run: MandatoryStocktakeRun, rep_ids: set[str]) -> None:
+    run.reopened_rep_ids_json = json.dumps(sorted(rep_ids), ensure_ascii=False)
+
+
 def _norm_serial(value: str) -> str:
     return "".join(str(value).split()).replace("-", "").lower()
 
@@ -263,7 +274,9 @@ async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dic
         return {"locked": False, "run": None, "lines": []}
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep.id).order_by(InventoryItem.name_ar))).all()
     odometer_record = await db.scalar(select(MandatoryStocktakeOdometer).where(MandatoryStocktakeOdometer.run_id == run.id, MandatoryStocktakeOdometer.rep_id == rep.id))
-    return {"locked": run.status in ("pending", "reopened"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "odometer": odometer_record.odometer if odometer_record else None, "odometer_photo_uploaded": bool(odometer_record and odometer_record.photo_data)}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
+    rep_reopened = rep.id in _reopened_rep_ids(run)
+    visible_status = "reopened" if rep_reopened else run.status
+    return {"locked": visible_status in ("pending", "reopened"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": visible_status, "odometer": odometer_record.odometer if odometer_record else None, "odometer_photo_uploaded": bool(odometer_record and odometer_record.photo_data)}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
 
 
 async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
@@ -271,7 +284,7 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
     run = await _run_for_rep(db, tenant_id, rep.id)
     if not run:
         raise HTTPException(409, "لا توجد جلسة جرد حالية")
-    if run.status == "submitted":
+    if run.status == "submitted" and rep.id not in _reopened_rep_ids(run):
         raise HTTPException(409, "تم رفع هذا الجرد مسبقًا")
     try:
         odometer = int(data.get("odometer"))
@@ -336,6 +349,10 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
     run.status = "submitted"
     run.submitted_at = datetime.utcnow()
     run.submitted_by = user_id
+    reopened_rep_ids = _reopened_rep_ids(run)
+    if rep.id in reopened_rep_ids:
+        reopened_rep_ids.remove(rep.id)
+        _set_reopened_rep_ids(run, reopened_rep_ids)
     await db.commit()
     from app.modules.notifications.service import notify_management_event
     await notify_management_event(
@@ -376,8 +393,26 @@ async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str
     if not run:
         raise HTTPException(404, "جلسة الجرد غير موجودة")
     action = data.get("action")
+    if action == "reopen_rep":
+        rep_id = str(data.get("rep_id") or "")
+        if not rep_id:
+            raise HTTPException(400, "يجب تحديد المندوب المراد إعادة فتح جرده")
+        if run.status == "approved":
+            raise HTTPException(409, "لا يمكن إعادة فتح مندوب بعد اعتماد تسوية الجرد")
+        has_rep = await db.scalar(select(MandatoryStocktakeLine.id).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep_id).limit(1))
+        if not has_rep:
+            raise HTTPException(404, "المندوب غير موجود في جلسة الجرد")
+        rep_ids = _reopened_rep_ids(run)
+        rep_ids.add(rep_id)
+        _set_reopened_rep_ids(run, rep_ids)
+        run.reviewed_at = datetime.utcnow()
+        run.reviewed_by = user_id
+        run.review_note = data.get("note")
+        await db.commit()
+        await _notify_review_result(db, tenant_id, user_id, run, approved=False, rep_id=rep_id)
+        return await get_run(db, tenant_id, run_id)
     if action not in ("approved", "reopened"):
-        raise HTTPException(400, "الإجراء يجب أن يكون approved أو reopened")
+        raise HTTPException(400, "الإجراء يجب أن يكون approved أو reopened أو reopen_rep")
     if action == "approved" and run.status != "submitted":
         raise HTTPException(409, "لا يمكن اعتماد الجرد قبل رفعه من المندوب")
     if action == "approved" and run.adjustments_applied_at:
@@ -463,12 +498,15 @@ async def _apply_run_adjustments(
 
 async def _notify_review_result(
     db: AsyncSession, tenant_id: str, actor_id: str,
-    run: MandatoryStocktakeRun, approved: bool,
+    run: MandatoryStocktakeRun, approved: bool, rep_id: str | None = None,
 ) -> None:
-    rep_ids = (await db.execute(
-        select(SalesRep.user_id).join(
+    query = select(SalesRep.user_id).join(
             MandatoryStocktakeLine, MandatoryStocktakeLine.rep_id == SalesRep.id
         ).where(MandatoryStocktakeLine.run_id == run.id, SalesRep.user_id.is_not(None))
+    if rep_id:
+        query = query.where(MandatoryStocktakeLine.rep_id == rep_id)
+    rep_ids = (await db.execute(
+        query
     )).scalars().all()
     from app.modules.notifications.service import notify_users_event
     await notify_users_event(

@@ -555,6 +555,7 @@ class MandatoryStocktakeRun(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reopened_rep_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     adjustments_applied_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     adjustments_applied_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
     reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
