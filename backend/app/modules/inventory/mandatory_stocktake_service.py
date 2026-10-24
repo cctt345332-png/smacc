@@ -17,6 +17,7 @@ from app.models.inventory import (
     MandatoryStocktakeConfig,
     MandatoryStocktakeRun,
     MandatoryStocktakeLine,
+    MandatoryStocktakeOdometer,
 )
 from app.models.reps import SalesRep
 from app.models.user import User
@@ -252,7 +253,7 @@ def _line_json(line: MandatoryStocktakeLine, item_name: str, sku: str | None, wa
     counted = json.loads(line.counted_serials_json) if line.counted_serials_json else []
     expected_keys = {_norm_serial(x) for x in expected}
     counted_keys = {_norm_serial(x) for x in counted}
-    return {"id": line.id, "rep_id": line.rep_id, "rep_name": rep_name or "—", "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "missing_serials": sorted(x for x in expected if _norm_serial(x) not in counted_keys), "extra_serials": sorted(x for x in counted if _norm_serial(x) not in expected_keys), "status": line.status, "notes": line.notes}
+    return {"id": line.id, "rep_id": line.rep_id, "rep_name": rep_name or "—", "item_id": line.item_id, "item_name": item_name, "sku": sku, "warehouse_id": line.warehouse_id, "warehouse_name": warehouse_name, "tracking_type": line.tracking_type, "system_qty": float(line.system_qty), "counted_qty": float(line.counted_qty) if line.counted_qty is not None else None, "diff_qty": float(line.diff_qty) if line.diff_qty is not None else None, "expected_serials": expected, "counted_serials": counted, "missing_serials": sorted(x for x in expected if _norm_serial(x) not in counted_keys), "extra_serials": sorted(x for x in counted if _norm_serial(x) not in expected_keys), "status": line.status, "notes": line.notes, "odometer": line.odometer, "odometer_recorded_at": _utc_iso(line.odometer_recorded_at)}
 
 
 async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
@@ -261,7 +262,8 @@ async def get_rep_current(db: AsyncSession, tenant_id: str, user_id: str) -> dic
     if not run:
         return {"locked": False, "run": None, "lines": []}
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep.id).order_by(InventoryItem.name_ar))).all()
-    return {"locked": run.status in ("pending", "reopened"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
+    odometer_record = await db.scalar(select(MandatoryStocktakeOdometer).where(MandatoryStocktakeOdometer.run_id == run.id, MandatoryStocktakeOdometer.rep_id == rep.id))
+    return {"locked": run.status in ("pending", "reopened"), "run": {"id": run.id, "scheduled_at": run.scheduled_at.isoformat(), "status": run.status, "odometer": odometer_record.odometer if odometer_record else None, "odometer_photo_uploaded": bool(odometer_record and odometer_record.photo_data)}, "rep_id": rep.id, "warehouse_id": rep.warehouse_id, "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar) for line, item, warehouse in rows]}
 
 
 async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
@@ -271,6 +273,21 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
         raise HTTPException(409, "لا توجد جلسة جرد حالية")
     if run.status == "submitted":
         raise HTTPException(409, "تم رفع هذا الجرد مسبقًا")
+    try:
+        odometer = int(data.get("odometer"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "يجب تسجيل قراءة عداد المركبة قبل رفع الجرد")
+    if odometer < 0:
+        raise HTTPException(400, "قراءة العداد لا يمكن أن تكون سالبة")
+    photo_data = str(data.get("odometer_photo_data") or "").strip()
+    if not photo_data.startswith("data:image/"):
+        raise HTTPException(400, "يجب تصوير عداد المركبة قبل رفع الجرد")
+    if len(photo_data) > 8 * 1024 * 1024:
+        raise HTTPException(400, "صورة العداد كبيرة جدًا، أعد تصويرها بجودة أقل")
+    from app.models.vehicle_maintenance import RepVehicle
+    vehicle = await db.scalar(select(RepVehicle).where(RepVehicle.tenant_id == tenant_id, RepVehicle.rep_id == rep.id))
+    if vehicle and odometer < (vehicle.current_odometer or 0):
+        raise HTTPException(400, f"قراءة العداد يجب ألا تقل عن القراءة السابقة ({vehicle.current_odometer} كم)")
     incoming = {str(row.get("line_id")): row for row in data.get("lines", [])}
     lines = (await db.execute(select(MandatoryStocktakeLine).where(MandatoryStocktakeLine.run_id == run.id, MandatoryStocktakeLine.rep_id == rep.id))).scalars().all()
     if not lines:
@@ -302,6 +319,20 @@ async def submit_rep_count(db: AsyncSession, tenant_id: str, user_id: str, data:
             line.status = "matched" if line.diff_qty == 0 else "variance"
         line.notes = row.get("notes")
         line.counted_at = datetime.utcnow()
+        line.odometer = odometer
+        line.odometer_recorded_at = datetime.utcnow()
+    if vehicle:
+        vehicle.current_odometer = odometer
+        vehicle.odometer_updated_at = datetime.utcnow()
+        vehicle.updated_at = datetime.utcnow()
+    odometer_record = await db.scalar(select(MandatoryStocktakeOdometer).where(MandatoryStocktakeOdometer.run_id == run.id, MandatoryStocktakeOdometer.rep_id == rep.id))
+    if odometer_record:
+        odometer_record.odometer = odometer
+        odometer_record.photo_data = photo_data
+        odometer_record.photo_name = str(data.get("odometer_photo_name") or "odometer.jpg")
+        odometer_record.recorded_at = datetime.utcnow()
+    else:
+        db.add(MandatoryStocktakeOdometer(id=str(uuid.uuid4()), tenant_id=tenant_id, run_id=run.id, rep_id=rep.id, odometer=odometer, photo_data=photo_data, photo_name=str(data.get("odometer_photo_name") or "odometer.jpg"), recorded_at=datetime.utcnow()))
     run.status = "submitted"
     run.submitted_at = datetime.utcnow()
     run.submitted_by = user_id
@@ -336,7 +367,8 @@ async def get_run(db: AsyncSession, tenant_id: str, run_id: str) -> dict:
     if not run:
         raise HTTPException(404, "جلسة الجرد غير موجودة")
     rows = (await db.execute(select(MandatoryStocktakeLine, InventoryItem, Warehouse, User).join(InventoryItem, InventoryItem.id == MandatoryStocktakeLine.item_id).join(Warehouse, Warehouse.id == MandatoryStocktakeLine.warehouse_id).join(SalesRep, SalesRep.id == MandatoryStocktakeLine.rep_id).join(User, User.id == SalesRep.user_id).where(MandatoryStocktakeLine.run_id == run.id).order_by(MandatoryStocktakeLine.rep_id, InventoryItem.name_ar))).all()
-    return {"id": run.id, "scheduled_at": _utc_iso(run.scheduled_at), "status": run.status, "is_test": bool(run.is_test), "submitted_at": _utc_iso(run.submitted_at), "review_note": run.review_note, "adjustments_applied_at": _utc_iso(run.adjustments_applied_at), "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
+    odometers = (await db.execute(select(MandatoryStocktakeOdometer).where(MandatoryStocktakeOdometer.run_id == run.id))).scalars().all()
+    return {"id": run.id, "scheduled_at": _utc_iso(run.scheduled_at), "status": run.status, "is_test": bool(run.is_test), "submitted_at": _utc_iso(run.submitted_at), "review_note": run.review_note, "adjustments_applied_at": _utc_iso(run.adjustments_applied_at), "odometers": [{"rep_id": x.rep_id, "odometer": x.odometer, "photo_data": x.photo_data, "photo_name": x.photo_name, "recorded_at": _utc_iso(x.recorded_at)} for x in odometers], "lines": [_line_json(line, item.name_ar, item.sku, warehouse.name_ar, user.full_name) for line, item, warehouse, user in rows]}
 
 
 async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str, data: dict) -> dict:

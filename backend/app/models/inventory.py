@@ -582,3 +582,19 @@ class MandatoryStocktakeLine(Base):
     status: Mapped[str] = mapped_column(String(30), default="pending")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     counted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    odometer: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    odometer_recorded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class MandatoryStocktakeOdometer(Base):
+    __tablename__ = "mandatory_stocktake_odometers"
+    __table_args__ = (Index("ix_mandatory_stocktake_odometers_run_rep", "run_id", "rep_id", unique=True),)
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    run_id: Mapped[str] = mapped_column(String, ForeignKey("mandatory_stocktake_runs.id", ondelete="CASCADE"), index=True)
+    rep_id: Mapped[str] = mapped_column(String, ForeignKey("sales_reps.id"), index=True)
+    odometer: Mapped[int] = mapped_column(Integer, nullable=False)
+    photo_data: Mapped[str] = mapped_column(Text, nullable=False)
+    photo_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

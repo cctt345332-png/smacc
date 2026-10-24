@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../data/api_client.dart';
@@ -86,6 +89,8 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
         payload.add({'line_id': id, 'counted_qty': value});
       }
     }
+    final odometerData = await _askOdometer(data['run']?['odometer']);
+    if (odometerData == null) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -93,6 +98,9 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
     try {
       await widget.apiClient.post('/inventory/mandatory-stocktake/rep/submit', {
         'lines': payload,
+        'odometer': odometerData['odometer'],
+        'odometer_photo_data': odometerData['photo_data'],
+        'odometer_photo_name': odometerData['photo_name'],
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -104,6 +112,69 @@ class _MandatoryStocktakeScreenState extends State<MandatoryStocktakeScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<Map<String, dynamic>?> _askOdometer(dynamic previous) async {
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+      maxWidth: 1800,
+      maxHeight: 1800,
+    );
+    if (photo == null) return null;
+    final bytes = await photo.readAsBytes();
+    final photoData = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    final controller = TextEditingController(text: previous?.toString() ?? '');
+    final value = await showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تسجيل قراءة عداد المركبة'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'أدخل قراءة العداد الحالية. هذه الخطوة مطلوبة لإرسال الجرد وحساب موعد تغيير الزيت القادم.',
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'قراءة العداد بالكيلومتر',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final number = int.tryParse(controller.text.trim());
+                if (number != null && number >= 0)
+                  Navigator.pop(context, number);
+              },
+              child: const Text('تأكيد ورفع الجرد'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (value == null) return null;
+    return {
+      'odometer': value,
+      'photo_data': photoData,
+      'photo_name': photo.name,
+    };
   }
 
   @override
