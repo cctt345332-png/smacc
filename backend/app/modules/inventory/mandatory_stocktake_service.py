@@ -150,7 +150,19 @@ async def ensure_current_run(db: AsyncSession, tenant_id: str, now: datetime | N
     now = now or datetime.utcnow()
     scheduled_at = _scheduled_at(now.replace(tzinfo=ZoneInfo("UTC")), config)
     if scheduled_at > now:
-        return None
+        # إذا تأخر العامل أو لم يفتح أحد النظام خلال نافذة الساعتين، لا
+        # نخفي جلسة ما زالت بانتظار المندوب. الويب يعرضها كسجل، وكان التطبيق
+        # سابقًا ينتقل مباشرة إلى موعد الأسبوع التالي فلا يراها المندوب.
+        return await db.scalar(
+            select(MandatoryStocktakeRun)
+            .where(
+                MandatoryStocktakeRun.tenant_id == tenant_id,
+                MandatoryStocktakeRun.scheduled_at <= now,
+                MandatoryStocktakeRun.status.in_(["pending", "reopened"]),
+                MandatoryStocktakeRun.is_test.is_(False),
+            )
+            .order_by(MandatoryStocktakeRun.scheduled_at.desc())
+        )
     run = await db.scalar(select(MandatoryStocktakeRun).where(MandatoryStocktakeRun.tenant_id == tenant_id, MandatoryStocktakeRun.scheduled_at == scheduled_at))
     if run:
         return run

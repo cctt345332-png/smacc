@@ -213,7 +213,9 @@ class RepShell extends StatefulWidget {
 class _RepShellState extends State<RepShell> {
   int _index = 0;
   Timer? _attendanceTimer;
+  Timer? _stocktakeTimer;
   bool _attendancePromptShown = false;
+  bool? _stocktakeLocked;
   late Future<Map<String, dynamic>> _mandatoryStocktake;
 
   @override
@@ -222,6 +224,9 @@ class _RepShellState extends State<RepShell> {
     _mandatoryStocktake = widget.apiClient.getMap(
       '/inventory/mandatory-stocktake/rep/current',
     );
+    _stocktakeTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _refreshStocktakeIfStateChanged();
+    });
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _checkAttendancePrompt(),
     );
@@ -233,7 +238,25 @@ class _RepShellState extends State<RepShell> {
   @override
   void dispose() {
     _attendanceTimer?.cancel();
+    _stocktakeTimer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _refreshStocktakeIfStateChanged() async {
+    if (!mounted) return;
+    try {
+      final data = await widget.apiClient.getMap(
+        '/inventory/mandatory-stocktake/rep/current',
+      );
+      if (!mounted) return;
+      final locked = data['locked'] == true;
+      if (_stocktakeLocked == null || _stocktakeLocked != locked) {
+        setState(() {
+          _stocktakeLocked = locked;
+          _mandatoryStocktake = Future<Map<String, dynamic>>.value(data);
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkAttendancePrompt() async {
@@ -375,9 +398,12 @@ class _RepShellState extends State<RepShell> {
           return MandatoryStocktakeScreen(
             apiClient: widget.apiClient,
             onSubmitted: () => setState(
-              () => _mandatoryStocktake = widget.apiClient.getMap(
-                '/inventory/mandatory-stocktake/rep/current',
-              ),
+              () {
+                _stocktakeLocked = false;
+                _mandatoryStocktake = widget.apiClient.getMap(
+                  '/inventory/mandatory-stocktake/rep/current',
+                );
+              },
             ),
           );
         }
