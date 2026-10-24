@@ -80,7 +80,13 @@ export default function MandatoryStocktakePage(props: { params: Promise<{ locale
       setSelected(data);
       setSerialReplaceChoices(prev => ({ ...prev, [line.id]: { from: "", to: "" } }));
       setMessage(ar ? "تم استبدال رقم السيريال فقط بدون إنشاء حركة مخزون." : "Serial number replaced without creating a stock movement.");
-    } catch (err: any) { setError(err?.response?.data?.detail || (ar ? "تعذر استبدال السيريال" : "Could not replace serial")); }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || (ar ? "تعذر استبدال السيريال" : "Could not replace serial");
+      const readable = `${err?.response?.status ? `(${err.response.status}) ` : ""}${detail}`;
+      setError(readable);
+      window.alert(readable);
+      console.error("Stocktake serial replacement failed", err?.response?.data || err);
+    }
     finally { setReplacingSerial(null); }
   };
 
