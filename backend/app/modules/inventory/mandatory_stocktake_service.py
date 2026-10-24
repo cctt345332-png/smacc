@@ -424,26 +424,25 @@ async def replace_stocktake_serial(
         raise HTTPException(409, "السيريال الموجود يجب أن يكون من سيريالات المخزون غير المصورة")
     if _norm_serial(to_serial) not in counted_keys or _norm_serial(to_serial) in expected_keys:
         raise HTTPException(409, "السيريال المصور يجب أن يكون غير مطابقًا وغير موجود مسبقًا في المخزون")
-    serial = await db.scalar(select(SerialItem).join(
+    serial_candidates = (await db.execute(select(SerialItem).join(
         InventoryItem, InventoryItem.id == SerialItem.product_id
     ).where(
         InventoryItem.tenant_id == tenant_id,
         SerialItem.product_id == line.item_id,
         SerialItem.warehouse_id == line.warehouse_id,
-        SerialItem.serial_number == from_serial,
         SerialItem.status == "in_stock",
-    ))
+    ))).scalars().all()
+    serial = next((candidate for candidate in serial_candidates if _norm_serial(candidate.serial_number) == _norm_serial(from_serial)), None)
     if not serial:
-        raise HTTPException(409, "السيريال الموجود غير متاح في مخزون المندوب")
-    duplicate = await db.scalar(select(SerialItem.id).join(
+        raise HTTPException(409, f"السيريال {from_serial} غير موجود كعنصر متاح في مخزون المندوب لهذا الصنف والمستودع")
+    duplicate_candidates = (await db.execute(select(SerialItem).join(
         InventoryItem, InventoryItem.id == SerialItem.product_id
     ).where(
         InventoryItem.tenant_id == tenant_id,
         SerialItem.product_id == line.item_id,
-        SerialItem.serial_number == to_serial,
-    ))
-    if duplicate:
-        raise HTTPException(409, "السيريال المصور موجود مسبقًا في النظام")
+    ))).scalars().all()
+    if any(_norm_serial(candidate.serial_number) == _norm_serial(to_serial) for candidate in duplicate_candidates):
+        raise HTTPException(409, f"السيريال المصور {to_serial} موجود مسبقًا لهذا الصنف في النظام")
     serial.serial_number = to_serial
     line.expected_serials_json = json.dumps([
         to_serial if _norm_serial(value) == _norm_serial(from_serial) else value
