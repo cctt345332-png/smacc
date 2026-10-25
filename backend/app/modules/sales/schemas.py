@@ -238,6 +238,7 @@ class PaymentCreate(BaseModel):
 
 
 class PaymentUpdate(BaseModel):
+    payment_type: Optional[Literal["receipt", "discount"]] = None
     payment_date: Optional[datetime] = None
     amount: Optional[Decimal] = None
     payment_method: Optional[PaymentMethod] = None

@@ -1575,10 +1575,15 @@ async def update_payment(
             raise HTTPException(409, "الفاتورة المرتبطة بالسند غير موجودة")
 
     changes = data.model_dump(exclude_unset=True)
+    old_type = payment.payment_type or "receipt"
+    new_type = changes.get("payment_type", old_type)
+    if new_type not in {"receipt", "discount"}:
+        raise HTTPException(400, "نوع السند غير صالح")
     old_amount = Decimal(str(payment.amount or 0))
     new_amount = Decimal(str(changes.get("amount", old_amount)))
     if new_amount <= Decimal("0"):
         raise HTTPException(400, "يجب أن يكون مبلغ السند أكبر من صفر")
+    old_receipt_amount = old_amount if old_type == "receipt" else Decimal("0")
 
     new_date = changes.get("payment_date", payment.payment_date)
     if new_date:
@@ -1588,8 +1593,8 @@ async def update_payment(
     if payment.journal_entry_id and new_method != payment.payment_method:
         raise HTTPException(409, "لا يمكن تغيير طريقة الدفع بعد ترحيل القيد المحاسبي")
 
-    if invoice:
-        paid_without_current = Decimal(str(invoice.paid_amount or 0)) - old_amount
+    if invoice and new_type == "receipt":
+        paid_without_current = Decimal(str(invoice.paid_amount or 0)) - old_receipt_amount
         if paid_without_current < Decimal("0"):
             paid_without_current = Decimal("0")
         if new_amount > Decimal(str(invoice.total or 0)) - paid_without_current + Decimal("0.01"):
@@ -1601,10 +1606,14 @@ async def update_payment(
             datetime(1970, 1, 1),
             max(payment.payment_date, new_date),
         )
-        available = Decimal(str(statement["summary"].get("closing_balance") or 0)) + old_amount
+        available = Decimal(str(statement["summary"].get("closing_balance") or 0)) + old_receipt_amount
         if new_amount > available + Decimal("0.01"):
             raise HTTPException(400, "المبلغ أكبر من رصيد العميل المتاح")
 
+    # تحديث رصيد الفاتورة عند التحويل بين قبض وخصم، وليس عند تغيير المبلغ فقط.
+    new_receipt_amount = new_amount if new_type == "receipt" else Decimal("0")
+
+    payment.payment_type = new_type
     payment.amount = new_amount
     payment.payment_date = new_date
     if "payment_method" in changes:
@@ -1615,7 +1624,11 @@ async def update_payment(
         payment.notes = changes["notes"]
 
     if invoice:
-        invoice.paid_amount = Decimal(str(invoice.paid_amount or 0)) - old_amount + new_amount
+        invoice.paid_amount = (
+            Decimal(str(invoice.paid_amount or 0))
+            - old_receipt_amount
+            + new_receipt_amount
+        )
         if invoice.paid_amount >= Decimal(str(invoice.total or 0)) - Decimal("0.01"):
             invoice.status = InvoiceStatus.PAID
         elif invoice.paid_amount > Decimal("0"):
@@ -1632,6 +1645,40 @@ async def update_payment(
         )
         if not entry:
             raise HTTPException(409, "القيد المحاسبي المرتبط بالسند غير موجود")
+        # إعادة توجيه طرف المدين حسب النوع: الخصم إلى حساب الخصومات، والقبض
+        # إلى الصندوق/البنك. يبقى حساب العميل طرفًا دائنًا في الحالتين.
+        from app.modules.accounting.service import get_operational_account
+        from app.models.accounting import BankAccount
+        if new_type == "discount":
+            try:
+                debit_account_id = (await get_operational_account(
+                    db, tenant_id, "sales_discounts"
+                )).id
+            except HTTPException:
+                raise HTTPException(409, "حساب خصم المبيعات غير مهيأ للشركة")
+        else:
+            debit_account_id = None
+            if payment.bank_account_id:
+                bank = await db.get(BankAccount, payment.bank_account_id)
+                if bank and bank.tenant_id == tenant_id and bank.gl_account_id:
+                    debit_account_id = bank.gl_account_id
+            if not debit_account_id:
+                method_key = payment.payment_method.value if hasattr(payment.payment_method, "value") else str(payment.payment_method)
+                mapping_key = {
+                    "cash": "default_cash",
+                    "bank_transfer": "default_bank",
+                    "cheque": "default_bank",
+                    "credit_card": "default_card",
+                    "mada": "default_card",
+                    "stc_pay": "default_wallet",
+                }.get(method_key, "default_cash")
+                try:
+                    debit_account_id = (await get_operational_account(
+                        db, tenant_id, mapping_key
+                    )).id
+                except HTTPException:
+                    raise HTTPException(409, "حساب الصندوق أو البنك غير مهيأ للشركة")
+
         entry.entry_date = new_date
         entry.total_debit = new_amount
         entry.total_credit = new_amount
@@ -1643,10 +1690,18 @@ async def update_payment(
         lines = line_result.scalars().all()
         if len(lines) < 2:
             raise HTTPException(409, "القيد المحاسبي المرتبط بالسند غير مكتمل")
+        lines[0].account_id = debit_account_id
         lines[0].debit = new_amount
         lines[0].credit = Decimal("0")
+        lines[1].account_id = customer.ar_account_id
         lines[1].debit = Decimal("0")
         lines[1].credit = new_amount
+        entry.source = "discount_voucher" if new_type == "discount" else "payment_receipt"
+        entry.description_ar = (
+            f"سند خصم {payment.payment_number} — {customer.name_ar}"
+            if new_type == "discount"
+            else f"سند قبض {payment.payment_number} — {customer.name_ar}"
+        )
 
         from app.models.treasury import Voucher, VoucherStatus
         voucher = await db.scalar(
@@ -1659,6 +1714,16 @@ async def update_payment(
         if voucher:
             voucher.voucher_date = new_date
             voucher.amount = new_amount
+            from app.models.treasury import VoucherType
+            voucher.voucher_type = VoucherType.DISCOUNT if new_type == "discount" else VoucherType.RECEIPT
+            voucher.debit_account_id = debit_account_id
+            voucher.credit_account_id = customer.ar_account_id
+            voucher.invoice_id = str(invoice.id) if invoice else None
+            voucher.description_ar = (
+                f"سند خصم — {customer.name_ar}"
+                if new_type == "discount"
+                else f"سند قبض — {customer.name_ar}"
+            )
 
     await db.commit()
     return await get_payment(db, tenant_id, payment_id)

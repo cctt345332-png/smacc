@@ -2,6 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getVoucher, postVoucher, cancelVoucher } from "@/lib/treasury";
+import { getPayments, updatePayment } from "@/lib/sales";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 import SellerBlock from "@/components/documents/SellerBlock";
@@ -31,12 +32,20 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
   const [company, setCompany] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
+  const [payment, setPayment] = useState<any>(null);
+  const [editingType, setEditingType] = useState(false);
+  const [selectedType, setSelectedType] = useState("receipt");
 
   const load = async () => {
     try {
-      const [vRes, cRes] = await Promise.all([getVoucher(id), getCompany()]);
+      const [vRes, cRes, pRes] = await Promise.all([getVoucher(id), getCompany(), getPayments()]);
       setVoucher(vRes.data);
       setCompany(cRes.data);
+      const linked = (Array.isArray(pRes.data) ? pRes.data : []).find(
+        (p: any) => p.payment_number === vRes.data.reference
+      );
+      setPayment(linked || null);
+      setSelectedType(linked?.payment_type || String(vRes.data.voucher_type || "receipt"));
     } catch {} finally { setLoading(false); }
   };
 
@@ -56,6 +65,23 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
     try { await cancelVoucher(id); load(); }
     catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setActing(false); }
+  };
+
+  const handleTypeSave = async () => {
+    if (!payment) {
+      alert(ar ? "هذا السند لا يملك سند قبض/خصم مرتبطًا من المبيعات" : "This voucher has no linked sales payment");
+      return;
+    }
+    if (selectedType === payment.payment_type) { setEditingType(false); return; }
+    if (!confirm(ar ? "سيتم تحديث الفاتورة والقيد المحاسبي معًا. هل تريد المتابعة؟" : "The invoice and journal will be updated together. Continue?")) return;
+    setActing(true);
+    try {
+      await updatePayment(payment.id, { payment_type: selectedType });
+      await load();
+      setEditingType(false);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر تعديل نوع السند" : "Could not change voucher type"));
+    } finally { setActing(false); }
   };
 
   if (loading) return <div className="empty-state" style={{ minHeight: "60vh" }}><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>;
@@ -89,6 +115,22 @@ export default function ReceiptDetailPage(props: { params: Promise<{ locale: str
           <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/treasury/receipts/${id}/print`, "_blank")}>
             <Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}
           </button>
+          {payment && (
+            editingType ? (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <select className="form-input" value={selectedType} onChange={e => setSelectedType(e.target.value)} disabled={acting}>
+                  <option value="receipt">{ar ? "سند قبض" : "Receipt"}</option>
+                  <option value="discount">{ar ? "سند خصم" : "Discount"}</option>
+                </select>
+                <button className="btn btn-primary btn-sm" onClick={handleTypeSave} disabled={acting}>{ar ? "حفظ" : "Save"}</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => setEditingType(false)} disabled={acting}>{ar ? "إلغاء" : "Cancel"}</button>
+              </div>
+            ) : (
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditingType(true)} disabled={acting}>
+                {ar ? "تعديل نوع السند" : "Change voucher type"}
+              </button>
+            )
+          )}
           {voucher.status === "draft" && (
             <>
               <button className="btn btn-primary btn-sm" onClick={handlePost} disabled={acting}>
