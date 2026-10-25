@@ -319,12 +319,30 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
 
     employees = await get_employees(db, tenant_id, status="active")
     records = []
+    month_start = date(year, month, 1)
+    month_end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
 
     for emp in employees:
         gross = emp.basic_salary + emp.housing_allowance + emp.transport_allowance + emp.other_allowances
         gosi_emp = (emp.basic_salary * GOSI_EMPLOYEE_RATE) if emp.gosi_eligible else Decimal("0")
         gosi_er  = (emp.basic_salary * GOSI_EMPLOYER_RATE) if emp.gosi_eligible else Decimal("0")
-        total_deductions = gosi_emp
+        absent_days = (await db.execute(select(func.count(AttendanceRecord.id)).where(
+            AttendanceRecord.tenant_id == tenant_id, AttendanceRecord.employee_id == emp.id,
+            AttendanceRecord.date >= month_start, AttendanceRecord.date <= month_end,
+            AttendanceRecord.status == "absent",
+        ))).scalar() or 0
+        unpaid_leaves = (await db.execute(select(LeaveRequest).where(
+            LeaveRequest.tenant_id == tenant_id, LeaveRequest.employee_id == emp.id,
+            LeaveRequest.status == "approved", LeaveRequest.leave_type == "unpaid",
+            LeaveRequest.from_date <= month_end, LeaveRequest.to_date >= month_start,
+        ))).scalars().all()
+        unpaid_leave_days = sum(
+            ((min(req.to_date, month_end) - max(req.from_date, month_start)).days + 1)
+            for req in unpaid_leaves
+        )
+        absence_days = Decimal(str(absent_days + unpaid_leave_days))
+        absence_deduction = (gross / Decimal("30") * absence_days).quantize(Decimal("0.01"))
+        total_deductions = gosi_emp + absence_deduction
         net = gross - total_deductions
 
         rec = PayrollRecord(
@@ -339,7 +357,7 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             other_allowances=emp.other_allowances,
             overtime_amount=Decimal("0"),
             gosi_employee=gosi_emp,
-            absence_deduction=Decimal("0"),
+            absence_deduction=absence_deduction,
             other_deductions=Decimal("0"),
             gross_salary=gross,
             total_deductions=total_deductions,
@@ -348,6 +366,7 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             status="draft",
             created_by=user_id,
             created_at=datetime.utcnow(),
+            notes=f"خصم تلقائي للغياب والإجازة غير المدفوعة: {absence_days} يوم" if absence_days else None,
         )
         db.add(rec)
         records.append(rec)
