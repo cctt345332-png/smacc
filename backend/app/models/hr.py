@@ -77,6 +77,19 @@ class Department(Base):
     )
 
 
+class HRSettings(Base):
+    __tablename__ = "hr_settings"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), unique=True, index=True)
+    work_start_time: Mapped[str] = mapped_column(String(5), default="09:00")
+    work_end_time: Mapped[str] = mapped_column(String(5), default="17:00")
+    grace_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    overtime_multiplier: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("1.50"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 # ─── Employee (الموظفون) ──────────────────────────────────────────────
 class Employee(Base):
     __tablename__ = "hr_employees"

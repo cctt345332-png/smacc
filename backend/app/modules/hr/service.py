@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models.hr import (
     Department, Employee, AttendanceRecord,
     LeaveRequest, PayrollRecord,
+    HRSettings,
     EmployeeStatus, LeaveStatus,
 )
 
@@ -78,6 +79,40 @@ async def update_department(db: AsyncSession, tenant_id: str, dept_id: str, data
     await db.commit()
     await db.refresh(dept)
     return dept
+
+
+async def get_hr_settings(db: AsyncSession, tenant_id: str) -> HRSettings:
+    settings = await db.scalar(select(HRSettings).where(HRSettings.tenant_id == tenant_id))
+    if settings:
+        return settings
+    settings = HRSettings(id=str(uuid.uuid4()), tenant_id=tenant_id, created_at=datetime.utcnow(), updated_at=datetime.utcnow())
+    db.add(settings)
+    await db.commit()
+    await db.refresh(settings)
+    return settings
+
+
+async def update_hr_settings(db: AsyncSession, tenant_id: str, data: dict) -> HRSettings:
+    settings = await get_hr_settings(db, tenant_id)
+    start = str(data.get("work_start_time", settings.work_start_time))
+    end = str(data.get("work_end_time", settings.work_end_time))
+    try:
+        time.fromisoformat(start)
+        time.fromisoformat(end)
+    except ValueError as exc:
+        raise HTTPException(400, "صيغة وقت الدوام غير صحيحة") from exc
+    grace = int(data.get("grace_minutes", settings.grace_minutes))
+    multiplier = Decimal(str(data.get("overtime_multiplier", settings.overtime_multiplier)))
+    if grace < 0 or grace > 180 or multiplier < 1 or multiplier > 5:
+        raise HTTPException(400, "قيم إعدادات الدوام خارج النطاق المسموح")
+    settings.work_start_time = start[:5]
+    settings.work_end_time = end[:5]
+    settings.grace_minutes = grace
+    settings.overtime_multiplier = multiplier
+    settings.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(settings)
+    return settings
 
 
 # ─── Employees ───────────────────────────────────────────────────────
@@ -333,6 +368,10 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
     records = []
     month_start = date(year, month, 1)
     month_end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
+    settings = await get_hr_settings(db, tenant_id)
+    work_start = time.fromisoformat(settings.work_start_time)
+    work_end = time.fromisoformat(settings.work_end_time)
+    grace_delta = timedelta(minutes=settings.grace_minutes)
 
     for emp in employees:
         gross = emp.basic_salary + emp.housing_allowance + emp.transport_allowance + emp.other_allowances
@@ -347,12 +386,12 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
         late_minutes = 0
         for row in attendance_rows:
             if row.check_in:
-                scheduled_start = datetime.combine(row.date, time(9, 0))
-                grace_deadline = scheduled_start + timedelta(minutes=15)
+                scheduled_start = datetime.combine(row.date, work_start)
+                grace_deadline = scheduled_start + grace_delta
                 if row.check_in > grace_deadline:
                     late_minutes += int((row.check_in - grace_deadline).total_seconds() // 60)
             if row.check_out:
-                scheduled_end = datetime.combine(row.date, time(17, 0))
+                scheduled_end = datetime.combine(row.date, work_end)
                 if row.check_out > scheduled_end:
                     overtime_hours += Decimal(str((row.check_out - scheduled_end).total_seconds() / 3600)).quantize(Decimal("0.01"))
         unpaid_leaves = (await db.execute(select(LeaveRequest).where(
@@ -367,7 +406,7 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
         absence_days = Decimal(str(absent_days + unpaid_leave_days))
         absence_deduction = (gross / Decimal("30") * absence_days).quantize(Decimal("0.01"))
         hourly_rate = (gross / Decimal("30") / Decimal("8")) if gross else Decimal("0")
-        overtime_amount = (hourly_rate * Decimal("1.5") * overtime_hours).quantize(Decimal("0.01"))
+        overtime_amount = (hourly_rate * settings.overtime_multiplier * overtime_hours).quantize(Decimal("0.01"))
         late_deduction = (hourly_rate * Decimal(late_minutes) / Decimal("60")).quantize(Decimal("0.01"))
         total_deductions = gosi_emp + absence_deduction + late_deduction
         net = gross - total_deductions

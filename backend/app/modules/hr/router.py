@@ -59,6 +59,17 @@ async def update_employee(employee_id: str, data: dict, user=Depends(require_rol
     return await service.update_employee(db, user["tenant_id"], employee_id, data)
 
 
+# ─── HR settings ─────────────────────────────────────────────────────
+@router.get("/settings")
+async def get_hr_settings(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_hr_settings(db, tenant_id)
+
+
+@router.patch("/settings")
+async def update_hr_settings(data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.update_hr_settings(db, user["tenant_id"], data)
+
+
 # ─── Attendance ──────────────────────────────────────────────────────
 @router.get("/attendance")
 async def list_attendance(

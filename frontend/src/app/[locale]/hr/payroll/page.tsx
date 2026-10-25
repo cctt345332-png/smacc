@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getPayroll, generatePayroll, confirmPayroll, payPayroll, updatePayrollRecord } from "@/lib/hr";
+import { getPayroll, generatePayroll, confirmPayroll, payPayroll, updatePayrollRecord, getHRSettings, updateHRSettings } from "@/lib/hr";
 
 const IcDollar   = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const IcUsers    = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -35,6 +35,8 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
+  const [hrSettings, setHrSettings] = useState({ work_start_time: "09:00", work_end_time: "17:00", grace_minutes: 15, overtime_multiplier: 1.5 });
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -46,6 +48,26 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   };
 
   useEffect(() => { load(); }, [month, year]);
+
+  useEffect(() => {
+    getHRSettings().then(({ data }) => setHrSettings({
+      work_start_time: data.work_start_time || "09:00",
+      work_end_time: data.work_end_time || "17:00",
+      grace_minutes: Number(data.grace_minutes ?? 15),
+      overtime_multiplier: Number(data.overtime_multiplier ?? 1.5),
+    })).catch(() => {});
+  }, []);
+
+  const saveSettings = async () => {
+    setSettingsSaving(true); setError("");
+    try {
+      const { data } = await updateHRSettings(hrSettings);
+      setHrSettings({ ...hrSettings, ...data });
+      alert(ar ? "تم حفظ إعدادات الدوام" : "Work settings saved");
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || (ar ? "تعذر حفظ إعدادات الدوام" : "Could not save work settings"));
+    } finally { setSettingsSaving(false); }
+  };
 
   const handleGenerate = async () => {
     setGenerating(true); setError("");
@@ -154,6 +176,20 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
               {[now.getFullYear(), now.getFullYear() - 1].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-header"><span className="card-title">{ar ? "إعدادات الدوام واحتساب الإضافي" : "Work & overtime settings"}</span></div>
+        <div className="card-body">
+          <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+            <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "بداية الدوام" : "Work start"}</label><input type="time" className="form-input" value={hrSettings.work_start_time} onChange={e => setHrSettings(s => ({ ...s, work_start_time: e.target.value }))} /></div>
+            <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "نهاية الدوام" : "Work end"}</label><input type="time" className="form-input" value={hrSettings.work_end_time} onChange={e => setHrSettings(s => ({ ...s, work_end_time: e.target.value }))} /></div>
+            <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "السماح بالتأخير بالدقائق" : "Grace minutes"}</label><input type="number" min="0" max="180" className="form-input" value={hrSettings.grace_minutes} onChange={e => setHrSettings(s => ({ ...s, grace_minutes: Number(e.target.value) }))} /></div>
+            <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "معامل الإضافي" : "Overtime multiplier"}</label><input type="number" min="1" max="5" step="0.05" className="form-input" value={hrSettings.overtime_multiplier} onChange={e => setHrSettings(s => ({ ...s, overtime_multiplier: Number(e.target.value) }))} /></div>
+            <button className="btn btn-primary" onClick={saveSettings} disabled={settingsSaving}>{settingsSaving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الإعدادات" : "Save settings")}</button>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10 }}>{ar ? "تُستخدم هذه القيم عند توليد مسير جديد، ولا تغيّر المسيرات المعتمدة سابقًا." : "These values apply when generating a new payroll and do not change previously approved payrolls."}</div>
         </div>
       </div>
 
