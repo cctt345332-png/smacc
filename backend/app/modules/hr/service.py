@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.models.hr import (
@@ -18,6 +19,25 @@ from app.models.hr import (
 
 GOSI_EMPLOYER_RATE = Decimal("0.09")
 GOSI_EMPLOYEE_RATE = Decimal("0.09")
+
+
+def _optional_text(value):
+    """تحويل النص الفارغ القادم من نموذج الويب إلى NULL."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+def _parse_date(value, field_name: str, default: date | None = None) -> date | None:
+    if value in (None, ""):
+        return default
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError as exc:
+        raise HTTPException(400, f"قيمة {field_name} غير صحيحة") from exc
 
 
 # ─── Departments ─────────────────────────────────────────────────────
@@ -102,24 +122,37 @@ async def create_employee(db: AsyncSession, tenant_id: str, data: dict) -> Emplo
         select(func.count()).where(Employee.tenant_id == tenant_id)
     )).scalar() or 0
     emp_number = data.get("employee_number") or f"EMP-{str(count + 1).zfill(3)}"
+    department_id = _optional_text(data.get("department_id"))
+    if department_id:
+        department = await db.scalar(
+            select(Department).where(
+                Department.id == department_id,
+                Department.tenant_id == tenant_id,
+                Department.is_active == True,
+            )
+        )
+        if not department:
+            raise HTTPException(400, "القسم المحدد غير موجود في الشركة")
+    hire_date = _parse_date(data.get("hire_date"), "تاريخ التعيين", date.today())
+    birth_date = _parse_date(data.get("birth_date"), "تاريخ الميلاد")
 
     emp = Employee(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
         employee_number=emp_number,
-        department_id=data.get("department_id"),
+        department_id=department_id,
         full_name_ar=data["full_name_ar"],
-        full_name_en=data.get("full_name_en"),
-        national_id=data.get("national_id"),
+        full_name_en=_optional_text(data.get("full_name_en")),
+        national_id=_optional_text(data.get("national_id")),
         gender=data.get("gender", "male"),
-        birth_date=data.get("birth_date"),
+        birth_date=birth_date,
         nationality=data.get("nationality", "SA"),
-        phone=data.get("phone"),
-        email=data.get("email"),
+        phone=_optional_text(data.get("phone")),
+        email=_optional_text(data.get("email")),
         job_title_ar=data["job_title_ar"],
-        job_title_en=data.get("job_title_en"),
+        job_title_en=_optional_text(data.get("job_title_en")),
         contract_type=data.get("contract_type", "full_time"),
-        hire_date=data.get("hire_date", date.today()),
+        hire_date=hire_date,
         basic_salary=Decimal(str(data.get("basic_salary", 0))),
         housing_allowance=Decimal(str(data.get("housing_allowance", 0))),
         transport_allowance=Decimal(str(data.get("transport_allowance", 0))),
@@ -131,7 +164,11 @@ async def create_employee(db: AsyncSession, tenant_id: str, data: dict) -> Emplo
         updated_at=datetime.utcnow(),
     )
     db.add(emp)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(409, "تعذر حفظ الموظف: الرقم الوظيفي مستخدم أو توجد بيانات مرتبطة غير صحيحة") from exc
     await db.refresh(emp)
     return emp
 
