@@ -142,7 +142,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
                   <td><span style={{ fontWeight: 600 }}>{Number(emp.basic_salary || 0).toLocaleString()}</span> <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "ر.س" : "SAR"}</span></td>
                   <td style={{ fontSize: 12 }}>{emp.hire_date}</td>
                   <td><span className={emp.status === "active" ? "badge badge-success" : "badge badge-gray"}>{emp.status === "active" ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}</span></td>
-                  <td><button className="btn btn-secondary btn-sm" style={{ gap: 4 }}><IcEye />{ar ? "عرض" : "View"}</button></td>
+                  <td><a className="btn btn-secondary btn-sm" style={{ gap: 4 }} href={`/${locale}/hr/employees/${emp.id}`}><IcEye />{ar ? "عرض" : "View"}</a></td>
                 </tr>
               ))}
             </tbody>

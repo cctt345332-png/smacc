@@ -62,6 +62,8 @@ export default function HRPage(props: { params: Promise<{ locale: string }> }) {
     { href: `/${locale}/hr/leaves`,      labelAr: "الإجازات",   labelEn: "Leaves",      icon: <IcCalendar />, color: "#D97706", bg: "#FFFBEB" },
     { href: `/${locale}/hr/payroll`,     labelAr: "الرواتب",    labelEn: "Payroll",     icon: <IcDollar />,   color: "#DC2626", bg: "#FEF2F2" },
     { href: `/${locale}/hr/gosi`,        labelAr: "GOSI",       labelEn: "GOSI",        icon: <IcShield />,   color: "#0891B2", bg: "#ECFEFF" },
+    { href: `/${locale}/hr/expenses`, labelAr: "مصروفات الموظفين", labelEn: "Employee Expenses", icon: <IcDollar />, color: "#7C3AED", bg: "#F5F3FF" },
+    { href: `/${locale}/hr/reports`, labelAr: "تقارير الموارد البشرية", labelEn: "HR Reports", icon: <IcShield />, color: "#047857", bg: "#ECFDF5" },
   ];
 
   return (

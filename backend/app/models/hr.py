@@ -110,6 +110,27 @@ class EmployeeAdvance(Base):
     employee: Mapped["Employee"] = relationship("Employee")
 
 
+class EmployeeExpense(Base):
+    __tablename__ = "hr_employee_expenses"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    employee_id: Mapped[str] = mapped_column(String, ForeignKey("hr_employees.id"), index=True)
+    expense_date: Mapped[date] = mapped_column(Date, index=True)
+    category: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    receipt_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    receipt_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    receipt_file_data: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    approved_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    employee: Mapped["Employee"] = relationship("Employee")
+
+
 # ─── Employee (الموظفون) ──────────────────────────────────────────────
 class Employee(Base):
     __tablename__ = "hr_employees"

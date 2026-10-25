@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models.hr import (
     Department, Employee, AttendanceRecord,
     LeaveRequest, PayrollRecord,
-    HRSettings, EmployeeAdvance,
+    HRSettings, EmployeeAdvance, EmployeeExpense,
     EmployeeStatus, LeaveStatus,
 )
 
@@ -311,9 +311,16 @@ async def approve_leave(db: AsyncSession, tenant_id: str, leave_id: str, user_id
         raise HTTPException(404, "الطلب غير موجود")
     if req.status != "pending":
         raise HTTPException(400, "الطلب ليس في حالة انتظار")
+    employee = await db.scalar(select(Employee).where(Employee.id == req.employee_id, Employee.tenant_id == tenant_id))
+    if not employee:
+        raise HTTPException(404, "الموظف غير موجود")
+    if req.leave_type == "annual" and Decimal(str(employee.leave_balance or 0)) < Decimal(str(req.days)):
+        raise HTTPException(409, f"رصيد الإجازة غير كافٍ. المتبقي: {employee.leave_balance} يوم")
     req.status = "approved"
     req.approved_by = user_id
     req.approved_at = datetime.utcnow()
+    if req.leave_type == "annual":
+        employee.leave_balance = Decimal(str(employee.leave_balance or 0)) - Decimal(str(req.days))
     await db.commit()
     await db.refresh(req)
     return req
@@ -754,6 +761,61 @@ async def get_gosi_report(db: AsyncSession, tenant_id: str, month: int, year: in
         "employee_rate": float(GOSI_EMPLOYEE_RATE * 100),
     }
 
+
+# ─── Employee expenses and profile ───────────────────────────────────
+async def get_employee_expenses(db, tenant_id, status=None, employee_id=None):
+    q = select(EmployeeExpense).where(EmployeeExpense.tenant_id == tenant_id).options(selectinload(EmployeeExpense.employee)).order_by(EmployeeExpense.expense_date.desc(), EmployeeExpense.created_at.desc())
+    if status: q = q.where(EmployeeExpense.status == status)
+    if employee_id: q = q.where(EmployeeExpense.employee_id == employee_id)
+    return (await db.execute(q)).scalars().all()
+
+async def create_employee_expense(db, tenant_id, user_id, data):
+    employee = await db.scalar(select(Employee).where(Employee.id == data.get("employee_id"), Employee.tenant_id == tenant_id))
+    if not employee: raise HTTPException(404, "الموظف غير موجود")
+    amount = Decimal(str(data.get("amount", 0)))
+    if amount <= 0: raise HTTPException(400, "قيمة المصروف يجب أن تكون أكبر من صفر")
+    expense = EmployeeExpense(id=str(uuid.uuid4()), tenant_id=tenant_id, employee_id=employee.id,
+        expense_date=_parse_date(data.get("expense_date"), "تاريخ المصروف", date.today()), category=str(data.get("category") or "عام"),
+        description=_optional_text(data.get("description")), amount=amount, status="pending",
+        receipt_file_name=data.get("receipt_file_name"), receipt_content_type=data.get("receipt_content_type"),
+        receipt_file_data=data.get("receipt_file_data"), created_by=user_id, created_at=datetime.utcnow())
+    db.add(expense); await db.commit(); await db.refresh(expense); return expense
+
+async def review_employee_expense(db, tenant_id, expense_id, user_id, approved):
+    expense = await db.scalar(select(EmployeeExpense).where(EmployeeExpense.id == expense_id, EmployeeExpense.tenant_id == tenant_id))
+    if not expense: raise HTTPException(404, "المصروف غير موجود")
+    if expense.status != "pending": raise HTTPException(400, "تمت مراجعة المصروف مسبقًا")
+    expense.status = "approved" if approved else "rejected"; expense.approved_by = user_id; expense.approved_at = datetime.utcnow()
+    if approved:
+        from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
+        from app.modules.accounting.service import get_operational_account, _next_entry_number
+        expense_account = await get_operational_account(db, tenant_id, "operating_expenses")
+        cash_account = await get_operational_account(db, tenant_id, "default_cash")
+        now = datetime.utcnow()
+        fiscal = (await db.execute(select(FiscalYear).where(FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN, FiscalYear.start_date <= now.date(), FiscalYear.end_date >= now.date()).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()))).scalars().first()
+        if not expense_account or not cash_account or not fiscal:
+            raise HTTPException(409, "حساب المصروف أو الصندوق أو السنة المالية غير مهيأ")
+        entry = JournalEntry(id=str(uuid.uuid4()), tenant_id=tenant_id, entry_number=await _next_entry_number(db, tenant_id), entry_date=now, fiscal_year_id=fiscal.id, description_ar=f"مصروف موظف - {expense.category}", description_en=f"Employee expense - {expense.category}", status=JournalEntryStatus.POSTED, source="hr_employee_expense", reference=expense.id, total_debit=expense.amount, total_credit=expense.amount, created_by=user_id, posted_by=user_id, posted_at=now)
+        db.add(entry)
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=expense_account.id, description=f"مصروف موظف {expense.category}", debit=expense.amount, credit=0, line_order=0))
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=cash_account.id, description="دفع مصروف موظف من الصندوق", debit=0, credit=expense.amount, line_order=1))
+        expense.journal_entry_id = entry.id
+    await db.commit(); await db.refresh(expense); return expense
+
+async def get_employee_profile(db, tenant_id, employee_id):
+    employee = await db.scalar(select(Employee).where(Employee.id == employee_id, Employee.tenant_id == tenant_id).options(selectinload(Employee.department)))
+    if not employee: raise HTTPException(404, "الموظف غير موجود")
+    payroll = (await db.execute(select(PayrollRecord).where(PayrollRecord.tenant_id == tenant_id, PayrollRecord.employee_id == employee_id).order_by(PayrollRecord.year.desc(), PayrollRecord.month.desc()).limit(24))).scalars().all()
+    leaves = (await db.execute(select(LeaveRequest).where(LeaveRequest.tenant_id == tenant_id, LeaveRequest.employee_id == employee_id).order_by(LeaveRequest.created_at.desc()))).scalars().all()
+    expenses = await get_employee_expenses(db, tenant_id, employee_id=employee_id)
+    advances = (await db.execute(select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant_id, EmployeeAdvance.employee_id == employee_id))).scalars().all()
+    return {"employee": employee, "payroll": payroll, "leaves": leaves, "expenses": expenses, "advances": advances}
+
+async def get_hr_financial_report(db, tenant_id, month, year):
+    rows = (await db.execute(select(PayrollRecord).where(PayrollRecord.tenant_id == tenant_id, PayrollRecord.month == month, PayrollRecord.year == year).options(selectinload(PayrollRecord.employee)))).scalars().all()
+    expenses = await get_employee_expenses(db, tenant_id, status="approved")
+    expenses = [x for x in expenses if x.expense_date.year == year and x.expense_date.month == month]
+    return {"month": month, "year": year, "payroll": [{"employee": x.employee.full_name_ar if x.employee else x.employee_id, "gross": float(x.gross_salary), "deductions": float(x.total_deductions), "net": float(x.net_salary)} for x in rows], "totals": {"gross": float(sum((x.gross_salary for x in rows), Decimal(0))), "deductions": float(sum((x.total_deductions for x in rows), Decimal(0))), "net": float(sum((x.net_salary for x in rows), Decimal(0))), "approved_expenses": float(sum((x.amount for x in expenses), Decimal(0)))}}
 
 # ─── HR Summary ──────────────────────────────────────────────────────
 

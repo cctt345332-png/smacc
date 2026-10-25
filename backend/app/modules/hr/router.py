@@ -90,6 +90,32 @@ async def reject_advance(advance_id: str, user=Depends(require_role(["manager", 
     return await service.reject_advance(db, user["tenant_id"], advance_id, user["user_id"])
 
 
+# ─── Employee expenses, profile and reports ───────────────────────────
+@router.get("/expenses")
+async def list_employee_expenses(status: Optional[str] = None, employee_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_employee_expenses(db, tenant_id, status, employee_id)
+
+@router.post("/expenses", status_code=201)
+async def create_employee_expense(data: dict, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await service.create_employee_expense(db, user["tenant_id"], user["user_id"], data)
+
+@router.post("/expenses/{expense_id}/approve")
+async def approve_employee_expense(expense_id: str, user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.review_employee_expense(db, user["tenant_id"], expense_id, user["user_id"], True)
+
+@router.post("/expenses/{expense_id}/reject")
+async def reject_employee_expense(expense_id: str, user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.review_employee_expense(db, user["tenant_id"], expense_id, user["user_id"], False)
+
+@router.get("/employees/{employee_id}/profile")
+async def employee_profile(employee_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_employee_profile(db, tenant_id, employee_id)
+
+@router.get("/reports/financial")
+async def hr_financial_report(month: int, year: int, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_hr_financial_report(db, tenant_id, month, year)
+
+
 # ─── Attendance ──────────────────────────────────────────────────────
 @router.get("/attendance")
 async def list_attendance(

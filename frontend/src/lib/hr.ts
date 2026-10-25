@@ -48,3 +48,11 @@ export const updatePayrollRecord = (id: string, data: any) =>
 // ─── GOSI ────────────────────────────────────────────────────────────
 export const getGOSI = (month: number, year: number) =>
   api.get(`/hr/gosi?month=${month}&year=${year}`);
+
+
+export const getEmployeeExpenses = (params?: any) => api.get("/hr/expenses", { params });
+export const createEmployeeExpense = (data: any) => api.post("/hr/expenses", data);
+export const approveEmployeeExpense = (id: string) => api.post(`/hr/expenses/${id}/approve`);
+export const rejectEmployeeExpense = (id: string) => api.post(`/hr/expenses/${id}/reject`);
+export const getEmployeeProfile = (id: string) => api.get(`/hr/employees/${id}/profile`);
+export const getHRFinancialReport = (month: number, year: number) => api.get(`/hr/reports/financial?month=${month}&year=${year}`);
