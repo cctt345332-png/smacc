@@ -16,7 +16,7 @@ export default function EditSalesPaymentPage(props: { params: Promise<{ locale: 
   const ar = locale === "ar";
   const router = useRouter();
   const [payment, setPayment] = useState<any>(null);
-  const [form, setForm] = useState({ payment_date: "", amount: "", payment_method: "cash", reference: "", notes: "" });
+  const [form, setForm] = useState({ payment_type: "receipt", payment_date: "", amount: "", payment_method: "cash", reference: "", notes: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -26,6 +26,7 @@ export default function EditSalesPaymentPage(props: { params: Promise<{ locale: 
       const value = res.data;
       setPayment(value);
       setForm({
+        payment_type: value.payment_type || "receipt",
         payment_date: String(value.payment_date || "").slice(0, 10),
         amount: String(value.amount || ""),
         payment_method: value.payment_method || "cash",
@@ -43,6 +44,7 @@ export default function EditSalesPaymentPage(props: { params: Promise<{ locale: 
     setSaving(true); setError("");
     try {
       await updatePayment(id, {
+        payment_type: form.payment_type,
         payment_date: new Date(`${form.payment_date}T00:00:00`).toISOString(),
         amount: Number(form.amount),
         payment_method: form.payment_method,
@@ -75,6 +77,7 @@ export default function EditSalesPaymentPage(props: { params: Promise<{ locale: 
         </div>
         <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
           {error && <div style={{ padding: "10px 14px", borderRadius: 8, background: "#FEF2F2", border: "1px solid #FECACA", color: "#B91C1C", fontSize: 13 }}>{error}</div>}
+          <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "نوع السند" : "Voucher type"}</label><select className="form-input form-select" value={form.payment_type} onChange={e => setForm(f => ({ ...f, payment_type: e.target.value }))}><option value="receipt">{ar ? "سند قبض" : "Receipt"}</option><option value="discount">{ar ? "سند خصم" : "Discount"}</option></select><div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>{ar ? "سيتم تحديث رصيد الفاتورة والقيد المحاسبي تلقائيًا عند الحفظ." : "The invoice balance and journal will be updated automatically."}</div></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "التاريخ" : "Date"}</label><input type="date" className="form-input" value={form.payment_date} onChange={e => setForm(f => ({ ...f, payment_date: e.target.value }))} /></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "المبلغ" : "Amount"}</label><input type="number" min="0.01" step="0.01" className="form-input" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} /></div>
           <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "طريقة الدفع" : "Payment method"}</label><select className="form-input form-select" disabled={Boolean(payment.journal_entry_id)} value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>{Object.entries(METHOD).map(([value, label]) => <option key={value} value={value}>{ar ? label : value}</option>)}</select>{payment.journal_entry_id && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>{ar ? "لا يمكن تغيير طريقة الدفع بعد ترحيل القيد المحاسبي." : "Payment method cannot change after journal posting."}</div>}</div>
