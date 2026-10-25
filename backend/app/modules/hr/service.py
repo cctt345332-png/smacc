@@ -534,7 +534,7 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
 async def update_payroll_record(db: AsyncSession, tenant_id: str, payroll_id: str, data: dict) -> PayrollRecord:
     """تعديل البدلات والخصومات قبل اعتماد سطر الراتب."""
     rec = (await db.execute(
-        select(PayrollRecord).where(
+        select(PayrollRecord).options(selectinload(PayrollRecord.employee)).where(
             PayrollRecord.id == payroll_id,
             PayrollRecord.tenant_id == tenant_id,
         )
@@ -567,6 +567,7 @@ async def update_payroll_record(db: AsyncSession, tenant_id: str, payroll_id: st
     rec.notes = data.get("notes", rec.notes)
     await db.commit()
     await db.refresh(rec)
+    await db.refresh(rec, attribute_names=["employee"])
     return rec
 
 

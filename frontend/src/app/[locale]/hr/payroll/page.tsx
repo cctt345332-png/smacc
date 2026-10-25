@@ -127,7 +127,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
         absence_deduction: Number(rec.absence_deduction || 0),
         other_deductions: Number(rec.other_deductions || 0),
       });
-      setRecords(rows => rows.map(row => row.id === rec.id ? data : row));
+      setRecords(rows => rows.map(row => row.id === rec.id ? { ...data, employee: data.employee || row.employee } : row));
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       setError(typeof detail === "string" ? detail : (ar ? "تعذر حفظ مكونات الراتب" : "Could not save payroll components"));
