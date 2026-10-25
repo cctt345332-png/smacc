@@ -33,6 +33,8 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   const [confirming, setConfirming] = useState(false);
   const [paying, setPaying] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
+  const [selectedForPayment, setSelectedForPayment] = useState<Record<string, boolean>>({});
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
   const [hrSettings, setHrSettings] = useState({ work_start_time: "09:00", work_end_time: "17:00", grace_minutes: 15, overtime_multiplier: 1.5 });
@@ -94,7 +96,15 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
     if (!confirm(ar ? "هل تريد تسجيل دفع الرواتب فعليًا من الحساب المحدد؟" : "Record the actual payroll payment?")) return;
     setPaying(true); setError("");
     try {
-      await payPayroll(month, year, { payment_method: paymentMethod }); await load();
+      const eligible = records.filter((r: any) => (r.status === "approved" || r.status === "partial") && Number(r.paid_amount || 0) < Number(r.net_salary || 0));
+      const chosen = eligible.filter((r: any) => selectedForPayment[r.id]);
+      const source = chosen.length ? chosen : eligible;
+      const allocations = source.map((r: any) => ({
+        payroll_id: r.id,
+        amount: Number(paymentAmounts[r.id] ?? (Number(r.net_salary || 0) - Number(r.paid_amount || 0))),
+      })).filter((x: any) => x.amount > 0);
+      await payPayroll(month, year, { payment_method: paymentMethod, allocations }); await load();
+      setPaymentAmounts({}); setSelectedForPayment({});
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       setError(typeof detail === "string" ? detail : (ar ? "تعذر تسجيل دفع الرواتب" : "Could not record payroll payment"));
@@ -127,8 +137,8 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   const totalNet     = records.reduce((s, r) => s + Number(r.net_salary || 0), 0);
   const paidCount    = records.filter(r => r.status === "paid").length;
   const pendingCount = records.filter(r => r.status !== "paid").length;
-  const paidAmount   = records.filter(r => r.status === "paid").reduce((s, r) => s + Number(r.net_salary || 0), 0);
-  const pendingAmount= records.filter(r => r.status !== "paid").reduce((s, r) => s + Number(r.net_salary || 0), 0);
+  const paidAmount   = records.reduce((s, r) => s + Number(r.paid_amount || 0), 0);
+  const pendingAmount= records.reduce((s, r) => s + Math.max(0, Number(r.net_salary || 0) - Number(r.paid_amount || 0)), 0);
   const currentMonth = months.find(m => m.v === month);
 
   return (
@@ -149,14 +159,14 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
               {confirming ? (ar ? "جاري الاعتماد..." : "Approving...") : (ar ? "اعتماد مسير الرواتب" : "Approve Payroll")}
             </button>
           )}
-          {records.some(r => r.status === "approved") && (
+          {records.some(r => r.status === "approved" || r.status === "partial") && (
             <>
               <select className="form-input form-select" style={{ width: 130 }} value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
                 <option value="cash">{ar ? "من الصندوق" : "Cash"}</option>
                 <option value="bank">{ar ? "من البنك" : "Bank"}</option>
               </select>
               <button className="btn btn-primary" onClick={handlePay} disabled={paying}>
-                {paying ? (ar ? "جاري الدفع..." : "Paying...") : (ar ? "دفع الرواتب فعليًا" : "Pay Payroll")}
+                {paying ? (ar ? "جاري الدفع..." : "Paying...") : (ar ? "دفع المحدد أو المتبقي" : "Pay selected / remaining")}
               </button>
             </>
           )}
@@ -189,7 +199,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
             <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "معامل الإضافي" : "Overtime multiplier"}</label><input type="number" min="1" max="5" step="0.05" className="form-input" value={hrSettings.overtime_multiplier} onChange={e => setHrSettings(s => ({ ...s, overtime_multiplier: Number(e.target.value) }))} /></div>
             <button className="btn btn-primary" onClick={saveSettings} disabled={settingsSaving}>{settingsSaving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الإعدادات" : "Save settings")}</button>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10 }}>{ar ? "تُستخدم هذه القيم عند توليد مسير جديد، ولا تغيّر المسيرات المعتمدة سابقًا." : "These values apply when generating a new payroll and do not change previously approved payrolls."}</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10 }}>{ar ? "الشركة تتحمل التأمينات الاجتماعية؛ لا تُخصم من الموظف. تُستخدم هذه القيم عند توليد مسير جديد." : "The company bears social insurance; it is not deducted from employees."}</div>
         </div>
       </div>
 
@@ -248,6 +258,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                   <th>{ar ? "البدلات" : "Allowances"}</th>
                   <th>{ar ? "الخصومات" : "Deductions"}</th>
                   <th>{ar ? "الصافي" : "Net"}</th>
+                  <th>{ar ? "المدفوع / المتبقي" : "Paid / Remaining"}</th>
                   <th>{ar ? "الحالة" : "Status"}</th>
                 </tr>
               </thead>
@@ -269,7 +280,8 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                     <td style={{ color: "#6F4A84" }}>{rec.status === "draft" ? <div style={{ display: "grid", gap: 4 }}><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدل السكن" : "Housing"} value={rec.housing_allowance ?? 0} onChange={e => updateLocal(rec.id, "housing_allowance", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدل النقل" : "Transport"} value={rec.transport_allowance ?? 0} onChange={e => updateLocal(rec.id, "transport_allowance", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدلات أخرى" : "Other allowances"} value={rec.other_allowances ?? 0} onChange={e => updateLocal(rec.id, "other_allowances", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "العمل الإضافي" : "Overtime"} value={rec.overtime_amount ?? 0} onChange={e => updateLocal(rec.id, "overtime_amount", e.target.value)} /></div> : `+${(Number(rec.housing_allowance || 0) + Number(rec.transport_allowance || 0) + Number(rec.other_allowances || 0) + Number(rec.overtime_amount || 0)).toLocaleString()}`}</td>
                     <td style={{ color: "#DC2626" }}>{rec.status === "draft" ? <div style={{ display: "grid", gap: 4 }}><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "خصم الغياب" : "Absence deduction"} value={rec.absence_deduction ?? 0} onChange={e => updateLocal(rec.id, "absence_deduction", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "خصومات أخرى" : "Other deductions"} value={rec.other_deductions ?? 0} onChange={e => updateLocal(rec.id, "other_deductions", e.target.value)} /></div> : `-${Number(rec.total_deductions || 0).toLocaleString()}`}</td>
                     <td style={{ fontWeight: 700 }}>{Number(rec.net_salary || 0).toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
-                    <td><span className={rec.status === "paid" ? "badge badge-success" : rec.status === "draft" ? "badge badge-warning" : "badge badge-info"}>{rec.status === "paid" ? (ar ? "مدفوع فعليًا" : "Paid") : rec.status === "draft" ? (ar ? "مسودة" : "Draft") : rec.status === "approved" ? (ar ? "معتمد بانتظار الدفع" : "Approved — unpaid") : (ar ? "معلق" : "Pending")}</span>{rec.status === "draft" && <button className="btn btn-secondary" style={{ marginTop: 6, fontSize: 11 }} onClick={() => handleSaveRecord(rec)} disabled={savingId === rec.id}>{savingId === rec.id ? (ar ? "حفظ..." : "Saving..." ) : (ar ? "حفظ المكونات" : "Save")}</button>}</td>
+                    <td>{(rec.status === "approved" || rec.status === "partial") && <div style={{ display: "grid", gap: 4 }}><label style={{ fontSize: 11 }}><input type="checkbox" checked={!!selectedForPayment[rec.id]} onChange={e => setSelectedForPayment(x => ({ ...x, [rec.id]: e.target.checked }))} /> {ar ? "اختيار للدفع" : "Select"}</label><input className="form-input" style={{ width: 120 }} type="number" min="0" max={Math.max(0, Number(rec.net_salary || 0) - Number(rec.paid_amount || 0))} placeholder={ar ? "مبلغ الدفعة" : "Payment"} value={paymentAmounts[rec.id] ?? ""} onChange={e => setPaymentAmounts(x => ({ ...x, [rec.id]: e.target.value }))} /></div>}<div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "مدفوع:" : "Paid:"} {Number(rec.paid_amount || 0).toLocaleString()} — {ar ? "متبقي:" : "Remaining:"} {Math.max(0, Number(rec.net_salary || 0) - Number(rec.paid_amount || 0)).toLocaleString()}</div></td>
+                    <td><span className={rec.status === "paid" ? "badge badge-success" : rec.status === "draft" ? "badge badge-warning" : rec.status === "partial" ? "badge badge-warning" : "badge badge-info"}>{rec.status === "paid" ? (ar ? "مدفوع بالكامل" : "Paid in full") : rec.status === "draft" ? (ar ? "مسودة" : "Draft") : rec.status === "partial" ? (ar ? "مدفوع جزئيًا" : "Partially paid") : (ar ? "معتمد بانتظار الدفع" : "Approved — unpaid")}</span>{rec.status === "draft" && <button className="btn btn-secondary" style={{ marginTop: 6, fontSize: 11 }} onClick={() => handleSaveRecord(rec)} disabled={savingId === rec.id}>{savingId === rec.id ? (ar ? "حفظ..." : "Saving..." ) : (ar ? "حفظ المكونات" : "Save")}</button>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -280,6 +292,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                   <td style={{ color: "#6F4A84" }}>+{records.reduce((s, r) => s + Number(r.housing_allowance || 0) + Number(r.transport_allowance || 0) + Number(r.other_allowances || 0), 0).toLocaleString()}</td>
                   <td style={{ color: "#DC2626" }}>-{records.reduce((s, r) => s + Number(r.total_deductions || 0), 0).toLocaleString()}</td>
                   <td style={{ fontWeight: 700, fontSize: 14 }}>{totalNet.toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
+                  <td>{paidAmount.toLocaleString()} / {pendingAmount.toLocaleString()}</td>
                   <td></td>
                 </tr>
               </tfoot>

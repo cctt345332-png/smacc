@@ -260,6 +260,7 @@ class PayrollRecord(Base):
     gross_salary:      Mapped[Decimal]      = mapped_column(Numeric(18, 2))
     total_deductions:  Mapped[Decimal]      = mapped_column(Numeric(18, 2))
     net_salary:        Mapped[Decimal]      = mapped_column(Numeric(18, 2))
+    paid_amount:       Mapped[Decimal]      = mapped_column(Numeric(18, 2), default=Decimal("0"))
 
     # GOSI صاحب العمل
     gosi_employer:     Mapped[Decimal]      = mapped_column(Numeric(18, 2), default=Decimal("0"))
@@ -271,3 +272,17 @@ class PayrollRecord(Base):
     created_at:        Mapped[datetime]     = mapped_column(DateTime, default=datetime.utcnow)
 
     employee:          Mapped["Employee"] = relationship("Employee", back_populates="payroll_records")
+
+
+class PayrollPayment(Base):
+    """سجل كل عملية دفع فعلية، بما فيها الدفعات الجزئية."""
+    __tablename__ = "hr_payroll_payments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    payroll_id: Mapped[str] = mapped_column(String, ForeignKey("hr_payroll.id"), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    payment_method: Mapped[str] = mapped_column(String(30))
+    journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    paid_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

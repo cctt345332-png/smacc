@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models.hr import (
     Department, Employee, AttendanceRecord,
     LeaveRequest, PayrollRecord,
-    HRSettings, EmployeeAdvance, EmployeeExpense,
+    HRSettings, EmployeeAdvance, EmployeeExpense, PayrollPayment,
     EmployeeStatus, LeaveStatus,
 )
 
@@ -429,7 +429,8 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
 
     for emp in employees:
         gross = emp.basic_salary + emp.housing_allowance + emp.transport_allowance + emp.other_allowances
-        gosi_emp = (emp.basic_salary * GOSI_EMPLOYEE_RATE) if emp.gosi_eligible else Decimal("0")
+        # الشركة تتحمل التأمينات حسب سياسة الشركة؛ لا تُخصم من الموظف.
+        gosi_emp = Decimal("0")
         gosi_er  = (emp.basic_salary * GOSI_EMPLOYER_RATE) if emp.gosi_eligible else Decimal("0")
         attendance_rows = (await db.execute(select(AttendanceRecord).where(
             AttendanceRecord.tenant_id == tenant_id, AttendanceRecord.employee_id == emp.id,
@@ -652,7 +653,7 @@ async def confirm_payroll(db: AsyncSession, tenant_id: str, month: int, year: in
 
 async def pay_payroll(
     db: AsyncSession, tenant_id: str, user_id: str, month: int, year: int,
-    payment_method: str = "cash", bank_account_id: str | None = None,
+    payment_method: str = "cash", bank_account_id: str | None = None, allocations: list[dict] | None = None,
 ) -> dict:
     """دفع مسير معتمد فعليًا من الصندوق أو البنك وإنشاء قيد مستقل."""
     from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus, BankAccount
@@ -665,13 +666,25 @@ async def pay_payroll(
         raise HTTPException(404, "لا يوجد مسير رواتب لهذا الشهر")
     if any(rec.status == "draft" for rec in rows):
         raise HTTPException(409, "يجب اعتماد مسير الرواتب أولًا")
-    if any(rec.status == "paid" for rec in rows):
-        raise HTTPException(409, "تم دفع مسير الرواتب مسبقًا")
+    eligible = {rec.id: rec for rec in rows if rec.status in ("approved", "partial") and Decimal(str(rec.paid_amount or 0)) < Decimal(str(rec.net_salary or 0))}
+    if not eligible:
+        raise HTTPException(409, "لا توجد رواتب متبقية للدفع")
+    if allocations:
+        selected = {}
+        for item in allocations:
+            rid = str(item.get("payroll_id")); value = Decimal(str(item.get("amount", 0)))
+            if rid not in eligible or value <= 0: raise HTTPException(400, "بيانات دفعة الموظف غير صحيحة")
+            selected[rid] = selected.get(rid, Decimal("0")) + value
+    else:
+        selected = {rid: Decimal(str(rec.net_salary or 0)) - Decimal(str(rec.paid_amount or 0)) for rid, rec in eligible.items()}
+    for rid, value in selected.items():
+        remaining = Decimal(str(eligible[rid].net_salary or 0)) - Decimal(str(eligible[rid].paid_amount or 0))
+        if value > remaining: raise HTTPException(400, "مبلغ الدفع أكبر من المتبقي للموظف")
     accrual_ids = {rec.journal_entry_id for rec in rows if rec.journal_entry_id}
     if not accrual_ids:
         raise HTTPException(409, "مسير الرواتب غير مرحّل محاسبيًا")
 
-    amount = sum((Decimal(str(rec.net_salary or 0)) for rec in rows), Decimal("0"))
+    amount = sum(selected.values(), Decimal("0"))
     method = (payment_method or "cash").lower()
     source_account = None
     if method in ("bank", "bank_transfer") and bank_account_id:
@@ -711,11 +724,19 @@ async def pay_payroll(
         id=str(uuid.uuid4()), entry_id=entry.id, account_id=source_account.id,
         description=f"دفع رواتب من {"البنك" if method in ("bank", "bank_transfer") else "الصندوق"}", debit=0, credit=amount, line_order=1,
     ))
-    for rec in rows:
-        rec.status = "paid"
+    for rid, value in selected.items():
+        db.add(PayrollPayment(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, payroll_id=rid, amount=value,
+            payment_method=method, journal_entry_id=entry.id, paid_by=user_id,
+            paid_at=payment_date,
+        ))
+    for rid, value in selected.items():
+        rec = eligible[rid]
+        rec.paid_amount = Decimal(str(rec.paid_amount or 0)) + value
+        rec.status = "paid" if rec.paid_amount >= Decimal(str(rec.net_salary or 0)) else "partial"
     await db.commit()
     return {
-        "paid": len(rows), "month": month, "year": year, "amount": float(amount),
+        "paid": len(selected), "month": month, "year": year, "amount": float(amount),
         "payment_method": method, "journal_entry_id": entry.id, "journal_entry_number": entry.entry_number,
     }
 

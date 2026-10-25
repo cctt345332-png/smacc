@@ -13,7 +13,7 @@ from app.models.inventory import (
 from app.models.pos import POSTerminal, POSSession, POSTransaction, POSTransactionLine
 from app.models.treasury import Voucher
 from app.models.assets import Asset, AssetCategory, DepreciationLine
-from app.models.hr import Department, Employee, AttendanceRecord, LeaveRequest, PayrollRecord, EmployeeExpense
+from app.models.hr import Department, Employee, AttendanceRecord, LeaveRequest, PayrollRecord, PayrollPayment, EmployeeExpense
 from app.models.notifications import Notification, AlertSetting
 from app.models.system_config import SystemConfig
 from app.models.ecommerce import Store, StoreCategory, StoreProduct, StoreOrder, StoreOrderLine

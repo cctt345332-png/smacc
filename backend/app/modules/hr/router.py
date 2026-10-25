@@ -205,6 +205,7 @@ async def pay_payroll(
     return await service.pay_payroll(
         db, user["tenant_id"], user["user_id"], month, year,
         data.get("payment_method", "cash"), data.get("bank_account_id"),
+        data.get("allocations"),
     )
 
 
