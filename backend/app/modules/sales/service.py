@@ -1481,6 +1481,8 @@ async def get_payments(
     tenant_id: str,
     invoice_id: str | None = None,
     rep_id: str | None = None,
+    date_from=None,
+    date_to=None,
 ):
     """جلب سندات القبض مع اسم العميل والمندوب ورقم الفاتورة إن وجد."""
     linked_rep_id = func.coalesce(Payment.rep_id, Invoice.rep_id, Customer.rep_id)
@@ -1496,6 +1498,10 @@ async def get_payments(
         q = q.where(Payment.invoice_id == invoice_id)
     if rep_id:
         q = q.where(linked_rep_id == rep_id)
+    if date_from:
+        q = q.where(Payment.payment_date >= date_from)
+    if date_to:
+        q = q.where(Payment.payment_date <= date_to)
     q = q.order_by(Payment.payment_date.desc(), Payment.payment_number.desc())
     rows = (await db.execute(q)).all()
     return [

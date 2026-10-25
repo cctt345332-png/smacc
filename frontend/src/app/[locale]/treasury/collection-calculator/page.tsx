@@ -52,7 +52,7 @@ export default function CollectionCalculatorPage(props: { params: Promise<{ loca
       setLoadingSystem(true); setSystemError("");
       try {
         const [{ data: paymentData }, { data: expenseData }] = await Promise.all([
-          getPayments(repId ? { rep_id: repId } : {}),
+          getPayments({ ...(repId ? { rep_id: repId } : {}), ...(from ? { date_from: `${from}T00:00:00` } : {}), ...(to ? { date_to: `${to}T23:59:59` } : {}) }),
           getExpenses({ ...(repId ? { rep_id: repId } : {}), ...(from ? { date_from: `${from}T00:00:00` } : {}), ...(to ? { date_to: `${to}T23:59:59` } : {}) }),
         ]);
         const payments = (Array.isArray(paymentData) ? paymentData : []).filter((row: any) => {

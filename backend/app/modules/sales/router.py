@@ -233,13 +233,15 @@ async def cancel_invoice(invoice_id: str, user=Depends(require_role(["manager","
 async def list_payments(
     invoice_id: Optional[str] = None,
     rep_id: Optional[str] = None,
+    date_from: Optional[datetime] = None,
+    date_to: Optional[datetime] = None,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     # المندوب يشوف سنداته فقط، بينما الإدارة يمكنها استخدام فلتر rep_id.
     if user["role"] == "sales_rep":
         rep_id = await get_rep_id_for_user(db, user["user_id"])
-    return await service.get_payments(db, user["tenant_id"], invoice_id, rep_id)
+    return await service.get_payments(db, user["tenant_id"], invoice_id, rep_id, date_from, date_to)
 
 
 @router.get("/payments/{payment_id}", response_model=PaymentOut)
