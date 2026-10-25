@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getPayroll, generatePayroll, confirmPayroll, updatePayrollRecord } from "@/lib/hr";
+import { getPayroll, generatePayroll, confirmPayroll, payPayroll, updatePayrollRecord } from "@/lib/hr";
 
 const IcDollar   = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const IcUsers    = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -31,6 +31,8 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
 
@@ -57,10 +59,24 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   };
 
   const handleConfirm = async () => {
-    if (!confirm(ar ? "هل تريد تأكيد صرف الرواتب؟" : "Confirm payroll processing?")) return;
+    if (!confirm(ar ? "هل تريد اعتماد مسير الرواتب وإنشاء قيد الاستحقاق؟" : "Approve payroll and create the accrual journal?")) return;
     setConfirming(true);
-    try { await confirmPayroll(month, year); await load(); }
-    catch {} finally { setConfirming(false); }
+    try {
+      await confirmPayroll(month, year); await load();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : (ar ? "تعذر اعتماد المسير" : "Could not approve payroll"));
+    } finally { setConfirming(false); }
+  };
+  const handlePay = async () => {
+    if (!confirm(ar ? "هل تريد تسجيل دفع الرواتب فعليًا من الحساب المحدد؟" : "Record the actual payroll payment?")) return;
+    setPaying(true); setError("");
+    try {
+      await payPayroll(month, year, { payment_method: paymentMethod }); await load();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : (ar ? "تعذر تسجيل دفع الرواتب" : "Could not record payroll payment"));
+    } finally { setPaying(false); }
   };
 
   const updateLocal = (id: string, field: string, value: string) => {
@@ -108,8 +124,19 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
           )}
           {records.some(r => r.status === "draft") && (
             <button className="btn btn-primary" onClick={handleConfirm} disabled={confirming}>
-              {confirming ? (ar ? "جاري التأكيد..." : "Confirming...") : (ar ? "تأكيد صرف الرواتب" : "Confirm Payroll")}
+              {confirming ? (ar ? "جاري الاعتماد..." : "Approving...") : (ar ? "اعتماد مسير الرواتب" : "Approve Payroll")}
             </button>
+          )}
+          {records.some(r => r.status === "approved") && (
+            <>
+              <select className="form-input form-select" style={{ width: 130 }} value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
+                <option value="cash">{ar ? "من الصندوق" : "Cash"}</option>
+                <option value="bank">{ar ? "من البنك" : "Bank"}</option>
+              </select>
+              <button className="btn btn-primary" onClick={handlePay} disabled={paying}>
+                {paying ? (ar ? "جاري الدفع..." : "Paying...") : (ar ? "دفع الرواتب فعليًا" : "Pay Payroll")}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -206,7 +233,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                     <td style={{ color: "#6F4A84" }}>{rec.status === "draft" ? <div style={{ display: "grid", gap: 4 }}><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدل السكن" : "Housing"} value={rec.housing_allowance ?? 0} onChange={e => updateLocal(rec.id, "housing_allowance", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدل النقل" : "Transport"} value={rec.transport_allowance ?? 0} onChange={e => updateLocal(rec.id, "transport_allowance", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدلات أخرى" : "Other allowances"} value={rec.other_allowances ?? 0} onChange={e => updateLocal(rec.id, "other_allowances", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "العمل الإضافي" : "Overtime"} value={rec.overtime_amount ?? 0} onChange={e => updateLocal(rec.id, "overtime_amount", e.target.value)} /></div> : `+${(Number(rec.housing_allowance || 0) + Number(rec.transport_allowance || 0) + Number(rec.other_allowances || 0) + Number(rec.overtime_amount || 0)).toLocaleString()}`}</td>
                     <td style={{ color: "#DC2626" }}>{rec.status === "draft" ? <div style={{ display: "grid", gap: 4 }}><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "خصم الغياب" : "Absence deduction"} value={rec.absence_deduction ?? 0} onChange={e => updateLocal(rec.id, "absence_deduction", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "خصومات أخرى" : "Other deductions"} value={rec.other_deductions ?? 0} onChange={e => updateLocal(rec.id, "other_deductions", e.target.value)} /></div> : `-${Number(rec.total_deductions || 0).toLocaleString()}`}</td>
                     <td style={{ fontWeight: 700 }}>{Number(rec.net_salary || 0).toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
-                    <td><span className={rec.status === "paid" ? "badge badge-success" : rec.status === "draft" ? "badge badge-warning" : "badge badge-info"}>{rec.status === "paid" ? (ar ? "مدفوع" : "Paid") : rec.status === "draft" ? (ar ? "مسودة" : "Draft") : (ar ? "معلق" : "Pending")}</span>{rec.status === "draft" && <button className="btn btn-secondary" style={{ marginTop: 6, fontSize: 11 }} onClick={() => handleSaveRecord(rec)} disabled={savingId === rec.id}>{savingId === rec.id ? (ar ? "حفظ..." : "Saving..." ) : (ar ? "حفظ المكونات" : "Save")}</button>}</td>
+                    <td><span className={rec.status === "paid" ? "badge badge-success" : rec.status === "draft" ? "badge badge-warning" : "badge badge-info"}>{rec.status === "paid" ? (ar ? "مدفوع فعليًا" : "Paid") : rec.status === "draft" ? (ar ? "مسودة" : "Draft") : rec.status === "approved" ? (ar ? "معتمد بانتظار الدفع" : "Approved — unpaid") : (ar ? "معلق" : "Pending")}</span>{rec.status === "draft" && <button className="btn btn-secondary" style={{ marginTop: 6, fontSize: 11 }} onClick={() => handleSaveRecord(rec)} disabled={savingId === rec.id}>{savingId === rec.id ? (ar ? "حفظ..." : "Saving..." ) : (ar ? "حفظ المكونات" : "Save")}</button>}</td>
                   </tr>
                 ))}
               </tbody>

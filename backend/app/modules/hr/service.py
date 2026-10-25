@@ -486,7 +486,7 @@ async def confirm_payroll(db: AsyncSession, tenant_id: str, month: int, year: in
             debit=0, credit=total_employee_gosi + total_employer_gosi, line_order=3,
         ))
     for rec in records:
-        rec.status = "paid"
+        rec.status = "approved"
         rec.journal_entry_id = entry.id
     await db.commit()
     return {
@@ -495,6 +495,76 @@ async def confirm_payroll(db: AsyncSession, tenant_id: str, month: int, year: in
         "total_net": float(total_net),
     }
 
+
+
+async def pay_payroll(
+    db: AsyncSession, tenant_id: str, user_id: str, month: int, year: int,
+    payment_method: str = "cash", bank_account_id: str | None = None,
+) -> dict:
+    """دفع مسير معتمد فعليًا من الصندوق أو البنك وإنشاء قيد مستقل."""
+    from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus, BankAccount
+    from app.modules.accounting.service import get_operational_account, _next_entry_number
+
+    rows = (await db.execute(select(PayrollRecord).where(
+        PayrollRecord.tenant_id == tenant_id, PayrollRecord.month == month, PayrollRecord.year == year,
+    ))).scalars().all()
+    if not rows:
+        raise HTTPException(404, "لا يوجد مسير رواتب لهذا الشهر")
+    if any(rec.status == "draft" for rec in rows):
+        raise HTTPException(409, "يجب اعتماد مسير الرواتب أولًا")
+    if any(rec.status == "paid" for rec in rows):
+        raise HTTPException(409, "تم دفع مسير الرواتب مسبقًا")
+    accrual_ids = {rec.journal_entry_id for rec in rows if rec.journal_entry_id}
+    if not accrual_ids:
+        raise HTTPException(409, "مسير الرواتب غير مرحّل محاسبيًا")
+
+    amount = sum((Decimal(str(rec.net_salary or 0)) for rec in rows), Decimal("0"))
+    method = (payment_method or "cash").lower()
+    source_account = None
+    if method in ("bank", "bank_transfer") and bank_account_id:
+        bank = await db.get(BankAccount, bank_account_id)
+        if not bank or bank.tenant_id != tenant_id or not bank.gl_account_id:
+            raise HTTPException(400, "الحساب البنكي غير صالح")
+        source_account = await db.get(Account, bank.gl_account_id)
+    else:
+        mapping = "default_bank" if method in ("bank", "bank_transfer") else "default_cash"
+        source_account = await get_operational_account(db, tenant_id, mapping)
+    payable = await get_operational_account(db, tenant_id, "payroll_payable")
+    if not source_account or not source_account.is_active or not source_account.is_posting:
+        raise HTTPException(409, "حساب الدفع غير صالح أو غير قابل للقيد")
+
+    payment_date = datetime.utcnow()
+    fiscal_year = (await db.execute(select(FiscalYear).where(
+        FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN,
+        FiscalYear.start_date <= payment_date.date(), FiscalYear.end_date >= payment_date.date(),
+    ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()))).scalars().first()
+    if not fiscal_year:
+        raise HTTPException(409, "لا توجد سنة مالية مفتوحة لتاريخ الدفع")
+
+    entry = JournalEntry(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, entry_number=await _next_entry_number(db, tenant_id),
+        entry_date=payment_date, fiscal_year_id=fiscal_year.id,
+        description_ar=f"دفع رواتب {month}/{year} - {"بنك" if method in ("bank", "bank_transfer") else "صندوق"}",
+        description_en=f"Payroll payment {month}/{year}", status=JournalEntryStatus.POSTED,
+        source="payroll_payment", reference=f"PAYROLL-PAY-{year}-{month:02d}",
+        total_debit=amount, total_credit=amount, created_by=user_id, posted_by=user_id, posted_at=payment_date,
+    )
+    db.add(entry)
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=payable.id,
+        description=f"سداد صافي رواتب {month}/{year}", debit=amount, credit=0, line_order=0,
+    ))
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=source_account.id,
+        description=f"دفع رواتب من {"البنك" if method in ("bank", "bank_transfer") else "الصندوق"}", debit=0, credit=amount, line_order=1,
+    ))
+    for rec in rows:
+        rec.status = "paid"
+    await db.commit()
+    return {
+        "paid": len(rows), "month": month, "year": year, "amount": float(amount),
+        "payment_method": method, "journal_entry_id": entry.id, "journal_entry_number": entry.entry_number,
+    }
 
 # ─── GOSI Report ─────────────────────────────────────────────────────
 

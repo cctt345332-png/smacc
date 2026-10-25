@@ -136,6 +136,21 @@ async def confirm_payroll(
     return await service.confirm_payroll(db, user["tenant_id"], month, year)
 
 
+@router.post("/payroll/pay")
+async def pay_payroll(
+    month: int,
+    year: int,
+    data: dict = {},
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """دفع المسير فعليًا من الصندوق أو البنك."""
+    return await service.pay_payroll(
+        db, user["tenant_id"], user["user_id"], month, year,
+        data.get("payment_method", "cash"), data.get("bank_account_id"),
+    )
+
+
 @router.patch("/payroll/{payroll_id}")
 async def update_payroll_record(
     payroll_id: str,
