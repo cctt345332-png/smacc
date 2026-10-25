@@ -2,7 +2,7 @@
 HR Service — منطق الأعمال للموارد البشرية
 """
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, time
 from decimal import Decimal
 from typing import Optional
 from fastapi import HTTPException
@@ -326,11 +326,23 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
         gross = emp.basic_salary + emp.housing_allowance + emp.transport_allowance + emp.other_allowances
         gosi_emp = (emp.basic_salary * GOSI_EMPLOYEE_RATE) if emp.gosi_eligible else Decimal("0")
         gosi_er  = (emp.basic_salary * GOSI_EMPLOYER_RATE) if emp.gosi_eligible else Decimal("0")
-        absent_days = (await db.execute(select(func.count(AttendanceRecord.id)).where(
+        attendance_rows = (await db.execute(select(AttendanceRecord).where(
             AttendanceRecord.tenant_id == tenant_id, AttendanceRecord.employee_id == emp.id,
             AttendanceRecord.date >= month_start, AttendanceRecord.date <= month_end,
-            AttendanceRecord.status == "absent",
-        ))).scalar() or 0
+        ))).scalars().all()
+        absent_days = sum(1 for row in attendance_rows if row.status == "absent")
+        overtime_hours = Decimal("0")
+        late_minutes = 0
+        for row in attendance_rows:
+            if row.check_in:
+                scheduled_start = datetime.combine(row.date, time(9, 0))
+                grace_deadline = scheduled_start + timedelta(minutes=15)
+                if row.check_in > grace_deadline:
+                    late_minutes += int((row.check_in - grace_deadline).total_seconds() // 60)
+            if row.check_out:
+                scheduled_end = datetime.combine(row.date, time(17, 0))
+                if row.check_out > scheduled_end:
+                    overtime_hours += Decimal(str((row.check_out - scheduled_end).total_seconds() / 3600)).quantize(Decimal("0.01"))
         unpaid_leaves = (await db.execute(select(LeaveRequest).where(
             LeaveRequest.tenant_id == tenant_id, LeaveRequest.employee_id == emp.id,
             LeaveRequest.status == "approved", LeaveRequest.leave_type == "unpaid",
@@ -342,7 +354,10 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
         )
         absence_days = Decimal(str(absent_days + unpaid_leave_days))
         absence_deduction = (gross / Decimal("30") * absence_days).quantize(Decimal("0.01"))
-        total_deductions = gosi_emp + absence_deduction
+        hourly_rate = (gross / Decimal("30") / Decimal("8")) if gross else Decimal("0")
+        overtime_amount = (hourly_rate * Decimal("1.5") * overtime_hours).quantize(Decimal("0.01"))
+        late_deduction = (hourly_rate * Decimal(late_minutes) / Decimal("60")).quantize(Decimal("0.01"))
+        total_deductions = gosi_emp + absence_deduction + late_deduction
         net = gross - total_deductions
 
         rec = PayrollRecord(
@@ -355,10 +370,10 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             housing_allowance=emp.housing_allowance,
             transport_allowance=emp.transport_allowance,
             other_allowances=emp.other_allowances,
-            overtime_amount=Decimal("0"),
+            overtime_amount=overtime_amount,
             gosi_employee=gosi_emp,
             absence_deduction=absence_deduction,
-            other_deductions=Decimal("0"),
+            other_deductions=late_deduction,
             gross_salary=gross,
             total_deductions=total_deductions,
             net_salary=net,
@@ -366,7 +381,8 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             status="draft",
             created_by=user_id,
             created_at=datetime.utcnow(),
-            notes=f"خصم تلقائي للغياب والإجازة غير المدفوعة: {absence_days} يوم" if absence_days else None,
+            notes=(f"تلقائي: غياب/إجازة غير مدفوعة {absence_days} يوم، تأخير {late_minutes} دقيقة، إضافي {overtime_hours} ساعة"
+                   if absence_days or late_minutes or overtime_hours else None),
         )
         db.add(rec)
         records.append(rec)
