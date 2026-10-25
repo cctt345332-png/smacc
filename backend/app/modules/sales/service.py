@@ -1584,6 +1584,8 @@ async def update_payment(
     if new_amount <= Decimal("0"):
         raise HTTPException(400, "يجب أن يكون مبلغ السند أكبر من صفر")
     old_receipt_amount = old_amount if old_type == "receipt" else Decimal("0")
+    # تحويل النوع مع بقاء المبلغ نفسه هو تعديل للسند ذاته، وليس قبضًا جديدًا.
+    type_only_change = new_type != old_type and new_amount == old_amount
 
     new_date = changes.get("payment_date", payment.payment_date)
     if new_date:
@@ -1593,13 +1595,15 @@ async def update_payment(
     if payment.journal_entry_id and new_method != payment.payment_method:
         raise HTTPException(409, "لا يمكن تغيير طريقة الدفع بعد ترحيل القيد المحاسبي")
 
-    if invoice and new_type == "receipt":
+    if type_only_change:
+        pass
+    elif invoice and new_type == "receipt":
         paid_without_current = Decimal(str(invoice.paid_amount or 0)) - old_receipt_amount
         if paid_without_current < Decimal("0"):
             paid_without_current = Decimal("0")
         if new_amount > Decimal(str(invoice.total or 0)) - paid_without_current + Decimal("0.01"):
             raise HTTPException(400, "المبلغ أكبر من المتبقي على الفاتورة")
-    else:
+    elif not invoice or new_type != "receipt":
         from app.modules.sales.orders_service import get_customer_statement
         statement = await get_customer_statement(
             db, tenant_id, customer.id,
@@ -1610,7 +1614,8 @@ async def update_payment(
         if new_amount > available + Decimal("0.01"):
             raise HTTPException(400, "المبلغ أكبر من رصيد العميل المتاح")
 
-    # تحديث رصيد الفاتورة عند التحويل بين قبض وخصم، وليس عند تغيير المبلغ فقط.
+    # عند تحويل النوع فقط نحافظ على أثر السند السابق على رصيد الفاتورة؛
+    # فهذا ليس تحصيلًا جديدًا ولا خصمًا جديدًا.
     new_receipt_amount = new_amount if new_type == "receipt" else Decimal("0")
 
     payment.payment_type = new_type
@@ -1623,7 +1628,7 @@ async def update_payment(
     if "notes" in changes:
         payment.notes = changes["notes"]
 
-    if invoice:
+    if invoice and not type_only_change:
         invoice.paid_amount = (
             Decimal(str(invoice.paid_amount or 0))
             - old_receipt_amount
