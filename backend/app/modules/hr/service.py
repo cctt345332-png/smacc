@@ -222,11 +222,47 @@ async def create_employee(db: AsyncSession, tenant_id: str, data: dict) -> Emplo
 
 async def update_employee(db: AsyncSession, tenant_id: str, employee_id: str, data: dict) -> Employee:
     emp = await get_employee(db, tenant_id, employee_id)
+    salary_fields = {"basic_salary", "housing_allowance", "transport_allowance", "other_allowances"}
+    if salary_fields.intersection(data):
+        approved_payroll = (await db.execute(select(func.count()).where(
+            PayrollRecord.tenant_id == tenant_id,
+            PayrollRecord.employee_id == employee_id,
+            PayrollRecord.status.in_(("approved", "partial", "paid")),
+        ))).scalar() or 0
+        if approved_payroll:
+            raise HTTPException(409, "لا يمكن تعديل مكونات راتب الموظف لوجود مسير معتمد. عدّلها في مسير جديد.")
+
+    allowed_fields = {
+        "full_name_ar", "full_name_en", "national_id", "national_id_file_name",
+        "national_id_content_type", "national_id_file_data", "gender", "phone", "email",
+        "job_title_ar", "job_title_en", "department_id", "contract_type", "hire_date",
+        "status", "is_active", "basic_salary", "housing_allowance", "transport_allowance",
+        "other_allowances", "gosi_eligible", "gosi_number", "notes",
+    }
+    identity_data = data.get("national_id_file_data")
+    if identity_data:
+        if len(str(identity_data)) > 7_000_000:
+            raise HTTPException(400, "حجم ملف الهوية يتجاوز 5 ميجابايت")
+        if data.get("national_id_content_type") not in {"image/jpeg", "image/png", "image/webp", "application/pdf"}:
+            raise HTTPException(400, "صيغة ملف الهوية غير مدعومة")
     for k, v in data.items():
-        if hasattr(emp, k) and k not in ("id", "tenant_id", "created_at"):
-            setattr(emp, k, v)
+        if k not in allowed_fields:
+            continue
+        if k == "hire_date" and v:
+            v = _parse_date(v, "تاريخ التعيين")
+        elif k in salary_fields:
+            v = Decimal(str(v or 0))
+        elif k in {"full_name_en", "job_title_en", "national_id", "phone", "email", "gosi_number", "notes"}:
+            v = _optional_text(v)
+        setattr(emp, k, v)
+    if "status" in data:
+        emp.is_active = data["status"] == "active"
     emp.updated_at = datetime.utcnow()
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(409, "تعذر حفظ التعديل: الرقم الوظيفي أو القسم غير صالح") from exc
     await db.refresh(emp)
     return emp
 

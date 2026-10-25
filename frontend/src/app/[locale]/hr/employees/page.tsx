@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getEmployees, getDepartments, createEmployee, deleteEmployee } from "@/lib/hr";
+import { getEmployees, getDepartments, createEmployee, updateEmployee, deleteEmployee } from "@/lib/hr";
 
 const IcPlus   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const IcSearch = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
@@ -22,6 +22,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
   const [deptFilter, setDeptFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showModal, setShowModal]   = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState("");
   const [identityFile, setIdentityFile] = useState<{ name: string; type: string; data: string } | null>(null);
@@ -30,7 +31,8 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
     full_name_ar: "", full_name_en: "", national_id: "", gender: "male",
     phone: "", email: "", job_title_ar: "", job_title_en: "",
     department_id: "", contract_type: "full_time", hire_date: "",
-    basic_salary: "", housing_allowance: "", transport_allowance: "",
+    basic_salary: "", housing_allowance: "", transport_allowance: "", other_allowances: "",
+    status: "active", gosi_eligible: true, gosi_number: "",
   });
   const upd = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
 
@@ -57,18 +59,45 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
     catch (err: any) { setError(err?.response?.data?.detail || (ar ? "تعذر حذف الموظف" : "Could not delete employee")); }
   };
 
+  const emptyForm = () => ({
+    full_name_ar: "", full_name_en: "", national_id: "", gender: "male",
+    phone: "", email: "", job_title_ar: "", job_title_en: "", department_id: "",
+    contract_type: "full_time", hire_date: new Date().toISOString().split("T")[0],
+    basic_salary: "", housing_allowance: "", transport_allowance: "", other_allowances: "",
+    status: "active", gosi_eligible: true, gosi_number: "",
+  });
+
+  const handleEdit = (emp: any) => {
+    setEditingEmployee(emp);
+    setForm({
+      ...emptyForm(), full_name_ar: emp.full_name_ar || "", full_name_en: emp.full_name_en || "",
+      national_id: emp.national_id || "", gender: emp.gender || "male", phone: emp.phone || "",
+      email: emp.email || "", job_title_ar: emp.job_title_ar || "", job_title_en: emp.job_title_en || "",
+      department_id: emp.department_id || "", contract_type: emp.contract_type || "full_time",
+      hire_date: emp.hire_date || "", basic_salary: String(emp.basic_salary ?? ""),
+      housing_allowance: String(emp.housing_allowance ?? ""), transport_allowance: String(emp.transport_allowance ?? ""),
+      other_allowances: String(emp.other_allowances ?? ""), status: emp.status || "active",
+      gosi_eligible: emp.gosi_eligible !== false, gosi_number: emp.gosi_number || "",
+    });
+    setIdentityFile(null); setError(""); setShowModal(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true); setError("");
     try {
-      await createEmployee({
+      const payload = {
         ...form,
         ...(identityFile ? { national_id_file_name: identityFile.name, national_id_content_type: identityFile.type, national_id_file_data: identityFile.data } : {}),
         basic_salary: parseFloat(form.basic_salary) || 0,
         housing_allowance: parseFloat(form.housing_allowance) || 0,
         transport_allowance: parseFloat(form.transport_allowance) || 0,
-      });
+        other_allowances: parseFloat(form.other_allowances) || 0,
+      };
+      if (editingEmployee) await updateEmployee(editingEmployee.id, payload);
+      else await createEmployee(payload);
       setIdentityFile(null);
+      setEditingEmployee(null);
       setShowModal(false);
       setLoading(true);
       await load();
@@ -86,7 +115,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
           <h1 className="page-title">{ar ? "الموظفون" : "Employees"}</h1>
           <p className="page-subtitle">{ar ? `${employees.length} موظف` : `${employees.length} employees`}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setForm({ full_name_ar: "", full_name_en: "", national_id: "", gender: "male", phone: "", email: "", job_title_ar: "", job_title_en: "", department_id: "", contract_type: "full_time", hire_date: new Date().toISOString().split("T")[0], basic_salary: "", housing_allowance: "", transport_allowance: "" }); setIdentityFile(null); setError(""); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={() => { setEditingEmployee(null); setForm(emptyForm()); setIdentityFile(null); setError(""); setShowModal(true); }}>
           <IcPlus />{ar ? "إضافة موظف" : "Add Employee"}
         </button>
       </div>
@@ -149,7 +178,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
                   <td><span style={{ fontWeight: 600 }}>{Number(emp.basic_salary || 0).toLocaleString()}</span> <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "ر.س" : "SAR"}</span></td>
                   <td style={{ fontSize: 12 }}>{emp.hire_date}</td>
                   <td><span className={emp.status === "active" ? "badge badge-success" : "badge badge-gray"}>{emp.status === "active" ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}</span></td>
-                  <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><a className="btn btn-secondary btn-sm" style={{ gap: 4 }} href={`/${locale}/hr/employees/${emp.id}`}><IcEye />{ar ? "عرض" : "View"}</a><button className="btn btn-danger btn-sm" onClick={() => handleDelete(emp)}>{ar ? "حذف" : "Delete"}</button></div></td>
+                  <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><a className="btn btn-secondary btn-sm" style={{ gap: 4 }} href={`/${locale}/hr/employees/${emp.id}`}><IcEye />{ar ? "عرض" : "View"}</a><button className="btn btn-secondary btn-sm" onClick={() => handleEdit(emp)}>{ar ? "تعديل" : "Edit"}</button><button className="btn btn-danger btn-sm" onClick={() => handleDelete(emp)}>{ar ? "حذف" : "Delete"}</button></div></td>
                 </tr>
               ))}
             </tbody>
@@ -161,7 +190,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
           <div className="card" style={{ width: "100%", maxWidth: 600, borderRadius: 16, margin: "auto" }}>
             <div className="card-header">
-              <span className="card-title">{ar ? "إضافة موظف جديد" : "Add New Employee"}</span>
+              <span className="card-title">{editingEmployee ? (ar ? "تعديل بيانات الموظف" : "Edit Employee") : (ar ? "إضافة موظف جديد" : "Add New Employee")}</span>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}><IcClose /></button>
             </div>
             <div className="card-body">
@@ -255,6 +284,27 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
                     <input type="number" className="form-input" value={form.transport_allowance} onChange={e => upd("transport_allowance", e.target.value)} min="0" />
                   </div>
                 </div>
+                <div className="grid-3">
+                  <div className="form-group">
+                    <label className="form-label">{ar ? "بدلات أخرى" : "Other allowances"}</label>
+                    <input type="number" className="form-input" value={form.other_allowances} onChange={e => upd("other_allowances", e.target.value)} min="0" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{ar ? "حالة الموظف" : "Employee status"}</label>
+                    <select className="form-input form-select" value={form.status} onChange={e => upd("status", e.target.value)}>
+                      <option value="active">{ar ? "نشط" : "Active"}</option>
+                      <option value="inactive">{ar ? "موقوف" : "Inactive"}</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">{ar ? "رقم التأمينات" : "GOSI number"}</label>
+                    <input className="form-input" value={form.gosi_number} onChange={e => upd("gosi_number", e.target.value)} />
+                  </div>
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 12 }}>
+                  <input type="checkbox" checked={form.gosi_eligible} onChange={e => upd("gosi_eligible", e.target.checked)} />
+                  {ar ? "مشمول بالتأمينات الاجتماعية (على حساب الشركة)" : "GOSI eligible (company-paid)"}
+                </label>
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
                   <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>{ar ? "إلغاء" : "Cancel"}</button>
                   <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ" : "Save")}</button>
