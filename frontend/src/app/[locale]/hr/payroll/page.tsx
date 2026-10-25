@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getPayroll, generatePayroll, confirmPayroll, payPayroll, updatePayrollRecord, getHRSettings, updateHRSettings } from "@/lib/hr";
+import { getPayroll, generatePayroll, confirmPayroll, deletePayroll, payPayroll, updatePayrollRecord, getHRSettings, updateHRSettings } from "@/lib/hr";
 
 const IcDollar   = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const IcUsers    = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -31,6 +31,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [paying, setPaying] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paymentAmounts, setPaymentAmounts] = useState<Record<string, string>>({});
@@ -91,6 +92,18 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
       const detail = err?.response?.data?.detail;
       setError(typeof detail === "string" ? detail : (ar ? "تعذر اعتماد المسير" : "Could not approve payroll"));
     } finally { setConfirming(false); }
+  };
+  const handleDelete = async () => {
+    if (!confirm(ar ? "سيتم حذف مسير هذه الفترة. إذا كان معتمدًا سيُنشأ قيد عكسي أولًا. لا يمكن التراجع عن العملية. هل تريد المتابعة؟" : "Delete this payroll? An approved payroll will be reversed first. This cannot be undone. Continue?")) return;
+    setDeleting(true); setError("");
+    try {
+      await deletePayroll(month, year);
+      await load();
+      alert(ar ? "تم حذف المسير وإنشاء القيود العكسية اللازمة" : "Payroll deleted and required reversals created");
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : (ar ? "تعذر حذف المسير" : "Could not delete payroll"));
+    } finally { setDeleting(false); }
   };
   const handlePay = async () => {
     if (!confirm(ar ? "هل تريد تسجيل دفع الرواتب فعليًا من الحساب المحدد؟" : "Record the actual payroll payment?")) return;
@@ -171,6 +184,11 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                 {paying ? (ar ? "جاري الدفع..." : "Paying...") : (ar ? "دفع المحدد أو المتبقي" : "Pay selected / remaining")}
               </button>
             </>
+          )}
+          {records.length > 0 && records.every(r => Number(r.paid_amount || 0) === 0) && (
+            <button className="btn btn-danger" onClick={handleDelete} disabled={deleting || generating || confirming}>
+              {deleting ? (ar ? "جاري الحذف..." : "Deleting...") : (ar ? "حذف المسير غير المدفوع" : "Delete unpaid payroll")}
+            </button>
           )}
         </div>
       </div>

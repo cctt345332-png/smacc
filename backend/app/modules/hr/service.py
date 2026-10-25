@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Optional
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -424,6 +424,84 @@ async def get_payroll(
     q = q.options(selectinload(PayrollRecord.employee)).order_by(PayrollRecord.created_at.desc())
     r = await db.execute(q)
     return r.scalars().all()
+
+
+async def delete_payroll_period(
+    db: AsyncSession, tenant_id: str, user_id: str, month: int, year: int
+) -> dict:
+    """حذف مسير غير مدفوع؛ يعكس قيد الاستحقاق قبل حذف سجلاته."""
+    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
+    from app.modules.accounting.service import _next_entry_number
+
+    rows = (await db.execute(select(PayrollRecord).where(
+        PayrollRecord.tenant_id == tenant_id,
+        PayrollRecord.month == month,
+        PayrollRecord.year == year,
+    ))).scalars().all()
+    if not rows:
+        raise HTTPException(404, "لا يوجد مسير رواتب لهذه الفترة")
+
+    payroll_ids = [row.id for row in rows]
+    paid_count = (await db.execute(select(func.count()).where(
+        PayrollPayment.tenant_id == tenant_id,
+        PayrollPayment.payroll_id.in_(payroll_ids),
+    ))).scalar() or 0
+    paid_amount = sum((Decimal(str(row.paid_amount or 0)) for row in rows), Decimal("0"))
+    if paid_count or paid_amount > 0:
+        raise HTTPException(409, "لا يمكن حذف المسير لأنه يحتوي على دفعات مسجلة. استخدم الإلغاء المحاسبي بدل الحذف.")
+
+    reversed_count = 0
+    try:
+        for row in rows:
+            if not row.journal_entry_id:
+                continue
+            original = await db.scalar(select(JournalEntry).where(
+                JournalEntry.id == row.journal_entry_id,
+                JournalEntry.tenant_id == tenant_id,
+            ))
+            if not original:
+                raise HTTPException(409, "القيد المرتبط بأحد سجلات المسير غير موجود؛ لم يتم حذف أي بيانات")
+            if original.status != JournalEntryStatus.POSTED:
+                raise HTTPException(409, "القيد المرتبط بالمسير ليس مرحّلًا؛ راجع حالته قبل الحذف")
+            lines = (await db.execute(select(JournalEntryLine).where(
+                JournalEntryLine.entry_id == original.id
+            ))).scalars().all()
+            reversal = JournalEntry(
+                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                entry_number=await _next_entry_number(db, tenant_id),
+                entry_date=datetime.utcnow(), fiscal_year_id=original.fiscal_year_id,
+                description_ar=f"عكس وحذف مسير رواتب {month}/{year} - {original.entry_number}",
+                description_en=f"Payroll deletion reversal {month}/{year} - {original.entry_number}",
+                status=JournalEntryStatus.POSTED, source="payroll_deletion_reversal",
+                reference=original.entry_number,
+                total_debit=original.total_credit, total_credit=original.total_debit,
+                created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow(),
+            )
+            db.add(reversal)
+            for line in lines:
+                db.add(JournalEntryLine(
+                    id=str(uuid.uuid4()), entry_id=reversal.id,
+                    account_id=line.account_id, cost_center_id=line.cost_center_id,
+                    description=line.description, debit=line.credit, credit=line.debit,
+                    line_order=line.line_order,
+                ))
+            reversed_count += 1
+        await db.execute(delete(PayrollPayment).where(
+            PayrollPayment.tenant_id == tenant_id,
+            PayrollPayment.payroll_id.in_(payroll_ids),
+        ))
+        await db.execute(delete(PayrollRecord).where(
+            PayrollRecord.tenant_id == tenant_id,
+            PayrollRecord.id.in_(payroll_ids),
+        ))
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(500, "تعذر حذف المسير. لم يتم حذف أي بيانات") from exc
+    return {"deleted": True, "month": month, "year": year, "records_deleted": len(rows), "reversals_created": reversed_count}
 
 
 async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month: int, year: int) -> list[PayrollRecord]:

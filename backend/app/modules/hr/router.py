@@ -198,6 +198,17 @@ async def confirm_payroll(
     return await service.confirm_payroll(db, user["tenant_id"], month, year)
 
 
+@router.delete("/payroll")
+async def delete_payroll(
+    month: int,
+    year: int,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """حذف مسير غير مدفوع مع عكس قيد الاستحقاق إن وجد."""
+    return await service.delete_payroll_period(db, user["tenant_id"], user["user_id"], month, year)
+
+
 @router.post("/payroll/pay")
 async def pay_payroll(
     month: int,
