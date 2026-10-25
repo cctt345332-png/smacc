@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.hr import (
     Department, Employee, AttendanceRecord,
-    LeaveRequest, PayrollRecord,
+    LeaveRequest, PayrollRecord, EmployeeDeduction,
     HRSettings, EmployeeAdvance, EmployeeExpense, PayrollPayment,
     EmployeeStatus, LeaveStatus,
 )
@@ -445,6 +445,46 @@ async def reject_advance(db: AsyncSession, tenant_id: str, advance_id: str, user
     await db.commit(); await db.refresh(advance); return advance
 
 
+async def get_deductions(db: AsyncSession, tenant_id: str, status: str | None = None, employee_id: str | None = None):
+    q = select(EmployeeDeduction).where(EmployeeDeduction.tenant_id == tenant_id).options(selectinload(EmployeeDeduction.employee)).order_by(EmployeeDeduction.deduction_date.desc(), EmployeeDeduction.created_at.desc())
+    if status:
+        q = q.where(EmployeeDeduction.status == status)
+    if employee_id:
+        q = q.where(EmployeeDeduction.employee_id == employee_id)
+    return (await db.execute(q)).scalars().all()
+
+
+async def create_deduction(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> EmployeeDeduction:
+    employee = await db.scalar(select(Employee).where(Employee.id == data.get("employee_id"), Employee.tenant_id == tenant_id))
+    if not employee:
+        raise HTTPException(404, "الموظف غير موجود")
+    amount = Decimal(str(data.get("amount", 0)))
+    reason = _optional_text(data.get("reason"))
+    if amount <= 0 or not reason:
+        raise HTTPException(400, "يجب إدخال مبلغ الخصم وسببه")
+    deduction = EmployeeDeduction(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, employee_id=employee.id,
+        deduction_date=_parse_date(data.get("deduction_date"), "تاريخ الخصم", date.today()),
+        amount=amount, reason=reason, status="pending", created_by=user_id, created_at=datetime.utcnow(),
+    )
+    db.add(deduction)
+    await db.commit(); await db.refresh(deduction)
+    return deduction
+
+
+async def review_deduction(db: AsyncSession, tenant_id: str, deduction_id: str, user_id: str, approved: bool) -> EmployeeDeduction:
+    deduction = await db.scalar(select(EmployeeDeduction).where(EmployeeDeduction.id == deduction_id, EmployeeDeduction.tenant_id == tenant_id))
+    if not deduction:
+        raise HTTPException(404, "الخصم غير موجود")
+    if deduction.status != "pending":
+        raise HTTPException(400, "الخصم تمت مراجعته مسبقًا")
+    deduction.status = "approved" if approved else "rejected"
+    deduction.approved_by = user_id
+    deduction.approved_at = datetime.utcnow()
+    await db.commit(); await db.refresh(deduction)
+    return deduction
+
+
 # ─── Payroll ─────────────────────────────────────────────────────────
 
 async def get_payroll(
@@ -605,7 +645,14 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             EmployeeAdvance.paid_amount < EmployeeAdvance.total_amount,
         ))).scalars().all()
         advance_deduction = sum((min(Decimal(str(a.monthly_installment)), Decimal(str(a.total_amount - a.paid_amount))) for a in advances), Decimal("0"))
-        total_deductions = gosi_emp + absence_deduction + late_deduction + advance_deduction
+        approved_deductions = (await db.execute(select(EmployeeDeduction).where(
+            EmployeeDeduction.tenant_id == tenant_id, EmployeeDeduction.employee_id == emp.id,
+            EmployeeDeduction.status == "approved",
+            EmployeeDeduction.deduction_date >= month_start,
+            EmployeeDeduction.deduction_date <= month_end,
+        ))).scalars().all()
+        manual_deduction = sum((Decimal(str(d.amount)) for d in approved_deductions), Decimal("0"))
+        total_deductions = gosi_emp + absence_deduction + late_deduction + advance_deduction + manual_deduction
         net = gross - total_deductions
 
         rec = PayrollRecord(
@@ -621,7 +668,7 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             overtime_amount=overtime_amount,
             gosi_employee=gosi_emp,
             absence_deduction=absence_deduction,
-            other_deductions=late_deduction,
+            other_deductions=late_deduction + manual_deduction,
             advance_deduction=advance_deduction,
             gross_salary=gross,
             total_deductions=total_deductions,
@@ -631,8 +678,9 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             created_by=user_id,
             created_at=datetime.utcnow(),
             notes=(f"تلقائي: غياب/إجازة غير مدفوعة {absence_days} يوم، تأخير {late_minutes} دقيقة، إضافي {overtime_hours} ساعة"
-                   + (f"، قسط سلف {advance_deduction} ر.س" if advance_deduction else ""))
-                   if absence_days or late_minutes or overtime_hours or advance_deduction else None,
+                   + (f"، قسط سلف {advance_deduction} ر.س" if advance_deduction else "")
+                   + (f"، خصومات معتمدة {manual_deduction} ر.س" if manual_deduction else ""))
+                   if absence_days or late_minutes or overtime_hours or advance_deduction or manual_deduction else None,
         )
         db.add(rec)
         records.append(rec)
@@ -968,7 +1016,42 @@ async def get_employee_profile(db, tenant_id, employee_id):
     leaves = (await db.execute(select(LeaveRequest).where(LeaveRequest.tenant_id == tenant_id, LeaveRequest.employee_id == employee_id).order_by(LeaveRequest.created_at.desc()))).scalars().all()
     expenses = await get_employee_expenses(db, tenant_id, employee_id=employee_id)
     advances = (await db.execute(select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant_id, EmployeeAdvance.employee_id == employee_id))).scalars().all()
-    return {"employee": employee, "payroll": payroll, "leaves": leaves, "expenses": expenses, "advances": advances}
+    deductions = await get_deductions(db, tenant_id, employee_id=employee_id)
+    return {"employee": employee, "payroll": payroll, "leaves": leaves, "expenses": expenses, "advances": advances, "deductions": deductions}
+
+
+async def get_employee_statements(db, tenant_id: str, employee_id: str | None = None, from_date: date | None = None, to_date: date | None = None):
+    employees_q = select(Employee).where(Employee.tenant_id == tenant_id).options(selectinload(Employee.department)).order_by(Employee.full_name_ar)
+    if employee_id:
+        employees_q = employees_q.where(Employee.id == employee_id)
+    employees = (await db.execute(employees_q)).scalars().all()
+    if employee_id and not employees:
+        raise HTTPException(404, "الموظف غير موجود")
+    result = []
+    for employee in employees:
+        payroll_q = select(PayrollRecord).where(PayrollRecord.tenant_id == tenant_id, PayrollRecord.employee_id == employee.id).order_by(PayrollRecord.year.desc(), PayrollRecord.month.desc())
+        payroll_rows = (await db.execute(payroll_q)).scalars().all()
+        advances_q = select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant_id, EmployeeAdvance.employee_id == employee.id).order_by(EmployeeAdvance.created_at.desc())
+        advances = (await db.execute(advances_q)).scalars().all()
+        deductions_q = select(EmployeeDeduction).where(EmployeeDeduction.tenant_id == tenant_id, EmployeeDeduction.employee_id == employee.id).order_by(EmployeeDeduction.deduction_date.desc())
+        if from_date:
+            deductions_q = deductions_q.where(EmployeeDeduction.deduction_date >= from_date)
+        if to_date:
+            deductions_q = deductions_q.where(EmployeeDeduction.deduction_date <= to_date)
+        deductions = (await db.execute(deductions_q)).scalars().all()
+        total_net = sum((Decimal(str(x.net_salary or 0)) for x in payroll_rows), Decimal("0"))
+        total_paid = sum((Decimal(str(x.paid_amount or 0)) for x in payroll_rows), Decimal("0"))
+        result.append({
+            "employee": employee, "payroll": payroll_rows, "advances": advances, "deductions": deductions,
+            "summary": {"total_net": float(total_net), "total_paid": float(total_paid), "total_remaining": float(max(Decimal("0"), total_net - total_paid)),
+                        "advances_total": float(sum((Decimal(str(x.total_amount or 0)) for x in advances), Decimal("0"))),
+                        "advances_remaining": float(sum((max(Decimal("0"), Decimal(str(x.total_amount or 0)) - Decimal(str(x.paid_amount or 0))) for x in advances), Decimal("0"))),
+                        "deductions_total": float(sum((Decimal(str(x.amount or 0)) for x in deductions if x.status == "approved"), Decimal("0")))}
+        })
+    totals = {"total_net": sum(x["summary"]["total_net"] for x in result), "total_paid": sum(x["summary"]["total_paid"] for x in result),
+              "total_remaining": sum(x["summary"]["total_remaining"] for x in result), "advances_remaining": sum(x["summary"]["advances_remaining"] for x in result),
+              "deductions_total": sum(x["summary"]["deductions_total"] for x in result)}
+    return {"statements": result, "totals": totals}
 
 async def get_hr_financial_report(db, tenant_id, month, year):
     rows = (await db.execute(select(PayrollRecord).where(PayrollRecord.tenant_id == tenant_id, PayrollRecord.month == month, PayrollRecord.year == year).options(selectinload(PayrollRecord.employee)))).scalars().all()

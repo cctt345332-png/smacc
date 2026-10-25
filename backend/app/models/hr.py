@@ -110,6 +110,24 @@ class EmployeeAdvance(Base):
     employee: Mapped["Employee"] = relationship("Employee")
 
 
+class EmployeeDeduction(Base):
+    """خصم مستقل مثل مخالفة أو جزاء يضاف لمسير شهر محدد بعد اعتماده."""
+    __tablename__ = "hr_employee_deductions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    employee_id: Mapped[str] = mapped_column(String, ForeignKey("hr_employees.id"), index=True)
+    deduction_date: Mapped[date] = mapped_column(Date, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    reason: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    approved_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    employee: Mapped["Employee"] = relationship("Employee")
+
+
 class EmployeeExpense(Base):
     __tablename__ = "hr_employee_expenses"
     id: Mapped[str] = mapped_column(String, primary_key=True)

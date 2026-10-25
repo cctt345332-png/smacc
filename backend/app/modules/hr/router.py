@@ -95,6 +95,26 @@ async def reject_advance(advance_id: str, user=Depends(require_role(["manager", 
     return await service.reject_advance(db, user["tenant_id"], advance_id, user["user_id"])
 
 
+@router.get("/deductions")
+async def list_deductions(status: Optional[str] = None, employee_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_deductions(db, tenant_id, status, employee_id)
+
+
+@router.post("/deductions", status_code=201)
+async def create_deduction(data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.create_deduction(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.post("/deductions/{deduction_id}/approve")
+async def approve_deduction(deduction_id: str, user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.review_deduction(db, user["tenant_id"], deduction_id, user["user_id"], True)
+
+
+@router.post("/deductions/{deduction_id}/reject")
+async def reject_deduction(deduction_id: str, user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.review_deduction(db, user["tenant_id"], deduction_id, user["user_id"], False)
+
+
 # ─── Employee expenses, profile and reports ───────────────────────────
 @router.get("/expenses")
 async def list_employee_expenses(status: Optional[str] = None, employee_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
@@ -119,6 +139,11 @@ async def employee_profile(employee_id: str, tenant_id=Depends(get_tenant_id), d
 @router.get("/reports/financial")
 async def hr_financial_report(month: int, year: int, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await service.get_hr_financial_report(db, tenant_id, month, year)
+
+
+@router.get("/reports/statements")
+async def hr_employee_statements(employee_id: Optional[str] = None, from_date: Optional[date] = None, to_date: Optional[date] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_employee_statements(db, tenant_id, employee_id, from_date, to_date)
 
 
 # ─── Attendance ──────────────────────────────────────────────────────

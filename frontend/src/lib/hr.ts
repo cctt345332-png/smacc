@@ -21,6 +21,10 @@ export const getAdvances = (params?: any) => api.get("/hr/advances", { params })
 export const createAdvance = (data: any) => api.post("/hr/advances", data);
 export const approveAdvance = (id: string) => api.post(`/hr/advances/${id}/approve`);
 export const rejectAdvance = (id: string) => api.post(`/hr/advances/${id}/reject`);
+export const getDeductions = (params?: any) => api.get("/hr/deductions", { params });
+export const createDeduction = (data: any) => api.post("/hr/deductions", data);
+export const approveDeduction = (id: string) => api.post(`/hr/deductions/${id}/approve`);
+export const rejectDeduction = (id: string) => api.post(`/hr/deductions/${id}/reject`);
 
 // ─── Attendance ──────────────────────────────────────────────────────
 export const getAttendance = (params?: { date_from?: string; date_to?: string; employee_id?: string }) =>
@@ -59,3 +63,4 @@ export const approveEmployeeExpense = (id: string) => api.post(`/hr/expenses/${i
 export const rejectEmployeeExpense = (id: string) => api.post(`/hr/expenses/${id}/reject`);
 export const getEmployeeProfile = (id: string) => api.get(`/hr/employees/${id}/profile`);
 export const getHRFinancialReport = (month: number, year: number) => api.get(`/hr/reports/financial?month=${month}&year=${year}`);
+export const getEmployeeStatements = (params?: any) => api.get("/hr/reports/statements", { params });
