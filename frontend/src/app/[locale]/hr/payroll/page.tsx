@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getPayroll, generatePayroll, confirmPayroll } from "@/lib/hr";
+import { getPayroll, generatePayroll, confirmPayroll, updatePayrollRecord } from "@/lib/hr";
 
 const IcDollar   = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>;
 const IcUsers    = () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
@@ -31,6 +31,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
 
   const load = async () => {
@@ -60,6 +61,29 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
     setConfirming(true);
     try { await confirmPayroll(month, year); await load(); }
     catch {} finally { setConfirming(false); }
+  };
+
+  const updateLocal = (id: string, field: string, value: string) => {
+    setRecords(rows => rows.map(row => row.id === id ? { ...row, [field]: value } : row));
+  };
+
+  const handleSaveRecord = async (rec: any) => {
+    setSavingId(rec.id); setError("");
+    try {
+      const { data } = await updatePayrollRecord(rec.id, {
+        basic_salary: Number(rec.basic_salary || 0),
+        housing_allowance: Number(rec.housing_allowance || 0),
+        transport_allowance: Number(rec.transport_allowance || 0),
+        other_allowances: Number(rec.other_allowances || 0),
+        overtime_amount: Number(rec.overtime_amount || 0),
+        absence_deduction: Number(rec.absence_deduction || 0),
+        other_deductions: Number(rec.other_deductions || 0),
+      });
+      setRecords(rows => rows.map(row => row.id === rec.id ? data : row));
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === "string" ? detail : (ar ? "تعذر حفظ مكونات الراتب" : "Could not save payroll components"));
+    } finally { setSavingId(""); }
   };
 
   const totalNet     = records.reduce((s, r) => s + Number(r.net_salary || 0), 0);
@@ -178,11 +202,11 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
                         </div>
                       </div>
                     </td>
-                    <td>{Number(rec.basic_salary || 0).toLocaleString()}</td>
-                    <td style={{ color: "#6F4A84" }}>+{(Number(rec.housing_allowance || 0) + Number(rec.transport_allowance || 0) + Number(rec.other_allowances || 0)).toLocaleString()}</td>
-                    <td style={{ color: "#DC2626" }}>-{Number(rec.total_deductions || 0).toLocaleString()}</td>
+                    <td>{rec.status === "draft" ? <input className="form-input" style={{ width: 100 }} type="number" min="0" value={rec.basic_salary ?? 0} onChange={e => updateLocal(rec.id, "basic_salary", e.target.value)} /> : Number(rec.basic_salary || 0).toLocaleString()}</td>
+                    <td style={{ color: "#6F4A84" }}>{rec.status === "draft" ? <div style={{ display: "grid", gap: 4 }}><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدل السكن" : "Housing"} value={rec.housing_allowance ?? 0} onChange={e => updateLocal(rec.id, "housing_allowance", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدل النقل" : "Transport"} value={rec.transport_allowance ?? 0} onChange={e => updateLocal(rec.id, "transport_allowance", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "بدلات أخرى" : "Other allowances"} value={rec.other_allowances ?? 0} onChange={e => updateLocal(rec.id, "other_allowances", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "العمل الإضافي" : "Overtime"} value={rec.overtime_amount ?? 0} onChange={e => updateLocal(rec.id, "overtime_amount", e.target.value)} /></div> : `+${(Number(rec.housing_allowance || 0) + Number(rec.transport_allowance || 0) + Number(rec.other_allowances || 0) + Number(rec.overtime_amount || 0)).toLocaleString()}`}</td>
+                    <td style={{ color: "#DC2626" }}>{rec.status === "draft" ? <div style={{ display: "grid", gap: 4 }}><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "خصم الغياب" : "Absence deduction"} value={rec.absence_deduction ?? 0} onChange={e => updateLocal(rec.id, "absence_deduction", e.target.value)} /><input className="form-input" style={{ width: 100 }} type="number" min="0" title={ar ? "خصومات أخرى" : "Other deductions"} value={rec.other_deductions ?? 0} onChange={e => updateLocal(rec.id, "other_deductions", e.target.value)} /></div> : `-${Number(rec.total_deductions || 0).toLocaleString()}`}</td>
                     <td style={{ fontWeight: 700 }}>{Number(rec.net_salary || 0).toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{ar ? "ر.س" : "SAR"}</span></td>
-                    <td><span className={rec.status === "paid" ? "badge badge-success" : rec.status === "draft" ? "badge badge-warning" : "badge badge-info"}>{rec.status === "paid" ? (ar ? "مدفوع" : "Paid") : rec.status === "draft" ? (ar ? "مسودة" : "Draft") : (ar ? "معلق" : "Pending")}</span></td>
+                    <td><span className={rec.status === "paid" ? "badge badge-success" : rec.status === "draft" ? "badge badge-warning" : "badge badge-info"}>{rec.status === "paid" ? (ar ? "مدفوع" : "Paid") : rec.status === "draft" ? (ar ? "مسودة" : "Draft") : (ar ? "معلق" : "Pending")}</span>{rec.status === "draft" && <button className="btn btn-secondary" style={{ marginTop: 6, fontSize: 11 }} onClick={() => handleSaveRecord(rec)} disabled={savingId === rec.id}>{savingId === rec.id ? (ar ? "حفظ..." : "Saving..." ) : (ar ? "حفظ المكونات" : "Save")}</button>}</td>
                   </tr>
                 ))}
               </tbody>

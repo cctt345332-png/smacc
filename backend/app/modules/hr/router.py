@@ -136,6 +136,17 @@ async def confirm_payroll(
     return await service.confirm_payroll(db, user["tenant_id"], month, year)
 
 
+@router.patch("/payroll/{payroll_id}")
+async def update_payroll_record(
+    payroll_id: str,
+    data: dict,
+    user=Depends(require_role(["manager", "hr", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """تعديل مكونات سطر الراتب قبل الاعتماد."""
+    return await service.update_payroll_record(db, user["tenant_id"], payroll_id, data)
+
+
 # ─── GOSI ────────────────────────────────────────────────────────────
 @router.get("/gosi")
 async def gosi_report(

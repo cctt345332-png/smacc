@@ -34,6 +34,8 @@ export const generatePayroll = (month: number, year: number) =>
   api.post(`/hr/payroll/generate?month=${month}&year=${year}`);
 export const confirmPayroll = (month: number, year: number) =>
   api.post(`/hr/payroll/confirm?month=${month}&year=${year}`);
+export const updatePayrollRecord = (id: string, data: any) =>
+  api.patch(`/hr/payroll/${id}`, data);
 
 // ─── GOSI ────────────────────────────────────────────────────────────
 export const getGOSI = (month: number, year: number) =>

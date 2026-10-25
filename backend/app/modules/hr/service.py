@@ -356,8 +356,53 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
     return records
 
 
+async def update_payroll_record(db: AsyncSession, tenant_id: str, payroll_id: str, data: dict) -> PayrollRecord:
+    """تعديل البدلات والخصومات قبل اعتماد سطر الراتب."""
+    rec = (await db.execute(
+        select(PayrollRecord).where(
+            PayrollRecord.id == payroll_id,
+            PayrollRecord.tenant_id == tenant_id,
+        )
+    )).scalar_one_or_none()
+    if not rec:
+        raise HTTPException(404, "سطر الراتب غير موجود")
+    if rec.status != "draft" or rec.journal_entry_id:
+        raise HTTPException(409, "لا يمكن تعديل راتب تم اعتماده أو ترحيله")
+
+    editable = (
+        "basic_salary", "housing_allowance", "transport_allowance",
+        "other_allowances", "overtime_amount", "absence_deduction", "other_deductions",
+    )
+    for field in editable:
+        if field in data:
+            try:
+                value = Decimal(str(data[field]))
+            except Exception as exc:
+                raise HTTPException(400, f"قيمة {field} غير صحيحة") from exc
+            if value < 0:
+                raise HTTPException(400, "لا يمكن إدخال مبلغ سالب في مكونات الراتب")
+            setattr(rec, field, value)
+
+    rec.gross_salary = (
+        rec.basic_salary + rec.housing_allowance + rec.transport_allowance
+        + rec.other_allowances + rec.overtime_amount
+    )
+    rec.total_deductions = rec.gosi_employee + rec.absence_deduction + rec.other_deductions
+    rec.net_salary = rec.gross_salary - rec.total_deductions
+    rec.notes = data.get("notes", rec.notes)
+    await db.commit()
+    await db.refresh(rec)
+    return rec
+
+
 async def confirm_payroll(db: AsyncSession, tenant_id: str, month: int, year: int) -> dict:
-    """تأكيد صرف الرواتب"""
+    """تأكيد مسير الرواتب وإنشاء قيده المحاسبي مرة واحدة فقط."""
+    from app.models.accounting import (
+        Account, FiscalYear, FiscalYearStatus,
+        JournalEntry, JournalEntryLine, JournalEntryStatus,
+    )
+    from app.modules.accounting.service import get_operational_account, _next_entry_number
+
     r = await db.execute(
         select(PayrollRecord).where(
             PayrollRecord.tenant_id == tenant_id,
@@ -367,10 +412,88 @@ async def confirm_payroll(db: AsyncSession, tenant_id: str, month: int, year: in
         )
     )
     records = r.scalars().all()
+    if not records:
+        raise HTTPException(400, "لا توجد رواتب مسودة لهذا الشهر")
+    if any(rec.journal_entry_id for rec in records):
+        raise HTTPException(409, "تم إنشاء قيد هذا المسير مسبقًا ولا يجوز تكراره")
+
+    payroll_expense = await get_operational_account(db, tenant_id, "payroll_expense")
+    payroll_payable = await get_operational_account(db, tenant_id, "payroll_payable")
+    gosi_payable = await get_operational_account(db, tenant_id, "accrued_expenses")
+    gosi_expense = (await db.execute(
+        select(Account).where(
+            Account.tenant_id == tenant_id,
+            Account.is_active.is_(True),
+            Account.is_posting.is_(True),
+            (Account.code.in_(["0522", "522000"]) | Account.name_ar.like("%التأمينات الاجتماعية%")),
+        ).order_by(Account.code)
+    )).scalars().first()
+    if not gosi_expense:
+        raise HTTPException(409, "حساب التأمينات الاجتماعية غير مهيأ في شجرة الحسابات")
+
+    first_day = date(year, month, 1)
+    fiscal_year = (await db.execute(
+        select(FiscalYear).where(
+            FiscalYear.tenant_id == tenant_id,
+            FiscalYear.status == FiscalYearStatus.OPEN,
+            FiscalYear.start_date <= first_day,
+            FiscalYear.end_date >= first_day,
+        ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc())
+    )).scalars().first()
+    if not fiscal_year:
+        raise HTTPException(409, "لا توجد سنة مالية مفتوحة لشهر مسير الرواتب")
+
+    total_gross = sum((Decimal(str(rec.gross_salary or 0)) for rec in records), Decimal("0"))
+    total_employee_gosi = sum((Decimal(str(rec.gosi_employee or 0)) for rec in records), Decimal("0"))
+    total_employer_gosi = sum((Decimal(str(rec.gosi_employer or 0)) for rec in records), Decimal("0"))
+    total_net = sum((Decimal(str(rec.net_salary or 0)) for rec in records), Decimal("0"))
+    total_debit = total_gross + total_employer_gosi
+    total_credit = total_net + total_employee_gosi + total_employer_gosi
+    if total_debit != total_credit:
+        raise HTTPException(409, "مكونات مسير الرواتب غير متوازنة محاسبيًا")
+
+    entry = JournalEntry(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        entry_number=await _next_entry_number(db, tenant_id),
+        entry_date=datetime(year, month, 1), fiscal_year_id=fiscal_year.id,
+        description_ar=f"قيد مسير رواتب {month}/{year}",
+        description_en=f"Payroll journal {month}/{year}",
+        status=JournalEntryStatus.POSTED, source="payroll",
+        reference=f"PAYROLL-{year}-{month:02d}",
+        total_debit=total_debit, total_credit=total_credit,
+        created_by=records[0].created_by, posted_by=records[0].created_by,
+        posted_at=datetime.utcnow(),
+    )
+    db.add(entry)
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=payroll_expense.id,
+        description=f"رواتب وبدلات {month}/{year}", debit=total_gross, credit=0, line_order=0,
+    ))
+    if total_employer_gosi:
+        db.add(JournalEntryLine(
+            id=str(uuid.uuid4()), entry_id=entry.id, account_id=gosi_expense.id,
+            description=f"حصة صاحب العمل من التأمينات {month}/{year}",
+            debit=total_employer_gosi, credit=0, line_order=1,
+        ))
+    db.add(JournalEntryLine(
+        id=str(uuid.uuid4()), entry_id=entry.id, account_id=payroll_payable.id,
+        description=f"رواتب مستحقة صافي {month}/{year}", debit=0, credit=total_net, line_order=2,
+    ))
+    if total_employee_gosi + total_employer_gosi:
+        db.add(JournalEntryLine(
+            id=str(uuid.uuid4()), entry_id=entry.id, account_id=gosi_payable.id,
+            description=f"تأمينات مستحقة {month}/{year}",
+            debit=0, credit=total_employee_gosi + total_employer_gosi, line_order=3,
+        ))
     for rec in records:
         rec.status = "paid"
+        rec.journal_entry_id = entry.id
     await db.commit()
-    return {"paid": len(records), "month": month, "year": year}
+    return {
+        "paid": len(records), "month": month, "year": year,
+        "journal_entry_id": entry.id, "journal_entry_number": entry.entry_number,
+        "total_net": float(total_net),
+    }
 
 
 # ─── GOSI Report ─────────────────────────────────────────────────────
