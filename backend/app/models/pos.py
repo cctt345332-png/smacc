@@ -157,6 +157,9 @@ class POSTerminal(Base):
     bank_account_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("bank_accounts.id"), nullable=True
     )
+    card_settlement_account_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("accounts.id"), nullable=True
+    )
     fiscal_year_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("fiscal_years.id"), nullable=True
     )

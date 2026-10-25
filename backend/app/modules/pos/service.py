@@ -69,6 +69,7 @@ async def get_terminals(db: AsyncSession, tenant_id: str):
             "sales_account_id": t.sales_account_id,
             "vat_account_id": t.vat_account_id,
             "bank_account_id": t.bank_account_id,
+            "card_settlement_account_id": t.card_settlement_account_id,
             "fiscal_year_id": t.fiscal_year_id,
             "receipt_header": t.receipt_header,
             "receipt_footer": t.receipt_footer,
@@ -155,6 +156,11 @@ async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: st
 
 
 async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
+    if data.get("card_settlement_account_id"):
+        from app.models.accounting import Account
+        account = await db.get(Account, data["card_settlement_account_id"])
+        if not account or account.tenant_id != tenant_id or account.account_type != "asset" or not account.is_active or not account.is_posting:
+            raise HTTPException(400, "حساب تسوية الشبكة يجب أن يكون حساب أصول تفصيليًا ونشطًا")
     bt = data.get("business_type", "general")
     cfg = ACTIVITY_CONFIG.get(bt, ACTIVITY_CONFIG["general"])
     allow_purchase = data.get("allow_purchase", bt in POS_PURCHASE_ACTIVITIES)
@@ -169,6 +175,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         sales_account_id=data.get("sales_account_id"),
         vat_account_id=data.get("vat_account_id"),
         bank_account_id=data.get("bank_account_id"),
+        card_settlement_account_id=data.get("card_settlement_account_id"),
         fiscal_year_id=data.get("fiscal_year_id"),
         receipt_header=data.get("receipt_header"),
         receipt_footer=data.get("receipt_footer"),
@@ -196,6 +203,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         "sales_account_id": terminal.sales_account_id,
         "vat_account_id": terminal.vat_account_id,
         "bank_account_id": terminal.bank_account_id,
+        "card_settlement_account_id": terminal.card_settlement_account_id,
         "fiscal_year_id": terminal.fiscal_year_id,
         "receipt_header": terminal.receipt_header,
         "receipt_footer": terminal.receipt_footer,
@@ -211,10 +219,15 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
     t = await db.get(POSTerminal, terminal_id)
     if not t or t.tenant_id != tenant_id:
         raise HTTPException(404, "Terminal not found")
+    if data.get("card_settlement_account_id"):
+        from app.models.accounting import Account
+        account = await db.get(Account, data["card_settlement_account_id"])
+        if not account or account.tenant_id != tenant_id or account.account_type != "asset" or not account.is_active or not account.is_posting:
+            raise HTTPException(400, "حساب تسوية الشبكة يجب أن يكون حساب أصول تفصيليًا ونشطًا")
     allowed = [
         "name", "branch_name", "business_type", "warehouse_id",
         "cash_account_id", "sales_account_id", "vat_account_id",
-        "bank_account_id", "fiscal_year_id",
+        "bank_account_id", "card_settlement_account_id", "fiscal_year_id",
         "receipt_header", "receipt_footer", "print_receipt",
         "allow_discount", "max_discount_pct", "allow_purchase", "is_active",
         "assigned_user_id",
@@ -245,6 +258,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         "sales_account_id": t.sales_account_id,
         "vat_account_id": t.vat_account_id,
         "bank_account_id": t.bank_account_id,
+        "card_settlement_account_id": t.card_settlement_account_id,
         "fiscal_year_id": t.fiscal_year_id,
         "receipt_header": t.receipt_header,
         "receipt_footer": t.receipt_footer,
@@ -572,6 +586,7 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
     invoice_id = await _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_settings)
     if invoice_id:
         tx.invoice_id = invoice_id
+    tx.journal_entry_id = await _create_pos_journal(db, tenant_id, user_id, tx, terminal, vat_settings, invoice_id)
 
     await db.commit()
     await db.refresh(tx)
@@ -586,6 +601,65 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         "invoice_id": invoice_id,
         "status": "completed",
     }
+
+
+async def _create_pos_journal(db: AsyncSession, tenant_id: str, user_id: str, tx, terminal, vat_settings, invoice_id: str | None) -> str:
+    """قيد POS: النقد للصندوق، والشبكة لحساب التسوية، لا للبنك مباشرة."""
+    from app.models.accounting import Account, JournalEntry, JournalEntryLine, JournalEntryStatus
+    from app.models.sales import Invoice
+    from app.modules.accounting.service import _next_entry_number, get_operational_account
+
+    cash_account = await db.get(Account, terminal.cash_account_id) if terminal.cash_account_id else None
+    if not cash_account:
+        cash_account = await get_operational_account(db, tenant_id, "default_cash")
+    sales_account = await db.get(Account, terminal.sales_account_id) if terminal.sales_account_id else None
+    if not sales_account:
+        sales_account = await get_operational_account(db, tenant_id, "sales_goods")
+    vat_account = await db.get(Account, terminal.vat_account_id) if terminal.vat_account_id else None
+    if not vat_account and vat_settings and vat_settings.vat_account_id:
+        vat_account = await db.get(__import__("app.models.accounting", fromlist=["Account"]).Account, vat_settings.vat_account_id)
+    if not cash_account or not sales_account or (tx.vat_amount > 0 and not vat_account):
+        raise HTTPException(409, "إعداد الحسابات المحاسبية لنقطة البيع غير مكتمل")
+
+    card_amount = Decimal(str(tx.card_amount or 0)) if tx.payment_method == "split" else (tx.total if tx.payment_method in ("mada", "credit_card", "stc_pay") else Decimal("0"))
+    cash_amount = tx.total - card_amount
+    settlement_account = None
+    if card_amount > 0:
+        settlement_account = await db.get(Account, terminal.card_settlement_account_id) if terminal.card_settlement_account_id else None
+        if not settlement_account:
+            settlement_account = await get_operational_account(db, tenant_id, "default_card")
+        if not settlement_account:
+            raise HTTPException(409, "يجب تحديد حساب تسوية الشبكة/مدى من شجرة الحسابات")
+
+    entry = JournalEntry(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        entry_number=await _next_entry_number(db, tenant_id),
+        entry_date=tx.created_at, fiscal_year_id=terminal.fiscal_year_id,
+        description_ar=f"مبيعات نقطة البيع {tx.transaction_number}",
+        description_en=f"POS sale {tx.transaction_number}", status=JournalEntryStatus.POSTED,
+        source="pos_transaction", reference=tx.transaction_number,
+        total_debit=tx.total, total_credit=tx.total,
+        created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow(),
+    )
+    db.add(entry)
+    order = 0
+    if cash_amount > 0:
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=cash_account.id,
+            description=f"نقدية {tx.transaction_number}", debit=cash_amount, credit=0, line_order=order)); order += 1
+    if card_amount > 0:
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=settlement_account.id,
+            description=f"تسوية شبكة {tx.transaction_number}", debit=card_amount, credit=0, line_order=order)); order += 1
+    taxable = tx.total - tx.vat_amount
+    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=sales_account.id,
+        description=f"مبيعات {tx.transaction_number}", debit=0, credit=taxable, line_order=order)); order += 1
+    if tx.vat_amount > 0:
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=vat_account.id,
+            description="ضريبة مخرجات POS", debit=0, credit=tx.vat_amount, line_order=order))
+    if invoice_id:
+        invoice = await db.get(Invoice, invoice_id)
+        if invoice:
+            invoice.journal_entry_id = entry.id
+    return entry.id
 
 
 async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_id: str, line: dict, terminal_warehouse_id: str):

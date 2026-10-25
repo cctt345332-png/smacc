@@ -45,7 +45,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
   const emptyForm = {
     name: "", branch_name: "",
     warehouse_id: "", cash_account_id: "", sales_account_id: "",
-    vat_account_id: "", bank_account_id: "", fiscal_year_id: "",
+    vat_account_id: "", bank_account_id: "", card_settlement_account_id: "", fiscal_year_id: "",
     receipt_header: "", receipt_footer: "",
     print_receipt: true, allow_discount: true,
     max_discount_pct: "10",
@@ -92,7 +92,6 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
     const vatAcc     = accounts.find((a: any) => a.code === "212"  || a.name_ar.includes("ضريبة القيمة المضافة المخرجات"));
     const defaultFY  = fiscalYears.find((f: any) => f.is_default) || fiscalYears[0];
     const defaultWH  = warehouses.find((w: any) => w.is_default) || warehouses[0];
-    const defaultBank= bankAccounts[0];
 
     setEditing(null);
     setForm({
@@ -102,7 +101,8 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
       vat_account_id:   vatAcc?.id   || "",
       fiscal_year_id:   defaultFY?.id || "",
       warehouse_id:     defaultWH?.id || "",
-      bank_account_id:  defaultBank?.id || "",
+      bank_account_id:  "",
+      card_settlement_account_id: accounts.find((a: any) => a.code === "01121" || (a.account_type === "asset" && a.is_posting))?.id || "",
     });
     setShowModal(true);
   };
@@ -115,6 +115,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
       sales_account_id: t.sales_account_id || "",
       vat_account_id: t.vat_account_id || "",
       bank_account_id: t.bank_account_id || "",
+      card_settlement_account_id: t.card_settlement_account_id || "",
       fiscal_year_id: t.fiscal_year_id || "",
       receipt_header: t.receipt_header || "",
       receipt_footer: t.receipt_footer || "",
@@ -140,6 +141,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
         sales_account_id: form.sales_account_id || null,
         vat_account_id:   form.vat_account_id   || null,
         bank_account_id:  form.bank_account_id  || null,
+        card_settlement_account_id: form.card_settlement_account_id || null,
         fiscal_year_id:   form.fiscal_year_id   || null,
         receipt_header:   form.receipt_header   || null,
         receipt_footer:   form.receipt_footer   || null,
@@ -456,7 +458,17 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">{ar ? "الحساب البنكي (مدى/بطاقة)" : "Bank Account (Card)"}</label>
+                  <label className="form-label">{ar ? "حساب تسوية الشبكة/مدى" : "Card Network Settlement Account"}</label>
+                  <select className="form-input form-select" value={form.card_settlement_account_id} onChange={(e) => upd("card_settlement_account_id", e.target.value)}>
+                    <option value="">{ar ? "— اختر من شجرة الحسابات —" : "— Select GL account —"}</option>
+                    {accounts.filter((a: any) => a.account_type === "asset" && a.is_posting === true && a.is_active !== false).map((a: any) => (
+                      <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>
+                    ))}
+                  </select>
+                  <p className="form-hint">{ar ? "تُسجل فيه مبيعات مدى والبطاقات حتى تتم تسويتها في البنك" : "Card sales remain here until settled into the bank"}</p>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">{ar ? "الحساب البنكي الفعلي (اختياري)" : "Actual Bank Account (Optional)"}</label>
                   <select className="form-input form-select" value={form.bank_account_id} onChange={(e) => upd("bank_account_id", e.target.value)}>
                     <option value="">{ar ? "— اختر —" : "— Select —"}</option>
                     {bankAccounts.map((b: any) => (
