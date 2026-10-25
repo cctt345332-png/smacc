@@ -24,6 +24,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
   const [showModal, setShowModal]   = useState(false);
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState("");
+  const [identityFile, setIdentityFile] = useState<{ name: string; type: string; data: string } | null>(null);
 
   const [form, setForm] = useState({
     full_name_ar: "", full_name_en: "", national_id: "", gender: "male",
@@ -55,10 +56,12 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
     try {
       await createEmployee({
         ...form,
+        ...(identityFile ? { national_id_file_name: identityFile.name, national_id_content_type: identityFile.type, national_id_file_data: identityFile.data } : {}),
         basic_salary: parseFloat(form.basic_salary) || 0,
         housing_allowance: parseFloat(form.housing_allowance) || 0,
         transport_allowance: parseFloat(form.transport_allowance) || 0,
       });
+      setIdentityFile(null);
       setShowModal(false);
       setLoading(true);
       await load();
@@ -76,7 +79,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
           <h1 className="page-title">{ar ? "الموظفون" : "Employees"}</h1>
           <p className="page-subtitle">{ar ? `${employees.length} موظف` : `${employees.length} employees`}</p>
         </div>
-        <button className="btn btn-primary" onClick={() => { setForm({ full_name_ar: "", full_name_en: "", national_id: "", gender: "male", phone: "", email: "", job_title_ar: "", job_title_en: "", department_id: "", contract_type: "full_time", hire_date: new Date().toISOString().split("T")[0], basic_salary: "", housing_allowance: "", transport_allowance: "" }); setError(""); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={() => { setForm({ full_name_ar: "", full_name_en: "", national_id: "", gender: "male", phone: "", email: "", job_title_ar: "", job_title_en: "", department_id: "", contract_type: "full_time", hire_date: new Date().toISOString().split("T")[0], basic_salary: "", housing_allowance: "", transport_allowance: "" }); setIdentityFile(null); setError(""); setShowModal(true); }}>
           <IcPlus />{ar ? "إضافة موظف" : "Add Employee"}
         </button>
       </div>
@@ -179,6 +182,19 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
                       <option value="female">{ar ? "أنثى" : "Female"}</option>
                     </select>
                   </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">{ar ? "مرفق الهوية" : "Identity attachment"}</label>
+                  <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="form-input"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 5 * 1024 * 1024) { setError(ar ? "حجم ملف الهوية يجب ألا يتجاوز 5 ميجابايت" : "Identity file must be 5MB or smaller"); e.target.value = ""; return; }
+                      const reader = new FileReader();
+                      reader.onload = () => setIdentityFile({ name: file.name, type: file.type, data: String(reader.result) });
+                      reader.readAsDataURL(file);
+                    }} />
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 5 }}>{identityFile ? `${identityFile.name} — ${ar ? "تم الإرفاق" : "Attached"}` : (ar ? "JPG أو PNG أو WEBP أو PDF — حد أقصى 5MB" : "JPG, PNG, WEBP or PDF — max 5MB")}</div>
                 </div>
                 <div className="grid-2">
                   <div className="form-group">

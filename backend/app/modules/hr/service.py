@@ -136,6 +136,15 @@ async def create_employee(db: AsyncSession, tenant_id: str, data: dict) -> Emplo
     hire_date = _parse_date(data.get("hire_date"), "تاريخ التعيين", date.today())
     birth_date = _parse_date(data.get("birth_date"), "تاريخ الميلاد")
 
+    identity_data = data.get("national_id_file_data")
+    identity_type = _optional_text(data.get("national_id_content_type"))
+    identity_name = _optional_text(data.get("national_id_file_name"))
+    if identity_data:
+        if len(str(identity_data)) > 7_000_000:
+            raise HTTPException(400, "حجم ملف الهوية يتجاوز 5 ميجابايت")
+        allowed_identity_types = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+        if identity_type not in allowed_identity_types:
+            raise HTTPException(400, "صيغة ملف الهوية غير مدعومة. استخدم JPG أو PNG أو WEBP أو PDF")
     emp = Employee(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
@@ -144,6 +153,9 @@ async def create_employee(db: AsyncSession, tenant_id: str, data: dict) -> Emplo
         full_name_ar=data["full_name_ar"],
         full_name_en=_optional_text(data.get("full_name_en")),
         national_id=_optional_text(data.get("national_id")),
+        national_id_file_name=identity_name,
+        national_id_content_type=identity_type,
+        national_id_file_data=identity_data,
         gender=data.get("gender", "male"),
         birth_date=birth_date,
         nationality=data.get("nationality", "SA"),
