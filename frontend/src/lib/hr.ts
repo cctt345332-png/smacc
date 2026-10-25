@@ -16,6 +16,10 @@ export const createEmployee = (data: any) => api.post("/hr/employees", data);
 export const updateEmployee = (id: string, data: any) => api.patch(`/hr/employees/${id}`, data);
 export const getHRSettings = () => api.get("/hr/settings");
 export const updateHRSettings = (data: any) => api.patch("/hr/settings", data);
+export const getAdvances = (params?: any) => api.get("/hr/advances", { params });
+export const createAdvance = (data: any) => api.post("/hr/advances", data);
+export const approveAdvance = (id: string) => api.post(`/hr/advances/${id}/approve`);
+export const rejectAdvance = (id: string) => api.post(`/hr/advances/${id}/reject`);
 
 // ─── Attendance ──────────────────────────────────────────────────────
 export const getAttendance = (params?: { date_from?: string; date_to?: string; employee_id?: string }) =>

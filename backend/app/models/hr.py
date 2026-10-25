@@ -90,6 +90,26 @@ class HRSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class EmployeeAdvance(Base):
+    __tablename__ = "hr_employee_advances"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    employee_id: Mapped[str] = mapped_column(String, ForeignKey("hr_employees.id"), index=True)
+    total_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    monthly_installment: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    start_month: Mapped[int] = mapped_column(Integer)
+    start_year: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    employee: Mapped["Employee"] = relationship("Employee")
+
+
 # ─── Employee (الموظفون) ──────────────────────────────────────────────
 class Employee(Base):
     __tablename__ = "hr_employees"
@@ -213,6 +233,7 @@ class PayrollRecord(Base):
     gosi_employee:     Mapped[Decimal]      = mapped_column(Numeric(18, 2), default=Decimal("0"))
     absence_deduction: Mapped[Decimal]      = mapped_column(Numeric(18, 2), default=Decimal("0"))
     other_deductions:  Mapped[Decimal]      = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    advance_deduction: Mapped[Decimal]      = mapped_column(Numeric(18, 2), default=Decimal("0"))
 
     # الإجماليات
     gross_salary:      Mapped[Decimal]      = mapped_column(Numeric(18, 2))

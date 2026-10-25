@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.models.hr import (
     Department, Employee, AttendanceRecord,
     LeaveRequest, PayrollRecord,
-    HRSettings,
+    HRSettings, EmployeeAdvance,
     EmployeeStatus, LeaveStatus,
 )
 
@@ -334,6 +334,53 @@ async def reject_leave(db: AsyncSession, tenant_id: str, leave_id: str, user_id:
     return req
 
 
+# ─── Employee advances ───────────────────────────────────────────────
+async def get_advances(db: AsyncSession, tenant_id: str, status: str | None = None, employee_id: str | None = None):
+    q = select(EmployeeAdvance).where(EmployeeAdvance.tenant_id == tenant_id).options(selectinload(EmployeeAdvance.employee)).order_by(EmployeeAdvance.created_at.desc())
+    if status:
+        q = q.where(EmployeeAdvance.status == status)
+    if employee_id:
+        q = q.where(EmployeeAdvance.employee_id == employee_id)
+    return (await db.execute(q)).scalars().all()
+
+
+async def create_advance(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> EmployeeAdvance:
+    employee_id = data.get("employee_id")
+    employee = await db.scalar(select(Employee).where(Employee.id == employee_id, Employee.tenant_id == tenant_id, Employee.is_active.is_(True)))
+    if not employee:
+        raise HTTPException(404, "الموظف غير موجود أو غير نشط")
+    total = Decimal(str(data.get("total_amount", 0)))
+    installment = Decimal(str(data.get("monthly_installment", 0)))
+    if total <= 0 or installment <= 0 or installment > total:
+        raise HTTPException(400, "قيمة السلفة والقسط غير صحيحة")
+    start_month, start_year = int(data.get("start_month")), int(data.get("start_year"))
+    if start_month < 1 or start_month > 12:
+        raise HTTPException(400, "شهر بداية السداد غير صحيح")
+    advance = EmployeeAdvance(id=str(uuid.uuid4()), tenant_id=tenant_id, employee_id=employee_id,
+        total_amount=total, monthly_installment=installment, paid_amount=Decimal("0"),
+        start_month=start_month, start_year=start_year, status="pending", reason=data.get("reason"),
+        created_by=user_id, created_at=datetime.utcnow())
+    db.add(advance)
+    await db.commit(); await db.refresh(advance)
+    return advance
+
+
+async def approve_advance(db: AsyncSession, tenant_id: str, advance_id: str, user_id: str) -> EmployeeAdvance:
+    advance = await db.scalar(select(EmployeeAdvance).where(EmployeeAdvance.id == advance_id, EmployeeAdvance.tenant_id == tenant_id))
+    if not advance: raise HTTPException(404, "السلفة غير موجودة")
+    if advance.status != "pending": raise HTTPException(400, "السلفة ليست بانتظار الاعتماد")
+    advance.status = "active"; advance.approved_by = user_id; advance.approved_at = datetime.utcnow()
+    await db.commit(); await db.refresh(advance); return advance
+
+
+async def reject_advance(db: AsyncSession, tenant_id: str, advance_id: str, user_id: str) -> EmployeeAdvance:
+    advance = await db.scalar(select(EmployeeAdvance).where(EmployeeAdvance.id == advance_id, EmployeeAdvance.tenant_id == tenant_id))
+    if not advance: raise HTTPException(404, "السلفة غير موجودة")
+    if advance.status != "pending": raise HTTPException(400, "السلفة ليست بانتظار الاعتماد")
+    advance.status = "rejected"; advance.approved_by = user_id; advance.approved_at = datetime.utcnow()
+    await db.commit(); await db.refresh(advance); return advance
+
+
 # ─── Payroll ─────────────────────────────────────────────────────────
 
 async def get_payroll(
@@ -408,7 +455,14 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
         hourly_rate = (gross / Decimal("30") / Decimal("8")) if gross else Decimal("0")
         overtime_amount = (hourly_rate * settings.overtime_multiplier * overtime_hours).quantize(Decimal("0.01"))
         late_deduction = (hourly_rate * Decimal(late_minutes) / Decimal("60")).quantize(Decimal("0.01"))
-        total_deductions = gosi_emp + absence_deduction + late_deduction
+        advances = (await db.execute(select(EmployeeAdvance).where(
+            EmployeeAdvance.tenant_id == tenant_id, EmployeeAdvance.employee_id == emp.id,
+            EmployeeAdvance.status == "active",
+            ((EmployeeAdvance.start_year < year) | ((EmployeeAdvance.start_year == year) & (EmployeeAdvance.start_month <= month))),
+            EmployeeAdvance.paid_amount < EmployeeAdvance.total_amount,
+        ))).scalars().all()
+        advance_deduction = sum((min(Decimal(str(a.monthly_installment)), Decimal(str(a.total_amount - a.paid_amount))) for a in advances), Decimal("0"))
+        total_deductions = gosi_emp + absence_deduction + late_deduction + advance_deduction
         net = gross - total_deductions
 
         rec = PayrollRecord(
@@ -425,6 +479,7 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             gosi_employee=gosi_emp,
             absence_deduction=absence_deduction,
             other_deductions=late_deduction,
+            advance_deduction=advance_deduction,
             gross_salary=gross,
             total_deductions=total_deductions,
             net_salary=net,
@@ -433,10 +488,15 @@ async def generate_payroll(db: AsyncSession, tenant_id: str, user_id: str, month
             created_by=user_id,
             created_at=datetime.utcnow(),
             notes=(f"تلقائي: غياب/إجازة غير مدفوعة {absence_days} يوم، تأخير {late_minutes} دقيقة، إضافي {overtime_hours} ساعة"
-                   if absence_days or late_minutes or overtime_hours else None),
+                   + (f"، قسط سلف {advance_deduction} ر.س" if advance_deduction else ""))
+                   if absence_days or late_minutes or overtime_hours or advance_deduction else None,
         )
         db.add(rec)
         records.append(rec)
+        for advance in advances:
+            advance.paid_amount = min(advance.total_amount, advance.paid_amount + min(advance.monthly_installment, advance.total_amount - advance.paid_amount))
+            if advance.paid_amount >= advance.total_amount:
+                advance.status = "completed"
 
     await db.commit()
     return records
@@ -457,7 +517,7 @@ async def update_payroll_record(db: AsyncSession, tenant_id: str, payroll_id: st
 
     editable = (
         "basic_salary", "housing_allowance", "transport_allowance",
-        "other_allowances", "overtime_amount", "absence_deduction", "other_deductions",
+        "other_allowances", "overtime_amount", "absence_deduction", "other_deductions", "advance_deduction",
     )
     for field in editable:
         if field in data:
@@ -473,7 +533,7 @@ async def update_payroll_record(db: AsyncSession, tenant_id: str, payroll_id: st
         rec.basic_salary + rec.housing_allowance + rec.transport_allowance
         + rec.other_allowances + rec.overtime_amount
     )
-    rec.total_deductions = rec.gosi_employee + rec.absence_deduction + rec.other_deductions
+    rec.total_deductions = rec.gosi_employee + rec.absence_deduction + rec.other_deductions + rec.advance_deduction
     rec.net_salary = rec.gross_salary - rec.total_deductions
     rec.notes = data.get("notes", rec.notes)
     await db.commit()

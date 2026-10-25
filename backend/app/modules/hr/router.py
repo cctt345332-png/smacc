@@ -70,6 +70,26 @@ async def update_hr_settings(data: dict, user=Depends(require_role(["manager", "
     return await service.update_hr_settings(db, user["tenant_id"], data)
 
 
+@router.get("/advances")
+async def list_advances(status: Optional[str] = None, employee_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_advances(db, tenant_id, status, employee_id)
+
+
+@router.post("/advances", status_code=201)
+async def create_advance(data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.create_advance(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.post("/advances/{advance_id}/approve")
+async def approve_advance(advance_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.approve_advance(db, user["tenant_id"], advance_id, user["user_id"])
+
+
+@router.post("/advances/{advance_id}/reject")
+async def reject_advance(advance_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.reject_advance(db, user["tenant_id"], advance_id, user["user_id"])
+
+
 # ─── Attendance ──────────────────────────────────────────────────────
 @router.get("/attendance")
 async def list_attendance(
