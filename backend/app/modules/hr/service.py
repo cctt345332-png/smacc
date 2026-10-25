@@ -595,18 +595,6 @@ async def confirm_payroll(db: AsyncSession, tenant_id: str, month: int, year: in
 
     payroll_expense = await get_operational_account(db, tenant_id, "payroll_expense")
     payroll_payable = await get_operational_account(db, tenant_id, "payroll_payable")
-    gosi_payable = await get_operational_account(db, tenant_id, "accrued_expenses")
-    gosi_expense = (await db.execute(
-        select(Account).where(
-            Account.tenant_id == tenant_id,
-            Account.is_active.is_(True),
-            Account.is_posting.is_(True),
-            (Account.code.in_(["0522", "522000"]) | Account.name_ar.like("%التأمينات الاجتماعية%")),
-        ).order_by(Account.code)
-    )).scalars().first()
-    if not gosi_expense:
-        raise HTTPException(409, "حساب التأمينات الاجتماعية غير مهيأ في شجرة الحسابات")
-
     first_day = date(year, month, 1)
     fiscal_year = (await db.execute(
         select(FiscalYear).where(
@@ -623,6 +611,20 @@ async def confirm_payroll(db: AsyncSession, tenant_id: str, month: int, year: in
     total_employee_gosi = sum((Decimal(str(rec.gosi_employee or 0)) for rec in records), Decimal("0"))
     total_employer_gosi = sum((Decimal(str(rec.gosi_employer or 0)) for rec in records), Decimal("0"))
     total_net = sum((Decimal(str(rec.net_salary or 0)) for rec in records), Decimal("0"))
+    gosi_payable = None
+    gosi_expense = None
+    if total_employee_gosi + total_employer_gosi:
+        gosi_payable = await get_operational_account(db, tenant_id, "accrued_expenses")
+        gosi_expense = (await db.execute(
+            select(Account).where(
+                Account.tenant_id == tenant_id,
+                Account.is_active.is_(True),
+                Account.is_posting.is_(True),
+                (Account.code.in_(["0522", "522000"]) | Account.name_ar.like("%التأمينات الاجتماعية%")),
+            ).order_by(Account.code)
+        )).scalars().first()
+        if not gosi_expense:
+            raise HTTPException(409, "حساب التأمينات الاجتماعية غير مهيأ في شجرة الحسابات")
     total_debit = total_gross + total_employer_gosi
     total_credit = total_net + total_employee_gosi + total_employer_gosi
     if total_debit != total_credit:
