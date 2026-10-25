@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { getSessions, openSession, getTerminals, getMyTerminal, createTransaction, closeSession, posPurchase } from "@/lib/pos";
+import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase } from "@/lib/pos";
 import { getItemsForPicker, getAvailableSerials, getBatches, getVariants } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
@@ -193,7 +193,9 @@ export default function POSCashierPage() {
   // ── add to cart ────────────────────────────────────────────────────
   const addToCart = async (p: Product) => {
     if (p.tracking_type === "serial") {
-      const r = await getAvailableSerials(p.id).catch(() => ({ data: [] }));
+      const r = terminal?.id
+        ? await getTerminalSerials(terminal.id, p.id).catch(() => ({ data: [] }))
+        : await getAvailableSerials(p.id).catch(() => ({ data: [] }));
       const serials = r.data || [];
       if (!serials.length) { alert(isAr ? "لا يوجد مخزون متاح" : "No stock available"); return; }
       setSerialModal({ product: p, serials });
@@ -725,6 +727,9 @@ export default function POSCashierPage() {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{s.serial_number}</div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{s.condition === "new" ? (isAr ? "جديد" : "New") : s.condition === "used" ? (isAr ? "مستخدم" : "Used") : (isAr ? "مجدد" : "Refurbished")}</div>
+                    <div style={{ fontSize: 10, color: s.will_transfer_to_terminal ? "#b45309" : "var(--text-muted)", marginTop: 2 }}>
+                      {s.will_transfer_to_terminal ? (isAr ? "من الرئيسي — سيُنقل للفرع تلقائياً" : "From main — auto-transfer to branch") : (s.warehouse_name || (isAr ? "مستودع الفرع" : "Branch warehouse"))}
+                    </div>
                   </div>
                   <div style={{ fontWeight: 700, color: actCfg.color, fontSize: 13 }}>{fmt(s.sale_price || serialModal.product.sale_price)} {sar}</div>
                 </button>

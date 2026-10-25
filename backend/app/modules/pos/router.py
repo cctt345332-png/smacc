@@ -23,6 +23,12 @@ async def get_my_terminal(user=Depends(get_current_user), db: AsyncSession = Dep
     return await service.get_terminal_by_user(db, user["tenant_id"], user["user_id"])
 
 
+@router.get("/terminals/{terminal_id}/serials/{product_id}")
+async def get_terminal_serials(terminal_id: str, product_id: str, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """سيريالات الفرع مع سيريالات الرئيسي القابلة للسحب التلقائي."""
+    return await service.get_terminal_serials(db, user["tenant_id"], terminal_id, product_id)
+
+
 @router.post("/terminals", status_code=201)
 async def create_terminal(
     data: dict,

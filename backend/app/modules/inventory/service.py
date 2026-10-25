@@ -1703,6 +1703,9 @@ async def transfer_stock_bulk(
                 if serial.status != "in_stock":
                     line_errors.append({"serial_id": sid, "serial_number": serial.serial_number, "error": f"الوضع: {serial.status}"})
                     continue
+                if serial.warehouse_id != from_warehouse_id:
+                    line_errors.append({"serial_id": sid, "serial_number": serial.serial_number, "error": "السيريال ليس في المستودع المصدر المحدد"})
+                    continue
                 if serial.warehouse_id == to_warehouse_id:
                     line_errors.append({"serial_id": sid, "serial_number": serial.serial_number, "error": "موجود في المستودع الهدف مسبقاً"})
                     continue

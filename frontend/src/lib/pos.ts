@@ -3,6 +3,8 @@ import api from "./api";
 // ─── Terminals ───────────────────────────────────────────────────────
 export const getTerminals   = ()                       => api.get("/pos/terminals");
 export const getMyTerminal  = ()                       => api.get("/pos/terminals/my");
+export const getTerminalSerials = (terminalId: string, productId: string) =>
+  api.get(`/pos/terminals/${terminalId}/serials/${productId}`);
 export const createTerminal = (data: any)              => api.post("/pos/terminals", data);
 export const updateTerminal = (id: string, data: any)  => api.patch(`/pos/terminals/${id}`, data);
 export const deleteTerminal = (id: string)             => api.delete(`/pos/terminals/${id}`);

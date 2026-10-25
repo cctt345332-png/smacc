@@ -110,6 +110,50 @@ async def get_terminal_by_user(db: AsyncSession, tenant_id: str, user_id: str):
     }
 
 
+async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: str, product_id: str) -> list[dict]:
+    """السيريالات المتاحة للفرع، مع إظهار سيريالات الرئيسي التي ستُنقل تلقائياً."""
+    from app.models.inventory import InventoryItem, SerialItem, Warehouse
+    terminal = await db.get(POSTerminal, terminal_id)
+    if not terminal or terminal.tenant_id != tenant_id or not terminal.is_active:
+        raise HTTPException(404, "نقطة البيع غير موجودة")
+    if not terminal.warehouse_id:
+        raise HTTPException(400, "لم يتم ربط نقطة البيع بمستودع الفرع")
+    item = await db.get(InventoryItem, product_id)
+    if not item or item.tenant_id != tenant_id:
+        raise HTTPException(404, "الصنف غير موجود")
+    tracking = item.tracking_type.value if hasattr(item.tracking_type, "value") else str(item.tracking_type)
+    if tracking != "serial":
+        raise HTTPException(400, "هذا الصنف لا يستخدم السيريال")
+    main_result = await db.execute(select(Warehouse).where(
+        Warehouse.tenant_id == tenant_id,
+        Warehouse.is_default == True,
+        Warehouse.is_active == True,
+    ))
+    main = main_result.scalar_one_or_none()
+    warehouse_ids = [terminal.warehouse_id]
+    if main and main.id not in warehouse_ids:
+        warehouse_ids.append(main.id)
+    result = await db.execute(select(SerialItem).where(
+        SerialItem.product_id == product_id,
+        SerialItem.status == "in_stock",
+        SerialItem.warehouse_id.in_(warehouse_ids),
+    ).order_by(SerialItem.created_at.desc()))
+    serials = result.scalars().all()
+    names = {terminal.warehouse_id: terminal.branch_name or "مستودع نقطة البيع"}
+    if main:
+        names[main.id] = main.name_ar
+    return [{
+        "id": s.id,
+        "serial_number": s.serial_number,
+        "condition": s.condition,
+        "cost_price": float(s.cost_price),
+        "sale_price": float(item.sale_price) if item.sale_price else (float(s.sale_price) if s.sale_price else None),
+        "warehouse_id": s.warehouse_id,
+        "warehouse_name": names.get(s.warehouse_id, ""),
+        "will_transfer_to_terminal": s.warehouse_id != terminal.warehouse_id,
+    } for s in serials]
+
+
 async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
     bt = data.get("business_type", "general")
     cfg = ACTIVITY_CONFIG.get(bt, ACTIVITY_CONFIG["general"])
@@ -392,6 +436,11 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         raise HTTPException(404, "الجلسة غير موجودة")
     if session.status != "open":
         raise HTTPException(400, "الجلسة مغلقة")
+    terminal = await db.get(POSTerminal, session.terminal_id)
+    if not terminal or terminal.tenant_id != tenant_id:
+        raise HTTPException(404, "نقطة البيع غير موجودة")
+    if not terminal.warehouse_id:
+        raise HTTPException(400, "لم يتم ربط نقطة البيع بمستودع الفرع")
 
     # جلب بيانات الشركة للـ QR
     from app.models.tenant import Tenant
@@ -505,7 +554,7 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
 
         # خصم المخزون حسب نوع التتبع
         if line.get("inventory_item_id"):
-            await _deduct_inventory(db, tenant_id, user_id, tx_id, line)
+            await _deduct_inventory(db, tenant_id, user_id, tx_id, line, terminal.warehouse_id)
 
     # تحديث إجماليات الجلسة
     session.total_sales += grand_total
@@ -539,9 +588,9 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
     }
 
 
-async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_id: str, line: dict):
+async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_id: str, line: dict, terminal_warehouse_id: str):
     """خصم المخزون حسب نوع التتبع"""
-    from app.models.inventory import InventoryItem
+    from app.models.inventory import InventoryItem, SerialItem, Warehouse, StockMovement
     from app.modules.inventory.service import sell_serial, deduct_stock, deduct_batch_fefo
 
     item = await db.get(InventoryItem, line["inventory_item_id"])
@@ -553,11 +602,49 @@ async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_i
     if tracking == "serial":
         serial_id = line.get("serial_item_id")
         if serial_id:
+            serial_result = await db.execute(select(SerialItem).where(
+                SerialItem.id == serial_id,
+                SerialItem.product_id == item.id,
+            ).with_for_update())
+            serial = serial_result.scalar_one_or_none()
+            if not serial:
+                raise HTTPException(404, "السيريال غير موجود لهذا الصنف")
+            if serial.status != "in_stock":
+                raise HTTPException(400, f"السيريال {serial.serial_number} غير متاح — الحالة: {serial.status}")
+            if serial.warehouse_id != terminal_warehouse_id:
+                main_result = await db.execute(select(Warehouse).where(
+                    Warehouse.tenant_id == tenant_id,
+                    Warehouse.is_default == True,
+                    Warehouse.is_active == True,
+                ))
+                main = main_result.scalar_one_or_none()
+                if not main or serial.warehouse_id != main.id:
+                    raise HTTPException(400, f"السيريال {serial.serial_number} ليس في مستودع نقطة البيع ولا المستودع الرئيسي")
+                source_warehouse_id = serial.warehouse_id
+                serial.warehouse_id = terminal_warehouse_id
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()),
+                    tenant_id=tenant_id,
+                    product_id=item.id,
+                    warehouse_id=source_warehouse_id,
+                    to_warehouse_id=terminal_warehouse_id,
+                    movement_type="transfer",
+                    quantity=Decimal("1"),
+                    unit_cost=serial.cost_price,
+                    serial_item_id=serial.id,
+                    reference_type="pos_auto_transfer",
+                    reference_id=tx_id,
+                    notes="تحويل تلقائي من المستودع الرئيسي إلى نقطة البيع قبل البيع",
+                    created_by=user_id,
+                ))
             await sell_serial(
                 db=db, tenant_id=tenant_id,
                 serial_id=serial_id,
                 sale_price=Decimal(str(line["unit_price"])),
                 invoice_id=tx_id,
+                warehouse_id=terminal_warehouse_id,
+                user_id=user_id,
+                auto_commit=False,
             )
     elif tracking == "batch":
         await deduct_batch_fefo(
@@ -567,6 +654,7 @@ async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_i
             reference_type="pos",
             reference_id=tx_id,
             user_id=user_id,
+            auto_commit=False,
         )
     elif tracking == "variant":
         variant_id = line.get("variant_id")
@@ -584,9 +672,11 @@ async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_i
             db=db, tenant_id=tenant_id,
             product_id=line["inventory_item_id"],
             quantity=Decimal(str(line["quantity"])),
+            warehouse_id=terminal_warehouse_id,
             reference_type="pos",
             reference_id=tx_id,
             user_id=user_id,
+            auto_commit=False,
         )
 
 
