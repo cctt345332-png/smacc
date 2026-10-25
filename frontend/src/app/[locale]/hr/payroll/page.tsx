@@ -149,6 +149,8 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
           <p className="page-subtitle">{ar ? "إدارة رواتب الموظفين الشهرية" : "Manage monthly employee salaries"}</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          <a className="btn btn-secondary" href={`/${locale}/hr/advances`}>{ar ? "السلف والسحبيات" : "Advances / withdrawals"}</a>
+          <a className="btn btn-secondary" href={`/${locale}/hr/employees`}>{ar ? "كشوف الموظفين" : "Employee statements"}</a>
           {records.length === 0 && (
             <button className="btn btn-primary" onClick={handleGenerate} disabled={generating}>
               {generating ? (ar ? "جاري التوليد..." : "Generating...") : (ar ? "توليد مسير الرواتب" : "Generate Payroll")}
@@ -199,7 +201,7 @@ export default function PayrollPage(props: { params: Promise<{ locale: string }>
             <div className="form-group" style={{ margin: 0 }}><label className="form-label">{ar ? "معامل الإضافي" : "Overtime multiplier"}</label><input type="number" min="1" max="5" step="0.05" className="form-input" value={hrSettings.overtime_multiplier} onChange={e => setHrSettings(s => ({ ...s, overtime_multiplier: Number(e.target.value) }))} /></div>
             <button className="btn btn-primary" onClick={saveSettings} disabled={settingsSaving}>{settingsSaving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الإعدادات" : "Save settings")}</button>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10 }}>{ar ? "الشركة تتحمل التأمينات الاجتماعية؛ لا تُخصم من الموظف. تُستخدم هذه القيم عند توليد مسير جديد." : "The company bears social insurance; it is not deducted from employees."}</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 10 }}>{ar ? "الخصومات الإضافية وسحب السلفة تُدخل من سطر الموظف قبل الاعتماد، والسحبيات المسجلة من صفحة السلف. الشركة تتحمل التأمينات الاجتماعية؛ لا تُخصم من الموظف." : "Enter extra deductions before approval; record withdrawals from Advances. The company bears social insurance."}</div>
         </div>
       </div>
 
