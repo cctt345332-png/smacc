@@ -14,6 +14,7 @@ export const getEmployees = (params?: { search?: string; department_id?: string;
 export const getEmployee = (id: string) => api.get(`/hr/employees/${id}`);
 export const createEmployee = (data: any) => api.post("/hr/employees", data);
 export const updateEmployee = (id: string, data: any) => api.patch(`/hr/employees/${id}`, data);
+export const deleteEmployee = (id: string) => api.delete(`/hr/employees/${id}`);
 export const getHRSettings = () => api.get("/hr/settings");
 export const updateHRSettings = (data: any) => api.patch("/hr/settings", data);
 export const getAdvances = (params?: any) => api.get("/hr/advances", { params });

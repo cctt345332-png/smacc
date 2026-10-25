@@ -59,6 +59,11 @@ async def update_employee(employee_id: str, data: dict, user=Depends(require_rol
     return await service.update_employee(db, user["tenant_id"], employee_id, data)
 
 
+@router.delete("/employees/{employee_id}")
+async def delete_employee(employee_id: str, user=Depends(require_role(["manager","hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.delete_employee(db, user["tenant_id"], employee_id)
+
+
 # ─── HR settings ─────────────────────────────────────────────────────
 @router.get("/settings")
 async def get_hr_settings(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):

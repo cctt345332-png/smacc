@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getEmployees, getDepartments, createEmployee } from "@/lib/hr";
+import { getEmployees, getDepartments, createEmployee, deleteEmployee } from "@/lib/hr";
 
 const IcPlus   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const IcSearch = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
@@ -49,6 +49,13 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
   useEffect(() => { load(); }, []);
 
   const handleSearch = () => { setLoading(true); load(); };
+
+  const handleDelete = async (emp: any) => {
+    if (!window.confirm(ar ? `هل تريد حذف الموظف ${emp.full_name_ar}؟ لا يمكن التراجع عن الحذف.` : `Delete ${emp.full_name_ar}? This cannot be undone.`)) return;
+    setError("");
+    try { await deleteEmployee(emp.id); await load(); }
+    catch (err: any) { setError(err?.response?.data?.detail || (ar ? "تعذر حذف الموظف" : "Could not delete employee")); }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,7 +149,7 @@ export default function EmployeesPage(props: { params: Promise<{ locale: string 
                   <td><span style={{ fontWeight: 600 }}>{Number(emp.basic_salary || 0).toLocaleString()}</span> <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "ر.س" : "SAR"}</span></td>
                   <td style={{ fontSize: 12 }}>{emp.hire_date}</td>
                   <td><span className={emp.status === "active" ? "badge badge-success" : "badge badge-gray"}>{emp.status === "active" ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}</span></td>
-                  <td><a className="btn btn-secondary btn-sm" style={{ gap: 4 }} href={`/${locale}/hr/employees/${emp.id}`}><IcEye />{ar ? "عرض" : "View"}</a></td>
+                  <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><a className="btn btn-secondary btn-sm" style={{ gap: 4 }} href={`/${locale}/hr/employees/${emp.id}`}><IcEye />{ar ? "عرض" : "View"}</a><button className="btn btn-danger btn-sm" onClick={() => handleDelete(emp)}>{ar ? "حذف" : "Delete"}</button></div></td>
                 </tr>
               ))}
             </tbody>

@@ -231,6 +231,27 @@ async def update_employee(db: AsyncSession, tenant_id: str, employee_id: str, da
     return emp
 
 
+async def delete_employee(db: AsyncSession, tenant_id: str, employee_id: str) -> dict:
+    emp = await get_employee(db, tenant_id, employee_id)
+    linked = [
+        (PayrollRecord, PayrollRecord.employee_id, "مسيرات رواتب"),
+        (EmployeeAdvance, EmployeeAdvance.employee_id, "سلف أو سحبيات"),
+        (EmployeeExpense, EmployeeExpense.employee_id, "مصروفات"),
+        (AttendanceRecord, AttendanceRecord.employee_id, "سجلات حضور"),
+        (LeaveRequest, LeaveRequest.employee_id, "طلبات إجازات"),
+    ]
+    found = []
+    for model, field, label in linked:
+        count = (await db.execute(select(func.count()).where(model.tenant_id == tenant_id, field == employee_id))).scalar() or 0
+        if count:
+            found.append(f"{label} ({count})")
+    if found:
+        raise HTTPException(409, "لا يمكن حذف الموظف لوجود سجلات مرتبطة: " + "، ".join(found) + ". يمكنك إيقافه بدل الحذف.")
+    await db.delete(emp)
+    await db.commit()
+    return {"deleted": True, "id": employee_id}
+
+
 # ─── Attendance ──────────────────────────────────────────────────────
 
 async def get_attendance(
