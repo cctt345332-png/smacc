@@ -997,6 +997,31 @@ async def _ensure_payroll_payable_mapping(db: AsyncSession, tenant_id: str) -> N
     await db.commit()
 
 
+async def _ensure_accrued_expenses_mapping(db: AsyncSession, tenant_id: str) -> None:
+    """يربط التأمينات المستحقة بحساب التزام موجود دون إنشاء حساب جديد."""
+    existing = await db.execute(select(AccountingAccountMapping).where(
+        AccountingAccountMapping.tenant_id == tenant_id,
+        AccountingAccountMapping.mapping_key == "accrued_expenses",
+    ))
+    if existing.scalar_one_or_none():
+        return
+    account_result = await db.execute(select(Account).where(
+        Account.tenant_id == tenant_id,
+        Account.is_active.is_(True),
+        Account.is_posting.is_(True),
+        or_(Account.code.in_(["02132", "0522", "522000"]), Account.name_ar.like("%تأمينات%مستحقة%")),
+    ).order_by(Account.code))
+    account = account_result.scalars().first()
+    if not account:
+        return
+    db.add(AccountingAccountMapping(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        mapping_key="accrued_expenses", account_id=account.id,
+        updated_at=datetime.utcnow(),
+    ))
+    await db.commit()
+
+
 async def get_accounting_readiness(db: AsyncSession, tenant_id: str) -> dict:
     """فحص الجاهزية دون إنشاء حسابات أو تغيير أرصدة؛ يضيف فقط مفتاح توافق للمخزون الموجود."""
     from app.models.sales import Customer, Invoice, Payment, InvoiceStatus
@@ -1424,6 +1449,7 @@ async def apply_default_party_mappings(db: AsyncSession, tenant_id: str) -> dict
 
 async def get_operational_account_mappings(db: AsyncSession, tenant_id: str) -> list[AccountingAccountMapping]:
     await _ensure_payroll_payable_mapping(db, tenant_id)
+    await _ensure_accrued_expenses_mapping(db, tenant_id)
     return await _get_account_mapping_rows(db, tenant_id)
 
 
@@ -1696,6 +1722,17 @@ async def get_operational_account(db: AsyncSession, tenant_id: str, mapping_key:
             await db.flush()
     if not mapping and mapping_key == "payroll_payable":
         await _ensure_payroll_payable_mapping(db, tenant_id)
+        result = await db.execute(
+            select(AccountingAccountMapping)
+            .options(selectinload(AccountingAccountMapping.account))
+            .where(
+                AccountingAccountMapping.tenant_id == tenant_id,
+                AccountingAccountMapping.mapping_key == mapping_key,
+            )
+        )
+        mapping = result.scalar_one_or_none()
+    if not mapping and mapping_key == "accrued_expenses":
+        await _ensure_accrued_expenses_mapping(db, tenant_id)
         result = await db.execute(
             select(AccountingAccountMapping)
             .options(selectinload(AccountingAccountMapping.account))
