@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getVATSettings, saveVATSettings, getZATCAStatus, prepareZATCA, requestComplianceCSID } from "@/lib/accounting";
+import { getVATSettings, saveVATSettings, getZATCAStatus, prepareZATCA, requestComplianceCSID, requestProductionCSID } from "@/lib/accounting";
 
 export default function TaxSettingsPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
@@ -65,6 +65,17 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       setZatcaMessage(ar ? "تم إصدار Compliance CSID بنجاح." : "Compliance CSID issued successfully.");
       setZatcaStatus((await getZATCAStatus()).data);
     } catch (e: any) { setZatcaMessage(e?.response?.data?.detail || (ar ? "رفضت زاتكا طلب Compliance CSID" : "ZATCA rejected the Compliance CSID request")); }
+    finally { setZatcaBusy(false); }
+  };
+
+  const requestProduction = async () => {
+    if (!confirm(ar ? "هل أكملت اختبارات الامتثال في بيئة المحاكاة؟ سيتم طلب شهادة الإنتاج." : "Have compliance tests passed in the sandbox? This will request the production certificate.")) return;
+    setZatcaBusy(true); setZatcaMessage("");
+    try {
+      await requestProductionCSID();
+      setZatcaMessage(ar ? "تم إصدار Production CSID وحفظه مشفرًا." : "Production CSID issued and encrypted.");
+      setZatcaStatus((await getZATCAStatus()).data);
+    } catch (e: any) { setZatcaMessage(e?.response?.data?.detail || (ar ? "تعذر إصدار شهادة الإنتاج" : "Unable to issue production certificate")); }
     finally { setZatcaBusy(false); }
   };
 
@@ -182,6 +193,11 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                     <button className="btn btn-primary" type="button" onClick={requestCsid} disabled={zatcaBusy || otp.length < 4}>{ar ? "طلب CSID" : "Request CSID"}</button>
                   </div>
                 </div>
+              )}
+              {zatcaStatus?.has_compliance_credentials && !zatcaStatus?.has_production_credentials && (
+                <button className="btn btn-primary" type="button" onClick={requestProduction} disabled={zatcaBusy} style={{ marginTop: 12 }}>
+                  {ar ? "طلب Production CSID بعد نجاح الاختبارات" : "Request Production CSID after tests"}
+                </button>
               )}
               {zatcaStatus && <p className="form-hint">{ar ? "الحالة الحالية: " : "Current status: "}{zatcaStatus.status}</p>}
               {zatcaMessage && <p className="form-hint" style={{ color: zatcaMessage.includes("تعذر") || zatcaMessage.includes("رفض") ? "#B91C1C" : "#166534" }}>{zatcaMessage}</p>}

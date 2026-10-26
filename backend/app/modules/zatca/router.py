@@ -34,3 +34,23 @@ async def prepare(data: ZATCAPrepareRequest, user=Depends(require_role(["manager
 @router.post("/compliance-csid")
 async def compliance_csid(data: ZATCAOTPRequest, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
     return await zatca_service.request_compliance_csid(db, user["tenant_id"], data.otp)
+
+
+@router.post("/production-csid")
+async def production_csid(user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
+    return await zatca_service.request_production_csid(db, user["tenant_id"])
+
+
+@router.post("/invoices/{invoice_id}/submit")
+async def submit_invoice(invoice_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await zatca_service.submit_invoice(db, user["tenant_id"], user["user_id"], invoice_id)
+
+
+@router.get("/submissions")
+async def list_submissions(document_id: str | None = None, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await zatca_service.list_submissions(db, user["tenant_id"], document_id)
+
+
+@router.post("/submissions/{submission_id}/retry")
+async def retry_submission(submission_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await zatca_service.retry_submission(db, user["tenant_id"], user["user_id"], submission_id)

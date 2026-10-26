@@ -222,6 +222,10 @@ class Invoice(Base):
     zatca_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     zatca_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     zatca_cleared_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    zatca_invoice_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    zatca_previous_invoice_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    zatca_signed_xml: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_submission_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # مرجع
     quotation_id: Mapped[str | None] = mapped_column(String, ForeignKey("quotations.id"), nullable=True)
@@ -321,11 +325,39 @@ class CreditNote(Base):
     total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     qr_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     zatca_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    zatca_invoice_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    zatca_signed_xml: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zatca_submission_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True)
     created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     lines: Mapped[list["CreditNoteLine"]] = relationship("CreditNoteLine", back_populates="credit_note", cascade="all, delete-orphan")
+
+
+class ZATCASubmission(Base):
+    """سجل تدقيق مستقل لكل محاولة إرسال إلى زاتكا."""
+    __tablename__ = "zatca_submissions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    document_type: Mapped[str] = mapped_column(String(30))
+    document_id: Mapped[str] = mapped_column(String, index=True)
+    document_uuid: Mapped[str] = mapped_column(String(36), index=True)
+    invoice_hash: Mapped[str] = mapped_column(String(128))
+    previous_invoice_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    api_type: Mapped[str] = mapped_column(String(20))
+    environment: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    request_xml: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class RefundRequestStatus(str, enum.Enum):
