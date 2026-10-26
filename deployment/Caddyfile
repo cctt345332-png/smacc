@@ -8,6 +8,15 @@
 
     @api path /api/*
     handle @api {
+        request_body {
+            max_size 10MB
+        }
+        header {
+            ?Access-Control-Allow-Origin "https://www.masa-erp.com"
+            ?Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+            ?Access-Control-Allow-Headers "Authorization, Content-Type, X-Requested-With"
+            ?Access-Control-Allow-Credentials "true"
+        }
         reverse_proxy backend:8000
     }
 
