@@ -23,6 +23,17 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
     zatca_activity: "", zatca_invoice_type_map: "both", vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: true,
   });
 
+  const errorText = (error: any, fallback: string) => {
+    const detail = error?.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (detail?.zatca?.message) return `${detail.message || fallback}: ${detail.zatca.message}`;
+    if (detail?.message) return detail.message;
+    if (detail) {
+      try { return JSON.stringify(detail); } catch { return fallback; }
+    }
+    return fallback;
+  };
+
   useEffect(() => {
     getVATSettings().then(({ data }) => {
       setForm({
@@ -53,7 +64,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       setZatcaMessage(ar ? "تم تجهيز CSR بنجاح. انسخه إلى بوابة فاتورة عند طلبه، والمفتاح الخاص محفوظ داخل السيرفر." : "CSR prepared. The private key is kept on the server.");
       setZatcaStatus((await getZATCAStatus()).data);
       void data;
-    } catch (e: any) { setZatcaMessage(e?.response?.data?.detail || (ar ? "تعذر تجهيز الربط" : "Unable to prepare integration")); }
+    } catch (e: any) { setZatcaMessage(errorText(e, ar ? "تعذر تجهيز الربط" : "Unable to prepare integration")); }
     finally { setZatcaBusy(false); }
   };
 
@@ -64,7 +75,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       setOtp("");
       setZatcaMessage(ar ? "تم إصدار Compliance CSID بنجاح." : "Compliance CSID issued successfully.");
       setZatcaStatus((await getZATCAStatus()).data);
-    } catch (e: any) { setZatcaMessage(e?.response?.data?.detail || (ar ? "رفضت زاتكا طلب Compliance CSID" : "ZATCA rejected the Compliance CSID request")); }
+    } catch (e: any) { setZatcaMessage(errorText(e, ar ? "رفضت زاتكا طلب Compliance CSID" : "ZATCA rejected the Compliance CSID request")); }
     finally { setZatcaBusy(false); }
   };
 
@@ -75,7 +86,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       await requestProductionCSID();
       setZatcaMessage(ar ? "تم إصدار Production CSID وحفظه مشفرًا." : "Production CSID issued and encrypted.");
       setZatcaStatus((await getZATCAStatus()).data);
-    } catch (e: any) { setZatcaMessage(e?.response?.data?.detail || (ar ? "تعذر إصدار شهادة الإنتاج" : "Unable to issue production certificate")); }
+    } catch (e: any) { setZatcaMessage(errorText(e, ar ? "تعذر إصدار شهادة الإنتاج" : "Unable to issue production certificate")); }
     finally { setZatcaBusy(false); }
   };
 
@@ -85,7 +96,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       await saveVATSettings({ ...form, vat_rate: parseFloat(form.vat_rate) });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+    } catch (e: any) { alert(errorText(e, "Error")); }
     finally { setSaving(false); }
   };
 
