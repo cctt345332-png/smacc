@@ -153,11 +153,7 @@ async def create_budget(data: BudgetCreate, tenant_id=Depends(get_tenant_id), db
 # ─── VAT Settings ────────────────────────────────────────────────────
 @router.get("/vat-settings", response_model=VATSettingOut)
 async def get_vat_settings(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
-    vat = await service.get_vat_settings(db, tenant_id)
-    if not vat:
-        from fastapi import HTTPException
-        raise HTTPException(404, "VAT settings not configured")
-    return vat
+    return await service.ensure_vat_settings(db, tenant_id)
 
 
 @router.put("/vat-settings", response_model=VATSettingOut)

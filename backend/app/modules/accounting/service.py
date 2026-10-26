@@ -712,6 +712,18 @@ async def get_vat_settings(db: AsyncSession, tenant_id: str):
     return r.scalar_one_or_none()
 
 
+async def ensure_vat_settings(db: AsyncSession, tenant_id: str):
+    """ينشئ سجل إعداد فارغًا عند فتح شاشة الضريبة لأول مرة فقط."""
+    vat = await get_vat_settings(db, tenant_id)
+    if vat:
+        return vat
+    vat = VATSetting(id=str(uuid.uuid4()), tenant_id=tenant_id)
+    db.add(vat)
+    await db.commit()
+    await db.refresh(vat)
+    return vat
+
+
 async def upsert_vat_settings(db: AsyncSession, tenant_id: str, data: VATSettingUpdate):
     vat = await get_vat_settings(db, tenant_id)
     if not vat:
