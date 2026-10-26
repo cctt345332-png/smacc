@@ -45,6 +45,7 @@ export const prepareZATCA = (data: any) => api.post("/zatca/prepare", data);
 export const requestComplianceCSID = (otp: string) => api.post("/zatca/compliance-csid", { otp });
 export const requestProductionCSID = () => api.post("/zatca/production-csid");
 export const submitInvoiceToZATCA = (invoiceId: string) => api.post(`/zatca/invoices/${invoiceId}/submit`);
+export const submitCreditNoteToZATCA = (noteId: string) => api.post(`/zatca/credit-notes/${noteId}/submit`);
 export const getZATCASubmissions = (documentId?: string) => api.get("/zatca/submissions", { params: documentId ? { document_id: documentId } : {} });
 export const retryZATCASubmission = (submissionId: string) => api.post(`/zatca/submissions/${submissionId}/retry`);
 

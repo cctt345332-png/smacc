@@ -27,12 +27,13 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.models.accounting import VATSetting
-from app.models.sales import Invoice, InvoiceLine, ZATCASubmission
+from app.models.sales import CreditNote, CreditNoteLine, Customer, Invoice, InvoiceLine, ZATCASubmission
 from app.models.tenant import Tenant
 
 CBC = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
 CAC = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
 UBL = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+CREDIT_NOTE_UBL = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
 DS = "http://www.w3.org/2000/09/xmldsig#"
 EXT = "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
 
@@ -304,6 +305,88 @@ async def retry_submission(db: AsyncSession, tenant_id: str, user_id: str, submi
     row = await db.scalar(select(ZATCASubmission).where(ZATCASubmission.id == submission_id, ZATCASubmission.tenant_id == tenant_id))
     if not row:
         raise HTTPException(404, "سجل إرسال زاتكا غير موجود")
-    if row.document_type != "invoice":
-        raise HTTPException(400, "إعادة إرسال هذا النوع من المستندات غير مفعلة بعد")
-    return await submit_invoice(db, tenant_id, user_id, row.document_id, force=True)
+    if row.document_type == "invoice":
+        return await submit_invoice(db, tenant_id, user_id, row.document_id, force=True)
+    if row.document_type == "credit_note":
+        return await submit_credit_note(db, tenant_id, user_id, row.document_id, force=True)
+    raise HTTPException(400, "إعادة إرسال هذا النوع من المستندات غير مفعلة بعد")
+
+
+# NOTE: this block is appended intentionally after the invoice builder.
+def _build_credit_note_ubl(note: CreditNote, customer: Customer, original: Invoice | None, previous_hash: str, vat: VATSetting) -> tuple[str, str]:
+    root = ET.Element(f"{{{CREDIT_NOTE_UBL}}}CreditNote")
+    _q(root, CBC, "UBLVersionID", "2.1")
+    _q(root, CBC, "ProfileID", "reporting:1.0")
+    _q(root, CBC, "ID", note.credit_note_number)
+    _q(root, CBC, "UUID", note.uuid)
+    _q(root, CBC, "IssueDate", note.issue_date.date().isoformat())
+    _q(root, CBC, "CreditNoteTypeCode", "381", name="0200000" if original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified" else "0100000")
+    _q(root, CBC, "DocumentCurrencyCode", "SAR")
+    if original:
+        ref = _q(root, CAC, "BillingReference")
+        invoice_ref = _q(ref, CAC, "InvoiceDocumentReference")
+        _q(invoice_ref, CBC, "ID", original.invoice_number)
+        _q(invoice_ref, CBC, "UUID", original.uuid)
+    reason = _q(root, CAC, "DiscrepancyResponse")
+    _q(reason, CBC, "ReferenceID", original.invoice_number if original else "")
+    _q(reason, CBC, "Description", note.reason)
+    previous_ref = _q(root, CAC, "AdditionalDocumentReference")
+    _q(previous_ref, CBC, "ID", "PIH")
+    _q(previous_ref, CBC, "UUID", previous_hash)
+    supplier = _q(root, CAC, "AccountingSupplierParty"); party = _q(supplier, CAC, "Party")
+    ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", vat.vat_number or "", schemeID="VAT")
+    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "CityName", vat.zatca_branch_name or "الرياض"); country = _q(addr, CAC, "Country"); _q(country, CBC, "IdentificationCode", "SA")
+    legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", vat.zatca_activity or "")
+    buyer = _q(root, CAC, "AccountingCustomerParty"); bparty = _q(buyer, CAC, "Party")
+    baddr = _q(bparty, CAC, "PostalAddress"); _q(baddr, CBC, "CityName", customer.address_city or "الرياض"); bcountry = _q(baddr, CAC, "Country"); _q(bcountry, CBC, "IdentificationCode", customer.address_country or "SA")
+    blegal = _q(bparty, CAC, "PartyLegalEntity"); _q(blegal, CBC, "RegistrationName", customer.name_ar)
+    payment = _q(root, CAC, "PaymentMeans"); _q(payment, CBC, "PaymentMeansCode", "30")
+    tax_total = _q(root, CAC, "TaxTotal"); _q(tax_total, CBC, "TaxAmount", _money(note.vat_amount), currencyID="SAR")
+    subtotal = _q(tax_total, CAC, "TaxSubtotal"); _q(subtotal, CBC, "TaxableAmount", _money(note.subtotal), currencyID="SAR"); _q(subtotal, CBC, "TaxAmount", _money(note.vat_amount), currencyID="SAR")
+    category = _q(subtotal, CAC, "TaxCategory"); _q(category, CBC, "ID", "S"); _q(category, CBC, "Percent", "15"); scheme = _q(category, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
+    monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(note.subtotal), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(note.subtotal), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(note.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(note.total), currencyID="SAR")
+    for index, line in enumerate(sorted(note.lines, key=lambda x: x.line_order), 1):
+        nl = _q(root, CAC, "CreditNoteLine"); _q(nl, CBC, "ID", index); _q(nl, CBC, "CreditedQuantity", str(line.quantity), unitCode="PCE"); _q(nl, CBC, "LineExtensionAmount", _money(line.subtotal), currencyID="SAR")
+        item = _q(nl, CAC, "Item"); _q(item, CBC, "Name", line.description_ar); tax = _q(item, CAC, "ClassifiedTaxCategory"); _q(tax, CBC, "ID", "S"); _q(tax, CBC, "Percent", str(line.vat_rate)); scheme = _q(tax, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
+        price = _q(nl, CAC, "Price"); _q(price, CBC, "PriceAmount", _money(line.unit_price), currencyID="SAR")
+    raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    return raw.decode(), base64.b64encode(hashlib.sha256(raw).digest()).decode()
+
+
+async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, note_id: str, force: bool = False) -> dict[str, Any]:
+    vat = await get_settings(db, tenant_id)
+    note = await db.scalar(select(CreditNote).options(selectinload(CreditNote.lines)).where(CreditNote.id == note_id, CreditNote.tenant_id == tenant_id))
+    if not vat or not note:
+        raise HTTPException(404, "إعدادات الضريبة أو إشعار الدائن غير موجود")
+    if not vat.is_zatca_enabled or not vat.zatca_production_token_encrypted or not vat.zatca_production_secret_encrypted:
+        raise HTTPException(409, "الربط الفعلي غير جاهز: يجب إصدار Production CSID وتفعيل الإعدادات")
+    if note.zatca_status in {"reported", "cleared"} and not force:
+        raise HTTPException(409, "تم إرسال إشعار الدائن مسبقًا")
+    customer = await db.scalar(select(Customer).where(Customer.id == note.customer_id, Customer.tenant_id == tenant_id))
+    original = await db.scalar(select(Invoice).where(Invoice.id == note.original_invoice_id, Invoice.tenant_id == tenant_id)) if note.original_invoice_id else None
+    if not customer:
+        raise HTTPException(409, "بيانات عميل إشعار الدائن غير موجودة")
+    previous = _first_hash()
+    xml, digest = _build_credit_note_ubl(note, customer, original, previous, vat)
+    private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(vat.zatca_production_token_encrypted); secret = _decrypt(vat.zatca_production_secret_encrypted)
+    signed = _sign_xml(xml, private_key or "", token, digest)
+    simplified = original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified"
+    api_type = "reporting" if simplified else "clearance"
+    auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
+    body = {"invoiceHash": digest, "invoice": base64.b64encode(signed.encode()).decode()}
+    log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="credit_note", document_id=note.id, document_uuid=note.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=vat.zatca_env, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
+    db.add(log); note.zatca_invoice_hash = digest; note.zatca_signed_xml = signed
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            response = await client.post(f"{_api_base(vat.zatca_env)}/invoices/{api_type}/single", headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Accept-Language": "en", "Content-Type": "application/json"}, json=body)
+        payload = response.json() if response.content else {}
+        log.http_status = response.status_code; log.response_body = json.dumps(payload, ensure_ascii=False)[:100000]; log.responded_at = datetime.utcnow()
+        accepted = response.status_code in (200, 202) and str(payload.get("status", "")).upper() in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
+        if accepted:
+            state = "reported" if api_type == "reporting" else "cleared"; log.status = state; note.zatca_status = state; note.zatca_submission_id = log.id
+        else:
+            log.status = "rejected"; log.error_message = json.dumps(payload, ensure_ascii=False)[:10000]; note.zatca_status = "rejected"
+    except (httpx.HTTPError, ValueError) as exc:
+        log.status = "retry_pending"; log.error_message = str(exc); log.next_retry_at = datetime.utcnow() + timedelta(minutes=5); note.zatca_status = "zatca_pending"
+    await db.commit()
+    return {"status": note.zatca_status, "submission_id": log.id, "api_type": api_type, "http_status": log.http_status, "error": log.error_message}
