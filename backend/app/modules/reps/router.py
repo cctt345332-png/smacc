@@ -252,6 +252,32 @@ async def list_rep_attendance(
     return await service.get_rep_attendance(db, user["tenant_id"], date, rep_id)
 
 
+@router.get("/attendance/settings")
+async def get_attendance_settings(
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await service.get_rep_attendance_settings(db, user["tenant_id"])
+
+
+@router.put("/attendance/settings")
+async def update_attendance_settings(
+    data: dict,
+    user=Depends(require_role(["manager"])),
+    db: AsyncSession = Depends(get_db),
+):
+    start_time = str(data.get("start_time") or "").strip()
+    if len(start_time) != 5 or start_time[2] != ":":
+        raise HTTPException(400, "وقت البداية يجب أن يكون بصيغة HH:MM")
+    try:
+        hour, minute = (int(part) for part in start_time.split(":", 1))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError
+    except ValueError:
+        raise HTTPException(400, "وقت البداية غير صحيح")
+    return await service.update_rep_attendance_settings(db, user["tenant_id"], start_time)
+
+
 @router.get("")
 async def list_reps(
     user=Depends(require_role(["manager", "accountant", "sales"])),

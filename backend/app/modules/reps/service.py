@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, select, func, delete, update
 from fastapi import HTTPException
 
-from app.models.reps import RepAttendance, RepGeoEvent, RepGeoZone, RepLocation, SalesRep
+from app.models.reps import RepAttendance, RepAttendanceSettings, RepGeoEvent, RepGeoZone, RepLocation, SalesRep
 from app.models.user import User
 from app.models.inventory import Warehouse, InventoryStock, StockMovement
 from app.models.sales import Customer, Invoice, Payment
@@ -1172,7 +1172,7 @@ async def get_rep_summary(db: AsyncSession, tenant_id: str, rep_id: str) -> dict
 
 # ─── حضور المناديب اليومي ──────────────────────────────────────────────
 SAUDI_TZ = ZoneInfo("Asia/Riyadh")
-ATTENDANCE_START = time(17, 0)
+DEFAULT_ATTENDANCE_START = "17:00"
 
 
 def _saudi_now() -> datetime:
@@ -1180,9 +1180,19 @@ def _saudi_now() -> datetime:
     return datetime.now(SAUDI_TZ)
 
 
-def _is_attendance_window_open(local_now: datetime) -> bool:
-    """نافذة التسجيل اليومية: 5 مساءً حتى قبل منتصف الليل."""
-    return ATTENDANCE_START <= local_now.timetz().replace(tzinfo=None) <= time(23, 59, 59, 999999)
+def _parse_attendance_start(value: str | None) -> time:
+    try:
+        hour, minute = (int(part) for part in (value or DEFAULT_ATTENDANCE_START).split(":", 1))
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            raise ValueError
+        return time(hour, minute)
+    except (TypeError, ValueError):
+        return time(17, 0)
+
+
+def _is_attendance_window_open(local_now: datetime, start_time: str = DEFAULT_ATTENDANCE_START) -> bool:
+    """نافذة التسجيل اليومية من الوقت الإداري المحدد حتى نهاية اليوم."""
+    return _parse_attendance_start(start_time) <= local_now.timetz().replace(tzinfo=None) <= time(23, 59, 59, 999999)
 
 
 def _as_saudi_iso(value: datetime | None) -> str | None:
@@ -1207,10 +1217,36 @@ async def _current_rep_for_user(db: AsyncSession, tenant_id: str, user_id: str) 
     return rep
 
 
+async def get_rep_attendance_settings(db: AsyncSession, tenant_id: str) -> dict:
+    result = await db.execute(select(RepAttendanceSettings).where(RepAttendanceSettings.tenant_id == tenant_id))
+    settings = result.scalar_one_or_none()
+    return {
+        "tenant_id": tenant_id,
+        "start_time": settings.start_time if settings else DEFAULT_ATTENDANCE_START,
+        "timezone": settings.timezone if settings else "Asia/Riyadh",
+    }
+
+
+async def update_rep_attendance_settings(db: AsyncSession, tenant_id: str, start_time: str) -> dict:
+    parsed = _parse_attendance_start(start_time)
+    normalized = parsed.strftime("%H:%M")
+    result = await db.execute(select(RepAttendanceSettings).where(RepAttendanceSettings.tenant_id == tenant_id))
+    settings = result.scalar_one_or_none()
+    if settings:
+        settings.start_time = normalized
+        settings.timezone = "Asia/Riyadh"
+    else:
+        settings = RepAttendanceSettings(tenant_id=tenant_id, start_time=normalized, timezone="Asia/Riyadh")
+        db.add(settings)
+    await db.commit()
+    return {"tenant_id": tenant_id, "start_time": settings.start_time, "timezone": settings.timezone}
+
+
 async def get_my_attendance_status(db: AsyncSession, tenant_id: str, user_id: str) -> dict:
     """حالة حضور اليوم للمندوب، ويستخدمها مربع الحضور الإلزامي في لوحة المندوب."""
     rep = await _current_rep_for_user(db, tenant_id, user_id)
     local_now = _saudi_now()
+    attendance_settings = await get_rep_attendance_settings(db, tenant_id)
     attendance_date = local_now.date()
     result = await db.execute(
         select(RepAttendance).where(
@@ -1220,12 +1256,13 @@ async def get_my_attendance_status(db: AsyncSession, tenant_id: str, user_id: st
         )
     )
     record = result.scalar_one_or_none()
-    window_open = _is_attendance_window_open(local_now)
+    window_open = _is_attendance_window_open(local_now, attendance_settings["start_time"])
     return {
         "rep_id": rep.id,
         "attendance_date": attendance_date.isoformat(),
         "server_time": local_now.isoformat(),
         "window_open": window_open,
+        "attendance_start_time": attendance_settings["start_time"],
         "already_checked_in": bool(record),
         "requires_check_in": bool(window_open and not record),
         "check_in_at": _as_saudi_iso(record.check_in_at) if record else None,
@@ -1269,8 +1306,9 @@ async def check_in_my_attendance(db: AsyncSession, tenant_id: str, user_id: str,
         accuracy = float(latest_location.accuracy) if latest_location.accuracy is not None else None
         source = "rep_dashboard_tracking"
     local_now = _saudi_now()
-    if not _is_attendance_window_open(local_now):
-        raise HTTPException(400, "يبدأ تسجيل الحضور الساعة 5:00 مساءً بتوقيت السعودية")
+    attendance_settings = await get_rep_attendance_settings(db, tenant_id)
+    if not _is_attendance_window_open(local_now, attendance_settings["start_time"]):
+        raise HTTPException(400, f'يبدأ تسجيل الحضور الساعة {attendance_settings["start_time"]} بتوقيت السعودية')
 
     attendance_date = local_now.date()
     existing_result = await db.execute(

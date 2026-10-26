@@ -50,6 +50,16 @@ class SalesRep(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class RepAttendanceSettings(Base):
+    """إعدادات نافذة تحضير المناديب، إعداد واحد لكل شركة."""
+    __tablename__ = "rep_attendance_settings"
+
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), primary_key=True)
+    start_time: Mapped[str] = mapped_column(String(5), default="17:00", nullable=False)
+    timezone: Mapped[str] = mapped_column(String(64), default="Asia/Riyadh", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class RepAttendance(Base):
     """سجل حضور يومي للمندوب، مستقل عن حضور الموظفين وتتبع الموقع."""
     __tablename__ = "rep_attendance"

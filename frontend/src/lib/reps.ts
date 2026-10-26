@@ -57,6 +57,11 @@ export const getRepAttendance = (date?: string, repId?: string) => {
   return api.get(`/reps/attendance${query ? `?${query}` : ""}`);
 };
 
+export const getRepAttendanceSettings = () => api.get("/reps/attendance/settings");
+
+export const updateRepAttendanceSettings = (start_time: string) =>
+  api.put("/reps/attendance/settings", { start_time });
+
 export const getMyTransfers = () =>
   api.get("/reps/me/transfers");
 

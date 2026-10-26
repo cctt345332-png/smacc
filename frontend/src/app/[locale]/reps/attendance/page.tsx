@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { getRepAttendance, getReps } from "@/lib/reps";
+import { getRepAttendance, getReps, getRepAttendanceSettings, updateRepAttendanceSettings } from "@/lib/reps";
 
 const saudiDate = () => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit",
@@ -25,6 +25,8 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
   const [summary, setSummary] = useState({ total: 0, present: 0, absent: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [attendanceStart, setAttendanceStart] = useState("17:00");
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -42,6 +44,7 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
 
   useEffect(() => {
     getReps().then((response) => setReps(Array.isArray(response.data) ? response.data : [])).catch(() => {});
+    getRepAttendanceSettings().then((response) => setAttendanceStart(response.data?.start_time || "17:00")).catch(() => {});
   }, []);
 
   useEffect(() => { void load(); }, [date, repId]);
@@ -56,7 +59,7 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
             <span>{ar ? "الحضور والانصراف" : "Attendance"}</span>
           </div>
           <h1 className="page-title">{ar ? "إدارة حضور المناديب" : "Rep Attendance"}</h1>
-          <p className="page-subtitle">{ar ? "متابعة حضور المناديب المسجل من لوحة المندوب بعد الساعة 5 مساءً." : "Review rep check-ins recorded from the rep dashboard after 5 PM."}</p>
+          <p className="page-subtitle">{ar ? "متابعة حضور المناديب مع إمكانية تحديد وقت بداية التحضير من الإدارة." : "Review rep check-ins and configure the check-in start time."}</p>
         </div>
         <Link className="btn btn-secondary" href={`/${locale}/reps/manage`}>{ar ? "عودة إلى المناديب" : "Back to reps"}</Link>
       </div>
@@ -88,6 +91,26 @@ export default function RepAttendancePage(props: { params: Promise<{ locale: str
             </select>
           </label>
           <button className="btn btn-secondary" type="button" onClick={() => void load()}>{ar ? "تحديث" : "Refresh"}</button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-header"><span className="card-title">{ar ? "إعداد وقت تحضير المناديب" : "Rep check-in time"}</span></div>
+        <div className="card-body" style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 5, fontSize: 12, color: "var(--text-secondary)" }}>
+            {ar ? "يبدأ التحضير من الساعة (توقيت الرياض)" : "Check-in starts (Riyadh time)"}
+            <input className="form-input" type="time" value={attendanceStart} onChange={(event) => setAttendanceStart(event.target.value)} />
+          </label>
+          <button className="btn btn-primary" type="button" disabled={settingsSaving} onClick={async () => {
+            setSettingsSaving(true); setError("");
+            try {
+              const response = await updateRepAttendanceSettings(attendanceStart);
+              setAttendanceStart(response.data?.start_time || attendanceStart);
+            } catch (err: any) {
+              setError(err?.response?.data?.detail || (ar ? "تعذر حفظ وقت التحضير." : "Could not save check-in time."));
+            } finally { setSettingsSaving(false); }
+          }}>{settingsSaving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ وقت التحضير" : "Save check-in time")}</button>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "يُطبّق مباشرة على تطبيق المناديب ولا يحتاج تحديث APK." : "Applies immediately; no APK update is required."}</span>
         </div>
       </div>
 
