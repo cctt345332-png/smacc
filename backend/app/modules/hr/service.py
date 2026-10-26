@@ -245,6 +245,19 @@ async def update_employee(db: AsyncSession, tenant_id: str, employee_id: str, da
             raise HTTPException(400, "حجم ملف الهوية يتجاوز 5 ميجابايت")
         if data.get("national_id_content_type") not in {"image/jpeg", "image/png", "image/webp", "application/pdf"}:
             raise HTTPException(400, "صيغة ملف الهوية غير مدعومة")
+    if "department_id" in data:
+        department_id = _optional_text(data.get("department_id"))
+        if department_id:
+            department = await db.scalar(
+                select(Department).where(
+                    Department.id == department_id,
+                    Department.tenant_id == tenant_id,
+                    Department.is_active == True,
+                )
+            )
+            if not department:
+                raise HTTPException(400, "القسم المحدد غير موجود أو غير نشط في الشركة")
+        data["department_id"] = department_id
     for k, v in data.items():
         if k not in allowed_fields:
             continue
