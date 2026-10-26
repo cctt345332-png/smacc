@@ -63,7 +63,9 @@ def _decrypt(value: str | None) -> str | None:
 
 
 def _api_base(env: str) -> str:
-    if env in {"sandbox", "simulation"}:
+    if env == "simulation":
+        return "https://gw-fatoora.zatca.gov.sa/e-invoicing/simulation"
+    if env == "sandbox":
         return "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal"
     return "https://gw-fatoora.zatca.gov.sa/e-invoicing/core"
 
@@ -75,15 +77,45 @@ def _validate_vat(vat_number: str) -> None:
 
 def _build_csr(vat_number: str, branch_name: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
     key = ec.generate_private_key(ec.SECP256K1())
+    # حقول CSR الإلزامية حسب دليل زاتكا:
+    # serialNumber = 1-Manufacturer|2-Model|3-Serial
+    # organizationIdentifier = VAT number
+    # businessCategory = industry/activity
+    # invoice type map: T,S,X,Y => 1000, 0100, or 1100
+    invoice_functionality = {
+        "standard": "1000",
+        "simplified": "0100",
+        "both": "1100",
+    }.get(invoice_type_map, "1100")
+    egs_serial = f"1-SMACC|2-ERP|3-{uuid.uuid4().hex[:12]}"
+    # زاتكا تتوقع بيانات EGS داخل subjectAltName كـ dirName، وليس كحقول Subject
+    # عادية. هذه هي الصيغة المستخدمة في ملف OpenSSL الرسمي: SN / UID / title
+    # / registeredAddress / businessCategory.
+    registered_address_oid = x509.ObjectIdentifier("2.5.4.26")
+    alt_names = x509.Name([
+        x509.NameAttribute(NameOID.SERIAL_NUMBER, egs_serial),
+        x509.NameAttribute(NameOID.USER_ID, vat_number),
+        x509.NameAttribute(NameOID.TITLE, invoice_functionality),
+        x509.NameAttribute(registered_address_oid, branch_name[:128] or "Riyadh"),
+        x509.NameAttribute(NameOID.BUSINESS_CATEGORY, activity[:64] or "Retail"),
+    ])
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, "SA"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, activity[:64] or "SMACC"),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, branch_name[:64] or "Main Branch"),
-        x509.NameAttribute(NameOID.COMMON_NAME, vat_number),
+        x509.NameAttribute(NameOID.COMMON_NAME, f"SMACC-{vat_number[-4:]}"),
     ])
-    csr = x509.CertificateSigningRequestBuilder().subject_name(subject).add_extension(
-        x509.BasicConstraints(ca=False, path_length=None), critical=True
-    ).sign(key, hashes.SHA256())
+    # OID 1.3.6.1.4.1.311.20.2 = Certificate Template Name.
+    template = b"\x13\x15PREZATCA-Code-Signing"
+    csr = (x509.CertificateSigningRequestBuilder()
+        .subject_name(subject)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.KeyUsage(digital_signature=True, content_commitment=True, key_encipherment=True,
+                                     data_encipherment=False, key_agreement=False, key_cert_sign=False,
+                                     crl_sign=False, encipher_only=False, decipher_only=False), critical=True)
+        .add_extension(x509.SubjectAlternativeName([x509.DirectoryName(alt_names)]), critical=False)
+        .add_extension(x509.UnrecognizedExtension(x509.ObjectIdentifier("1.3.6.1.4.1.311.20.2"), template), critical=False)
+        .sign(key, hashes.SHA256()))
     csr_b64 = base64.b64encode(csr.public_bytes(serialization.Encoding.DER)).decode()
     private_key = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
     return csr_b64, private_key
