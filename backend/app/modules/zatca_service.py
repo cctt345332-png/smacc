@@ -140,8 +140,11 @@ async def request_compliance_csid(db: AsyncSession, tenant_id: str, otp: str) ->
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(url, headers={"OTP": otp, "Accept-Version": "V2", "Content-Type": "application/json"}, json={"csr": vat.zatca_csr})
-        payload = response.json() if response.content else {}
-    except (httpx.HTTPError, ValueError) as exc:
+        try:
+            payload = response.json() if response.content else {}
+        except ValueError:
+            payload = {"message": response.text[:4000]}
+    except httpx.HTTPError as exc:
         vat.zatca_last_error = str(exc); await db.commit(); raise HTTPException(502, "تعذر الاتصال بمنصة فاتورة") from exc
     if response.status_code >= 400 or not payload.get("binarySecurityToken"):
         vat.zatca_last_error = json.dumps(payload, ensure_ascii=False)[:4000]; await db.commit()
@@ -171,8 +174,11 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
     try:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(url, headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Content-Type": "application/json"}, json=body)
-        payload = response.json() if response.content else {}
-    except (httpx.HTTPError, ValueError) as exc:
+        try:
+            payload = response.json() if response.content else {}
+        except ValueError:
+            payload = {"message": response.text[:4000]}
+    except httpx.HTTPError as exc:
         vat.zatca_last_error = str(exc); await db.commit(); raise HTTPException(502, "تعذر الاتصال بمنصة فاتورة") from exc
     if response.status_code >= 400 or not payload.get("binarySecurityToken"):
         vat.zatca_last_error = json.dumps(payload, ensure_ascii=False)[:4000]; await db.commit()
