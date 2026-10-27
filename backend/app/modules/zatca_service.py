@@ -116,7 +116,7 @@ C=SA
 organizationIdentifier={vat_number}
 [ req_ext ]
 basicConstraints = critical,CA:FALSE
-keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment
+keyUsage = critical,digitalSignature,keyEncipherment
 certificateTemplateName = ASN1:PRINTABLESTRING:PREZATCA-Code-Signing
 subjectAltName = dirName:alt_names
 [ alt_names ]
