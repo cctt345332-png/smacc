@@ -4,7 +4,7 @@ WORKDIR /app
 
 # تثبيت postgresql-client لـ pg_dump و psql
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    postgresql-client openssl \
+    postgresql-client openssl openjdk-17-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # نسخ requirements أولاً للاستفادة من Docker cache
