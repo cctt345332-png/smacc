@@ -192,6 +192,8 @@ class InvoiceOut(BaseModel):
     currency_code: str
     qr_code: Optional[str]
     zatca_status: Optional[str]
+    zatca_response: Optional[str] = None
+    zatca_submission_id: Optional[str] = None
     notes: Optional[str]
     seller_name_ar: Optional[str]
     seller_vat_number: Optional[str]

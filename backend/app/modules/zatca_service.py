@@ -318,32 +318,38 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
-async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, force: bool = False) -> dict[str, Any]:
+async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, force: bool = False, simulation: bool = False) -> dict[str, Any]:
     vat = await get_settings(db, tenant_id); invoice = await db.scalar(select(Invoice).options(selectinload(Invoice.lines)).where(Invoice.id == invoice_id, Invoice.tenant_id == tenant_id))
     if not vat or not invoice:
         raise HTTPException(404, "إعدادات الضريبة أو الفاتورة غير موجودة")
-    if not vat.is_zatca_enabled or not vat.zatca_production_token_encrypted or not vat.zatca_production_secret_encrypted:
+    token_encrypted = vat.zatca_compliance_token_encrypted if simulation else vat.zatca_production_token_encrypted
+    secret_encrypted = vat.zatca_compliance_secret_encrypted if simulation else vat.zatca_production_secret_encrypted
+    if (not simulation and not vat.is_zatca_enabled) or not token_encrypted or not secret_encrypted:
+        if simulation:
+            raise HTTPException(409, "يجب إصدار Compliance CSID أولاً")
         raise HTTPException(409, "الربط الفعلي غير جاهز: يجب إصدار Production CSID وتفعيل الإعدادات")
     if invoice.zatca_status in {"reported", "cleared"} and not force:
         raise HTTPException(409, "تم إرسال الفاتورة مسبقًا")
     previous = invoice.zatca_previous_invoice_hash or _first_hash()
     xml, digest = _build_ubl(invoice, previous, vat)
     private_key = _decrypt(vat.zatca_private_key_encrypted)
-    production_token = _decrypt(vat.zatca_production_token_encrypted)
-    production_secret = _decrypt(vat.zatca_production_secret_encrypted)
-    signed = _sign_xml(xml, private_key or "", production_token, digest)
+    token = _decrypt(token_encrypted)
+    secret = _decrypt(secret_encrypted)
+    signed = _sign_xml(xml, private_key or "", token, digest)
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
-    url = f"{_api_base(vat.zatca_env)}/invoices/{api_type}/single"
-    auth = base64.b64encode(f"{production_token}:{production_secret}".encode()).decode()
+    environment = "simulation" if simulation else vat.zatca_env
+    url = f"{_api_base(environment)}/invoices/{api_type}/single"
+    auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
     body = {"invoiceHash": digest, "invoice": base64.b64encode(signed.encode()).decode()}
-    log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="invoice", document_id=invoice.id, document_uuid=invoice.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=vat.zatca_env, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
+    log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="invoice", document_id=invoice.id, document_uuid=invoice.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=environment, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
     db.add(log); invoice.zatca_invoice_hash = digest; invoice.zatca_previous_invoice_hash = previous; invoice.zatca_signed_xml = signed
     try:
         async with httpx.AsyncClient(timeout=45) as client:
             response = await client.post(url, headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Accept-Language": "en", "Content-Type": "application/json"}, json=body)
         payload = response.json() if response.content else {}
         log.http_status = response.status_code; log.response_body = json.dumps(payload, ensure_ascii=False)[:100000]; log.responded_at = datetime.utcnow()
-        accepted = response.status_code in (200, 202) and str(payload.get("status", "")).upper() in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
+        zatca_state = str(payload.get("status") or payload.get("reportingStatus") or payload.get("clearanceStatus") or "").upper()
+        accepted = response.status_code in (200, 202) and zatca_state in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
         if accepted:
             state = "reported" if api_type == "reporting" else "cleared"; log.status = state; invoice.zatca_status = state; invoice.zatca_response = log.response_body; invoice.zatca_cleared_at = datetime.utcnow(); invoice.zatca_submission_id = log.id
         else:
@@ -352,6 +358,22 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
         log.status = "retry_pending"; log.error_message = str(exc); log.next_retry_at = datetime.utcnow() + timedelta(minutes=5); invoice.zatca_status = "zatca_pending"; invoice.zatca_response = str(exc)
     await db.commit()
     return {"status": invoice.zatca_status, "submission_id": log.id, "api_type": api_type, "http_status": log.http_status, "error": log.error_message}
+
+
+async def submit_invoice_simulation(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str) -> dict[str, Any]:
+    """إرسال اختباري باستخدام Compliance CSID فقط وبدون أثر جديد على المخزون أو القيود."""
+    return await submit_invoice(db, tenant_id, user_id, invoice_id, simulation=True)
+
+
+async def invoice_xml(db: AsyncSession, tenant_id: str, invoice_id: str) -> str:
+    vat = await get_settings(db, tenant_id)
+    invoice = await db.scalar(select(Invoice).options(selectinload(Invoice.lines)).where(Invoice.id == invoice_id, Invoice.tenant_id == tenant_id))
+    if not vat or not invoice:
+        raise HTTPException(404, "إعدادات الضريبة أو الفاتورة غير موجودة")
+    if invoice.zatca_signed_xml:
+        return invoice.zatca_signed_xml
+    xml, _ = _build_ubl(invoice, invoice.zatca_previous_invoice_hash or _first_hash(), vat)
+    return xml
 
 
 async def list_submissions(db: AsyncSession, tenant_id: str, document_id: str | None = None) -> list[dict[str, Any]]:

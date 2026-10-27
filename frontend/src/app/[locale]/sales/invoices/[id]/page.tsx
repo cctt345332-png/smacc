@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
 import { getInvoice, confirmInvoice, createPayment, getPayments, deleteInvoiceDraft } from "@/lib/sales";
+import { submitInvoiceToZATCA, submitInvoiceToZATCASimulation, getInvoiceXML, getZATCASubmissions } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import SellerBlock from "@/components/documents/SellerBlock";
 import CustomerBlock from "@/components/documents/CustomerBlock";
@@ -74,19 +75,22 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
   const [saving, setSaving] = useState(false);
   const [acting, setActing] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [zatcaSubmissions, setZatcaSubmissions] = useState<any[]>([]);
 
   const load = async () => {
     try {
-      const [invRes, payRes, compRes, banksRes] = await Promise.all([
+      const [invRes, payRes, compRes, banksRes, zatcaRes] = await Promise.all([
         getInvoice(id),
         getPayments(id),
         import("@/lib/settings").then(m => m.getCompany()),
         import("@/lib/accounting").then(m => m.getBankAccounts()),
+        getZATCASubmissions(id),
       ]);
       setInvoice(invRes.data);
       setPayments(payRes.data);
       setCompany(compRes.data);
       setBankAccounts(banksRes.data || []);
+      setZatcaSubmissions(zatcaRes.data || []);
       // جلب بيانات العميل الكاملة
       if (invRes.data?.customer_id) {
         const { getCustomer } = await import("@/lib/sales");
@@ -145,6 +149,24 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
     } finally { setSaving(false); }
   };
 
+  const handleZATCASubmit = async (simulation: boolean) => {
+    if (!confirm(simulation ? "إرسال اختباري إلى منصة المحاكاة؟" : "إرسال الفاتورة إلى الهيئة؟")) return;
+    setActing(true);
+    try {
+      if (simulation) await submitInvoiceToZATCASimulation(id); else await submitInvoiceToZATCA(id);
+      await load();
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر إرسال الفاتورة إلى زاتكا"); }
+    finally { setActing(false); }
+  };
+
+  const handleDownloadXML = async () => {
+    try {
+      const res = await getInvoiceXML(id);
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a"); a.href = url; a.download = `${invoice?.invoice_number || "invoice"}.xml`; a.click(); URL.revokeObjectURL(url);
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر تحميل XML"); }
+  };
+
   if (loading) {
     return (
       <div className="empty-state" style={{ minHeight: "60vh" }}>
@@ -168,6 +190,15 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
   const remaining = Number(invoice.total || 0) - Number(invoice.paid_amount || 0);
   const invoicePaymentMethod = invoice.invoice_payment_method || "";
   const invoicePaymentLabel = INVOICE_PAYMENT_LABELS[invoicePaymentMethod] || invoicePaymentMethod;
+  const zatcaStatus = invoice.zatca_status || "not_sent";
+  const zatcaStatusMap: Record<string, { label: string; color: string }> = {
+    reported: { label: "مقبولة لدى الهيئة (Reporting)", color: "var(--success)" },
+    cleared: { label: "معتمدة لدى الهيئة (Clearance)", color: "var(--success)" },
+    rejected: { label: "مرفوضة من الهيئة", color: "var(--danger)" },
+    zatca_pending: { label: "بانتظار إعادة الإرسال", color: "#B45309" },
+    not_sent: { label: "لم ترسل إلى الهيئة بعد", color: "var(--text-muted)" },
+  };
+  const zatcaView = zatcaStatusMap[zatcaStatus] || { label: zatcaStatus, color: "var(--text-muted)" };
 
   return (
     <>
@@ -194,6 +225,14 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
             <Icon name="print" size={14} />
             {ar ? "طباعة" : "Print"}
           </button>
+          <button className="btn btn-secondary btn-sm" onClick={handleDownloadXML} disabled={acting}>
+            {ar ? "تحميل XML" : "Download XML"}
+          </button>
+          {invoice.status !== "draft" && (
+            <button className="btn btn-secondary btn-sm" onClick={() => handleZATCASubmit(true)} disabled={acting}>
+              {ar ? "اختبار زاتكا" : "ZATCA Test"}
+            </button>
+          )}
           {invoice.status === "draft" && (
             <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={acting}>
               <Icon name="check" size={14} />
@@ -217,6 +256,28 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
             </button>
           )}
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 20, borderInlineStart: `4px solid ${zatcaView.color}` }}>
+        <div className="card-header">
+          <span className="card-title">{ar ? "حالة الفاتورة لدى زاتكا" : "ZATCA status"}</span>
+          <span style={{ fontWeight: 800, color: zatcaView.color }}>{zatcaView.label}</span>
+        </div>
+        <div style={{ padding: "0 20px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {invoice.status !== "draft" && (
+            <button className="btn btn-primary btn-sm" onClick={() => handleZATCASubmit(false)} disabled={acting}>
+              {ar ? "إرسال للهيئة" : "Send to ZATCA"}
+            </button>
+          )}
+          {invoice.zatca_response && <pre style={{ margin: 0, width: "100%", whiteSpace: "pre-wrap", fontSize: 11, color: "var(--text-secondary)" }}>{invoice.zatca_response}</pre>}
+        </div>
+        {zatcaSubmissions.length > 0 && (
+          <div className="table-wrapper" style={{ border: "none" }}>
+            <table><thead><tr><th>التاريخ</th><th>المسار</th><th>الحالة</th><th>HTTP</th><th>الخطأ</th></tr></thead><tbody>
+              {zatcaSubmissions.map((s: any) => <tr key={s.id}><td>{s.created_at ? new Date(s.created_at).toLocaleString("ar-SA") : "—"}</td><td>{s.api_type === "clearance" ? "Clearance" : "Reporting"}</td><td>{s.status}</td><td>{s.http_status || "—"}</td><td>{s.error_message || "—"}</td></tr>)}
+            </tbody></table>
+          </div>
+        )}
       </div>
 
       {/* Invoice Print View */}

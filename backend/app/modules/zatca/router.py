@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +53,17 @@ async def production_csid(user=Depends(require_role(["manager"])), db: AsyncSess
 @router.post("/invoices/{invoice_id}/submit")
 async def submit_invoice(invoice_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
     return await zatca_service.submit_invoice(db, user["tenant_id"], user["user_id"], invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/submit-simulation")
+async def submit_invoice_simulation(invoice_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await zatca_service.submit_invoice_simulation(db, user["tenant_id"], user["user_id"], invoice_id)
+
+
+@router.get("/invoices/{invoice_id}/xml")
+async def download_invoice_xml(invoice_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    xml = await zatca_service.invoice_xml(db, user["tenant_id"], invoice_id)
+    return Response(content=xml, media_type="application/xml", headers={"Content-Disposition": f'attachment; filename="invoice-{invoice_id}.xml"'})
 
 
 @router.post("/credit-notes/{note_id}/submit")
