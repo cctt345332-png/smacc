@@ -95,7 +95,24 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveVATSettings({ ...form, vat_rate: parseFloat(form.vat_rate) });
+      await saveVATSettings({
+        vat_number: form.vat_number,
+        cr_number: form.cr_number,
+        vat_rate: parseFloat(form.vat_rate),
+        zatca_branch_name: form.zatca_branch_name,
+        zatca_address_building: form.address_building,
+        zatca_address_street: form.address_street,
+        zatca_address_district: form.address_district,
+        zatca_address_city: form.address_city,
+        zatca_address_postal: form.address_postal,
+        zatca_address_additional: form.address_additional,
+        zatca_address_country: form.address_country,
+        zatca_activity: form.zatca_activity,
+        zatca_invoice_type_map: form.zatca_invoice_type_map,
+        vat_account_id: form.vat_account_id,
+        zatca_env: form.zatca_env,
+        is_zatca_enabled: form.is_zatca_enabled,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: any) { alert(errorText(e, "Error")); }
