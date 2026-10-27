@@ -356,11 +356,11 @@ def _digits(value: str | None, fallback: int = 1) -> str:
     return digits or str(fallback)
 
 
-def _add_party_tax_scheme(party: LET._Element, vat_number: str | None, cr_number: str | None) -> None:
-    tax = LET.SubElement(party, f"{{{CAC}}}PartyTaxScheme")
-    LET.SubElement(tax, f"{{{CBC}}}CompanyID").text = vat_number or ""
-    scheme = LET.SubElement(tax, f"{{{CAC}}}TaxScheme")
-    LET.SubElement(scheme, f"{{{CBC}}}ID").text = "VAT"
+def _add_party_tax_scheme(party: ET.Element, vat_number: str | None, cr_number: str | None) -> None:
+    tax = _q(party, CAC, "PartyTaxScheme")
+    _q(tax, CBC, "CompanyID", vat_number or "")
+    scheme = _q(tax, CAC, "TaxScheme")
+    _q(scheme, CBC, "ID", "VAT")
 
 
 def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, digest: str) -> str:
