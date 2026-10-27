@@ -78,23 +78,39 @@ def _validate_vat(vat_number: str) -> None:
         raise HTTPException(400, "الرقم الضريبي يجب أن يكون 15 رقماً ويبدأ وينتهي بالرقم 3")
 
 
+def _csr_ascii(value: str, fallback: str) -> str:
+    """OpenSSL's dirName parser drops non-ASCII SAN values; keep DB text intact."""
+    translit = str.maketrans({
+        "ا":"a", "أ":"a", "إ":"i", "آ":"a", "ب":"b", "ت":"t", "ث":"th", "ج":"j", "ح":"h", "خ":"kh",
+        "د":"d", "ذ":"dh", "ر":"r", "ز":"z", "س":"s", "ش":"sh", "ص":"s", "ض":"d", "ط":"t", "ظ":"z",
+        "ع":"a", "غ":"gh", "ف":"f", "ق":"q", "ك":"k", "ل":"l", "م":"m", "ن":"n", "ه":"h", "و":"w", "ي":"y", "ى":"a", "ة":"h", "ء":"a", "ئ":"y", "ؤ":"w",
+    })
+    out = value.translate(translit).encode("ascii", "ignore").decode().strip()
+    return out or fallback
+
+
 def _build_csr(vat_number: str, branch_name: str, organization_name: str, address: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
     invoice_functionality = {"standard": "1000", "simplified": "0100", "both": "1100"}.get(invoice_type_map, "1100")
     egs_serial = f"1-SMACC|2-ERP|3-{uuid.uuid4().hex[:12]}"
     key = ec.generate_private_key(ec.SECP256K1())
     private_key = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()
+    branch = _csr_ascii(branch_name, "Main Branch")[:64]
+    organization = _csr_ascii(organization_name, "SMACC")[:64]
+    registered_address = _csr_ascii(address, "Riyadh")[:128]
+    business_category = _csr_ascii(activity, "Retail")[:64]
     config = f"""oid_section = OIDs
 [ OIDs ]
 certificateTemplateName = 1.3.6.1.4.1.311.20.2
 [ req ]
 prompt = no
+utf8 = yes
 default_md = sha256
 distinguished_name = dn
 req_extensions = req_ext
 [ dn ]
 CN=SMACC-{vat_number[-4:]}
-O={organization_name[:64] or 'SMACC'}
-OU={branch_name[:64] or 'Main Branch'}
+O={organization}
+OU={branch}
 C=SA
 [ req_ext ]
 basicConstraints = critical,CA:FALSE
@@ -105,8 +121,8 @@ subjectAltName = dirName:alt_names
 SN={egs_serial}
 UID={vat_number}
 title={invoice_functionality}
-registeredAddress={address[:128] or 'Riyadh'}
-businessCategory={activity[:64] or 'Retail'}
+registeredAddress={registered_address}
+businessCategory={business_category}
 """
     with tempfile.TemporaryDirectory(prefix="zatca-csr-") as tmp:
         key_path, cfg_path, csr_path = f"{tmp}/key.pem", f"{tmp}/csr.cnf", f"{tmp}/csr.der"
