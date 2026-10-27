@@ -288,6 +288,27 @@ def _first_hash() -> str:
     return base64.b64encode(hashlib.sha256(b"0").digest()).decode()
 
 
+def _hash_unsigned_invoice(xml: str) -> str:
+    root = ET.fromstring(xml.encode())
+    for child in list(root):
+        if child.tag == f"{{{EXT}}}UBLExtensions":
+            root.remove(child)
+    raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    return base64.b64encode(hashlib.sha256(raw).digest()).decode()
+
+
+def _digits(value: str | None, fallback: int = 1) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return digits or str(fallback)
+
+
+def _add_party_tax_scheme(party: ET.Element, vat_number: str | None, cr_number: str | None) -> None:
+    tax = _q(party, CAC, "PartyTaxScheme")
+    _q(tax, CBC, "CompanyID", vat_number or "")
+    scheme = _q(tax, CAC, "TaxScheme")
+    _q(scheme, CBC, "ID", "VAT")
+
+
 def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[str, str]:
     root = ET.Element(f"{{{UBL}}}Invoice")
     invoice_kind = "0200000" if invoice.invoice_type.value == "simplified" else "0100000"
@@ -296,25 +317,30 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[s
     _q(root, CBC, "ID", invoice.invoice_number)
     _q(root, CBC, "UUID", invoice.uuid)
     _q(root, CBC, "IssueDate", invoice.issue_date.date().isoformat())
+    _q(root, CBC, "IssueTime", invoice.issue_date.strftime("%H:%M:%S"))
     _q(root, CBC, "InvoiceTypeCode", "388", name=invoice_kind)
     _q(root, CBC, "DocumentCurrencyCode", invoice.currency_code or "SAR")
     _q(root, CBC, "TaxCurrencyCode", "SAR")
-    _q(root, CBC, "Note", "فاتورة ضريبية إلكترونية")
+    icv = _q(root, CAC, "AdditionalDocumentReference")
+    _q(icv, CBC, "ID", "ICV")
+    _q(icv, CBC, "UUID", _digits(invoice.invoice_number))
     previous_ref = _q(root, CAC, "AdditionalDocumentReference")
     _q(previous_ref, CBC, "ID", "PIH")
-    _q(previous_ref, CBC, "UUID", previous_hash)
+    attachment = _q(previous_ref, CAC, "Attachment")
+    _q(attachment, CBC, "EmbeddedDocumentBinaryObject", previous_hash, mimeCode="text/plain", encodingCode="Base64")
     if invoice.qr_code:
         qr_ref = _q(root, CAC, "AdditionalDocumentReference")
         _q(qr_ref, CBC, "ID", "QR")
         attachment = _q(qr_ref, CAC, "Attachment")
         _q(attachment, CBC, "EmbeddedDocumentBinaryObject", invoice.qr_code, mimeCode="text/plain", encodingCode="Base64")
     supplier = _q(root, CAC, "AccountingSupplierParty"); party = _q(supplier, CAC, "Party")
-    ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", vat.vat_number or invoice.seller_vat_number or "", schemeID="VAT")
-    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "CityName", (invoice.seller_address or vat.zatca_branch_name or "الرياض").split("،")[-1]); _q(addr, CBC, "CountrySubentityCode", "SA")
+    ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", _digits(vat.cr_number or invoice.seller_cr_number), schemeID="CRN")
+    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or ""); _q(addr, CBC, "CountrySubentity", vat.zatca_address_district or "")
     country = _q(addr, CAC, "Country"); _q(country, CBC, "IdentificationCode", "SA")
+    _add_party_tax_scheme(party, vat.vat_number or invoice.seller_vat_number, vat.cr_number or invoice.seller_cr_number)
     legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", invoice.seller_name_ar)
     customer = _q(root, CAC, "AccountingCustomerParty"); cparty = _q(customer, CAC, "Party")
-    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "CityName", (invoice.buyer_address or "الرياض").split("،")[-1]); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", "SA")
+    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", invoice.buyer_address or ""); _q(caddr, CBC, "CityName", (invoice.buyer_address or "الرياض").split("،")[-1]); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", "SA")
     clegal = _q(cparty, CAC, "PartyLegalEntity"); _q(clegal, CBC, "RegistrationName", invoice.buyer_name_ar)
     payment = _q(root, CAC, "PaymentMeans"); _q(payment, CBC, "PaymentMeansCode", "30")
     tax_total = _q(root, CAC, "TaxTotal"); _q(tax_total, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
@@ -323,6 +349,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[s
     monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(invoice.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(invoice.total), currencyID="SAR")
     for index, line in enumerate(sorted(invoice.lines, key=lambda x: x.line_order), 1):
         il = _q(root, CAC, "InvoiceLine"); _q(il, CBC, "ID", index); _q(il, CBC, "InvoicedQuantity", str(line.quantity), unitCode=line.unit or "PCE"); _q(il, CBC, "LineExtensionAmount", _money(line.subtotal - line.discount_amount), currencyID="SAR")
+        line_tax = _q(il, CAC, "TaxTotal"); _q(line_tax, CBC, "TaxAmount", _money(line.vat_amount), currencyID="SAR")
         item = _q(il, CAC, "Item"); _q(item, CBC, "Name", line.description_ar); tax = _q(item, CAC, "ClassifiedTaxCategory"); _q(tax, CBC, "ID", line.vat_category or "S"); _q(tax, CBC, "Percent", str(line.vat_rate)); ts = _q(tax, CAC, "TaxScheme"); _q(ts, CBC, "ID", "VAT")
         price = _q(il, CAC, "Price"); _q(price, CBC, "PriceAmount", _money(line.unit_price), currencyID="SAR")
     raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -364,11 +391,12 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     token = _decrypt(token_encrypted)
     secret = _decrypt(secret_encrypted)
     signed = _sign_xml(xml, private_key or "", token, digest)
+    digest = _hash_unsigned_invoice(signed)
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
     environment = "simulation" if simulation else vat.zatca_env
     url = f"{_api_base(environment)}/compliance/invoices" if simulation else f"{_api_base(environment)}/invoices/{api_type}/single"
     auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
-    body = {"invoiceHash": digest, "invoice": base64.b64encode(signed.encode()).decode()}
+    body = {"invoiceHash": digest, "uuid": invoice.uuid, "invoice": base64.b64encode(signed.encode()).decode()}
     log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="invoice", document_id=invoice.id, document_uuid=invoice.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=environment, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
     db.add(log); invoice.zatca_invoice_hash = digest; invoice.zatca_previous_invoice_hash = previous; invoice.zatca_signed_xml = signed
     try:
