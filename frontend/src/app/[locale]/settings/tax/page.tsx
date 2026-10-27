@@ -243,9 +243,17 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                 </div>
               )}
               {zatcaStatus?.has_compliance_credentials && !zatcaStatus?.has_production_credentials && (
-                <button className="btn btn-primary" type="button" onClick={requestProduction} disabled={zatcaBusy} style={{ marginTop: 12 }}>
-                  {ar ? "طلب Production CSID بعد نجاح الاختبارات" : "Request Production CSID after tests"}
-                </button>
+                <div style={{ marginTop: 12 }}>
+                  <div className="form-hint" style={{ marginBottom: 8 }}>
+                    {ar ? "اختبارات الامتثال الستة المطلوبة قبل شهادة الإنتاج:" : "Six compliance tests required before Production CSID:"}
+                    <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
+                      {["standard-compliant", "standard-credit-note-compliant", "standard-debit-note-compliant", "simplified-compliant", "simplified-credit-note-compliant", "simplified-debit-note-compliant"].map(step => <span key={step} style={{ color: zatcaStatus.compliance_steps?.[step] ? "#166534" : "#B91C1C" }}>{zatcaStatus.compliance_steps?.[step] ? "✓" : "○"} {step}</span>)}
+                    </div>
+                  </div>
+                  <button className="btn btn-primary" type="button" onClick={requestProduction} disabled={zatcaBusy || !zatcaStatus?.compliance_complete}>
+                    {ar ? "طلب Production CSID بعد نجاح الاختبارات" : "Request Production CSID after tests"}
+                  </button>
+                </div>
               )}
               {zatcaStatus && <p className="form-hint">{ar ? "الحالة الحالية: " : "Current status: "}{zatcaStatus.status}</p>}
               {zatcaMessage && <p className="form-hint" style={{ color: zatcaMessage.includes("تعذر") || zatcaMessage.includes("رفض") ? "#B91C1C" : "#166534" }}>{zatcaMessage}</p>}

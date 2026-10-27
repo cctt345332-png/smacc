@@ -71,6 +71,11 @@ async def submit_credit_note(note_id: str, user=Depends(require_role(["manager",
     return await zatca_service.submit_credit_note(db, user["tenant_id"], user["user_id"], note_id)
 
 
+@router.post("/credit-notes/{note_id}/submit-simulation")
+async def submit_credit_note_simulation(note_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await zatca_service.submit_credit_note(db, user["tenant_id"], user["user_id"], note_id, simulation=True)
+
+
 @router.get("/submissions")
 async def list_submissions(document_id: str | None = None, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
     return await zatca_service.list_submissions(db, user["tenant_id"], document_id)

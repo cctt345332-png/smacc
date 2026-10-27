@@ -48,6 +48,7 @@ export const submitInvoiceToZATCA = (invoiceId: string) => api.post(`/zatca/invo
 export const submitInvoiceToZATCASimulation = (invoiceId: string) => api.post(`/zatca/invoices/${invoiceId}/submit-simulation`);
 export const getInvoiceXML = (invoiceId: string) => api.get(`/zatca/invoices/${invoiceId}/xml`, { responseType: "blob" });
 export const submitCreditNoteToZATCA = (noteId: string) => api.post(`/zatca/credit-notes/${noteId}/submit`);
+export const submitCreditNoteToZATCASimulation = (noteId: string) => api.post(`/zatca/credit-notes/${noteId}/submit-simulation`);
 export const getZATCASubmissions = (documentId?: string) => api.get("/zatca/submissions", { params: documentId ? { document_id: documentId } : {} });
 export const retryZATCASubmission = (submissionId: string) => api.post(`/zatca/submissions/${submissionId}/retry`);
 

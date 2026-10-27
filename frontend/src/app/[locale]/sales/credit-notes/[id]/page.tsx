@@ -4,6 +4,7 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { createRefundRequest, getInvoice, getRefundRequests } from "@/lib/sales";
 import { getCompany } from "@/lib/settings";
+import { submitCreditNoteToZATCASimulation } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import SellerBlock from "@/components/documents/SellerBlock";
 import CustomerBlock from "@/components/documents/CustomerBlock";
@@ -35,6 +36,7 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
   const [originalInvoice, setOriginalInvoice] = useState<any>(null);
   const [refundRequests, setRefundRequests] = useState<any[]>([]);
   const [requestingRefund, setRequestingRefund] = useState(false);
+  const [zatcaBusy, setZatcaBusy] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -79,6 +81,14 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
     } catch (e: any) {
       alert(e?.response?.data?.detail || (ar ? "تعذر إنشاء طلب الاسترداد" : "Could not create refund request"));
     } finally { setRequestingRefund(false); }
+  };
+
+  const testZATCA = async () => {
+    if (!confirm(ar ? "إرسال إشعار الدائن اختباريًا إلى زاتكا؟" : "Send this credit note to ZATCA compliance test?")) return;
+    setZatcaBusy(true);
+    try { await submitCreditNoteToZATCASimulation(id); await load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || (ar ? "رفضت زاتكا الاختبار" : "ZATCA rejected the test")); }
+    finally { setZatcaBusy(false); }
   };
 
   if (loading) {
@@ -130,6 +140,9 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
           <button className="btn btn-primary btn-sm" onClick={requestRefund} disabled={requestingRefund}>
             <Icon name="money" size={14} />
             {requestingRefund ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "طلب استرداد" : "Request refund")}
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={testZATCA} disabled={zatcaBusy}>
+            {ar ? "اختبار زاتكا" : "ZATCA Test"}
           </button>
         </div>
       </div>

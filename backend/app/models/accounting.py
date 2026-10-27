@@ -230,6 +230,7 @@ class VATSetting(Base):
     zatca_production_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     zatca_production_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     zatca_compliance_request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    zatca_compliance_steps: Mapped[str | None] = mapped_column(Text, nullable=True)
     zatca_certificate_expiry: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     zatca_last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

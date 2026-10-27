@@ -228,6 +228,7 @@ class VATSettingUpdate(BaseModel):
     zatca_address_country: Optional[str] = None
     zatca_activity: Optional[str] = None
     zatca_invoice_type_map: Optional[str] = None
+    zatca_compliance_steps: Optional[str] = None
 
 
 class VATSettingOut(BaseModel):
@@ -248,6 +249,7 @@ class VATSettingOut(BaseModel):
     zatca_activity: Optional[str] = None
     zatca_invoice_type_map: Optional[str] = None
     zatca_onboarding_status: str = "not_started"
+    zatca_compliance_steps: Optional[str] = None
     model_config = {"from_attributes": True}
 
 

@@ -39,6 +39,10 @@ UBL = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
 CREDIT_NOTE_UBL = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
 DS = "http://www.w3.org/2000/09/xmldsig#"
 EXT = "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+COMPLIANCE_STEPS = (
+    "standard-compliant", "standard-credit-note-compliant", "standard-debit-note-compliant",
+    "simplified-compliant", "simplified-credit-note-compliant", "simplified-debit-note-compliant",
+)
 
 ET.register_namespace("", UBL)
 ET.register_namespace("cbc", CBC)
@@ -152,6 +156,10 @@ async def status(db: AsyncSession, tenant_id: str) -> dict[str, Any]:
     vat = await get_settings(db, tenant_id)
     if not vat:
         return {"configured": False, "status": "not_started", "environment": "sandbox", "has_csr": False, "has_compliance_credentials": False, "has_production_credentials": False, "last_error": None}
+    try:
+        compliance_steps = json.loads(vat.zatca_compliance_steps or "{}")
+    except (TypeError, ValueError):
+        compliance_steps = {}
     return {
         "configured": bool(vat.vat_number), "status": vat.zatca_onboarding_status, "environment": vat.zatca_env,
         "vat_number": vat.vat_number, "branch_name": vat.zatca_branch_name, "activity": vat.zatca_activity,
@@ -159,7 +167,18 @@ async def status(db: AsyncSession, tenant_id: str) -> dict[str, Any]:
         "has_compliance_credentials": bool(vat.zatca_compliance_token_encrypted and vat.zatca_compliance_secret_encrypted),
         "has_production_credentials": bool(vat.zatca_production_token_encrypted and vat.zatca_production_secret_encrypted),
         "certificate_expiry": vat.zatca_certificate_expiry, "last_error": vat.zatca_last_error, "enabled": bool(vat.is_zatca_enabled),
+        "compliance_steps": {step: compliance_steps.get(step, False) for step in COMPLIANCE_STEPS},
+        "compliance_complete": all(compliance_steps.get(step) is True for step in COMPLIANCE_STEPS),
     }
+
+
+def _mark_compliance_step(vat: VATSetting, step: str) -> None:
+    try:
+        steps = json.loads(vat.zatca_compliance_steps or "{}")
+    except (TypeError, ValueError):
+        steps = {}
+    steps[step] = True
+    vat.zatca_compliance_steps = json.dumps(steps)
 
 
 async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name: str, address: str, activity: str, env: str, invoice_type_map: str) -> dict[str, Any]:
@@ -179,6 +198,7 @@ async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name
     vat.vat_number = vat_number; vat.zatca_env = env; vat.zatca_branch_name = branch_name
     vat.zatca_activity = activity or tenant.name; vat.zatca_invoice_type_map = invoice_type_map
     vat.zatca_csr = csr; vat.zatca_private_key_encrypted = _encrypt(private_key)
+    vat.zatca_compliance_steps = json.dumps({})
     vat.zatca_onboarding_status = "csr_ready"; vat.zatca_last_error = None; vat.updated_at = datetime.utcnow()
     await db.commit()
     return {"status": "csr_ready", "environment": env, "csr": csr, "message": "تم إنشاء CSR. استخدم OTP من بوابة فاتورة لإكمال Compliance CSID."}
@@ -206,6 +226,7 @@ async def request_compliance_csid(db: AsyncSession, tenant_id: str, otp: str) ->
     vat.zatca_compliance_token_encrypted = _encrypt(payload["binarySecurityToken"])
     vat.zatca_compliance_secret_encrypted = _encrypt(payload.get("secret"))
     vat.zatca_compliance_request_id = str(payload.get("requestID") or payload.get("requestId") or "")
+    vat.zatca_compliance_steps = json.dumps({})
     vat.zatca_onboarding_status = "compliance_ready"; vat.zatca_last_error = None
     vat.zatca_certificate_expiry = datetime.utcnow() + timedelta(days=365)
     await db.commit()
@@ -220,6 +241,13 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
     request_id = vat.zatca_compliance_request_id
     if not request_id:
         raise HTTPException(409, "رقم طلب Compliance CSID غير موجود")
+    try:
+        completed = json.loads(vat.zatca_compliance_steps or "{}")
+    except (TypeError, ValueError):
+        completed = {}
+    missing = [step for step in COMPLIANCE_STEPS if completed.get(step) is not True]
+    if missing:
+        raise HTTPException(409, {"message": "لا يمكن طلب Production CSID قبل إكمال اختبارات الامتثال الستة", "missing_steps": missing})
     compliance_token = _decrypt(vat.zatca_compliance_token_encrypted)
     compliance_secret = _decrypt(vat.zatca_compliance_secret_encrypted)
     auth = base64.b64encode(f"{compliance_token}:{compliance_secret}".encode()).decode()
@@ -338,7 +366,7 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     signed = _sign_xml(xml, private_key or "", token, digest)
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
     environment = "simulation" if simulation else vat.zatca_env
-    url = f"{_api_base(environment)}/invoices/{api_type}/single"
+    url = f"{_api_base(environment)}/compliance/invoices" if simulation else f"{_api_base(environment)}/invoices/{api_type}/single"
     auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
     body = {"invoiceHash": digest, "invoice": base64.b64encode(signed.encode()).decode()}
     log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="invoice", document_id=invoice.id, document_uuid=invoice.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=environment, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
@@ -349,9 +377,16 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
         payload = response.json() if response.content else {}
         log.http_status = response.status_code; log.response_body = json.dumps(payload, ensure_ascii=False)[:100000]; log.responded_at = datetime.utcnow()
         zatca_state = str(payload.get("status") or payload.get("reportingStatus") or payload.get("clearanceStatus") or "").upper()
-        accepted = response.status_code in (200, 202) and zatca_state in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
+        compliance_ok = response.status_code in (200, 202) and not payload.get("errors")
+        accepted = compliance_ok if simulation else response.status_code in (200, 202) and zatca_state in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
         if accepted:
-            state = "reported" if api_type == "reporting" else "cleared"; log.status = state; invoice.zatca_status = state; invoice.zatca_response = log.response_body; invoice.zatca_cleared_at = datetime.utcnow(); invoice.zatca_submission_id = log.id
+            if simulation:
+                step = f"{'simplified' if invoice.invoice_type.value == 'simplified' else 'standard'}-compliant"
+                _mark_compliance_step(vat, step)
+                state = "compliance_passed"
+            else:
+                state = "reported" if api_type == "reporting" else "cleared"
+            log.status = state; invoice.zatca_status = state; invoice.zatca_response = log.response_body; invoice.zatca_cleared_at = datetime.utcnow(); invoice.zatca_submission_id = log.id
         else:
             log.status = "rejected"; log.error_message = json.dumps(payload, ensure_ascii=False)[:10000]; invoice.zatca_status = "rejected"; invoice.zatca_response = log.response_body
     except (httpx.HTTPError, ValueError) as exc:
@@ -435,12 +470,14 @@ def _build_credit_note_ubl(note: CreditNote, customer: Customer, original: Invoi
     return raw.decode(), base64.b64encode(hashlib.sha256(raw).digest()).decode()
 
 
-async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, note_id: str, force: bool = False) -> dict[str, Any]:
+async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, note_id: str, force: bool = False, simulation: bool = False) -> dict[str, Any]:
     vat = await get_settings(db, tenant_id)
     note = await db.scalar(select(CreditNote).options(selectinload(CreditNote.lines)).where(CreditNote.id == note_id, CreditNote.tenant_id == tenant_id))
     if not vat or not note:
         raise HTTPException(404, "إعدادات الضريبة أو إشعار الدائن غير موجود")
-    if not vat.is_zatca_enabled or not vat.zatca_production_token_encrypted or not vat.zatca_production_secret_encrypted:
+    token_field = vat.zatca_compliance_token_encrypted if simulation else vat.zatca_production_token_encrypted
+    secret_field = vat.zatca_compliance_secret_encrypted if simulation else vat.zatca_production_secret_encrypted
+    if (not simulation and not vat.is_zatca_enabled) or not token_field or not secret_field:
         raise HTTPException(409, "الربط الفعلي غير جاهز: يجب إصدار Production CSID وتفعيل الإعدادات")
     if note.zatca_status in {"reported", "cleared"} and not force:
         raise HTTPException(409, "تم إرسال إشعار الدائن مسبقًا")
@@ -450,7 +487,7 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
         raise HTTPException(409, "بيانات عميل إشعار الدائن غير موجودة")
     previous = _first_hash()
     xml, digest = _build_credit_note_ubl(note, customer, original, previous, vat)
-    private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(vat.zatca_production_token_encrypted); secret = _decrypt(vat.zatca_production_secret_encrypted)
+    private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(token_field); secret = _decrypt(secret_field)
     signed = _sign_xml(xml, private_key or "", token, digest)
     simplified = original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified"
     api_type = "reporting" if simplified else "clearance"
@@ -459,13 +496,20 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
     log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="credit_note", document_id=note.id, document_uuid=note.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=vat.zatca_env, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
     db.add(log); note.zatca_invoice_hash = digest; note.zatca_signed_xml = signed
     try:
+        submit_url = f"{_api_base(vat.zatca_env)}/compliance/invoices" if simulation else f"{_api_base(vat.zatca_env)}/invoices/{api_type}/single"
         async with httpx.AsyncClient(timeout=45) as client:
-            response = await client.post(f"{_api_base(vat.zatca_env)}/invoices/{api_type}/single", headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Accept-Language": "en", "Content-Type": "application/json"}, json=body)
+            response = await client.post(submit_url, headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Accept-Language": "en", "Content-Type": "application/json"}, json=body)
         payload = response.json() if response.content else {}
         log.http_status = response.status_code; log.response_body = json.dumps(payload, ensure_ascii=False)[:100000]; log.responded_at = datetime.utcnow()
-        accepted = response.status_code in (200, 202) and str(payload.get("status", "")).upper() in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
+        accepted = (response.status_code in (200, 202) and not payload.get("errors")) if simulation else response.status_code in (200, 202) and str(payload.get("status", "")).upper() in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
         if accepted:
-            state = "reported" if api_type == "reporting" else "cleared"; log.status = state; note.zatca_status = state; note.zatca_submission_id = log.id
+            if simulation:
+                step = f"{'simplified' if simplified else 'standard'}-credit-note-compliant"
+                _mark_compliance_step(vat, step)
+                state = "compliance_passed"
+            else:
+                state = "reported" if api_type == "reporting" else "cleared"
+            log.status = state; note.zatca_status = state; note.zatca_submission_id = log.id
         else:
             log.status = "rejected"; log.error_message = json.dumps(payload, ensure_ascii=False)[:10000]; note.zatca_status = "rejected"
     except (httpx.HTTPError, ValueError) as exc:
