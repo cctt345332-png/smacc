@@ -18,10 +18,12 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 import httpx
+from lxml import etree as LET
 from cryptography import x509
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 from cryptography.x509.oid import NameOID
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -288,27 +290,6 @@ def _first_hash() -> str:
     return base64.b64encode(hashlib.sha256(b"0").digest()).decode()
 
 
-def _hash_unsigned_invoice(xml: str) -> str:
-    root = ET.fromstring(xml.encode())
-    for child in list(root):
-        if child.tag == f"{{{EXT}}}UBLExtensions":
-            root.remove(child)
-    raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-    return base64.b64encode(hashlib.sha256(raw).digest()).decode()
-
-
-def _digits(value: str | None, fallback: int = 1) -> str:
-    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
-    return digits or str(fallback)
-
-
-def _add_party_tax_scheme(party: ET.Element, vat_number: str | None, cr_number: str | None) -> None:
-    tax = _q(party, CAC, "PartyTaxScheme")
-    _q(tax, CBC, "CompanyID", vat_number or "")
-    scheme = _q(tax, CAC, "TaxScheme")
-    _q(scheme, CBC, "ID", "VAT")
-
-
 def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[str, str]:
     root = ET.Element(f"{{{UBL}}}Invoice")
     invoice_kind = "0200000" if invoice.invoice_type.value == "simplified" else "0100000"
@@ -320,7 +301,6 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[s
     _q(root, CBC, "IssueTime", invoice.issue_date.strftime("%H:%M:%S"))
     _q(root, CBC, "InvoiceTypeCode", "388", name=invoice_kind)
     _q(root, CBC, "DocumentCurrencyCode", invoice.currency_code or "SAR")
-    _q(root, CBC, "TaxCurrencyCode", "SAR")
     icv = _q(root, CAC, "AdditionalDocumentReference")
     _q(icv, CBC, "ID", "ICV")
     _q(icv, CBC, "UUID", _digits(invoice.invoice_number))
@@ -328,11 +308,14 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[s
     _q(previous_ref, CBC, "ID", "PIH")
     attachment = _q(previous_ref, CAC, "Attachment")
     _q(attachment, CBC, "EmbeddedDocumentBinaryObject", previous_hash, mimeCode="text/plain", encodingCode="Base64")
-    if invoice.qr_code:
-        qr_ref = _q(root, CAC, "AdditionalDocumentReference")
-        _q(qr_ref, CBC, "ID", "QR")
-        attachment = _q(qr_ref, CAC, "Attachment")
-        _q(attachment, CBC, "EmbeddedDocumentBinaryObject", invoice.qr_code, mimeCode="text/plain", encodingCode="Base64")
+    qr_ref = _q(root, CAC, "AdditionalDocumentReference")
+    _q(qr_ref, CBC, "ID", "QR")
+    attachment = _q(qr_ref, CAC, "Attachment")
+    def _tlv(tag: int, value: str) -> bytes:
+        raw = value.encode("utf-8")
+        return bytes([tag, len(raw)]) + raw
+    qr_value = base64.b64encode(b"".join((_tlv(1, invoice.seller_name_ar or ""), _tlv(2, vat.vat_number or ""), _tlv(3, invoice.issue_date.isoformat()), _tlv(4, _money(invoice.total)), _tlv(5, _money(invoice.vat_amount))))).decode()
+    _q(attachment, CBC, "EmbeddedDocumentBinaryObject", qr_value, mimeCode="text/plain", encodingCode="Base64")
     supplier = _q(root, CAC, "AccountingSupplierParty"); party = _q(supplier, CAC, "Party")
     ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", _digits(vat.cr_number or invoice.seller_cr_number), schemeID="CRN")
     addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or ""); _q(addr, CBC, "CountrySubentity", vat.zatca_address_district or "")
@@ -357,20 +340,78 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[s
     return raw.decode(), digest
 
 
+
+
+def _hash_unsigned_invoice(xml: str) -> str:
+    root = LET.fromstring(xml.encode())
+    for child in list(root):
+        if child.tag == f"{{{EXT}}}UBLExtensions":
+            root.remove(child)
+    raw = LET.tostring(root, method="c14n", exclusive=False, with_comments=False)
+    return base64.b64encode(hashlib.sha256(raw).digest()).decode()
+
+
+def _digits(value: str | None, fallback: int = 1) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return digits or str(fallback)
+
+
+def _add_party_tax_scheme(party: LET._Element, vat_number: str | None, cr_number: str | None) -> None:
+    tax = LET.SubElement(party, f"{{{CAC}}}PartyTaxScheme")
+    LET.SubElement(tax, f"{{{CBC}}}CompanyID").text = vat_number or ""
+    scheme = LET.SubElement(tax, f"{{{CAC}}}TaxScheme")
+    LET.SubElement(scheme, f"{{{CBC}}}ID").text = "VAT"
+
+
 def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, digest: str) -> str:
     key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
-    signature = key.sign(xml.encode(), ec.ECDSA(hashes.SHA256()))
-    root = ET.fromstring(xml.encode())
-    ext = ET.Element(f"{{{EXT}}}UBLExtensions"); ext_item = ET.SubElement(ext, f"{{{EXT}}}UBLExtension"); content = ET.SubElement(ext_item, f"{{{EXT}}}ExtensionContent")
-    sig = ET.SubElement(content, f"{{{DS}}}Signature", {"Id": "invoiceSignature"}); signed_info = ET.SubElement(sig, f"{{{DS}}}SignedInfo")
-    ET.SubElement(signed_info, f"{{{DS}}}CanonicalizationMethod", {"Algorithm": "http://www.w3.org/2006/12/xml-c14n11"})
-    ET.SubElement(signed_info, f"{{{DS}}}SignatureMethod", {"Algorithm": "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"})
-    ref = ET.SubElement(signed_info, f"{{{DS}}}Reference", {"URI": ""}); ET.SubElement(ref, f"{{{DS}}}DigestMethod", {"Algorithm": "http://www.w3.org/2001/04/xmlenc#sha256"}); ET.SubElement(ref, f"{{{DS}}}DigestValue").text = digest
-    ET.SubElement(sig, f"{{{DS}}}SignatureValue").text = base64.b64encode(signature).decode()
-    if certificate_b64:
-        ki = ET.SubElement(sig, f"{{{DS}}}KeyInfo"); xd = ET.SubElement(ki, f"{{{DS}}}X509Data"); ET.SubElement(xd, f"{{{DS}}}X509Certificate").text = certificate_b64
+    root = LET.fromstring(xml.encode())
+    sig_ns = "urn:oasis:names:specification:ubl:schema:xsd:CommonSignatureComponents-2"
+    sac_ns = "urn:oasis:names:specification:ubl:schema:xsd:SignatureAggregateComponents-2"
+    sbc_ns = "urn:oasis:names:specification:ubl:schema:xsd:SignatureBasicComponents-2"
+    xades_ns = "http://uri.etsi.org/01903/v1.3.2#"
+    ext = LET.Element(f"{{{EXT}}}UBLExtensions", nsmap={"ext": EXT})
+    ext_item = LET.SubElement(ext, f"{{{EXT}}}UBLExtension")
+    content = LET.SubElement(ext_item, f"{{{EXT}}}ExtensionContent")
+    document_sigs = LET.SubElement(content, f"{{{sig_ns}}}UBLDocumentSignatures", nsmap={"sig": sig_ns, "sac": sac_ns, "sbc": sbc_ns, "ds": DS, "xades": xades_ns})
+    info = LET.SubElement(document_sigs, f"{{{sac_ns}}}SignatureInformation")
+    LET.SubElement(info, f"{{{CBC}}}ID").text = "urn:oasis:names:specification:ubl:signature:1"
+    LET.SubElement(info, f"{{{sbc_ns}}}ReferencedSignatureID").text = "urn:oasis:names:specification:ubl:signature:Invoice"
+    sig = LET.SubElement(info, f"{{{DS}}}Signature", Id="urn:oasis:names:specification:ubl:signature:Invoice")
+    signed_info = LET.SubElement(sig, f"{{{DS}}}SignedInfo")
+    LET.SubElement(signed_info, f"{{{DS}}}CanonicalizationMethod", Algorithm="http://www.w3.org/2006/12/xml-c14n11")
+    LET.SubElement(signed_info, f"{{{DS}}}SignatureMethod", Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256")
+    ref = LET.SubElement(signed_info, f"{{{DS}}}Reference", URI="")
+    transforms = LET.SubElement(ref, f"{{{DS}}}Transforms")
+    LET.SubElement(transforms, f"{{{DS}}}Transform", Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature")
+    LET.SubElement(transforms, f"{{{DS}}}Transform", Algorithm="http://www.w3.org/2006/12/xml-c14n11")
+    LET.SubElement(ref, f"{{{DS}}}DigestMethod", Algorithm="http://www.w3.org/2001/04/xmlenc#sha256")
+    LET.SubElement(ref, f"{{{DS}}}DigestValue").text = digest
+    signed_info_bytes = LET.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
+    r, s = decode_dss_signature(key.sign(signed_info_bytes, ec.ECDSA(hashes.SHA256())))
+    LET.SubElement(sig, f"{{{DS}}}SignatureValue").text = base64.b64encode(r.to_bytes(32, "big") + s.to_bytes(32, "big")).decode()
+    cert_text = "".join((certificate_b64 or "").replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
+    if cert_text:
+        cert_der = base64.b64decode(cert_text)
+        cert = x509.load_der_x509_certificate(cert_der)
+        key_info = LET.SubElement(sig, f"{{{DS}}}KeyInfo")
+        xdata = LET.SubElement(key_info, f"{{{DS}}}X509Data")
+        LET.SubElement(xdata, f"{{{DS}}}X509Certificate").text = cert_text
+        obj = LET.SubElement(sig, f"{{{DS}}}Object")
+        props = LET.SubElement(obj, f"{{{xades_ns}}}QualifyingProperties", Target="#urn:oasis:names:specification:ubl:signature:Invoice")
+        signed_props = LET.SubElement(props, f"{{{xades_ns}}}SignedProperties", Id="xadesSignedProperties")
+        signed_sig_props = LET.SubElement(signed_props, f"{{{xades_ns}}}SignedSignatureProperties")
+        LET.SubElement(signed_sig_props, f"{{{xades_ns}}}SigningTime").text = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+        signing_cert = LET.SubElement(signed_sig_props, f"{{{xades_ns}}}SigningCertificateV2")
+        cert_el = LET.SubElement(signing_cert, f"{{{xades_ns}}}Cert")
+        cert_digest = LET.SubElement(cert_el, f"{{{xades_ns}}}CertDigest")
+        LET.SubElement(cert_digest, f"{{{DS}}}DigestMethod", Algorithm="http://www.w3.org/2001/04/xmlenc#sha256")
+        LET.SubElement(cert_digest, f"{{{DS}}}DigestValue").text = base64.b64encode(hashlib.sha256(cert_der).digest()).decode()
+        issuer = LET.SubElement(cert_el, f"{{{xades_ns}}}IssuerSerialV2")
+        LET.SubElement(issuer, f"{{{DS}}}X509IssuerName").text = cert.issuer.rfc4514_string()
+        LET.SubElement(issuer, f"{{{DS}}}X509SerialNumber").text = str(cert.serial_number)
     root.insert(0, ext)
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
+    return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
 async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, force: bool = False, simulation: bool = False) -> dict[str, Any]:
@@ -386,12 +427,12 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     if invoice.zatca_status in {"reported", "cleared"} and not force:
         raise HTTPException(409, "تم إرسال الفاتورة مسبقًا")
     previous = invoice.zatca_previous_invoice_hash or _first_hash()
-    xml, digest = _build_ubl(invoice, previous, vat)
+    xml, _ = _build_ubl(invoice, previous, vat)
+    digest = _hash_unsigned_invoice(xml)
     private_key = _decrypt(vat.zatca_private_key_encrypted)
     token = _decrypt(token_encrypted)
     secret = _decrypt(secret_encrypted)
     signed = _sign_xml(xml, private_key or "", token, digest)
-    digest = _hash_unsigned_invoice(signed)
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
     environment = "simulation" if simulation else vat.zatca_env
     url = f"{_api_base(environment)}/compliance/invoices" if simulation else f"{_api_base(environment)}/invoices/{api_type}/single"
@@ -514,7 +555,8 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
     if not customer:
         raise HTTPException(409, "بيانات عميل إشعار الدائن غير موجودة")
     previous = _first_hash()
-    xml, digest = _build_credit_note_ubl(note, customer, original, previous, vat)
+    xml, _ = _build_credit_note_ubl(note, customer, original, previous, vat)
+    digest = _hash_unsigned_invoice(xml)
     private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(token_field); secret = _decrypt(secret_field)
     signed = _sign_xml(xml, private_key or "", token, digest)
     simplified = original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified"

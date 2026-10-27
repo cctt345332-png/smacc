@@ -21,3 +21,5 @@ python-bidi==0.4.2
 
 # Release verification
 pytest==8.3.5
+
+lxml==5.3.0
