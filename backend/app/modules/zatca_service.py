@@ -92,10 +92,10 @@ default_md = sha256
 distinguished_name = dn
 req_extensions = req_ext
 [ dn ]
-C=SA
-OU={branch_name[:64] or 'Main Branch'}
-O={organization_name[:64] or 'SMACC'}
 CN=SMACC-{vat_number[-4:]}
+O={organization_name[:64] or 'SMACC'}
+OU={branch_name[:64] or 'Main Branch'}
+C=SA
 [ req_ext ]
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment
