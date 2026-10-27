@@ -8,9 +8,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import subprocess
+import tempfile
 import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -76,48 +79,44 @@ def _validate_vat(vat_number: str) -> None:
 
 
 def _build_csr(vat_number: str, branch_name: str, organization_name: str, address: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
-    key = ec.generate_private_key(ec.SECP256K1())
-    # حقول CSR الإلزامية حسب دليل زاتكا:
-    # serialNumber = 1-Manufacturer|2-Model|3-Serial
-    # organizationIdentifier = VAT number
-    # businessCategory = industry/activity
-    # invoice type map: T,S,X,Y => 1000, 0100, or 1100
-    invoice_functionality = {
-        "standard": "1000",
-        "simplified": "0100",
-        "both": "1100",
-    }.get(invoice_type_map, "1100")
+    invoice_functionality = {"standard": "1000", "simplified": "0100", "both": "1100"}.get(invoice_type_map, "1100")
     egs_serial = f"1-SMACC|2-ERP|3-{uuid.uuid4().hex[:12]}"
-    # زاتكا تتوقع بيانات EGS داخل subjectAltName كـ dirName، وليس كحقول Subject
-    # عادية. هذه هي الصيغة المستخدمة في ملف OpenSSL الرسمي: SN / UID / title
-    # / registeredAddress / businessCategory.
-    registered_address_oid = x509.ObjectIdentifier("2.5.4.26")
-    alt_names = x509.Name([
-        x509.NameAttribute(NameOID.SERIAL_NUMBER, egs_serial),
-        x509.NameAttribute(NameOID.USER_ID, vat_number),
-        x509.NameAttribute(NameOID.TITLE, invoice_functionality),
-        x509.NameAttribute(registered_address_oid, address[:128] or "Riyadh"),
-        x509.NameAttribute(NameOID.BUSINESS_CATEGORY, activity[:64] or "Retail"),
-    ])
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "SA"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization_name[:64] or "SMACC"),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, branch_name[:64] or "Main Branch"),
-        x509.NameAttribute(NameOID.COMMON_NAME, f"SMACC-{vat_number[-4:]}"),
-    ])
-    # OID 1.3.6.1.4.1.311.20.2 = Certificate Template Name.
-    template = b"\x13\x15PREZATCA-Code-Signing"
-    csr = (x509.CertificateSigningRequestBuilder()
-        .subject_name(subject)
-        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        .add_extension(x509.KeyUsage(digital_signature=True, content_commitment=True, key_encipherment=True,
-                                     data_encipherment=False, key_agreement=False, key_cert_sign=False,
-                                     crl_sign=False, encipher_only=False, decipher_only=False), critical=True)
-        .add_extension(x509.SubjectAlternativeName([x509.DirectoryName(alt_names)]), critical=False)
-        .add_extension(x509.UnrecognizedExtension(x509.ObjectIdentifier("1.3.6.1.4.1.311.20.2"), template), critical=False)
-        .sign(key, hashes.SHA256()))
-    csr_b64 = base64.b64encode(csr.public_bytes(serialization.Encoding.DER)).decode()
-    private_key = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+    key = ec.generate_private_key(ec.SECP256K1())
+    private_key = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()
+    config = f"""oid_section = OIDs
+[ OIDs ]
+certificateTemplateName = 1.3.6.1.4.1.311.20.2
+[ req ]
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+[ dn ]
+C=SA
+OU={branch_name[:64] or 'Main Branch'}
+O={organization_name[:64] or 'SMACC'}
+CN=SMACC-{vat_number[-4:]}
+[ req_ext ]
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment
+certificateTemplateName = ASN1:PRINTABLESTRING:PREZATCA-Code-Signing
+subjectAltName = dirName:alt_names
+[ alt_names ]
+SN={egs_serial}
+UID={vat_number}
+title={invoice_functionality}
+registeredAddress={address[:128] or 'Riyadh'}
+businessCategory={activity[:64] or 'Retail'}
+"""
+    with tempfile.TemporaryDirectory(prefix="zatca-csr-") as tmp:
+        key_path, cfg_path, csr_path = f"{tmp}/key.pem", f"{tmp}/csr.cnf", f"{tmp}/csr.der"
+        Path(key_path).write_text(private_key, encoding="utf-8")
+        Path(cfg_path).write_text(config, encoding="utf-8")
+        try:
+            subprocess.run(["openssl", "req", "-new", "-sha256", "-key", key_path, "-config", cfg_path, "-outform", "DER", "-out", csr_path], check=True, capture_output=True, text=True)
+        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+            raise HTTPException(500, "تعذر إنشاء CSR؛ تأكد من تثبيت OpenSSL على الخادم") from exc
+        csr_b64 = base64.b64encode(Path(csr_path).read_bytes()).decode()
     return csr_b64, private_key
 
 
