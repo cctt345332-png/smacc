@@ -219,7 +219,13 @@ class VATSettingUpdate(BaseModel):
     zatca_env: Optional[str] = None
     is_zatca_enabled: Optional[bool] = None
     zatca_branch_name: Optional[str] = None
-    zatca_registered_address: Optional[str] = None
+    zatca_address_building: Optional[str] = None
+    zatca_address_street: Optional[str] = None
+    zatca_address_district: Optional[str] = None
+    zatca_address_city: Optional[str] = None
+    zatca_address_postal: Optional[str] = None
+    zatca_address_additional: Optional[str] = None
+    zatca_address_country: Optional[str] = None
     zatca_activity: Optional[str] = None
     zatca_invoice_type_map: Optional[str] = None
 
@@ -232,7 +238,13 @@ class VATSettingOut(BaseModel):
     zatca_env: str
     is_zatca_enabled: bool
     zatca_branch_name: Optional[str] = None
-    zatca_registered_address: Optional[str] = None
+    zatca_address_building: Optional[str] = None
+    zatca_address_street: Optional[str] = None
+    zatca_address_district: Optional[str] = None
+    zatca_address_city: Optional[str] = None
+    zatca_address_postal: Optional[str] = None
+    zatca_address_additional: Optional[str] = None
+    zatca_address_country: Optional[str] = None
     zatca_activity: Optional[str] = None
     zatca_invoice_type_map: Optional[str] = None
     zatca_onboarding_status: str = "not_started"

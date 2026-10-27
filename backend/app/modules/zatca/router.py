@@ -12,7 +12,13 @@ router = APIRouter(prefix="/zatca", tags=["zatca"])
 class ZATCAPrepareRequest(BaseModel):
     vat_number: str = Field(min_length=15, max_length=15)
     branch_name: str = Field(min_length=1, max_length=200)
-    address: str = Field(min_length=1, max_length=300)
+    address_building: str = Field(min_length=1, max_length=20)
+    address_street: str = Field(min_length=1, max_length=300)
+    address_district: str = Field(min_length=1, max_length=100)
+    address_city: str = Field(min_length=1, max_length=100)
+    address_postal: str = Field(min_length=1, max_length=10)
+    address_additional: str = Field(min_length=1, max_length=10)
+    address_country: str = Field(default="SA", min_length=2, max_length=3)
     activity: str = Field(min_length=1, max_length=300)
     environment: str = "sandbox"
     invoice_type_map: str = "both"
@@ -29,7 +35,8 @@ async def get_status(user=Depends(require_role(["manager", "accountant"])), db: 
 
 @router.post("/prepare")
 async def prepare(data: ZATCAPrepareRequest, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
-    return await zatca_service.prepare(db, user["tenant_id"], data.vat_number, data.branch_name, data.address, data.activity, data.environment, data.invoice_type_map)
+    address = ", ".join([f"Building {data.address_building}", data.address_street, data.address_district, data.address_city, f"Postal {data.address_postal}", f"Additional {data.address_additional}", data.address_country])
+    return await zatca_service.prepare(db, user["tenant_id"], data.vat_number, data.branch_name, address, data.activity, data.environment, data.invoice_type_map)
 
 
 @router.post("/compliance-csid")

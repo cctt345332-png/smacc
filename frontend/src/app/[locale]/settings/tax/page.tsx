@@ -19,7 +19,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
   const [otp, setOtp] = useState("");
   const [phase2Setup, setPhase2Setup] = useState(false);
   const [form, setForm] = useState({
-    vat_number: "", cr_number: "", vat_rate: "15", zatca_branch_name: "الفرع الرئيسي", zatca_registered_address: "",
+    vat_number: "", cr_number: "", vat_rate: "15", zatca_branch_name: "الفرع الرئيسي", address_building: "", address_street: "", address_district: "", address_city: "", address_postal: "", address_additional: "", address_country: "SA",
     zatca_activity: "", zatca_invoice_type_map: "both", vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: true,
   });
 
@@ -41,7 +41,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         cr_number: data.cr_number || "",
         vat_rate: String(data.vat_rate),
         zatca_branch_name: data.zatca_branch_name || "الفرع الرئيسي",
-        zatca_registered_address: data.zatca_registered_address || "",
+        address_building: data.zatca_address_building || "", address_street: data.zatca_address_street || "", address_district: data.zatca_address_district || "", address_city: data.zatca_address_city || "", address_postal: data.zatca_address_postal || "", address_additional: data.zatca_address_additional || "", address_country: data.zatca_address_country || "SA",
         zatca_activity: data.zatca_activity || "",
         zatca_invoice_type_map: data.zatca_invoice_type_map || "both",
         vat_account_id: data.vat_account_id || "",
@@ -58,7 +58,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       const { data } = await prepareZATCA({
         vat_number: form.vat_number,
         branch_name: form.zatca_branch_name,
-        address: form.zatca_registered_address,
+        address_building: form.address_building, address_street: form.address_street, address_district: form.address_district, address_city: form.address_city, address_postal: form.address_postal, address_additional: form.address_additional, address_country: form.address_country,
         activity: form.zatca_activity,
         environment: form.zatca_env,
         invoice_type_map: form.zatca_invoice_type_map,
@@ -185,8 +185,10 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
               </div>
               <div className="form-group">
                 <label className="form-label">{ar ? "العنوان الوطني للفرع" : "Registered branch address"} <span className="required">*</span></label>
-                <input className="form-input" value={form.zatca_registered_address} onChange={e => setForm(f => ({ ...f, zatca_registered_address: e.target.value }))} placeholder={ar ? "المدينة، الحي، الشارع، رقم المبنى" : "City, district, street, building"} />
-                <div className="form-hint">{ar ? "اكتب العنوان الوطني أو عنوان الفرع الفعلي، وليس اسم الشركة." : "Use the actual registered branch/location address, not the company name."}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 }}>
+                  {[ ["address_building", ar ? "رقم المبنى" : "Building"], ["address_street", ar ? "الشارع" : "Street"], ["address_district", ar ? "الحي" : "District"], ["address_city", ar ? "المدينة" : "City"], ["address_postal", ar ? "الرمز البريدي" : "Postal code"], ["address_additional", ar ? "الرقم الإضافي" : "Additional number"] ].map(([key, label]) => <input key={key} className="form-input" placeholder={label} value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />)}
+                </div>
+                <div className="form-hint">{ar ? "سيتم تجميع الحقول تلقائيًا داخل CSR." : "These fields are combined automatically inside the CSR."}</div>
               </div>
               <div className="form-group">
                 <label className="form-label">{ar ? "تصنيف النشاط" : "Business activity"}</label>
@@ -200,7 +202,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                   <option value="simplified">{ar ? "مبسطة فقط" : "Simplified only"}</option>
                 </select>
               </div>
-              <button className="btn btn-primary" type="button" style={{ background: "#5546D9" }} onClick={prepareZatca} disabled={zatcaBusy || !form.vat_number || !form.zatca_registered_address.trim()}>
+              <button className="btn btn-primary" type="button" style={{ background: "#5546D9" }} onClick={prepareZatca} disabled={zatcaBusy || !form.vat_number || !form.address_building.trim() || !form.address_street.trim() || !form.address_district.trim() || !form.address_city.trim() || !form.address_postal.trim() || !form.address_additional.trim()}>
                 {zatcaBusy ? (ar ? "جاري التنفيذ..." : "Working...") : (ar ? "تجهيز CSR والربط" : "Prepare CSR")}
               </button>
               {zatcaStatus?.has_csr && !zatcaStatus?.has_compliance_credentials && (
