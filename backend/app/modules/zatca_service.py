@@ -92,7 +92,8 @@ def _csr_ascii(value: str, fallback: str) -> str:
 def _build_csr(vat_number: str, branch_name: str, organization_name: str, address: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
     invoice_functionality = {"standard": "1000", "simplified": "0100", "both": "1100"}.get(invoice_type_map, "1100")
     egs_serial = f"1-SMACC|2-ERP|3-{uuid.uuid4().hex[:12]}"
-    key = ec.generate_private_key(ec.SECP256K1())
+    # ZATCA requires a 256-bit ECDSA P-256 key (prime256v1), not secp256k1.
+    key = ec.generate_private_key(ec.SECP256R1())
     private_key = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()
     branch = _csr_ascii(branch_name, "Main Branch")[:64]
     organization = _csr_ascii(organization_name, "SMACC")[:64]
