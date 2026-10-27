@@ -113,6 +113,7 @@ CN=SMACC-{vat_number[-4:]}
 O={organization}
 OU={branch}
 C=SA
+organizationIdentifier={vat_number}
 [ req_ext ]
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment
@@ -120,7 +121,6 @@ certificateTemplateName = ASN1:PRINTABLESTRING:PREZATCA-Code-Signing
 subjectAltName = dirName:alt_names
 [ alt_names ]
 SN={egs_serial}
-UID={vat_number}
 title={invoice_functionality}
 registeredAddress={registered_address}
 businessCategory={business_category}
