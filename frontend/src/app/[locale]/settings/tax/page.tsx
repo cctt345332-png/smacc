@@ -49,7 +49,12 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         is_zatca_enabled: true,
       });
     }).catch(() => {});
-    getZATCAStatus().then(({ data }) => setZatcaStatus(data)).catch(() => {});
+    getZATCAStatus().then(({ data }) => {
+      setZatcaStatus(data);
+      // المرحلة الثانية ليست اختيارًا مؤقتًا؛ تبقى مفتوحة بعد تجهيز CSR
+      // أو إصدار Compliance/Production CSID حتى لا تعود للمرحلة الأولى عند التحديث.
+      setPhase2Setup(Boolean(data?.has_csr || data?.has_compliance_credentials || data?.has_production_credentials || (data?.status && data.status !== "not_started")));
+    }).catch(() => {});
   }, []);
 
   const prepareZatca = async () => {
@@ -64,7 +69,9 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         invoice_type_map: form.zatca_invoice_type_map,
       });
       setZatcaMessage(ar ? "تم تجهيز CSR بنجاح. انسخه إلى بوابة فاتورة عند طلبه، والمفتاح الخاص محفوظ داخل السيرفر." : "CSR prepared. The private key is kept on the server.");
-      setZatcaStatus((await getZATCAStatus()).data);
+      const status = (await getZATCAStatus()).data;
+      setZatcaStatus(status);
+      setPhase2Setup(true);
       void data;
     } catch (e: any) { setZatcaMessage(errorText(e, ar ? "تعذر تجهيز الربط" : "Unable to prepare integration")); }
     finally { setZatcaBusy(false); }
@@ -76,7 +83,9 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       await requestComplianceCSID(otp);
       setOtp("");
       setZatcaMessage(ar ? "تم إصدار Compliance CSID بنجاح." : "Compliance CSID issued successfully.");
-      setZatcaStatus((await getZATCAStatus()).data);
+      const status = (await getZATCAStatus()).data;
+      setZatcaStatus(status);
+      setPhase2Setup(true);
     } catch (e: any) { setZatcaMessage(errorText(e, ar ? "رفضت زاتكا طلب Compliance CSID" : "ZATCA rejected the Compliance CSID request")); }
     finally { setZatcaBusy(false); }
   };
@@ -87,7 +96,9 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
     try {
       await requestProductionCSID();
       setZatcaMessage(ar ? "تم إصدار Production CSID وحفظه مشفرًا." : "Production CSID issued and encrypted.");
-      setZatcaStatus((await getZATCAStatus()).data);
+      const status = (await getZATCAStatus()).data;
+      setZatcaStatus(status);
+      setPhase2Setup(true);
     } catch (e: any) { setZatcaMessage(errorText(e, ar ? "تعذر إصدار شهادة الإنتاج" : "Unable to issue production certificate")); }
     finally { setZatcaBusy(false); }
   };
