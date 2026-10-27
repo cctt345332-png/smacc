@@ -75,7 +75,7 @@ def _validate_vat(vat_number: str) -> None:
         raise HTTPException(400, "الرقم الضريبي يجب أن يكون 15 رقماً ويبدأ وينتهي بالرقم 3")
 
 
-def _build_csr(vat_number: str, branch_name: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
+def _build_csr(vat_number: str, branch_name: str, organization_name: str, address: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
     key = ec.generate_private_key(ec.SECP256K1())
     # حقول CSR الإلزامية حسب دليل زاتكا:
     # serialNumber = 1-Manufacturer|2-Model|3-Serial
@@ -96,12 +96,12 @@ def _build_csr(vat_number: str, branch_name: str, activity: str, invoice_type_ma
         x509.NameAttribute(NameOID.SERIAL_NUMBER, egs_serial),
         x509.NameAttribute(NameOID.USER_ID, vat_number),
         x509.NameAttribute(NameOID.TITLE, invoice_functionality),
-        x509.NameAttribute(registered_address_oid, branch_name[:128] or "Riyadh"),
+        x509.NameAttribute(registered_address_oid, address[:128] or "Riyadh"),
         x509.NameAttribute(NameOID.BUSINESS_CATEGORY, activity[:64] or "Retail"),
     ])
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, "SA"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, activity[:64] or "SMACC"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization_name[:64] or "SMACC"),
         x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, branch_name[:64] or "Main Branch"),
         x509.NameAttribute(NameOID.COMMON_NAME, f"SMACC-{vat_number[-4:]}"),
     ])
@@ -140,7 +140,7 @@ async def status(db: AsyncSession, tenant_id: str) -> dict[str, Any]:
     }
 
 
-async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name: str, activity: str, env: str, invoice_type_map: str) -> dict[str, Any]:
+async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name: str, address: str, activity: str, env: str, invoice_type_map: str) -> dict[str, Any]:
     _validate_vat(vat_number)
     if env not in {"simulation", "sandbox", "production"}:
         raise HTTPException(400, "بيئة زاتكا يجب أن تكون simulation أو sandbox أو production")
@@ -153,7 +153,7 @@ async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name
     if not vat:
         vat = VATSetting(id=uuid.uuid4().hex, tenant_id=tenant_id)
         db.add(vat)
-    csr, private_key = _build_csr(vat_number, branch_name, activity or tenant.name, invoice_type_map)
+    csr, private_key = _build_csr(vat_number, branch_name, tenant.name, address, activity or tenant.name, invoice_type_map)
     vat.vat_number = vat_number; vat.zatca_env = env; vat.zatca_branch_name = branch_name
     vat.zatca_activity = activity or tenant.name; vat.zatca_invoice_type_map = invoice_type_map
     vat.zatca_csr = csr; vat.zatca_private_key_encrypted = _encrypt(private_key)

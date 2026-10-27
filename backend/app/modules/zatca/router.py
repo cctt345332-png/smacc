@@ -12,6 +12,7 @@ router = APIRouter(prefix="/zatca", tags=["zatca"])
 class ZATCAPrepareRequest(BaseModel):
     vat_number: str = Field(min_length=15, max_length=15)
     branch_name: str = Field(min_length=1, max_length=200)
+    address: str = Field(min_length=1, max_length=300)
     activity: str = Field(min_length=1, max_length=300)
     environment: str = "sandbox"
     invoice_type_map: str = "both"
@@ -28,7 +29,7 @@ async def get_status(user=Depends(require_role(["manager", "accountant"])), db: 
 
 @router.post("/prepare")
 async def prepare(data: ZATCAPrepareRequest, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
-    return await zatca_service.prepare(db, user["tenant_id"], data.vat_number, data.branch_name, data.activity, data.environment, data.invoice_type_map)
+    return await zatca_service.prepare(db, user["tenant_id"], data.vat_number, data.branch_name, data.address, data.activity, data.environment, data.invoice_type_map)
 
 
 @router.post("/compliance-csid")

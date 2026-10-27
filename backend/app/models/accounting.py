@@ -213,6 +213,7 @@ class VATSetting(Base):
     is_zatca_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # إعدادات المرحلة الثانية — تحفظ الأسرار مشفرة بواسطة مفتاح التطبيق
     zatca_branch_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    zatca_registered_address: Mapped[str | None] = mapped_column(String(300), nullable=True)
     zatca_activity: Mapped[str | None] = mapped_column(String(300), nullable=True)
     zatca_invoice_type_map: Mapped[str | None] = mapped_column(String(20), nullable=True)
     zatca_onboarding_status: Mapped[str] = mapped_column(String(40), default="not_started")

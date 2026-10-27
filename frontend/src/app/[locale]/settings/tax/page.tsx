@@ -19,7 +19,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
   const [otp, setOtp] = useState("");
   const [phase2Setup, setPhase2Setup] = useState(false);
   const [form, setForm] = useState({
-    vat_number: "", cr_number: "", vat_rate: "15", zatca_branch_name: "الفرع الرئيسي",
+    vat_number: "", cr_number: "", vat_rate: "15", zatca_branch_name: "الفرع الرئيسي", zatca_registered_address: "",
     zatca_activity: "", zatca_invoice_type_map: "both", vat_account_id: "", zatca_env: "sandbox", is_zatca_enabled: true,
   });
 
@@ -41,6 +41,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
         cr_number: data.cr_number || "",
         vat_rate: String(data.vat_rate),
         zatca_branch_name: data.zatca_branch_name || "الفرع الرئيسي",
+        zatca_registered_address: data.zatca_registered_address || "",
         zatca_activity: data.zatca_activity || "",
         zatca_invoice_type_map: data.zatca_invoice_type_map || "both",
         vat_account_id: data.vat_account_id || "",
@@ -57,6 +58,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
       const { data } = await prepareZATCA({
         vat_number: form.vat_number,
         branch_name: form.zatca_branch_name,
+        address: form.zatca_registered_address,
         activity: form.zatca_activity,
         environment: form.zatca_env,
         invoice_type_map: form.zatca_invoice_type_map,
@@ -182,6 +184,11 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                 <input className="form-input" value={form.zatca_branch_name} onChange={e => setForm(f => ({ ...f, zatca_branch_name: e.target.value }))} />
               </div>
               <div className="form-group">
+                <label className="form-label">{ar ? "العنوان الوطني للفرع" : "Registered branch address"} <span className="required">*</span></label>
+                <input className="form-input" value={form.zatca_registered_address} onChange={e => setForm(f => ({ ...f, zatca_registered_address: e.target.value }))} placeholder={ar ? "المدينة، الحي، الشارع، رقم المبنى" : "City, district, street, building"} />
+                <div className="form-hint">{ar ? "اكتب العنوان الوطني أو عنوان الفرع الفعلي، وليس اسم الشركة." : "Use the actual registered branch/location address, not the company name."}</div>
+              </div>
+              <div className="form-group">
                 <label className="form-label">{ar ? "تصنيف النشاط" : "Business activity"}</label>
                 <input className="form-input" value={form.zatca_activity} onChange={e => setForm(f => ({ ...f, zatca_activity: e.target.value }))} placeholder={ar ? "اسم المنشأة أو النشاط" : "Company or activity name"} />
               </div>
@@ -193,7 +200,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
                   <option value="simplified">{ar ? "مبسطة فقط" : "Simplified only"}</option>
                 </select>
               </div>
-              <button className="btn btn-primary" type="button" style={{ background: "#5546D9" }} onClick={prepareZatca} disabled={zatcaBusy || !form.vat_number}>
+              <button className="btn btn-primary" type="button" style={{ background: "#5546D9" }} onClick={prepareZatca} disabled={zatcaBusy || !form.vat_number || !form.zatca_registered_address.trim()}>
                 {zatcaBusy ? (ar ? "جاري التنفيذ..." : "Working...") : (ar ? "تجهيز CSR والربط" : "Prepare CSR")}
               </button>
               {zatcaStatus?.has_csr && !zatcaStatus?.has_compliance_credentials && (
