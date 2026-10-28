@@ -290,6 +290,11 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
             payload = response.json() if response.content else {}
         except ValueError:
             payload = {"message": response.text[:4000]}
+        logger.error(
+            "ZATCA Production CSID response status=%s payload=%s",
+            response.status_code,
+            json.dumps(payload, ensure_ascii=False)[:4000],
+        )
     except httpx.HTTPError as exc:
         vat.zatca_last_error = str(exc); await db.commit(); raise HTTPException(502, "تعذر الاتصال بمنصة فاتورة") from exc
     if response.status_code >= 400 or not payload.get("binarySecurityToken"):
