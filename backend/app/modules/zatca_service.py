@@ -537,7 +537,7 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool) -> str:
         # text, while tags 8 and 9 carry the DER public key and DER
         # certificate signature bytes. This keeps the outer Base64 TLV under
         # the 500-character gateway limit even with a production CSID.
-        public_key = cert.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint)
+        public_key = cert.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
         signature_b64 = signature_value
         certificate_signature = cert.signature
     except (ValueError, TypeError, base64.binascii.Error) as exc:
