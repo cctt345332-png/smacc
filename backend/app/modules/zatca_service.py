@@ -389,7 +389,6 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
             customer.address_street if customer else None,
             customer.address_city if customer else None,
             customer.address_postal if customer else None,
-            customer.address_country if customer else None,
         ]
         if any(not str(value or "").strip() for value in required_address) or not str(customer.address_postal).strip().isdigit() or len(str(customer.address_postal).strip()) != 5:
             raise HTTPException(422, "لا يمكن اختبار الفاتورة القياسية: يجب إدخال عنوان العميل الحقيقي (الشارع، المدينة، الرمز البريدي من 5 أرقام، الدولة)")
