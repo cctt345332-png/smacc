@@ -621,6 +621,12 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
                 tx.transaction_number, invoice_id, exc,
             )
             await db.commit()
+    else:
+        logger.error(
+            "POS invoice was not created; automatic ZATCA reporting skipped: transaction=%s session=%s",
+            tx.transaction_number, session.id,
+        )
+        zatca_result = {"status": "zatca_pending", "reason": "لم يتم إنشاء فاتورة POS؛ تحقق من ربط السنة المالية بجهاز نقطة البيع"}
 
     return {
         "transaction_id": tx.id,
