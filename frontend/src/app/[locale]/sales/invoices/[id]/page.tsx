@@ -30,6 +30,27 @@ const STATUS_MAP: Record<string, { ar: string; badge: string }> = {
   zatca_cleared: { ar: "زاتكا ✓", badge: "badge-success" },
 };
 
+const ZATCA_CODE_AR: Record<string, string> = {
+  "BR-KSA-81": "يفضل إضافة معرّف آخر للمشتري عند عدم وجود الرقم الضريبي للمشتري. هذا تنبيه فقط ولا يمنع قبول الفاتورة.",
+  "XSD_ZATCA_VALID": "ملف الفاتورة مطابق لمعيار زاتكا وUBL 2.1.",
+};
+
+function parseZatcaResponse(value: any): any | null {
+  if (!value) return null;
+  if (typeof value === "object") return value;
+  try { return JSON.parse(value); } catch { return null; }
+}
+
+function zatcaResponseView(value: any) {
+  const data = parseZatcaResponse(value);
+  const validation = data?.validationResults;
+  const warnings = validation?.warningMessages || [];
+  const errors = validation?.errorMessages || [];
+  const cleared = String(data?.clearanceStatus || "").toUpperCase() === "CLEARED";
+  const reported = String(data?.reportingStatus || "").toUpperCase() === "REPORTED";
+  return { data, validation, warnings, errors, cleared, reported };
+}
+
 const PAYMENT_METHODS = [
   { value: "cash",          ar: "نقداً",           en: "Cash" },
   { value: "bank_transfer", ar: "تحويل بنكي",      en: "Bank Transfer" },
@@ -191,9 +212,11 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
   const invoicePaymentMethod = invoice.invoice_payment_method || "";
   const invoicePaymentLabel = INVOICE_PAYMENT_LABELS[invoicePaymentMethod] || invoicePaymentMethod;
   const zatcaStatus = invoice.zatca_status || "not_sent";
+  const zatcaResponse = zatcaResponseView(invoice.zatca_response);
   const zatcaStatusMap: Record<string, { label: string; color: string }> = {
     reported: { label: "مقبولة لدى الهيئة (Reporting)", color: "var(--success)" },
     cleared: { label: "معتمدة لدى الهيئة (Clearance)", color: "var(--success)" },
+    compliance_passed: { label: "اجتازت اختبار زاتكا بنجاح", color: "var(--success)" },
     rejected: { label: "مرفوضة من الهيئة", color: "var(--danger)" },
     zatca_pending: { label: "بانتظار إعادة الإرسال", color: "#B45309" },
     not_sent: { label: "لم ترسل إلى الهيئة بعد", color: "var(--text-muted)" },
@@ -269,12 +292,42 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
               {ar ? "إرسال للهيئة" : "Send to ZATCA"}
             </button>
           )}
-          {invoice.zatca_response && <pre style={{ margin: 0, width: "100%", whiteSpace: "pre-wrap", fontSize: 11, color: "var(--text-secondary)" }}>{invoice.zatca_response}</pre>}
+          {invoice.zatca_response && zatcaResponse.data ? (
+            <div style={{ width: "100%", borderRadius: 8, background: "var(--surface-subtle, #F8FAFC)", padding: 12, fontSize: 13 }}>
+              {(zatcaResponse.cleared || zatcaResponse.reported || zatcaResponse.validation?.status === "WARNING") && (
+                <div style={{ color: "var(--success)", fontWeight: 800, marginBottom: 6 }}>
+                  {zatcaResponse.cleared ? "تم اعتماد الفاتورة من زاتكا" : zatcaResponse.reported ? "تم الإبلاغ عن الفاتورة إلى زاتكا" : "تم اجتياز التحقق من زاتكا"}
+                </div>
+              )}
+              {zatcaResponse.validation && (
+                <div style={{ color: "var(--text-secondary)", marginBottom: 6 }}>
+                  نتيجة التحقق: {zatcaResponse.validation.status === "PASS" ? "ناجح" : zatcaResponse.validation.status === "WARNING" ? "ناجح مع تنبيه" : zatcaResponse.validation.status}
+                  {zatcaResponse.data.clearanceStatus && <> — حالة الاعتماد: {zatcaResponse.cleared ? "معتمدة" : zatcaResponse.data.clearanceStatus}</>}
+                </div>
+              )}
+              {zatcaResponse.errors.length > 0 && (
+                <div style={{ color: "var(--danger)", marginTop: 6 }}>
+                  <strong>أخطاء زاتكا:</strong>
+                  {zatcaResponse.errors.map((item: any, index: number) => <div key={index}>{ZATCA_CODE_AR[item.code] || item.message || item.code}</div>)}
+                </div>
+              )}
+              {zatcaResponse.warnings.length > 0 && (
+                <div style={{ color: "#92400E", marginTop: 6 }}>
+                  <strong>تنبيه:</strong>
+                  {zatcaResponse.warnings.map((item: any, index: number) => <div key={index}>{ZATCA_CODE_AR[item.code] || item.message || item.code}</div>)}
+                </div>
+              )}
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer", color: "var(--text-muted)", fontSize: 11 }}>عرض التفاصيل التقنية</summary>
+                <pre style={{ margin: "8px 0 0", whiteSpace: "pre-wrap", fontSize: 10, color: "var(--text-secondary)" }}>{JSON.stringify(zatcaResponse.data, null, 2)}</pre>
+              </details>
+            </div>
+          ) : invoice.zatca_response ? <div style={{ width: "100%", color: "var(--danger)" }}>{invoice.zatca_response}</div> : null}
         </div>
         {zatcaSubmissions.length > 0 && (
           <div className="table-wrapper" style={{ border: "none" }}>
             <table><thead><tr><th>التاريخ</th><th>المسار</th><th>الحالة</th><th>HTTP</th><th>الخطأ</th></tr></thead><tbody>
-              {zatcaSubmissions.map((s: any) => <tr key={s.id}><td>{s.created_at ? new Date(s.created_at).toLocaleString("ar-SA") : "—"}</td><td>{s.api_type === "clearance" ? "Clearance" : "Reporting"}</td><td>{s.status}</td><td>{s.http_status || "—"}</td><td>{s.error_message || "—"}</td></tr>)}
+              {zatcaSubmissions.map((s: any) => <tr key={s.id}><td>{s.created_at ? new Date(s.created_at).toLocaleString("ar-SA") : "—"}</td><td>{s.api_type === "clearance" ? "اعتماد الفاتورة" : "الإبلاغ"}</td><td>{s.status === "compliance_passed" ? "اجتاز الاختبار" : s.status === "cleared" ? "معتمدة" : s.status === "reported" ? "مُبلّغ عنها" : s.status === "rejected" ? "مرفوضة" : s.status === "sending" ? "جارٍ الإرسال" : s.status}</td><td>{s.http_status || "—"}</td><td>{s.error_message || "—"}</td></tr>)}
             </tbody></table>
           </div>
         )}
