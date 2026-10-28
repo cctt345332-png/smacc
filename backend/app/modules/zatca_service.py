@@ -978,7 +978,7 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
     is_debit = getattr(note.note_type, "value", note.note_type) == "debit"
     api_type = "reporting" if simplified else "clearance"
     auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
-    body = {"invoiceHash": digest, "invoice": base64.b64encode(signed.encode()).decode()}
+    body = {"invoiceHash": digest, "uuid": note.uuid, "invoice": base64.b64encode(signed.encode()).decode()}
     log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="debit_note" if is_debit else "credit_note", document_id=note.id, document_uuid=note.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=vat.zatca_env, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
     db.add(log); note.zatca_invoice_hash = digest; note.zatca_signed_xml = signed
     try:
