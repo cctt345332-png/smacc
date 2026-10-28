@@ -504,7 +504,7 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
     return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
-def _complete_phase2_qr(xml: str, digest: str, simplified: bool) -> str:
+def _complete_phase2_qr(xml: str, digest: str, simplified: bool, signing_public_key: bytes | None = None) -> str:
     """Replace the legacy five-field QR with the signed Phase 2 TLV payload."""
     root = LET.fromstring(xml.encode())
     ns = {"cbc": CBC, "cac": CAC, "ds": DS}
@@ -537,7 +537,10 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool) -> str:
         # text, while tags 8 and 9 carry the DER public key and DER
         # certificate signature bytes. This keeps the outer Base64 TLV under
         # the 500-character gateway limit even with a production CSID.
-        public_key = cert.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        certificate_public_key = cert.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        if signing_public_key is not None and signing_public_key != certificate_public_key:
+            raise HTTPException(422, "مفتاح التوقيع الخاص لا يطابق شهادة Compliance CSID المحفوظة؛ أعد تجهيز وإصدار الشهادة والمفتاح معًا")
+        public_key = certificate_public_key
         signature_b64 = signature_value
         certificate_signature = cert.signature
     except (ValueError, TypeError, base64.binascii.Error) as exc:
@@ -630,7 +633,8 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        final_xml = _complete_phase2_qr(final_xml, digest, type_name.startswith("02"))
+        signing_public_key = key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        final_xml = _complete_phase2_qr(final_xml, digest, type_name.startswith("02"), signing_public_key)
         signed_root = LET.fromstring(final_xml.encode())
         return final_xml, digest
 
