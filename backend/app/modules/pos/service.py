@@ -4,6 +4,7 @@
 """
 import uuid
 import base64
+import logging
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,8 @@ SESSION_CLOSED = "closed"
 TX_COMPLETED   = "completed"
 TX_CANCELLED   = "cancelled"
 TX_REFUNDED    = "refunded"
+
+logger = logging.getLogger(__name__)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────
@@ -596,17 +599,27 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         from app.modules.zatca_service import submit_invoice_reporting_simulation
         from app.models.sales import Invoice
         try:
+            logger.info("POS ZATCA reporting started: transaction=%s invoice=%s", tx.transaction_number, invoice_id)
             zatca_result = await submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
             invoice = await db.get(Invoice, invoice_id)
             if invoice and tx.qr_code != invoice.qr_code:
                 tx.qr_code = invoice.qr_code
                 await db.commit()
+            logger.info(
+                "POS ZATCA reporting finished: transaction=%s invoice=%s status=%s http_status=%s error=%s",
+                tx.transaction_number, invoice_id, zatca_result.get("status"),
+                zatca_result.get("http_status"), zatca_result.get("error"),
+            )
         except Exception as exc:
             invoice = await db.get(Invoice, invoice_id)
             if invoice:
                 invoice.zatca_status = "zatca_pending"
                 invoice.zatca_response = str(exc)[:10000]
             zatca_result = {"status": "zatca_pending", "reason": str(exc)[:500]}
+            logger.exception(
+                "POS ZATCA reporting pending: transaction=%s invoice=%s reason=%s",
+                tx.transaction_number, invoice_id, exc,
+            )
             await db.commit()
 
     return {
