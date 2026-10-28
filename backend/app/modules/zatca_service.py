@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import subprocess
 import tempfile
 import uuid
@@ -45,6 +46,8 @@ COMPLIANCE_STEPS = (
     "standard-compliant", "standard-credit-note-compliant", "standard-debit-note-compliant",
     "simplified-compliant", "simplified-credit-note-compliant", "simplified-debit-note-compliant",
 )
+
+logger = logging.getLogger(__name__)
 
 ET.register_namespace("", UBL)
 ET.register_namespace("cbc", CBC)
@@ -494,6 +497,7 @@ def _validate_with_official_sdk(xml: str) -> None:
         lowered = output.lower()
         if result.returncode != 0 or "failed to validate" in lowered or "error" in lowered:
             details = output[-8000:] or "لم يعرض SDK تفاصيل إضافية"
+            logger.error("ZATCA official SDK rejected generated XML:\n%s", details)
             raise HTTPException(422, f"رفض SDK الرسمي ملف XML قبل الإرسال: {details}")
 
 
