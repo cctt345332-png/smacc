@@ -517,10 +517,15 @@ def _complete_phase2_qr(xml: str, invoice: Invoice, digest: str) -> str:
             raise HTTPException(422, f"قيمة QR للوسم {tag} تتجاوز 255 بايت")
         return bytes((tag, len(raw))) + raw
 
-    fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, digest), _tlv(7, signature_value), _tlv(8, certificate)]
+    try:
+        cert = x509.load_der_x509_certificate(base64.b64decode(certificate))
+        public_key = cert.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+        public_key_b64 = base64.b64encode(public_key).decode()
+    except (ValueError, TypeError, base64.binascii.Error) as exc:
+        raise HTTPException(422, "تعذر استخراج المفتاح العام من شهادة X.509 لوسم QR رقم 8") from exc
+    fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, digest), _tlv(7, signature_value), _tlv(8, public_key_b64)]
     if invoice.invoice_type.value == "simplified":
         try:
-            cert = x509.load_der_x509_certificate(base64.b64decode(certificate))
             fields.append(_tlv(9, base64.b64encode(cert.signature).decode()))
         except (ValueError, TypeError, base64.binascii.Error) as exc:
             raise HTTPException(422, "تعذر استخراج توقيع شهادة X.509 لوسم QR رقم 9") from exc
