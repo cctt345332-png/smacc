@@ -270,18 +270,11 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
     compliance_token = _decrypt(vat.zatca_compliance_token_encrypted)
     compliance_secret = _decrypt(vat.zatca_compliance_secret_encrypted)
     auth = base64.b64encode(f"{compliance_token}:{compliance_secret}".encode()).decode()
-    # ZATCA's Production CSID contract defines compliance_request_id as a
-    # numeric request ID.  It is stored as text in our database only to avoid
-    # losing precision across database/client versions; restore the numeric
-    # JSON type at the gateway boundary.
-    try:
-        request_id_payload: int | str = int(request_id)
-    except (TypeError, ValueError):
-        request_id_payload = request_id
     # The production-csid API accepts only the Compliance request ID in the
     # JSON body.  The Compliance secret belongs exclusively in HTTP Basic
-    # authentication (token as username, secret as password).
-    body = {"compliance_request_id": request_id_payload}
+    # authentication (token as username, secret as password).  The official
+    # API example sends the request ID as a JSON string.
+    body = {"compliance_request_id": str(request_id)}
     url = f"{_api_base(vat.zatca_env)}/production/csids"
     try:
         async with httpx.AsyncClient(timeout=30) as client:
