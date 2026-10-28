@@ -236,8 +236,12 @@ async def request_compliance_csid(db: AsyncSession, tenant_id: str, otp: str) ->
     if response.status_code >= 400 or not payload.get("binarySecurityToken"):
         vat.zatca_last_error = json.dumps(payload, ensure_ascii=False)[:4000]; await db.commit()
         raise HTTPException(400, {"message": "رفضت زاتكا طلب Compliance CSID", "zatca": payload})
-    certificate_b64, _, _ = _normalize_certificate(payload["binarySecurityToken"])
-    vat.zatca_compliance_token_encrypted = _encrypt(certificate_b64)
+    # Keep the gateway token byte-for-byte for HTTP Basic authentication.
+    # A canonical Base64-DER certificate is only needed by the XML signer;
+    # normalizing it here can change the credential accepted by the gateway.
+    binary_security_token = str(payload["binarySecurityToken"]).strip()
+    _normalize_certificate(binary_security_token)  # fail early if it is not an X.509 CSID
+    vat.zatca_compliance_token_encrypted = _encrypt(binary_security_token)
     vat.zatca_compliance_secret_encrypted = _encrypt(payload.get("secret"))
     vat.zatca_compliance_request_id = str(payload.get("requestID") or payload.get("requestId") or "")
     vat.zatca_compliance_steps = json.dumps({})
@@ -279,8 +283,9 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
     if response.status_code >= 400 or not payload.get("binarySecurityToken"):
         vat.zatca_last_error = json.dumps(payload, ensure_ascii=False)[:4000]; await db.commit()
         raise HTTPException(400, {"message": "رفضت زاتكا طلب Production CSID", "zatca": payload})
-    certificate_b64, _, _ = _normalize_certificate(payload["binarySecurityToken"])
-    vat.zatca_production_token_encrypted = _encrypt(certificate_b64)
+    binary_security_token = str(payload["binarySecurityToken"]).strip()
+    _normalize_certificate(binary_security_token)
+    vat.zatca_production_token_encrypted = _encrypt(binary_security_token)
     vat.zatca_production_secret_encrypted = _encrypt(payload.get("secret"))
     vat.zatca_onboarding_status = "production_ready"; vat.zatca_last_error = None
     vat.zatca_certificate_expiry = datetime.utcnow() + timedelta(days=365)
