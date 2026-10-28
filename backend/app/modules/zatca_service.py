@@ -619,22 +619,23 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         qr_match = re.search(r"QR code\s*=\s*([^\s]+)", qr_output)
         if qr.returncode != 0 or not qr_match:
             raise HTTPException(422, f"فشل توليد QR بواسطة SDK الرسمي: {(qr.stdout + qr.stderr)[-3000:]}")
-        # SDK 3.0.8 returns a QR payload, but its tags 7/8/9 contain binary
-        # values while the gateway expects the Base64 text representation of
-        # the exact values in the signed XML. Keep the SDK's official signing
-        # and hashing, then serialize the gateway-compatible Phase 2 TLV from
-        # that signed XML so all three values are byte-for-byte consistent.
+        # The official SDK is the source of truth for QR as well as signing.
+        # Its QR generator deliberately encodes the ECDSA signature components
+        # in tags 8/9. Do not rebuild this payload locally: the gateway accepts
+        # the exact payload emitted by the official `-qr` command.
         final_root = LET.parse(str(signed_path))
         final_xml = LET.tostring(final_root, encoding="utf-8", xml_declaration=True).decode()
         digest = final_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS}).strip()
         if not digest:
             raise HTTPException(422, "SDK الرسمي لم يُرجع DigestValue داخل التوقيع")
-        type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        signing_public_key = key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
-        final_xml = _complete_phase2_qr(final_xml, digest, type_name.startswith("02"), signing_public_key)
-        signed_root = LET.fromstring(final_xml.encode())
+        qr_nodes = final_root.xpath(
+            "./cac:AdditionalDocumentReference[cbc:ID='QR']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject",
+            namespaces={"cac": CAC, "cbc": CBC},
+        )
+        if not qr_nodes:
+            raise HTTPException(422, "SDK الرسمي لم يُرجع موضع QR داخل XML")
+        qr_nodes[0].text = qr_match.group(1).strip()
+        final_xml = LET.tostring(final_root, encoding="utf-8", xml_declaration=True).decode()
         return final_xml, digest
 
 
