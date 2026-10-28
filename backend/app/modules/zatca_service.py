@@ -42,6 +42,7 @@ CBC = "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
 CAC = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
 UBL = "urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
 CREDIT_NOTE_UBL = "urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
+DEBIT_NOTE_UBL = "urn:oasis:names:specification:ubl:schema:xsd:DebitNote-2"
 DS = "http://www.w3.org/2000/09/xmldsig#"
 EXT = "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
 COMPLIANCE_STEPS = (
@@ -875,18 +876,21 @@ async def retry_submission(db: AsyncSession, tenant_id: str, user_id: str, submi
         return await submit_invoice(db, tenant_id, user_id, row.document_id, force=True)
     if row.document_type == "credit_note":
         return await submit_credit_note(db, tenant_id, user_id, row.document_id, force=True)
+    if row.document_type == "debit_note":
+        return await submit_credit_note(db, tenant_id, user_id, row.document_id, force=True)
     raise HTTPException(400, "إعادة إرسال هذا النوع من المستندات غير مفعلة بعد")
 
 
 # NOTE: this block is appended intentionally after the invoice builder.
 def _build_credit_note_ubl(note: CreditNote, customer: Customer, original: Invoice | None, previous_hash: str, vat: VATSetting) -> tuple[str, str]:
-    root = ET.Element(f"{{{CREDIT_NOTE_UBL}}}CreditNote")
+    is_debit = getattr(note.note_type, "value", note.note_type) == "debit"
+    root = ET.Element(f"{{{DEBIT_NOTE_UBL if is_debit else CREDIT_NOTE_UBL}}}{'DebitNote' if is_debit else 'CreditNote'}")
     _q(root, CBC, "UBLVersionID", "2.1")
     _q(root, CBC, "ProfileID", "reporting:1.0")
     _q(root, CBC, "ID", note.credit_note_number)
     _q(root, CBC, "UUID", note.uuid)
     _q(root, CBC, "IssueDate", note.issue_date.date().isoformat())
-    _q(root, CBC, "CreditNoteTypeCode", "381", name="0200000" if original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified" else "0100000")
+    _q(root, CBC, "DebitNoteTypeCode" if is_debit else "CreditNoteTypeCode", "383" if is_debit else "381", name="0200000" if original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified" else "0100000")
     _q(root, CBC, "DocumentCurrencyCode", "SAR")
     if original:
         ref = _q(root, CAC, "BillingReference")
@@ -912,7 +916,7 @@ def _build_credit_note_ubl(note: CreditNote, customer: Customer, original: Invoi
     category = _q(subtotal, CAC, "TaxCategory"); _q(category, CBC, "ID", "S"); _q(category, CBC, "Percent", "15"); scheme = _q(category, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
     monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(note.subtotal), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(note.subtotal), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(note.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(note.total), currencyID="SAR")
     for index, line in enumerate(sorted(note.lines, key=lambda x: x.line_order), 1):
-        nl = _q(root, CAC, "CreditNoteLine"); _q(nl, CBC, "ID", index); _q(nl, CBC, "CreditedQuantity", str(line.quantity), unitCode="PCE"); _q(nl, CBC, "LineExtensionAmount", _money(line.subtotal), currencyID="SAR")
+        nl = _q(root, CAC, "DebitNoteLine" if is_debit else "CreditNoteLine"); _q(nl, CBC, "ID", index); _q(nl, CBC, "DebitedQuantity" if is_debit else "CreditedQuantity", str(line.quantity), unitCode="PCE"); _q(nl, CBC, "LineExtensionAmount", _money(line.subtotal), currencyID="SAR")
         item = _q(nl, CAC, "Item"); _q(item, CBC, "Name", line.description_ar); tax = _q(item, CAC, "ClassifiedTaxCategory"); _q(tax, CBC, "ID", "S"); _q(tax, CBC, "Percent", str(line.vat_rate)); scheme = _q(tax, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
         price = _q(nl, CAC, "Price"); _q(price, CBC, "PriceAmount", _money(line.unit_price), currencyID="SAR")
     raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -940,10 +944,11 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
     signed, digest = _sdk_sign_and_qr(xml, private_key or "", token or "")
     _validate_with_official_sdk(signed)
     simplified = original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified"
+    is_debit = getattr(note.note_type, "value", note.note_type) == "debit"
     api_type = "reporting" if simplified else "clearance"
     auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
     body = {"invoiceHash": digest, "invoice": base64.b64encode(signed.encode()).decode()}
-    log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="credit_note", document_id=note.id, document_uuid=note.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=vat.zatca_env, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
+    log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="debit_note" if is_debit else "credit_note", document_id=note.id, document_uuid=note.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=vat.zatca_env, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
     db.add(log); note.zatca_invoice_hash = digest; note.zatca_signed_xml = signed
     try:
         submit_url = f"{_api_base(vat.zatca_env)}/compliance/invoices" if simulation else f"{_api_base(vat.zatca_env)}/invoices/{api_type}/single"
@@ -954,7 +959,7 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
         accepted = (response.status_code in (200, 202) and not payload.get("errors")) if simulation else response.status_code in (200, 202) and str(payload.get("status", "")).upper() in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
         if accepted:
             if simulation:
-                step = f"{'simplified' if simplified else 'standard'}-credit-note-compliant"
+                step = f"{'simplified' if simplified else 'standard'}-{'debit' if is_debit else 'credit'}-note-compliant"
                 _mark_compliance_step(vat, step)
                 state = "compliance_passed"
             else:

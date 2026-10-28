@@ -321,6 +321,7 @@ class CreditNoteLineCreate(InvoiceLineCreate):
 class CreditNoteCreate(BaseModel):
     original_invoice_id: Optional[str] = None
     customer_id: Optional[str] = None
+    note_type: Literal["credit", "debit"] = "credit"
     issue_date: datetime
     reason: str
     lines: List[CreditNoteLineCreate]

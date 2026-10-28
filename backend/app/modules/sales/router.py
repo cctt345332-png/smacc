@@ -321,6 +321,26 @@ async def create_credit_note(data: CreditNoteCreate, user=Depends(require_role([
     return await service.create_credit_note(db, user["tenant_id"], user["user_id"], data)
 
 
+@router.post("/debit-notes", status_code=201)
+async def create_debit_note(data: CreditNoteCreate, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    """إنشاء إشعار مدين مبيعات مرتبط بفاتورة أصلية لأغراض زاتكا."""
+    data.note_type = "debit"
+    return await service.create_credit_note(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.get("/debit-notes")
+async def list_debit_notes(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models.sales import CreditNote
+    result = await db.execute(
+        select(CreditNote).options(selectinload(CreditNote.lines))
+        .where(CreditNote.tenant_id == tenant_id, CreditNote.note_type == "debit")
+        .order_by(CreditNote.issue_date.desc())
+    )
+    return result.scalars().all()
+
+
 @router.patch("/credit-notes/{cn_id}")
 async def update_credit_note(cn_id: str, data: CreditNoteCreate, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
     """تعديل مرتجع مرتبط بفاتورة مع عكس أثر النسخة السابقة."""
@@ -334,7 +354,7 @@ async def list_credit_notes(tenant_id=Depends(get_tenant_id), db: AsyncSession =
     from app.models.sales import CreditNote, CreditNoteLine
     r = await db.execute(
         select(CreditNote).options(selectinload(CreditNote.lines))
-        .where(CreditNote.tenant_id == tenant_id)
+        .where(CreditNote.tenant_id == tenant_id, CreditNote.note_type == "credit")
         .order_by(CreditNote.issue_date.desc())
     )
     return r.scalars().all()

@@ -2127,6 +2127,8 @@ async def convert_quotation_to_invoice(db: AsyncSession, tenant_id: str, user_id
 # ─── Credit Notes ────────────────────────────────────────────────────
 async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
     """إنشاء إشعار دائن متزن، مرتبط بسطر الفاتورة ووحداته المتسلسلة عند الحاجة."""
+    if data.note_type == "debit" and not data.original_invoice_id:
+        raise HTTPException(400, "الإشعار المدين يجب أن يرتبط بفاتورة مبيعات أصلية")
     if not data.original_invoice_id:
         return await create_customer_serial_credit_note(db, tenant_id, user_id, data)
     original = await get_invoice(db, tenant_id, data.original_invoice_id)
@@ -2254,7 +2256,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
     return_warehouse_id = return_warehouse_id or await _get_default_warehouse_id(db, tenant_id)
     cn = CreditNote(
         id=cn_id, tenant_id=tenant_id, credit_note_number=await _next_credit_note_number(db, tenant_id),
-        uuid=str(uuid.uuid4()), original_invoice_id=data.original_invoice_id, customer_id=original.customer_id,
+        uuid=str(uuid.uuid4()), note_type=data.note_type, original_invoice_id=data.original_invoice_id, customer_id=original.customer_id,
         issue_date=issue_date, reason=data.reason, subtotal=taxable_total, vat_amount=total_vat, total=total,
         qr_code=_generate_qr_tlv(tenant.name if tenant else "", vat_settings.vat_number if vat_settings else "", issue_date.isoformat(), total, total_vat), created_by=user_id,
     )
@@ -2271,11 +2273,12 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
                 serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
                 return_condition=return_condition, warehouse_id=return_warehouse_id,
             ))
-        await _return_credit_note_inventory(db, tenant_id, user_id, cn, original, validated_lines)
+        if data.note_type == "credit":
+            await _return_credit_note_inventory(db, tenant_id, user_id, cn, original, validated_lines)
         record_audit(db, tenant_id, user_id, "create", "credit_note", cn.id,
                      credit_note_number=cn.credit_note_number, original_invoice_id=original.id,
                      total=cn.total, line_count=len(validated_lines))
-        if original.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
+        if data.note_type == "credit" and original.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
             await _create_credit_note_journal(db, tenant_id, user_id, cn, original)
         await db.commit()
     except Exception:

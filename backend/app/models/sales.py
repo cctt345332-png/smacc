@@ -308,7 +308,12 @@ class Payment(Base):
     invoice: Mapped["Invoice | None"] = relationship("Invoice", back_populates="payments")
 
 
-# ─── Credit Note (إشعار دائن) ────────────────────────────────────────
+# ─── Sales adjustment notes (إشعارات المبيعات) ───────────────────────
+class SalesNoteType(str, enum.Enum):
+    CREDIT = "credit"
+    DEBIT = "debit"
+
+
 class CreditNote(Base):
     __tablename__ = "credit_notes"
 
@@ -316,6 +321,10 @@ class CreditNote(Base):
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
     credit_note_number: Mapped[str] = mapped_column(String(50), index=True)
     uuid: Mapped[str] = mapped_column(String(36), unique=True)
+    note_type: Mapped[SalesNoteType] = mapped_column(
+        SAEnum(SalesNoteType, values_callable=lambda x: [e.value for e in x]),
+        default=SalesNoteType.CREDIT, server_default="credit",
+    )
     original_invoice_id: Mapped[str | None] = mapped_column(String, ForeignKey("invoices.id"), nullable=True)
     customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"))
     issue_date: Mapped[datetime] = mapped_column(DateTime)
