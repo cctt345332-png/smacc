@@ -2196,7 +2196,10 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
         quantity = Decimal(str(line.quantity))
         if quantity <= 0:
             raise HTTPException(400, "كمية المرتجع يجب أن تكون أكبر من صفر")
-        if quantity + returned_qty.get(original_line.id, Decimal("0")) > Decimal(str(original_line.quantity)):
+        # إشعار الدائن يعيد كمية من الفاتورة، لذلك يخضع للكمية المتاحة.
+        # إشعار المدين يضيف كمية/قيمة جديدة ولا يُعد مرتجعًا، فلا يتأثر
+        # بإشعارات الدائن السابقة ولا يُقيد بكمية السطر الأصلي.
+        if data.note_type == "credit" and quantity + returned_qty.get(original_line.id, Decimal("0")) > Decimal(str(original_line.quantity)):
             raise HTTPException(400, f"كمية المرتجع للصنف '{original_line.description_ar}' تتجاوز الكمية المتاحة للمرتجع")
         if line.inventory_item_id and line.inventory_item_id != original_line.inventory_item_id:
             raise HTTPException(400, "الصنف المرتجع لا يطابق سطر الفاتورة الأصلية")
@@ -2204,7 +2207,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
             raise HTTPException(400, "متغير الصنف المرتجع لا يطابق سطر الفاتورة الأصلية")
 
         serial_ids = list(dict.fromkeys(str(serial_id) for serial_id in (line.serial_ids or [])))
-        if original_line.inventory_item_id:
+        if original_line.inventory_item_id and data.note_type == "credit":
             item = await get_item(db, tenant_id, original_line.inventory_item_id)
             tracking_type = getattr(item.tracking_type, "value", item.tracking_type)
             if tracking_type == "serial":
