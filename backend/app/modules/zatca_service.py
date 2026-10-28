@@ -119,7 +119,7 @@ def _build_csr(vat_number: str, branch_name: str, organization_name: str, addres
 csr.serial.number={egs_serial}
 csr.organization.identifier={vat_number}
 csr.organization.unit.name={group_identifier}
-csr.organization.name={organization}
+csr.organization.name={group_identifier}
 csr.country.name=SA
 csr.invoice.type={invoice_functionality}
 csr.location.address={registered_address}
