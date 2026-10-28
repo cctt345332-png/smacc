@@ -200,6 +200,12 @@ async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name
     vat.vat_number = vat_number; vat.zatca_env = env; vat.zatca_branch_name = branch_name
     vat.zatca_activity = activity or tenant.name; vat.zatca_invoice_type_map = invoice_type_map
     vat.zatca_csr = csr; vat.zatca_private_key_encrypted = _encrypt(private_key)
+    # A CSR/key pair is inseparable from its CSID certificate.  Never keep an
+    # old token after preparing a new CSR, otherwise signing uses mismatched
+    # credentials and fails with an ASN.1 or certificate error.
+    vat.zatca_compliance_token_encrypted = None; vat.zatca_compliance_secret_encrypted = None
+    vat.zatca_compliance_request_id = None; vat.zatca_production_token_encrypted = None
+    vat.zatca_production_secret_encrypted = None
     vat.zatca_compliance_steps = json.dumps({})
     vat.zatca_onboarding_status = "csr_ready"; vat.zatca_last_error = None; vat.updated_at = datetime.utcnow()
     await db.commit()
