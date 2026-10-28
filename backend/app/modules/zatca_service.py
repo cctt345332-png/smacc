@@ -528,7 +528,8 @@ def _validate_with_official_sdk(xml: str) -> None:
         # collapses SAXParseException details into a generic message.
         try:
             xsd_doc = LET.parse(str(sdk_data / "Schemas/xsds/UBL2.1/xsd/maindoc/UBL-Invoice-2.1.xsd"))
-            LET.XMLSchema(xsd_doc)(LET.parse(str(invoice_path)))
+            schema = LET.XMLSchema(xsd_doc)
+            schema.assertValid(LET.parse(str(invoice_path)))
         except LET.XMLSyntaxError as exc:
             details = "; ".join(f"line {e.line}, column {e.column}: {e.message}" for e in exc.error_log)
             raise HTTPException(422, f"ملف XML غير صالح حسب UBL/XSD: {details or str(exc)}") from exc
