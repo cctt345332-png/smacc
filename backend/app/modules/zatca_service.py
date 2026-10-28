@@ -278,7 +278,10 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
         request_id_payload: int | str = int(request_id)
     except (TypeError, ValueError):
         request_id_payload = request_id
-    body = {"compliance_request_id": request_id_payload, "compliance_request_secret": compliance_secret}
+    # The production-csid API accepts only the Compliance request ID in the
+    # JSON body.  The Compliance secret belongs exclusively in HTTP Basic
+    # authentication (token as username, secret as password).
+    body = {"compliance_request_id": request_id_payload}
     url = f"{_api_base(vat.zatca_env)}/production/csids"
     try:
         async with httpx.AsyncClient(timeout=30) as client:
