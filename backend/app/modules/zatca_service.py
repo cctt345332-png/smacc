@@ -296,17 +296,30 @@ def _normalize_certificate(value: str | None) -> tuple[str, bytes, x509.Certific
     if not text:
         raise HTTPException(422, "لم تُرجع زاتكا شهادة ضمن Compliance CSID")
     try:
-        raw = base64.b64decode(text, validate=False)
-        if b"-----BEGIN CERTIFICATE-----" in raw:
-            pem = raw.decode("ascii")
-            pem = "".join(pem.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
-            raw = base64.b64decode(pem, validate=False)
-        try:
-            cert = x509.load_der_x509_certificate(raw)
-        except ValueError:
-            cert = x509.load_pem_x509_certificate(raw)
-            raw = cert.public_bytes(serialization.Encoding.DER)
-        return base64.b64encode(raw).decode(), raw, cert
+        candidates: list[bytes] = [text.encode()]
+        # Some gateway responses wrap the certificate in Base64 more than
+        # once. Try up to three layers, while checking each layer as DER/PEM.
+        for _ in range(3):
+            current = candidates[-1]
+            try:
+                decoded = base64.b64decode(current + b"=" * (-len(current) % 4), validate=False)
+                if decoded and decoded not in candidates:
+                    candidates.append(decoded)
+            except (ValueError, TypeError):
+                break
+        for raw in reversed(candidates):
+            try:
+                cert = x509.load_der_x509_certificate(raw)
+                der = raw
+                return base64.b64encode(der).decode(), der, cert
+            except ValueError:
+                try:
+                    cert = x509.load_pem_x509_certificate(raw)
+                    der = cert.public_bytes(serialization.Encoding.DER)
+                    return base64.b64encode(der).decode(), der, cert
+                except ValueError:
+                    continue
+        raise ValueError("no X.509 certificate found after Base64 decoding")
     except (ValueError, TypeError, UnicodeDecodeError) as exc:
         raise HTTPException(422, "رد زاتكا لا يحتوي شهادة X.509 صالحة؛ أعد إصدار Compliance CSID") from exc
 
