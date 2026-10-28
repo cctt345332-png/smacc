@@ -9,6 +9,7 @@ import base64
 import hashlib
 import json
 import logging
+import os
 import subprocess
 import tempfile
 import uuid
