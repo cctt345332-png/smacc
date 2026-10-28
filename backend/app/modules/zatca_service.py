@@ -414,6 +414,40 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
     return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
+def _validate_with_official_sdk(xml: str) -> None:
+    """Run the attached ZATCA SDK before making a remote submission.
+
+    This is deliberately a hard gate: a locally generated document must pass
+    the official XSD/rule validator first.  Returning a 422 with the SDK
+    output is much safer than sending a malformed document and recording a
+    misleading remote rejection.
+    """
+    sdk_jar = Path("/app/vendor/zatca-sdk-3.0.8.jar")
+    if not sdk_jar.exists():
+        sdk_jar = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-3.0.8.jar"
+    if not sdk_jar.exists():
+        raise HTTPException(503, "أداة التحقق الرسمية لـ ZATCA غير مثبتة على الخادم")
+    with tempfile.TemporaryDirectory(prefix="zatca-sdk-") as tmp:
+        invoice_path = Path(tmp) / "invoice.xml"
+        invoice_path.write_text(xml, encoding="utf-8")
+        result = subprocess.run(
+            [
+                "java", "-jar", str(sdk_jar), "--globalVersion", "3.0.8",
+                "-certpassword", "123456789", "-invoice", str(invoice_path),
+                "-validate", "-nonprod",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        output = (result.stdout + "\n" + result.stderr).strip()
+        lowered = output.lower()
+        if result.returncode != 0 or "failed to validate" in lowered or "error" in lowered:
+            details = output[-8000:] or "لم يعرض SDK تفاصيل إضافية"
+            raise HTTPException(422, f"رفض SDK الرسمي ملف XML قبل الإرسال: {details}")
+
+
 async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, force: bool = False, simulation: bool = False) -> dict[str, Any]:
     vat = await get_settings(db, tenant_id); invoice = await db.scalar(select(Invoice).options(selectinload(Invoice.lines)).where(Invoice.id == invoice_id, Invoice.tenant_id == tenant_id))
     if not vat or not invoice:
@@ -433,6 +467,7 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     token = _decrypt(token_encrypted)
     secret = _decrypt(secret_encrypted)
     signed = _sign_xml(xml, private_key or "", token, digest)
+    _validate_with_official_sdk(signed)
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
     environment = "simulation" if simulation else vat.zatca_env
     url = f"{_api_base(environment)}/compliance/invoices" if simulation else f"{_api_base(environment)}/invoices/{api_type}/single"
@@ -559,6 +594,7 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
     digest = _hash_unsigned_invoice(xml)
     private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(token_field); secret = _decrypt(secret_field)
     signed = _sign_xml(xml, private_key or "", token, digest)
+    _validate_with_official_sdk(signed)
     simplified = original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified"
     api_type = "reporting" if simplified else "clearance"
     auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
