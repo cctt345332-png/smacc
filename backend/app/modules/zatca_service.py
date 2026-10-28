@@ -384,6 +384,15 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     buyer_postal = _buyer_value(customer.address_postal if customer else None, buyer_parts[3] if len(buyer_parts) > 3 else "00000")
     buyer_building = _buyer_value(customer.address_building if customer else None, "0000")
     buyer_additional = _buyer_value(customer.address_additional if customer else None, "0000")
+    if invoice.invoice_type.value != "simplified":
+        required_address = [
+            customer.address_street if customer else None,
+            customer.address_city if customer else None,
+            customer.address_postal if customer else None,
+            customer.address_country if customer else None,
+        ]
+        if any(not str(value or "").strip() for value in required_address) or not str(customer.address_postal).strip().isdigit() or len(str(customer.address_postal).strip()) != 5:
+            raise HTTPException(422, "لا يمكن اختبار الفاتورة القياسية: يجب إدخال عنوان العميل الحقيقي (الشارع، المدينة، الرمز البريدي من 5 أرقام، الدولة)")
     caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", buyer_street); _q(caddr, CBC, "BuildingNumber", buyer_building); _q(caddr, CBC, "PlotIdentification", buyer_additional); _q(caddr, CBC, "CitySubdivisionName", buyer_district); _q(caddr, CBC, "CityName", buyer_city); _q(caddr, CBC, "PostalZone", buyer_postal); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", (customer.address_country if customer else None) or "SA")
     clegal = _q(cparty, CAC, "PartyLegalEntity"); _q(clegal, CBC, "RegistrationName", invoice.buyer_name_ar)
     delivery = _q(root, CAC, "Delivery"); _q(delivery, CBC, "ActualDeliveryDate", invoice.issue_date.date().isoformat())
