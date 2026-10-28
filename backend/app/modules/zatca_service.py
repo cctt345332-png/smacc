@@ -578,11 +578,11 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         # must already be declared on the UBL root; otherwise its serializer
         # emits an unbound ext prefix before validation even starts.
         if "xmlns:ext=" not in xml:
-            xml = xml.replace(
-                '<Invoice ',
-                f'<Invoice xmlns:ext="{EXT}" ',
-                1,
-            )
+            for root_name in ("Invoice", "CreditNote", "DebitNote"):
+                marker = f"<{root_name} "
+                if marker in xml:
+                    xml = xml.replace(marker, f'<{root_name} xmlns:ext="{EXT}" ', 1)
+                    break
         input_path.write_text(xml, encoding="utf-8")
         cert_path.write_text(cert_text, encoding="utf-8")
         key_path.write_text(base64.b64encode(key_der).decode(), encoding="utf-8")
