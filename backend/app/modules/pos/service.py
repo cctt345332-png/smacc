@@ -7,7 +7,7 @@ import base64
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 
@@ -776,7 +776,7 @@ async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_i
 async def _get_or_create_pos_cash_customer(db: AsyncSession, tenant_id: str, user_id: str):
     """يعيد عميل POS النقدي الثابت حتى لا تبقى فاتورة POS بلا customer_id."""
     from app.models.sales import Customer, CustomerType
-    from app.models.accounting import Account, AccountType, AccountNature
+    from app.models.accounting import Account, AccountType, AccountNature, AccountingAccountMapping
     from app.modules.accounting.service import get_operational_account
     from app.modules.sales.service import _next_customer_account_code
 
@@ -787,9 +787,35 @@ async def _get_or_create_pos_cash_customer(db: AsyncSession, tenant_id: str, use
     if customer:
         return customer
 
-    parent = await get_operational_account(db, tenant_id, "default_ar")
+    try:
+        parent = await get_operational_account(db, tenant_id, "default_ar")
+    except HTTPException:
+        # بعض الشركات القديمة تربط default_ar بحساب تجميعي (مثل 01131).
+        # هذا الحساب صالح كفرع للشجرة لكنه ليس حساب قيد نهائيًا، لذلك نختار
+        # حساب العملاء النهائي النشط تحته ونصحح الربط نفسه بدل إنشاء حساب عشوائي.
+        mapping = await db.scalar(select(AccountingAccountMapping).where(
+            AccountingAccountMapping.tenant_id == tenant_id,
+            AccountingAccountMapping.mapping_key == "default_ar",
+        ))
+        mapped = await db.get(Account, mapping.account_id) if mapping else None
+        candidates = select(Account).where(
+            Account.tenant_id == tenant_id,
+            Account.is_active.is_(True),
+            Account.is_posting.is_(True),
+            Account.is_customer_account.is_(True),
+            Account.account_type == AccountType.ASSET,
+            Account.nature == AccountNature.DEBIT,
+        )
+        if mapped:
+            candidates = candidates.where(
+                or_(Account.parent_id == mapped.id, Account.code.startswith(str(mapped.code)))
+            )
+        parent = (await db.execute(candidates.order_by(Account.code))).scalars().first()
+        if parent and mapping:
+            mapping.account_id = parent.id
+            await db.flush()
     if not parent:
-        raise HTTPException(409, "لم يتم إعداد الحساب الرئيسي لعملاء نقاط البيع")
+        raise HTTPException(409, "لم يتم إعداد حساب عملاء نهائي نشط لنقاط البيع")
 
     customer = Customer(
         id=str(uuid.uuid4()), tenant_id=tenant_id, customer_number="POS-CASH",
