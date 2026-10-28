@@ -662,6 +662,17 @@ def _validate_with_official_sdk(xml: str) -> None:
         ).strip()
         pih_path = Path(tmp) / "pih.txt"
         pih_path.write_text(pih_value, encoding="utf-8")
+        signed_cert_b64 = LET.fromstring(xml.encode()).xpath(
+            "string(.//ds:Signature/ds:KeyInfo/ds:X509Data/ds:X509Certificate)",
+            namespaces={"ds": DS},
+        ).strip()
+        if not signed_cert_b64:
+            raise HTTPException(422, "التوقيع لا يحتوي شهادة X.509 للتحقق الرسمي")
+        signed_cert_text, signed_cert_der, signed_cert = _normalize_certificate(signed_cert_b64)
+        validator_cert_path = Path(tmp) / "invoice-certificate.txt"
+        # SignatureValidator reads the configured certificate as Base64 DER,
+        # not PEM (the XML itself also carries Base64 DER).
+        validator_cert_path.write_text(signed_cert_text, encoding="utf-8")
         # The official CLI reads all schemas/rules through SDK_CONFIG. Its
         # distributed config contains Windows paths, so provide equivalent
         # Linux paths for the container instead of relying on the host cwd.
@@ -670,7 +681,7 @@ def _validate_with_official_sdk(xml: str) -> None:
             "xsdPath": str(sdk_data / "Schemas/xsds/UBL2.1/xsd/maindoc/UBL-Invoice-2.1.xsd"),
             "enSchematron": str(sdk_data / "Rules/schematrons/CEN-EN16931-UBL.xsl"),
             "zatcaSchematron": str(sdk_data / "Rules/schematrons/20210819_ZATCA_E-invoice_Validation_Rules.xsl"),
-            "certPath": str(sdk_data / "Certificates/cert.pem"),
+            "certPath": str(validator_cert_path),
             "privateKeyPath": str(sdk_data / "Certificates/ec-secp256k1-priv-key.pem"),
             "pihPath": str(pih_path),
             "certPassword": "123456789",
