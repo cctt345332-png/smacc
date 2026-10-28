@@ -504,7 +504,7 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
     return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
-def _complete_phase2_qr(xml: str, invoice: Invoice, digest: str) -> str:
+def _complete_phase2_qr(xml: str, digest: str, simplified: bool) -> str:
     """Replace the legacy five-field QR with the signed Phase 2 TLV payload."""
     root = LET.fromstring(xml.encode())
     ns = {"cbc": CBC, "cac": CAC, "ds": DS}
@@ -525,22 +525,27 @@ def _complete_phase2_qr(xml: str, invoice: Invoice, digest: str) -> str:
     total = root.xpath("string(./cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)", namespaces=ns).strip()
     tax_amount = root.xpath("string(./cac:TaxTotal[1]/cbc:TaxAmount)", namespaces=ns).strip()
 
-    def _tlv(tag: int, value: str) -> bytes:
-        raw = value.encode("utf-8")
+    def _tlv(tag: int, value: str | bytes) -> bytes:
+        raw = value.encode("utf-8") if isinstance(value, str) else value
         if len(raw) > 255:
             raise HTTPException(422, f"قيمة QR للوسم {tag} تتجاوز 255 بايت")
         return bytes((tag, len(raw))) + raw
 
     try:
         cert = x509.load_der_x509_certificate(base64.b64decode(certificate))
-        public_key = cert.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+        # QR values are UTF-8 text fields. Tag 7 is the XML signature in
+        # Base64, tag 8 is the Base64 ECDSA public point, and tag 9 is the
+        # Base64 signature of that public-key certificate.
+        public_key = cert.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint)
+        signature_b64 = signature_value
+        certificate_signature_b64 = base64.b64encode(cert.signature).decode()
         public_key_b64 = base64.b64encode(public_key).decode()
     except (ValueError, TypeError, base64.binascii.Error) as exc:
         raise HTTPException(422, "تعذر استخراج المفتاح العام من شهادة X.509 لوسم QR رقم 8") from exc
-    fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, digest), _tlv(7, signature_value), _tlv(8, public_key_b64)]
-    if invoice.invoice_type.value == "simplified":
+    fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, digest), _tlv(7, signature_b64), _tlv(8, public_key_b64)]
+    if simplified:
         try:
-            fields.append(_tlv(9, base64.b64encode(cert.signature).decode()))
+            fields.append(_tlv(9, certificate_signature_b64))
         except (ValueError, TypeError, base64.binascii.Error) as exc:
             raise HTTPException(422, "تعذر استخراج توقيع شهادة X.509 لوسم QR رقم 9") from exc
     qr_binary[0].text = base64.b64encode(b"".join(fields)).decode()
@@ -612,21 +617,22 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         qr_match = re.search(r"QR code\s*=\s*([^\s]+)", qr_output)
         if qr.returncode != 0 or not qr_match:
             raise HTTPException(422, f"فشل توليد QR بواسطة SDK الرسمي: {(qr.stdout + qr.stderr)[-3000:]}")
-        # SDK 3.0.8's -qr command returns the official TLV payload in its
-        # output; it does not serialize a second XML file despite accepting
-        # the -invoiceWithQr argument. Preserve that official payload and
-        # place it in the existing UBL QR attachment without rebuilding TLV.
+        # SDK 3.0.8 returns a QR payload, but its tags 7/8/9 contain binary
+        # values while the gateway expects the Base64 text representation of
+        # the exact values in the signed XML. Keep the SDK's official signing
+        # and hashing, then serialize the gateway-compatible Phase 2 TLV from
+        # that signed XML so all three values are byte-for-byte consistent.
         final_root = LET.parse(str(signed_path))
-        qr_nodes = final_root.xpath("./cac:AdditionalDocumentReference[cbc:ID='QR']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject", namespaces={"cac": CAC, "cbc": CBC})
-        if not qr_nodes:
-            raise HTTPException(422, "SDK الرسمي ولّد QR لكن XML لا يحتوي موضع QR القياسي")
-        qr_nodes[0].text = qr_match.group(1).strip()
         final_xml = LET.tostring(final_root, encoding="utf-8", xml_declaration=True).decode()
-        signed_root = LET.fromstring(final_xml.encode())
-        digest_values = signed_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS})
-        if not digest_values.strip():
+        digest = final_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS}).strip()
+        if not digest:
             raise HTTPException(422, "SDK الرسمي لم يُرجع DigestValue داخل التوقيع")
-        return final_xml, digest_values.strip()
+        type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
+        type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
+        type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
+        final_xml = _complete_phase2_qr(final_xml, digest, type_name.startswith("02"))
+        signed_root = LET.fromstring(final_xml.encode())
+        return final_xml, digest
 
 
 def _validate_with_official_sdk(xml: str) -> None:
