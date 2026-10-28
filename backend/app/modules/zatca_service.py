@@ -347,6 +347,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     _q(root, CBC, "IssueTime", invoice.issue_date.strftime("%H:%M:%S"))
     _q(root, CBC, "InvoiceTypeCode", "388", name=invoice_kind)
     _q(root, CBC, "DocumentCurrencyCode", invoice.currency_code or "SAR")
+    _q(root, CBC, "TaxCurrencyCode", "SAR")
     icv = _q(root, CAC, "AdditionalDocumentReference")
     _q(icv, CBC, "ID", "ICV")
     _q(icv, CBC, "UUID", _digits(invoice.invoice_number))
@@ -375,18 +376,21 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", invoice.seller_name_ar)
     customer_party = _q(root, CAC, "AccountingCustomerParty"); cparty = _q(customer_party, CAC, "Party")
     buyer_parts = [part.strip() for part in (invoice.buyer_address or "").split("،") if part.strip()]
-    buyer_street = (customer.address_street if customer else None) or (buyer_parts[0] if buyer_parts else "غير محدد")
-    buyer_district = (customer.address_district if customer else None) or (buyer_parts[1] if len(buyer_parts) > 1 else "")
-    buyer_city = (customer.address_city if customer else None) or (buyer_parts[2] if len(buyer_parts) > 2 else "الرياض")
-    buyer_postal = (customer.address_postal if customer else None) or (buyer_parts[3] if len(buyer_parts) > 3 else "00000")
-    buyer_building = (customer.address_building if customer else None) or "0000"
-    buyer_additional = (customer.address_additional if customer else None) or "0000"
+    def _buyer_value(value: Any, fallback: str) -> str:
+        return str(value or "").strip() or fallback
+    buyer_street = _buyer_value(customer.address_street if customer else None, buyer_parts[0] if buyer_parts else "غير محدد")
+    buyer_district = _buyer_value(customer.address_district if customer else None, buyer_parts[1] if len(buyer_parts) > 1 else "غير محدد")
+    buyer_city = _buyer_value(customer.address_city if customer else None, buyer_parts[2] if len(buyer_parts) > 2 else "الرياض")
+    buyer_postal = _buyer_value(customer.address_postal if customer else None, buyer_parts[3] if len(buyer_parts) > 3 else "00000")
+    buyer_building = _buyer_value(customer.address_building if customer else None, "0000")
+    buyer_additional = _buyer_value(customer.address_additional if customer else None, "0000")
     caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", buyer_street); _q(caddr, CBC, "BuildingNumber", buyer_building); _q(caddr, CBC, "PlotIdentification", buyer_additional); _q(caddr, CBC, "CitySubdivisionName", buyer_district); _q(caddr, CBC, "CityName", buyer_city); _q(caddr, CBC, "PostalZone", buyer_postal); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", (customer.address_country if customer else None) or "SA")
     clegal = _q(cparty, CAC, "PartyLegalEntity"); _q(clegal, CBC, "RegistrationName", invoice.buyer_name_ar)
     delivery = _q(root, CAC, "Delivery"); _q(delivery, CBC, "ActualDeliveryDate", invoice.issue_date.date().isoformat())
     payment = _q(root, CAC, "PaymentMeans"); _q(payment, CBC, "PaymentMeansCode", "30")
     tax_total = _q(root, CAC, "TaxTotal"); _q(tax_total, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     subtotal = _q(tax_total, CAC, "TaxSubtotal"); _q(subtotal, CBC, "TaxableAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(subtotal, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
+    tax_currency_total = _q(root, CAC, "TaxTotal"); _q(tax_currency_total, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     category = _q(subtotal, CAC, "TaxCategory"); _q(category, CBC, "ID", "S"); _q(category, CBC, "Percent", "15"); scheme = _q(category, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
     monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(invoice.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(invoice.total), currencyID="SAR")
     for index, line in enumerate(sorted(invoice.lines, key=lambda x: x.line_order), 1):
