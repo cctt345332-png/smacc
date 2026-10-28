@@ -819,7 +819,11 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
                 state = "reported" if api_type == "reporting" else "cleared"
             log.status = state; invoice.zatca_status = state; invoice.zatca_response = log.response_body; invoice.zatca_cleared_at = datetime.utcnow(); invoice.zatca_submission_id = log.id
         else:
-            log.status = "rejected"; log.error_message = json.dumps(payload, ensure_ascii=False)[:10000]; invoice.zatca_status = "rejected"; invoice.zatca_response = log.response_body
+            log.status = "rejected"
+            log.error_message = json.dumps(payload, ensure_ascii=False)[:10000] or f"رفضت زاتكا الطلب HTTP {response.status_code}"
+            if not log.error_message or log.error_message == "{}":
+                log.error_message = f"رفضت زاتكا الطلب HTTP {response.status_code}"
+            invoice.zatca_status = "rejected"; invoice.zatca_response = log.response_body
     except (httpx.HTTPError, ValueError) as exc:
         log.status = "retry_pending"; log.error_message = str(exc); log.next_retry_at = datetime.utcnow() + timedelta(minutes=5); invoice.zatca_status = "zatca_pending"; invoice.zatca_response = str(exc)
     await db.commit()
@@ -832,8 +836,16 @@ async def submit_invoice_simulation(db: AsyncSession, tenant_id: str, user_id: s
 
 
 async def submit_invoice_reporting_simulation(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str) -> dict[str, Any]:
-    """إبلاغ تشغيلي في بيئة المحاكاة باستخدام Compliance CSID، وليس اختبار امتثال."""
-    return await submit_invoice(db, tenant_id, user_id, invoice_id, simulation=True, compliance_test=False)
+    """إبلاغ تشغيلي تلقائي باستخدام Production CSID بعد جاهزيته.
+
+    Compliance CSID مخصص لاختبارات /compliance/invoices؛ استخدامه مع
+    Reporting يعيد HTTP 401 من زاتكا، لذلك تبقى فاتورة POS معلقة بأمان
+    إلى أن تصدر Production CSID.
+    """
+    vat = await get_settings(db, tenant_id)
+    if not vat or not vat.zatca_production_token_encrypted or not vat.zatca_production_secret_encrypted or not vat.is_zatca_enabled:
+        raise HTTPException(409, "الإبلاغ التشغيلي لنقاط البيع يحتاج إصدار Production CSID وتفعيل الربط أولاً")
+    return await submit_invoice(db, tenant_id, user_id, invoice_id, simulation=False, compliance_test=False)
 
 
 async def invoice_xml(db: AsyncSession, tenant_id: str, invoice_id: str) -> str:
