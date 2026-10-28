@@ -533,14 +533,12 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool, signing_public_
 
     try:
         cert = x509.load_der_x509_certificate(base64.b64decode(certificate))
-        # ZATCA's Phase 2 guide represents tag 7 as the XML SignatureValue
-        # text, while tags 8 and 9 carry the DER public key and DER
-        # certificate signature bytes. This keeps the outer Base64 TLV under
-        # the 500-character gateway limit even with a production CSID.
-        certificate_public_key = cert.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        # Tag 8 is the Base64 text representation of the exact ECDSA public
+        # point proven to match both the CSID certificate and private key.
+        certificate_public_key = cert.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint)
         if signing_public_key is not None and signing_public_key != certificate_public_key:
             raise HTTPException(422, "مفتاح التوقيع الخاص لا يطابق شهادة Compliance CSID المحفوظة؛ أعد تجهيز وإصدار الشهادة والمفتاح معًا")
-        public_key = certificate_public_key
+        public_key = base64.b64encode(certificate_public_key).decode()
         signature_b64 = signature_value
         certificate_signature = cert.signature
     except (ValueError, TypeError, base64.binascii.Error) as exc:
@@ -633,7 +631,7 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        signing_public_key = key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        signing_public_key = key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint)
         final_xml = _complete_phase2_qr(final_xml, digest, type_name.startswith("02"), signing_public_key)
         signed_root = LET.fromstring(final_xml.encode())
         return final_xml, digest
