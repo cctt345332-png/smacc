@@ -587,11 +587,22 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
             "inputPath": str(tmp_path), "outputPath": str(tmp_path),
             "usagePathFile": str(sdk_data / "Input/csr-config-example.properties"),
         }), encoding="utf-8")
+        security_path = tmp_path / "security.properties"
+        security_path.write_text("\n".join([
+            "security.provider.1=org.bouncycastle.jce.provider.BouncyCastleProvider",
+            "security.provider.2=sun.security.provider.Sun",
+            "security.provider.3=sun.security.rsa.SunRsaSign",
+            "security.provider.4=sun.security.ec.SunEC",
+            "security.provider.5=sun.security.jgss.SunJGSS",
+            "security.provider.6=sun.security.crypto.SunJCE",
+            "security.provider.7=sun.security.smartcardio.SunPCSC",
+        ]), encoding="utf-8")
         env = {**os.environ, "SDK_CONFIG": str(config_path)}
-        sign = subprocess.run(["java", "-jar", str(sdk_jar), "-sign", "-invoice", str(input_path), "-signedInvoice", str(signed_path)], capture_output=True, text=True, timeout=45, env=env, check=False)
+        java = ["java", f"-Djava.security.properties={security_path}", "-jar", str(sdk_jar)]
+        sign = subprocess.run(java + ["-sign", "-invoice", str(input_path), "-signedInvoice", str(signed_path)], capture_output=True, text=True, timeout=45, env=env, check=False)
         if sign.returncode != 0 or not signed_path.exists():
             raise HTTPException(422, f"فشل توقيع XML بواسطة SDK الرسمي: {(sign.stdout + sign.stderr)[-3000:]}")
-        qr = subprocess.run(["java", "-jar", str(sdk_jar), "-qr", "-invoice", str(signed_path), "-invoiceWithQr", str(final_path)], capture_output=True, text=True, timeout=45, env=env, check=False)
+        qr = subprocess.run(java + ["-qr", "-invoice", str(signed_path), "-invoiceWithQr", str(final_path)], capture_output=True, text=True, timeout=45, env=env, check=False)
         qr_output = qr.stdout + qr.stderr
         qr_match = re.search(r"QR code\s*=\s*([^\s]+)", qr_output)
         if qr.returncode != 0 or not qr_match:
@@ -661,6 +672,16 @@ def _validate_with_official_sdk(xml: str) -> None:
             "inputPath": str(sdk_data / "Input"),
             "usagePathFile": str(sdk_data / "Input/csr-config-example.properties"),
         }), encoding="utf-8")
+        security_path = Path(tmp) / "security.properties"
+        security_path.write_text("\n".join([
+            "security.provider.1=org.bouncycastle.jce.provider.BouncyCastleProvider",
+            "security.provider.2=sun.security.provider.Sun",
+            "security.provider.3=sun.security.rsa.SunRsaSign",
+            "security.provider.4=sun.security.ec.SunEC",
+            "security.provider.5=sun.security.jgss.SunJGSS",
+            "security.provider.6=sun.security.crypto.SunJCE",
+            "security.provider.7=sun.security.smartcardio.SunPCSC",
+        ]), encoding="utf-8")
         # Produce the precise XML/XSD error locally. The Java SDK intentionally
         # collapses SAXParseException details into a generic message.
         try:
@@ -675,7 +696,7 @@ def _validate_with_official_sdk(xml: str) -> None:
             raise HTTPException(422, f"ترتيب أو بنية XML غير مطابقة لـ UBL 2.1: {details or str(exc)}") from exc
         result = subprocess.run(
             [
-                "java", "-jar", str(sdk_jar), "--globalVersion", "3.0.8",
+                "java", f"-Djava.security.properties={security_path}", "-jar", str(sdk_jar), "--globalVersion", "3.0.8",
                 "-certpassword", "123456789", "-invoice", str(invoice_path),
                 "-validate", "-nonprod",
             ],
