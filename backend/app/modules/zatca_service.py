@@ -944,10 +944,17 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
     if not customer:
         raise HTTPException(409, "بيانات عميل إشعار الدائن غير موجودة")
     previous = _first_hash()
-    xml, _ = _build_credit_note_ubl(note, customer, original, previous, vat)
-    private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(token_field); secret = _decrypt(secret_field)
-    signed, digest = _sdk_sign_and_qr(xml, private_key or "", token or "")
-    _validate_with_official_sdk(signed)
+    try:
+        xml, _ = _build_credit_note_ubl(note, customer, original, previous, vat)
+        logger.info("ZATCA note stage=xml_built note=%s type=%s", note.id, getattr(note, "note_type", "credit"))
+        private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(token_field); secret = _decrypt(secret_field)
+        signed, digest = _sdk_sign_and_qr(xml, private_key or "", token or "")
+        logger.info("ZATCA note stage=sdk_signed note=%s", note.id)
+        _validate_with_official_sdk(signed)
+        logger.info("ZATCA note stage=sdk_validated note=%s", note.id)
+    except Exception as exc:
+        logger.exception("ZATCA note stage=pre_submit_failed note=%s reason=%s", note.id, exc)
+        raise
     simplified = original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified"
     is_debit = getattr(note.note_type, "value", note.note_type) == "debit"
     api_type = "reporting" if simplified else "clearance"
