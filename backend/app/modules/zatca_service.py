@@ -540,14 +540,16 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool, signing_public_
         if signing_public_key is not None and signing_public_key != certificate_public_key:
             raise HTTPException(422, "مفتاح التوقيع الخاص لا يطابق شهادة Compliance CSID المحفوظة؛ أعد تجهيز وإصدار الشهادة والمفتاح معًا")
         public_key = certificate_public_key
-        # ZATCA Table 3 defines tag 7 as the ECDSA signature byte array,
-        # not the Base64 text stored in ds:SignatureValue.  The XML keeps
-        # Base64 text, while the QR TLV carries the decoded signature bytes.
-        invoice_signature = base64.b64decode(signature_value, validate=True)
-        certificate_signature = cert.signature
+        # QR Table 3 stores fields 6-9 as their Base64 textual values encoded
+        # as UTF-8 inside the TLV.  Do not decode these values before TLV
+        # encoding; the gateway validates the textual Base64 representation.
+        base64.b64decode(signature_value, validate=True)
+        invoice_signature = signature_value
+        public_key = base64.b64encode(certificate_public_key).decode()
+        certificate_signature = base64.b64encode(cert.signature).decode()
     except (ValueError, TypeError, base64.binascii.Error) as exc:
         raise HTTPException(422, "تعذر استخراج المفتاح العام من شهادة X.509 لوسم QR رقم 8") from exc
-    fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, base64.b64decode(digest)), _tlv(7, invoice_signature), _tlv(8, public_key)]
+    fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, digest), _tlv(7, invoice_signature), _tlv(8, public_key)]
     if simplified:
         try:
             fields.append(_tlv(9, certificate_signature))
