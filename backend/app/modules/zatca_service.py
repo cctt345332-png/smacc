@@ -524,6 +524,17 @@ def _validate_with_official_sdk(xml: str) -> None:
             "inputPath": str(sdk_data / "Input"),
             "usagePathFile": str(sdk_data / "Input/csr-config-example.properties"),
         }), encoding="utf-8")
+        # Produce the precise XML/XSD error locally. The Java SDK intentionally
+        # collapses SAXParseException details into a generic message.
+        try:
+            xsd_doc = LET.parse(str(sdk_data / "Schemas/xsds/UBL2.1/xsd/maindoc/UBL-Invoice-2.1.xsd"))
+            LET.XMLSchema(xsd_doc)(LET.parse(str(invoice_path)))
+        except LET.XMLSyntaxError as exc:
+            details = "; ".join(f"line {e.line}, column {e.column}: {e.message}" for e in exc.error_log)
+            raise HTTPException(422, f"ملف XML غير صالح حسب UBL/XSD: {details or str(exc)}") from exc
+        except LET.DocumentInvalid as exc:
+            details = "; ".join(f"line {e.line}, column {e.column}: {e.message}" for e in exc.error_log)
+            raise HTTPException(422, f"ترتيب أو بنية XML غير مطابقة لـ UBL 2.1: {details or str(exc)}") from exc
         result = subprocess.run(
             [
                 "java", "-jar", str(sdk_jar), "--globalVersion", "3.0.8",
