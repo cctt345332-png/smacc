@@ -118,8 +118,8 @@ def _build_csr(vat_number: str, branch_name: str, organization_name: str, addres
     config = f"""csr.common.name=SMACC-{vat_number[-4:]}
 csr.serial.number={egs_serial}
 csr.organization.identifier={vat_number}
-csr.organization.unit.name={group_identifier}
-csr.organization.name={group_identifier}
+csr.organization.unit.name={branch}
+csr.organization.name={organization}
 csr.country.name=SA
 csr.invoice.type={invoice_functionality}
 csr.location.address={registered_address}
