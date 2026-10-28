@@ -533,6 +533,57 @@ def _complete_phase2_qr(xml: str, invoice: Invoice, digest: str) -> str:
     return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
+def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tuple[str, str]:
+    """Use the official SDK's signing and QR generators, never local replicas."""
+    sdk_jar = Path("/app/vendor/zatca-sdk-3.0.8.jar")
+    if not sdk_jar.exists():
+        sdk_jar = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-3.0.8.jar"
+    if not sdk_jar.exists():
+        raise HTTPException(503, "أداة SDK الرسمية لـZATCA غير مثبتة")
+    try:
+        key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+        key_der = key.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption())
+        cert_text, _, _ = _normalize_certificate(certificate_b64)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, "بيانات مفتاح أو شهادة ZATCA غير صالحة لتشغيل SDK الرسمي") from exc
+    with tempfile.TemporaryDirectory(prefix="zatca-official-") as tmp:
+        tmp_path = Path(tmp)
+        input_path = tmp_path / "invoice.xml"
+        signed_path = tmp_path / "signed.xml"
+        final_path = tmp_path / "signed-with-qr.xml"
+        cert_path = tmp_path / "certificate.txt"
+        key_path = tmp_path / "private-key.txt"
+        input_path.write_text(xml, encoding="utf-8")
+        cert_path.write_text(cert_text, encoding="utf-8")
+        key_path.write_text(base64.b64encode(key_der).decode(), encoding="utf-8")
+        sdk_data = Path("/app/vendor/zatca-sdk-data")
+        if not sdk_data.exists():
+            sdk_data = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-data"
+        config_path = tmp_path / "sdk-config.json"
+        config_path.write_text(json.dumps({
+            "xsdPath": str(sdk_data / "Schemas/xsds/UBL2.1/xsd/maindoc/UBL-Invoice-2.1.xsd"),
+            "enSchematron": str(sdk_data / "Rules/schematrons/CEN-EN16931-UBL.xsl"),
+            "zatcaSchematron": str(sdk_data / "Rules/schematrons/20210819_ZATCA_E-invoice_Validation_Rules.xsl"),
+            "certPath": str(cert_path), "privateKeyPath": str(key_path),
+            "pihPath": str(sdk_data / "PIH/pih.txt"), "certPassword": "123456789",
+            "inputPath": str(tmp_path), "outputPath": str(tmp_path),
+            "usagePathFile": str(sdk_data / "Input/csr-config-example.properties"),
+        }), encoding="utf-8")
+        env = {**os.environ, "SDK_CONFIG": str(config_path)}
+        sign = subprocess.run(["java", "-jar", str(sdk_jar), "-sign", "-invoice", str(input_path), "-signedInvoice", str(signed_path)], capture_output=True, text=True, timeout=45, env=env, check=False)
+        if sign.returncode != 0 or not signed_path.exists():
+            raise HTTPException(422, f"فشل توقيع XML بواسطة SDK الرسمي: {(sign.stdout + sign.stderr)[-3000:]}")
+        qr = subprocess.run(["java", "-jar", str(sdk_jar), "-qr", "-invoice", str(signed_path), "-invoiceWithQr", str(final_path)], capture_output=True, text=True, timeout=45, env=env, check=False)
+        if qr.returncode != 0 or not final_path.exists():
+            raise HTTPException(422, f"فشل توليد QR بواسطة SDK الرسمي: {(qr.stdout + qr.stderr)[-3000:]}")
+        final_xml = final_path.read_text(encoding="utf-8")
+        signed_root = LET.fromstring(final_xml.encode())
+        digest_values = signed_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS})
+        if not digest_values.strip():
+            raise HTTPException(422, "SDK الرسمي لم يُرجع DigestValue داخل التوقيع")
+        return final_xml, digest_values.strip()
+
+
 def _validate_with_official_sdk(xml: str) -> None:
     """Run the attached ZATCA SDK before making a remote submission.
 
@@ -618,12 +669,10 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     previous = invoice.zatca_previous_invoice_hash or _first_hash()
     customer = await db.scalar(select(Customer).where(Customer.id == invoice.customer_id, Customer.tenant_id == tenant_id))
     xml, _ = _build_ubl(invoice, previous, vat, customer)
-    digest = _hash_unsigned_invoice(xml)
     private_key = _decrypt(vat.zatca_private_key_encrypted)
     token = _decrypt(token_encrypted)
     secret = _decrypt(secret_encrypted)
-    signed = _sign_xml(xml, private_key or "", token, digest)
-    signed = _complete_phase2_qr(signed, invoice, digest)
+    signed, digest = _sdk_sign_and_qr(xml, private_key or "", token or "")
     _validate_with_official_sdk(signed)
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
     environment = "simulation" if simulation else vat.zatca_env
@@ -749,9 +798,8 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
         raise HTTPException(409, "بيانات عميل إشعار الدائن غير موجودة")
     previous = _first_hash()
     xml, _ = _build_credit_note_ubl(note, customer, original, previous, vat)
-    digest = _hash_unsigned_invoice(xml)
     private_key = _decrypt(vat.zatca_private_key_encrypted); token = _decrypt(token_field); secret = _decrypt(secret_field)
-    signed = _sign_xml(xml, private_key or "", token, digest)
+    signed, digest = _sdk_sign_and_qr(xml, private_key or "", token or "")
     _validate_with_official_sdk(signed)
     simplified = original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified"
     api_type = "reporting" if simplified else "clearance"
