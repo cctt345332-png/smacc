@@ -369,7 +369,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     _q(document_signature, CBC, "SignatureMethod", "urn:oasis:names:specification:ubl:dsig:enveloped:xades")
     supplier = _q(root, CAC, "AccountingSupplierParty"); party = _q(supplier, CAC, "Party")
     ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", _digits(vat.cr_number or invoice.seller_cr_number), schemeID="CRN")
-    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "PlotIdentification", vat.zatca_address_additional or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or ""); _q(addr, CBC, "CitySubdivisionName", vat.zatca_address_district or "")
+    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "PlotIdentification", vat.zatca_address_additional or ""); _q(addr, CBC, "CitySubdivisionName", vat.zatca_address_district or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or "")
     country = _q(addr, CAC, "Country"); _q(country, CBC, "IdentificationCode", "SA")
     _add_party_tax_scheme(party, vat.vat_number or invoice.seller_vat_number, vat.cr_number or invoice.seller_cr_number)
     legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", invoice.seller_name_ar)
@@ -381,7 +381,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     buyer_postal = (customer.address_postal if customer else None) or (buyer_parts[3] if len(buyer_parts) > 3 else "00000")
     buyer_building = (customer.address_building if customer else None) or "0000"
     buyer_additional = (customer.address_additional if customer else None) or "0000"
-    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", buyer_street); _q(caddr, CBC, "BuildingNumber", buyer_building); _q(caddr, CBC, "PlotIdentification", buyer_additional); _q(caddr, CBC, "CityName", buyer_city); _q(caddr, CBC, "PostalZone", buyer_postal); _q(caddr, CBC, "CitySubdivisionName", buyer_district); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", (customer.address_country if customer else None) or "SA")
+    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", buyer_street); _q(caddr, CBC, "BuildingNumber", buyer_building); _q(caddr, CBC, "PlotIdentification", buyer_additional); _q(caddr, CBC, "CitySubdivisionName", buyer_district); _q(caddr, CBC, "CityName", buyer_city); _q(caddr, CBC, "PostalZone", buyer_postal); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", (customer.address_country if customer else None) or "SA")
     clegal = _q(cparty, CAC, "PartyLegalEntity"); _q(clegal, CBC, "RegistrationName", invoice.buyer_name_ar)
     payment = _q(root, CAC, "PaymentMeans"); _q(payment, CBC, "PaymentMeansCode", "30")
     _q(root, CBC, "TaxCurrencyCode", "SAR")
