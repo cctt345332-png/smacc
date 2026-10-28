@@ -689,7 +689,10 @@ def _validate_with_official_sdk(xml: str) -> None:
         lowered = output.lower()
         passed = "global validation result = passed" in lowered
         failed = "global validation result = failed" in lowered
-        if result.returncode != 0 or failed or not passed:
+        # The official Java CLI may return a non-zero process code after
+        # printing its final validation result. The authoritative decision is
+        # the SDK result line, not the JVM exit status.
+        if failed or not passed:
             details = output[-8000:] or "لم يعرض SDK تفاصيل إضافية"
             logger.error("ZATCA official SDK rejected generated XML:\n%s", details)
             raise HTTPException(422, f"رفض SDK الرسمي ملف XML قبل الإرسال: {details}")
