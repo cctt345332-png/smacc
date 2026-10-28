@@ -710,9 +710,14 @@ def _validate_with_official_sdk(xml: str) -> None:
         # Produce the precise XML/XSD error locally. The Java SDK intentionally
         # collapses SAXParseException details into a generic message.
         try:
-            xsd_doc = LET.parse(str(sdk_data / "Schemas/xsds/UBL2.1/xsd/maindoc/UBL-Invoice-2.1.xsd"))
-            schema = LET.XMLSchema(xsd_doc)
-            schema.assertValid(LET.parse(str(invoice_path)))
+            parsed_root = LET.parse(str(invoice_path)).getroot()
+            document_name = LET.QName(parsed_root).localname
+            # حزمة SDK المرفقة تحتوي XSD رئيسي للفواتير فقط؛ أما CreditNote
+            # وDebitNote فيتحقق منهما Java SDK نفسه عبر مسار المستند الرسمي.
+            if document_name == "Invoice":
+                xsd_doc = LET.parse(str(sdk_data / "Schemas/xsds/UBL2.1/xsd/maindoc/UBL-Invoice-2.1.xsd"))
+                schema = LET.XMLSchema(xsd_doc)
+                schema.assertValid(LET.parse(str(invoice_path)))
         except LET.XMLSyntaxError as exc:
             details = "; ".join(f"line {e.line}, column {e.column}: {e.message}" for e in exc.error_log)
             raise HTTPException(422, f"ملف XML غير صالح حسب UBL/XSD: {details or str(exc)}") from exc
