@@ -631,7 +631,7 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        signing_public_key = key.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.CompressedPoint)
+        signing_public_key = key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
         final_xml = _complete_phase2_qr(final_xml, digest, type_name.startswith("02"), signing_public_key)
         signed_root = LET.fromstring(final_xml.encode())
         return final_xml, digest
