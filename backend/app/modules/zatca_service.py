@@ -104,50 +104,54 @@ def _csr_ascii(value: str, fallback: str) -> str:
 def _build_csr(vat_number: str, branch_name: str, organization_name: str, address: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
     invoice_functionality = {"standard": "1000", "simplified": "0100", "both": "1100"}.get(invoice_type_map, "1100")
     egs_serial = f"1-SMACC|2-ERP|3-{uuid.uuid4().hex[:12]}"
-    # ZATCA CSR fields: O is the taxpayer name and OU is the branch name.
-    # SDK 3.0.8 incorrectly restricts both fields to a ten-digit value, so
-    # use OpenSSL for CSR creation and retain the official SDK for invoices.
-    key = ec.generate_private_key(ec.SECP256K1())
-    private_key = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()).decode()
-    branch = _csr_ascii(branch_name, "Main Branch")[:64]
-    organization = _csr_ascii(organization_name, "SMACC")[:64]
-    registered_address = _csr_ascii(address, "Riyadh")[:128]
-    business_category = _csr_ascii(activity, "Retail")[:64]
-    config = f"""oid_section = OIDs
-[ OIDs ]
-certificateTemplateName = 1.3.6.1.4.1.311.20.2
-[ req ]
-prompt = no
-utf8 = yes
-default_md = sha256
-distinguished_name = dn
-req_extensions = req_ext
-[ dn ]
-CN=SMACC-{vat_number[-4:]}
-O={organization}
-OU={branch}
-C=SA
-[ req_ext ]
-basicConstraints = critical,CA:FALSE
-keyUsage = critical,digitalSignature,nonRepudiation,keyEncipherment
-certificateTemplateName = ASN1:PRINTABLESTRING:PREZATCA-Code-Signing
-subjectAltName = dirName:alt_names
-[ alt_names ]
-SN={egs_serial}
-UID={vat_number}
-title={invoice_functionality}
-registeredAddress={registered_address}
-businessCategory={business_category}
+    # Use the official ZATCA SDK so its CSR encoding, environment template,
+    # key curve, and Base64/PEM representation stay exactly compatible.
+    sdk_jar = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-3.0.8.jar"
+    if not sdk_jar.exists():
+        raise HTTPException(500, "ملف SDK الرسمي لزاتكا غير موجود في الخادم")
+    # SDK 3.0.8 validates these two fields as the 10-digit taxpayer identifier.
+    group_identifier = vat_number[:10]
+    branch = (branch_name or "Main Branch")[:64]
+    organization = (organization_name or "SMACC")[:64]
+    registered_address = (address or "Riyadh")[:128]
+    business_category = (activity or "Retail")[:64]
+    config = f"""csr.common.name=SMACC-{vat_number[-4:]}
+csr.serial.number={egs_serial}
+csr.organization.identifier={vat_number}
+csr.organization.unit.name={group_identifier}
+csr.organization.name={group_identifier}
+csr.country.name=SA
+csr.invoice.type={invoice_functionality}
+csr.location.address={registered_address}
+csr.industry.business.category={business_category}
 """
     with tempfile.TemporaryDirectory(prefix="zatca-csr-") as tmp:
-        key_path, cfg_path, csr_path = f"{tmp}/key.pem", f"{tmp}/csr.cnf", f"{tmp}/csr.der"
-        Path(key_path).write_text(private_key, encoding="utf-8")
-        Path(cfg_path).write_text(config, encoding="utf-8")
+        cfg_path = Path(tmp) / "csr.properties"
+        key_path = Path(tmp) / "private-key.pem"
+        csr_path = Path(tmp) / "csr.txt"
+        cfg_path.write_text(config, encoding="utf-8")
         try:
-            subprocess.run(["openssl", "req", "-new", "-sha256", "-key", key_path, "-config", cfg_path, "-outform", "DER", "-out", csr_path], check=True, capture_output=True, text=True)
-        except (FileNotFoundError, subprocess.CalledProcessError) as exc:
-            raise HTTPException(500, "تعذر إنشاء CSR؛ تأكد من تثبيت OpenSSL على الخادم") from exc
-        csr_b64 = base64.b64encode(Path(csr_path).read_bytes()).decode()
+            result = subprocess.run(
+                ["java", "-jar", str(sdk_jar), "-csr", "-sim", "-csrConfig", str(cfg_path),
+                 "-privateKey", str(key_path), "-generatedCsr", str(csr_path)],
+                check=False, capture_output=True, text=True, cwd=str(sdk_jar.parent.parent), timeout=45,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            raise HTTPException(500, "تعذر تشغيل SDK الرسمي لزاتكا؛ تأكد من تثبيت Java") from exc
+        if result.returncode != 0 or not csr_path.exists() or not key_path.exists():
+            detail = (result.stderr or result.stdout or "").strip()[-1000:]
+            raise HTTPException(500, f"تعذر إنشاء CSR بواسطة SDK الرسمي لزاتكا: {detail}")
+        csr_b64 = "".join(csr_path.read_text(encoding="utf-8").split())
+        # The SDK writes the private key as Base64(DER); the rest of SMACC
+        # consumes a PEM key for XML signing, so convert it without changing
+        # the key material.
+        sdk_key_der = base64.b64decode("".join(key_path.read_text(encoding="utf-8").split()))
+        key = serialization.load_der_private_key(sdk_key_der, password=None)
+        private_key = key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption(),
+        ).decode()
     return csr_b64, private_key
 
 
