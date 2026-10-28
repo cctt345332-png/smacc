@@ -490,6 +490,44 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
     return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
+def _complete_phase2_qr(xml: str, invoice: Invoice, digest: str) -> str:
+    """Replace the legacy five-field QR with the signed Phase 2 TLV payload."""
+    root = LET.fromstring(xml.encode())
+    ns = {"cbc": CBC, "cac": CAC, "ds": DS}
+    qr_binary = root.xpath("./cac:AdditionalDocumentReference[cbc:ID='QR']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject", namespaces=ns)
+    signature = root.xpath(".//ds:Signature", namespaces=ns)
+    if not qr_binary or not signature:
+        raise HTTPException(422, "تعذر بناء QR المرحلة الثانية من XML الموقّع")
+    sig = signature[0]
+    signature_value = (sig.xpath("./ds:SignatureValue/text()", namespaces=ns) or [""])[0].strip()
+    certificate = (sig.xpath("./ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", namespaces=ns) or [""])[0].strip()
+    if not signature_value or not certificate:
+        raise HTTPException(422, "التوقيع لا يحتوي SignatureValue أو شهادة X.509 اللازمة لـQR")
+    issue_date = root.xpath("string(./cbc:IssueDate)").strip()
+    issue_time = root.xpath("string(./cbc:IssueTime)").strip()
+    timestamp = f"{issue_date}T{issue_time}Z"
+    seller = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName)", namespaces=ns).strip()
+    vat_number = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID)", namespaces=ns).strip()
+    total = root.xpath("string(./cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)", namespaces=ns).strip()
+    tax_amount = root.xpath("string(./cac:TaxTotal[1]/cbc:TaxAmount)", namespaces=ns).strip()
+
+    def _tlv(tag: int, value: str) -> bytes:
+        raw = value.encode("utf-8")
+        if len(raw) > 255:
+            raise HTTPException(422, f"قيمة QR للوسم {tag} تتجاوز 255 بايت")
+        return bytes((tag, len(raw))) + raw
+
+    fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, digest), _tlv(7, signature_value), _tlv(8, certificate)]
+    if invoice.invoice_type.value == "simplified":
+        try:
+            cert = x509.load_der_x509_certificate(base64.b64decode(certificate))
+            fields.append(_tlv(9, base64.b64encode(cert.signature).decode()))
+        except (ValueError, TypeError, base64.binascii.Error) as exc:
+            raise HTTPException(422, "تعذر استخراج توقيع شهادة X.509 لوسم QR رقم 9") from exc
+    qr_binary[0].text = base64.b64encode(b"".join(fields)).decode()
+    return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
+
+
 def _validate_with_official_sdk(xml: str) -> None:
     """Run the attached ZATCA SDK before making a remote submission.
 
@@ -580,6 +618,7 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     token = _decrypt(token_encrypted)
     secret = _decrypt(secret_encrypted)
     signed = _sign_xml(xml, private_key or "", token, digest)
+    signed = _complete_phase2_qr(signed, invoice, digest)
     _validate_with_official_sdk(signed)
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
     environment = "simulation" if simulation else vat.zatca_env
