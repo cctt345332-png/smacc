@@ -102,6 +102,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "الفواتير" : "Invoices", href: `${base}/sales/invoices` },
           { label: ar ? "سندات القبض" : "Receipts", href: `${base}/sales/payments` },
           { label: ar ? "مرتجعات المبيعات" : "Sales Returns", href: `${base}/sales/credit-notes` },
+          { label: ar ? "إشعارات مدينة المبيعات" : "Sales Debit Notes", href: `${base}/sales/debit-notes` },
         ],
       },
       {

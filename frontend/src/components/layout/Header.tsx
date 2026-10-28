@@ -34,6 +34,7 @@ const QUICK_ACTION_CATALOG: QuickAction[] = [
   { id: "purchase-bill", href: "/purchases/bills/new", icon: "purchase", ar: "فاتورة مشتريات", en: "Purchase bill", section: "purchases" },
   { id: "purchase-return", href: "/purchases/debit-notes/new", icon: "reverse", ar: "مرتجع مشتريات", en: "Purchase return", section: "purchases" },
   { id: "sales-return", href: "/sales/credit-notes/new", icon: "refund", ar: "مرتجع مبيعات", en: "Sales return", section: "sales" },
+  { id: "sales-debit-note", href: "/sales/debit-notes/new", icon: "invoice", ar: "إشعار مدين للمبيعات", en: "Sales debit note", section: "sales" },
   { id: "receipt", href: "/treasury/receipts/new", icon: "cash", ar: "سند قبض", en: "Receipt", section: "treasury" },
   { id: "payment", href: "/treasury/payments/new", icon: "wallet", ar: "سند صرف", en: "Payment", section: "treasury" },
   { id: "expenses", href: "/treasury/rep-expenses", icon: "wallet", ar: "مصاريف المناديب", en: "Rep expenses", section: "treasury" },
@@ -44,7 +45,7 @@ const QUICK_ACTION_CATALOG: QuickAction[] = [
   { id: "reps", href: "/reps/manage", icon: "users", ar: "إدارة المناديب", en: "Sales reps", section: "reps" },
 ];
 
-const DEFAULT_QUICK_ACTION_IDS = ["sales-invoice", "purchase-bill", "sales-return", "purchase-return", "receipt", "payment", "journal"];
+const DEFAULT_QUICK_ACTION_IDS = ["sales-invoice", "purchase-bill", "sales-return", "sales-debit-note", "purchase-return", "receipt", "payment", "journal"];
 const QUICK_ACTIONS_STORAGE_KEY = "smacc.admin.quick-actions.v1";
 const SECTION_LABELS = {
   sales: { ar: "المبيعات", en: "Sales" },

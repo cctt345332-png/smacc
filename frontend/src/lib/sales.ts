@@ -65,3 +65,8 @@ export const convertOrderToInvoice = (id: string) => api.post(`/sales/orders/${i
 // Customer Statement
 export const getCustomerStatement = (customerId: string, fromDate: string, toDate: string, accountId?: string) =>
   api.get(`/sales/customers/${customerId}/statement`, { params: { from_date: fromDate, to_date: toDate, ...(accountId ? { account_id: accountId } : {}) } });
+
+// Sales debit notes
+export const getSalesDebitNotes = () => api.get("/sales/debit-notes");
+export const createSalesDebitNote = (data: any) => api.post("/sales/debit-notes", data);
+export const submitSalesDebitNoteToZATCASimulation = (id: string) => api.post(`/zatca/debit-notes/${id}/submit-simulation`);
