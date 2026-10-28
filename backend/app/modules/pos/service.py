@@ -591,15 +591,34 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
     await db.commit()
     await db.refresh(tx)
 
+    zatca_result = {"status": "zatca_pending", "reason": "لم تتم محاولة الإبلاغ بعد"}
+    if invoice_id:
+        from app.modules.zatca_service import submit_invoice_reporting_simulation
+        from app.models.sales import Invoice
+        try:
+            zatca_result = await submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
+            invoice = await db.get(Invoice, invoice_id)
+            if invoice and tx.qr_code != invoice.qr_code:
+                tx.qr_code = invoice.qr_code
+                await db.commit()
+        except Exception as exc:
+            invoice = await db.get(Invoice, invoice_id)
+            if invoice:
+                invoice.zatca_status = "zatca_pending"
+                invoice.zatca_response = str(exc)[:10000]
+            zatca_result = {"status": "zatca_pending", "reason": str(exc)[:500]}
+            await db.commit()
+
     return {
         "transaction_id": tx.id,
         "transaction_number": tx.transaction_number,
         "total": float(grand_total),
         "vat_amount": float(vat_total),
         "change_amount": float(change_amount),
-        "qr_code": qr,
+        "qr_code": tx.qr_code,
         "invoice_id": invoice_id,
         "status": "completed",
+        "zatca": zatca_result,
     }
 
 
@@ -754,6 +773,46 @@ async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_i
         )
 
 
+async def _get_or_create_pos_cash_customer(db: AsyncSession, tenant_id: str, user_id: str):
+    """يعيد عميل POS النقدي الثابت حتى لا تبقى فاتورة POS بلا customer_id."""
+    from app.models.sales import Customer, CustomerType
+    from app.models.accounting import Account, AccountType, AccountNature
+    from app.modules.accounting.service import get_operational_account
+    from app.modules.sales.service import _next_customer_account_code
+
+    customer = await db.scalar(select(Customer).where(
+        Customer.tenant_id == tenant_id,
+        Customer.customer_number == "POS-CASH",
+    ))
+    if customer:
+        return customer
+
+    parent = await get_operational_account(db, tenant_id, "default_ar")
+    if not parent:
+        raise HTTPException(409, "لم يتم إعداد الحساب الرئيسي لعملاء نقاط البيع")
+
+    customer = Customer(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, customer_number="POS-CASH",
+        customer_type=CustomerType.INDIVIDUAL, name_ar="عميل نقدي POS",
+        name_en="POS Cash Customer", vat_number=None, cr_number=None,
+        address_country="SA", is_active=True,
+    )
+    db.add(customer)
+    account = Account(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        code=await _next_customer_account_code(db, tenant_id, parent),
+        name_ar="عميل نقدي POS", name_en="POS Cash Customer",
+        account_type=AccountType.ASSET, nature=AccountNature.DEBIT,
+        parent_id=parent.id, level=parent.level + 1, is_active=True,
+        is_posting=True, allow_direct_posting=True, is_customer_account=True,
+        notes="حساب العميل النقدي الافتراضي لنقاط البيع",
+    )
+    db.add(account)
+    customer.ar_account_id = account.id
+    await db.flush()
+    return customer
+
+
 async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_settings) -> str | None:
     """إنشاء فاتورة مبسطة ZATCA تلقائياً عند كل عملية بيع"""
     from app.models.sales import Invoice, InvoiceLine, InvoiceStatus
@@ -767,13 +826,19 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
     invoice_id = str(uuid.uuid4())
     now = datetime.utcnow()
 
+    customer_id = tx.customer_id
+    if not customer_id:
+        customer = await _get_or_create_pos_cash_customer(db, tenant_id, user_id)
+        customer_id = customer.id
+        tx.customer_id = customer_id
+
     invoice = Invoice(
         id=invoice_id,
         tenant_id=tenant_id,
         invoice_number=await _next_invoice_number(db, tenant_id),
         uuid=str(uuid.uuid4()),
         invoice_type="simplified",
-        customer_id=tx.customer_id,
+        customer_id=customer_id,
         issue_date=now,
         supply_date=now,
         fiscal_year_id=fiscal_year_id,

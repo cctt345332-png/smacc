@@ -768,7 +768,7 @@ def _validate_with_official_sdk(xml: str) -> None:
             raise HTTPException(422, f"رفض SDK الرسمي ملف XML قبل الإرسال: {details}")
 
 
-async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, force: bool = False, simulation: bool = False) -> dict[str, Any]:
+async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, force: bool = False, simulation: bool = False, compliance_test: bool = False) -> dict[str, Any]:
     vat = await get_settings(db, tenant_id); invoice = await db.scalar(select(Invoice).options(selectinload(Invoice.lines)).where(Invoice.id == invoice_id, Invoice.tenant_id == tenant_id))
     if not vat or not invoice:
         raise HTTPException(404, "إعدادات الضريبة أو الفاتورة غير موجودة")
@@ -788,9 +788,16 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     secret = _decrypt(secret_encrypted)
     signed, digest = _sdk_sign_and_qr(xml, private_key or "", token or "")
     _validate_with_official_sdk(signed)
+    signed_root = LET.fromstring(signed.encode())
+    qr_value = signed_root.xpath(
+        "string(./cac:AdditionalDocumentReference[cbc:ID='QR']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject)",
+        namespaces={"cac": CAC, "cbc": CBC},
+    ).strip()
+    if qr_value:
+        invoice.qr_code = qr_value
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
     environment = "simulation" if simulation else vat.zatca_env
-    url = f"{_api_base(environment)}/compliance/invoices" if simulation else f"{_api_base(environment)}/invoices/{api_type}/single"
+    url = f"{_api_base(environment)}/compliance/invoices" if compliance_test else f"{_api_base(environment)}/invoices/{api_type}/single"
     auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
     body = {"invoiceHash": digest, "uuid": invoice.uuid, "invoice": base64.b64encode(signed.encode()).decode()}
     log = ZATCASubmission(id=str(uuid.uuid4()), tenant_id=tenant_id, document_type="invoice", document_id=invoice.id, document_uuid=invoice.uuid, invoice_hash=digest, previous_invoice_hash=previous, api_type=api_type, environment=environment, status="sending", attempt_count=1, request_xml=signed, submitted_at=datetime.utcnow())
@@ -802,9 +809,9 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
         log.http_status = response.status_code; log.response_body = json.dumps(payload, ensure_ascii=False)[:100000]; log.responded_at = datetime.utcnow()
         zatca_state = str(payload.get("status") or payload.get("reportingStatus") or payload.get("clearanceStatus") or "").upper()
         compliance_ok = response.status_code in (200, 202) and not payload.get("errors")
-        accepted = compliance_ok if simulation else response.status_code in (200, 202) and zatca_state in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
+        accepted = compliance_ok if compliance_test else response.status_code in (200, 202) and zatca_state in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
         if accepted:
-            if simulation:
+            if compliance_test:
                 step = f"{'simplified' if invoice.invoice_type.value == 'simplified' else 'standard'}-compliant"
                 _mark_compliance_step(vat, step)
                 state = "compliance_passed"
@@ -821,7 +828,12 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
 
 async def submit_invoice_simulation(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str) -> dict[str, Any]:
     """إرسال اختباري باستخدام Compliance CSID فقط وبدون أثر جديد على المخزون أو القيود."""
-    return await submit_invoice(db, tenant_id, user_id, invoice_id, simulation=True)
+    return await submit_invoice(db, tenant_id, user_id, invoice_id, simulation=True, compliance_test=True)
+
+
+async def submit_invoice_reporting_simulation(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str) -> dict[str, Any]:
+    """إبلاغ تشغيلي في بيئة المحاكاة باستخدام Compliance CSID، وليس اختبار امتثال."""
+    return await submit_invoice(db, tenant_id, user_id, invoice_id, simulation=True, compliance_test=False)
 
 
 async def invoice_xml(db: AsyncSession, tenant_id: str, invoice_id: str) -> str:
