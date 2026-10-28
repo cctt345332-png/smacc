@@ -522,6 +522,12 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool, signing_public_
     issue_time = root.xpath("string(./cbc:IssueTime)", namespaces=ns).strip()
     timestamp = f"{issue_date}T{issue_time}Z"
     seller = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName)", namespaces=ns).strip()
+    # ZATCA QR tag 1 is limited to 127 UTF-8 bytes.  Limiting Python
+    # characters is insufficient for Arabic names because one character can
+    # occupy multiple UTF-8 bytes.  Truncate only at a valid code-point
+    # boundary so the TLV remains valid UTF-8.
+    seller_bytes = seller.encode("utf-8")[:127]
+    seller = seller_bytes.decode("utf-8", errors="ignore")
     vat_number = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID)", namespaces=ns).strip()
     total = root.xpath("string(./cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)", namespaces=ns).strip()
     tax_amount = root.xpath("string(./cac:TaxTotal[1]/cbc:TaxAmount)", namespaces=ns).strip()
