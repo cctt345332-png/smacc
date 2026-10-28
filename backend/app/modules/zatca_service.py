@@ -225,7 +225,8 @@ async def request_compliance_csid(db: AsyncSession, tenant_id: str, otp: str) ->
     if response.status_code >= 400 or not payload.get("binarySecurityToken"):
         vat.zatca_last_error = json.dumps(payload, ensure_ascii=False)[:4000]; await db.commit()
         raise HTTPException(400, {"message": "رفضت زاتكا طلب Compliance CSID", "zatca": payload})
-    vat.zatca_compliance_token_encrypted = _encrypt(payload["binarySecurityToken"])
+    certificate_b64, _, _ = _normalize_certificate(payload["binarySecurityToken"])
+    vat.zatca_compliance_token_encrypted = _encrypt(certificate_b64)
     vat.zatca_compliance_secret_encrypted = _encrypt(payload.get("secret"))
     vat.zatca_compliance_request_id = str(payload.get("requestID") or payload.get("requestId") or "")
     vat.zatca_compliance_steps = json.dumps({})
@@ -267,7 +268,8 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
     if response.status_code >= 400 or not payload.get("binarySecurityToken"):
         vat.zatca_last_error = json.dumps(payload, ensure_ascii=False)[:4000]; await db.commit()
         raise HTTPException(400, {"message": "رفضت زاتكا طلب Production CSID", "zatca": payload})
-    vat.zatca_production_token_encrypted = _encrypt(payload["binarySecurityToken"])
+    certificate_b64, _, _ = _normalize_certificate(payload["binarySecurityToken"])
+    vat.zatca_production_token_encrypted = _encrypt(certificate_b64)
     vat.zatca_production_secret_encrypted = _encrypt(payload.get("secret"))
     vat.zatca_onboarding_status = "production_ready"; vat.zatca_last_error = None
     vat.zatca_certificate_expiry = datetime.utcnow() + timedelta(days=365)
@@ -280,6 +282,27 @@ def _q(parent: ET.Element, ns: str, tag: str, text: str | None = None, **attrs) 
     if text is not None:
         node.text = str(text)
     return node
+
+
+def _normalize_certificate(value: str | None) -> tuple[str, bytes, x509.Certificate]:
+    """Return a canonical Base64-DER certificate from any CSID encoding."""
+    text = "".join((value or "").replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
+    if not text:
+        raise HTTPException(422, "لم تُرجع زاتكا شهادة ضمن Compliance CSID")
+    try:
+        raw = base64.b64decode(text, validate=False)
+        if b"-----BEGIN CERTIFICATE-----" in raw:
+            pem = raw.decode("ascii")
+            pem = "".join(pem.replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
+            raw = base64.b64decode(pem, validate=False)
+        try:
+            cert = x509.load_der_x509_certificate(raw)
+        except ValueError:
+            cert = x509.load_pem_x509_certificate(raw)
+            raw = cert.public_bytes(serialization.Encoding.DER)
+        return base64.b64encode(raw).decode(), raw, cert
+    except (ValueError, TypeError, UnicodeDecodeError) as exc:
+        raise HTTPException(422, "رد زاتكا لا يحتوي شهادة X.509 صالحة؛ أعد إصدار Compliance CSID") from exc
 
 
 def _money(value: Decimal) -> str:
