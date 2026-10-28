@@ -432,31 +432,17 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
     signed_info_bytes = LET.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
     r, s = decode_dss_signature(key.sign(signed_info_bytes, ec.ECDSA(hashes.SHA256())))
     LET.SubElement(sig, f"{{{DS}}}SignatureValue").text = base64.b64encode(r.to_bytes(32, "big") + s.to_bytes(32, "big")).decode()
-    cert_text = "".join((certificate_b64 or "").replace("-----BEGIN CERTIFICATE-----", "").replace("-----END CERTIFICATE-----", "").split())
-    if cert_text:
-        # ZATCA may return the binary security token as DER, PEM, or a
-        # Base64 wrapper around PEM. Normalize all three forms before ASN.1
-        # parsing; otherwise the invoice fails with an opaque 500.
-        raw_certificate = base64.b64decode(cert_text, validate=False)
-        if b"-----BEGIN CERTIFICATE-----" in raw_certificate:
-            pem_text = raw_certificate.decode("ascii")
-            cert_text = "".join(
-                pem_text.replace("-----BEGIN CERTIFICATE-----", "")
-                .replace("-----END CERTIFICATE-----", "")
-                .split()
-            )
-            cert_der = base64.b64decode(cert_text, validate=False)
-        else:
-            cert_der = raw_certificate
+    if certificate_b64:
+        # Use the exact same normalizer used when CSID is issued. This
+        # handles DER, PEM, one or more Base64 wrappers, and guarantees that
+        # the certificate embedded in XAdES is the canonical Base64-DER form.
         try:
-            cert = x509.load_der_x509_certificate(cert_der)
-        except ValueError as exc:
-            try:
-                cert = x509.load_pem_x509_certificate(raw_certificate)
-                cert_der = cert.public_bytes(serialization.Encoding.DER)
-                cert_text = base64.b64encode(cert_der).decode()
-            except ValueError as pem_exc:
-                raise HTTPException(422, "شهادة Compliance CSID المحفوظة غير صالحة أو تالفة؛ أعد إصدارها من زاتكا") from pem_exc
+            cert_text, cert_der, cert = _normalize_certificate(certificate_b64)
+        except HTTPException as exc:
+            raise HTTPException(
+                422,
+                "شهادة Compliance CSID المحفوظة غير قابلة للقراءة؛ أعد إصدار Compliance CSID بعد تجهيز CSR الحالي",
+            ) from exc
         key_info = LET.SubElement(sig, f"{{{DS}}}KeyInfo")
         xdata = LET.SubElement(key_info, f"{{{DS}}}X509Data")
         LET.SubElement(xdata, f"{{{DS}}}X509Certificate").text = cert_text
