@@ -335,7 +335,7 @@ def _first_hash() -> str:
     return base64.b64encode(hashlib.sha256(b"0").digest()).decode()
 
 
-def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[str, str]:
+def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: Customer | None = None) -> tuple[str, str]:
     root = ET.Element(f"{{{UBL}}}Invoice")
     invoice_kind = "0200000" if invoice.invoice_type.value == "simplified" else "0100000"
     _q(root, CBC, "UBLVersionID", "2.1")
@@ -361,23 +361,37 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting) -> tuple[s
         return bytes([tag, len(raw)]) + raw
     qr_value = base64.b64encode(b"".join((_tlv(1, invoice.seller_name_ar or ""), _tlv(2, vat.vat_number or ""), _tlv(3, invoice.issue_date.isoformat()), _tlv(4, _money(invoice.total)), _tlv(5, _money(invoice.vat_amount))))).decode()
     _q(attachment, CBC, "EmbeddedDocumentBinaryObject", qr_value, mimeCode="text/plain", encodingCode="Base64")
+    # UBL requires a document-level Signature reference in addition to the
+    # XAdES cryptographic stamp placed in UBLExtensions.
+    document_signature = _q(root, CAC, "Signature")
+    _q(document_signature, CBC, "ID", "urn:oasis:names:specification:ubl:signature:Invoice")
+    _q(document_signature, CBC, "SignatureMethod", "urn:oasis:names:specification:ubl:dsig:enveloped:xades")
     supplier = _q(root, CAC, "AccountingSupplierParty"); party = _q(supplier, CAC, "Party")
     ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", _digits(vat.cr_number or invoice.seller_cr_number), schemeID="CRN")
-    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or ""); _q(addr, CBC, "CountrySubentity", vat.zatca_address_district or "")
+    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "PlotIdentification", vat.zatca_address_additional or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or ""); _q(addr, CBC, "CitySubdivisionName", vat.zatca_address_district or "")
     country = _q(addr, CAC, "Country"); _q(country, CBC, "IdentificationCode", "SA")
     _add_party_tax_scheme(party, vat.vat_number or invoice.seller_vat_number, vat.cr_number or invoice.seller_cr_number)
     legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", invoice.seller_name_ar)
-    customer = _q(root, CAC, "AccountingCustomerParty"); cparty = _q(customer, CAC, "Party")
-    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", invoice.buyer_address or ""); _q(caddr, CBC, "CityName", (invoice.buyer_address or "الرياض").split("،")[-1]); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", "SA")
+    customer_party = _q(root, CAC, "AccountingCustomerParty"); cparty = _q(customer_party, CAC, "Party")
+    buyer_parts = [part.strip() for part in (invoice.buyer_address or "").split("،") if part.strip()]
+    buyer_street = (customer.address_street if customer else None) or (buyer_parts[0] if buyer_parts else "")
+    buyer_district = (customer.address_district if customer else None) or (buyer_parts[1] if len(buyer_parts) > 1 else "")
+    buyer_city = (customer.address_city if customer else None) or (buyer_parts[2] if len(buyer_parts) > 2 else "الرياض")
+    buyer_postal = (customer.address_postal if customer else None) or (buyer_parts[3] if len(buyer_parts) > 3 else "00000")
+    buyer_building = (customer.address_building if customer else None) or "0000"
+    buyer_additional = (customer.address_additional if customer else None) or "0000"
+    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", buyer_street); _q(caddr, CBC, "BuildingNumber", buyer_building); _q(caddr, CBC, "PlotIdentification", buyer_additional); _q(caddr, CBC, "CityName", buyer_city); _q(caddr, CBC, "PostalZone", buyer_postal); _q(caddr, CBC, "CitySubdivisionName", buyer_district); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", (customer.address_country if customer else None) or "SA")
     clegal = _q(cparty, CAC, "PartyLegalEntity"); _q(clegal, CBC, "RegistrationName", invoice.buyer_name_ar)
     payment = _q(root, CAC, "PaymentMeans"); _q(payment, CBC, "PaymentMeansCode", "30")
+    _q(root, CBC, "TaxCurrencyCode", "SAR")
     tax_total = _q(root, CAC, "TaxTotal"); _q(tax_total, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     subtotal = _q(tax_total, CAC, "TaxSubtotal"); _q(subtotal, CBC, "TaxableAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(subtotal, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     category = _q(subtotal, CAC, "TaxCategory"); _q(category, CBC, "ID", "S"); _q(category, CBC, "Percent", "15"); scheme = _q(category, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
     monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(invoice.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(invoice.total), currencyID="SAR")
     for index, line in enumerate(sorted(invoice.lines, key=lambda x: x.line_order), 1):
         il = _q(root, CAC, "InvoiceLine"); _q(il, CBC, "ID", index); _q(il, CBC, "InvoicedQuantity", str(line.quantity), unitCode=line.unit or "PCE"); _q(il, CBC, "LineExtensionAmount", _money(line.subtotal - line.discount_amount), currencyID="SAR")
-        line_tax = _q(il, CAC, "TaxTotal"); _q(line_tax, CBC, "TaxAmount", _money(line.vat_amount), currencyID="SAR")
+        line_net = Decimal(str(line.subtotal or 0)) - Decimal(str(line.discount_amount or 0))
+        line_tax = _q(il, CAC, "TaxTotal"); _q(line_tax, CBC, "TaxAmount", _money(line.vat_amount), currencyID="SAR"); _q(line_tax, CBC, "RoundingAmount", _money(line_net + Decimal(str(line.vat_amount or 0))), currencyID="SAR")
         item = _q(il, CAC, "Item"); _q(item, CBC, "Name", line.description_ar); tax = _q(item, CAC, "ClassifiedTaxCategory"); _q(tax, CBC, "ID", line.vat_category or "S"); _q(tax, CBC, "Percent", str(line.vat_rate)); ts = _q(tax, CAC, "TaxScheme"); _q(ts, CBC, "ID", "VAT")
         price = _q(il, CAC, "Price"); _q(price, CBC, "PriceAmount", _money(line.unit_price), currencyID="SAR")
     raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -422,7 +436,10 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
     info = LET.SubElement(document_sigs, f"{{{sac_ns}}}SignatureInformation")
     LET.SubElement(info, f"{{{CBC}}}ID").text = "urn:oasis:names:specification:ubl:signature:1"
     LET.SubElement(info, f"{{{sbc_ns}}}ReferencedSignatureID").text = "urn:oasis:names:specification:ubl:signature:Invoice"
-    sig = LET.SubElement(info, f"{{{DS}}}Signature", Id="urn:oasis:names:specification:ubl:signature:Invoice")
+    # XML xs:ID values cannot contain ':'; keep the UBL reference semantic in
+    # ReferencedSignatureID but use a valid local ID for the ds:Signature.
+    signature_id = "signature"
+    sig = LET.SubElement(info, f"{{{DS}}}Signature", Id=signature_id)
     signed_info = LET.SubElement(sig, f"{{{DS}}}SignedInfo")
     LET.SubElement(signed_info, f"{{{DS}}}CanonicalizationMethod", Algorithm="http://www.w3.org/2006/12/xml-c14n11")
     LET.SubElement(signed_info, f"{{{DS}}}SignatureMethod", Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256")
@@ -450,16 +467,18 @@ def _sign_xml(xml: str, private_key_pem: str, certificate_b64: str | None, diges
         xdata = LET.SubElement(key_info, f"{{{DS}}}X509Data")
         LET.SubElement(xdata, f"{{{DS}}}X509Certificate").text = cert_text
         obj = LET.SubElement(sig, f"{{{DS}}}Object")
-        props = LET.SubElement(obj, f"{{{xades_ns}}}QualifyingProperties", Target="#urn:oasis:names:specification:ubl:signature:Invoice")
+        props = LET.SubElement(obj, f"{{{xades_ns}}}QualifyingProperties", Target=f"#{signature_id}")
         signed_props = LET.SubElement(props, f"{{{xades_ns}}}SignedProperties", Id="xadesSignedProperties")
         signed_sig_props = LET.SubElement(signed_props, f"{{{xades_ns}}}SignedSignatureProperties")
         LET.SubElement(signed_sig_props, f"{{{xades_ns}}}SigningTime").text = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-        signing_cert = LET.SubElement(signed_sig_props, f"{{{xades_ns}}}SigningCertificateV2")
+        # SDK 3.0.8 validates against XAdES 1.3.2, whose schema expects
+        # SigningCertificate/IssuerSerial rather than the XAdES 1.4.1 V2 form.
+        signing_cert = LET.SubElement(signed_sig_props, f"{{{xades_ns}}}SigningCertificate")
         cert_el = LET.SubElement(signing_cert, f"{{{xades_ns}}}Cert")
         cert_digest = LET.SubElement(cert_el, f"{{{xades_ns}}}CertDigest")
         LET.SubElement(cert_digest, f"{{{DS}}}DigestMethod", Algorithm="http://www.w3.org/2001/04/xmlenc#sha256")
         LET.SubElement(cert_digest, f"{{{DS}}}DigestValue").text = base64.b64encode(hashlib.sha256(cert_der).digest()).decode()
-        issuer = LET.SubElement(cert_el, f"{{{xades_ns}}}IssuerSerialV2")
+        issuer = LET.SubElement(cert_el, f"{{{xades_ns}}}IssuerSerial")
         LET.SubElement(issuer, f"{{{DS}}}X509IssuerName").text = cert.issuer.rfc4514_string()
         LET.SubElement(issuer, f"{{{DS}}}X509SerialNumber").text = str(cert.serial_number)
     root.insert(0, ext)
@@ -479,9 +498,29 @@ def _validate_with_official_sdk(xml: str) -> None:
         sdk_jar = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-3.0.8.jar"
     if not sdk_jar.exists():
         raise HTTPException(503, "أداة التحقق الرسمية لـ ZATCA غير مثبتة على الخادم")
+    sdk_data = Path("/app/vendor/zatca-sdk-data/Data")
+    if not sdk_data.exists():
+        sdk_data = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-data" / "Data"
+    if not sdk_data.exists():
+        raise HTTPException(503, "ملفات XSD الرسمية لـ ZATCA غير مثبتة على الخادم")
     with tempfile.TemporaryDirectory(prefix="zatca-sdk-") as tmp:
         invoice_path = Path(tmp) / "invoice.xml"
         invoice_path.write_text(xml, encoding="utf-8")
+        # The official CLI reads all schemas/rules through SDK_CONFIG. Its
+        # distributed config contains Windows paths, so provide equivalent
+        # Linux paths for the container instead of relying on the host cwd.
+        sdk_config = Path(tmp) / "sdk-config.json"
+        sdk_config.write_text(json.dumps({
+            "xsdPath": str(sdk_data / "Schemas/xsds/UBL2.1/xsd/maindoc/UBL-Invoice-2.1.xsd"),
+            "enSchematron": str(sdk_data / "Rules/schematrons/CEN-EN16931-UBL.xsl"),
+            "zatcaSchematron": str(sdk_data / "Rules/schematrons/20210819_ZATCA_E-invoice_Validation_Rules.xsl"),
+            "certPath": str(sdk_data / "Certificates/cert.pem"),
+            "privateKeyPath": str(sdk_data / "Certificates/ec-secp256k1-priv-key.pem"),
+            "pihPath": str(sdk_data / "PIH/pih.txt"),
+            "certPassword": "123456789",
+            "inputPath": str(sdk_data / "Input"),
+            "usagePathFile": str(sdk_data / "Input/csr-config-example.properties"),
+        }), encoding="utf-8")
         result = subprocess.run(
             [
                 "java", "-jar", str(sdk_jar), "--globalVersion", "3.0.8",
@@ -492,6 +531,7 @@ def _validate_with_official_sdk(xml: str) -> None:
             text=True,
             timeout=30,
             check=False,
+            env={**os.environ, "SDK_CONFIG": str(sdk_config)},
         )
         output = (result.stdout + "\n" + result.stderr).strip()
         lowered = output.lower()
@@ -514,7 +554,8 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     if invoice.zatca_status in {"reported", "cleared"} and not force:
         raise HTTPException(409, "تم إرسال الفاتورة مسبقًا")
     previous = invoice.zatca_previous_invoice_hash or _first_hash()
-    xml, _ = _build_ubl(invoice, previous, vat)
+    customer = await db.scalar(select(Customer).where(Customer.id == invoice.customer_id, Customer.tenant_id == tenant_id))
+    xml, _ = _build_ubl(invoice, previous, vat, customer)
     digest = _hash_unsigned_invoice(xml)
     private_key = _decrypt(vat.zatca_private_key_encrypted)
     token = _decrypt(token_encrypted)
@@ -564,7 +605,8 @@ async def invoice_xml(db: AsyncSession, tenant_id: str, invoice_id: str) -> str:
         raise HTTPException(404, "إعدادات الضريبة أو الفاتورة غير موجودة")
     if invoice.zatca_signed_xml:
         return invoice.zatca_signed_xml
-    xml, _ = _build_ubl(invoice, invoice.zatca_previous_invoice_hash or _first_hash(), vat)
+    customer = await db.scalar(select(Customer).where(Customer.id == invoice.customer_id, Customer.tenant_id == tenant_id))
+    xml, _ = _build_ubl(invoice, invoice.zatca_previous_invoice_hash or _first_hash(), vat, customer)
     return xml
 
 
