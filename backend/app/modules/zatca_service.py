@@ -498,9 +498,11 @@ def _validate_with_official_sdk(xml: str) -> None:
         sdk_jar = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-3.0.8.jar"
     if not sdk_jar.exists():
         raise HTTPException(503, "أداة التحقق الرسمية لـ ZATCA غير مثبتة على الخادم")
-    sdk_data = Path("/app/vendor/zatca-sdk-data/Data")
+    # The repository stores the contents of the SDK Data directory directly
+    # under zatca-sdk-data (Schemas, Rules, Certificates, and PIH).
+    sdk_data = Path("/app/vendor/zatca-sdk-data")
     if not sdk_data.exists():
-        sdk_data = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-data" / "Data"
+        sdk_data = Path(__file__).resolve().parents[2] / "vendor" / "zatca-sdk-data"
     if not sdk_data.exists():
         raise HTTPException(503, "ملفات XSD الرسمية لـ ZATCA غير مثبتة على الخادم")
     with tempfile.TemporaryDirectory(prefix="zatca-sdk-") as tmp:
