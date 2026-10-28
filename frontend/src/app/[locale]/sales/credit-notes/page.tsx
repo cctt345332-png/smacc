@@ -19,18 +19,24 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
   const [invoiceMap, setInvoiceMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([
-      api.get("/sales/credit-notes"),
-      getInvoices(),
-    ]).then(([cnRes, invRes]) => {
-      setItems(cnRes.data);
-      // بناء map من invoice_id → invoice_number
+  const load = async () => {
+    setLoading(true);
+    // لا نربط ظهور المرتجعات بنجاح طلب الفواتير؛ المرتجع المحفوظ يجب أن يظهر
+    // حتى لو تعذر جلب بيانات الفاتورة الأصلية مؤقتًا.
+    try {
+      const cnRes = await api.get("/sales/credit-notes");
+      setItems(cnRes.data || []);
+    } catch { setItems([]); }
+    try {
+      const invRes = await getInvoices();
       const map: Record<string, string> = {};
-      invRes.data.forEach((inv: any) => { map[inv.id] = inv.invoice_number; });
+      (invRes.data || []).forEach((inv: any) => { map[inv.id] = inv.invoice_number; });
       setInvoiceMap(map);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+    } catch { setInvoiceMap({}); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
 
   return (
     <>
@@ -44,9 +50,12 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
           <h1 className="page-title">{ar ? "مرتجعات المبيعات" : "Sales Returns"}</h1>
           <p className="page-subtitle">{ar ? "إدارة مرتجعات المبيعات" : "Sales returns management"}</p>
         </div>
+        <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={load} className="btn btn-secondary btn-sm" disabled={loading}>{ar ? "تحديث" : "Refresh"}</button>
         <Link href={`/${locale}/sales/credit-notes/new`} className="btn btn-primary btn-sm">
           <Icon name="plus" size={14} /> {ar ? "+ مرتجع جديد" : "+ New Return"}
         </Link>
+        </div>
       </div>
 
       <div className="card">
