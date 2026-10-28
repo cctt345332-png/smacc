@@ -503,8 +503,8 @@ def _complete_phase2_qr(xml: str, invoice: Invoice, digest: str) -> str:
     certificate = (sig.xpath("./ds:KeyInfo/ds:X509Data/ds:X509Certificate/text()", namespaces=ns) or [""])[0].strip()
     if not signature_value or not certificate:
         raise HTTPException(422, "التوقيع لا يحتوي SignatureValue أو شهادة X.509 اللازمة لـQR")
-    issue_date = root.xpath("string(./cbc:IssueDate)").strip()
-    issue_time = root.xpath("string(./cbc:IssueTime)").strip()
+    issue_date = root.xpath("string(./cbc:IssueDate)", namespaces=ns).strip()
+    issue_time = root.xpath("string(./cbc:IssueTime)", namespaces=ns).strip()
     timestamp = f"{issue_date}T{issue_time}Z"
     seller = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName)", namespaces=ns).strip()
     vat_number = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID)", namespaces=ns).strip()
