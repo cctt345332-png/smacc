@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import uuid
@@ -370,7 +371,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     _q(document_signature, CBC, "SignatureMethod", "urn:oasis:names:specification:ubl:dsig:enveloped:xades")
     supplier = _q(root, CAC, "AccountingSupplierParty"); party = _q(supplier, CAC, "Party")
     ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", _digits(vat.cr_number or invoice.seller_cr_number), schemeID="CRN")
-    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "PlotIdentification", vat.zatca_address_additional or ""); _q(addr, CBC, "CitySubdivisionName", vat.zatca_address_district or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or "")
+    addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or invoice.seller_address or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or ""); _q(addr, CBC, "PlotIdentification", vat.zatca_address_additional or ""); _q(addr, CBC, "CitySubdivisionName", vat.zatca_address_district or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or ""); _q(addr, CBC, "CountrySubentity", vat.zatca_address_city or vat.zatca_branch_name or "")
     country = _q(addr, CAC, "Country"); _q(country, CBC, "IdentificationCode", "SA")
     _add_party_tax_scheme(party, vat.vat_number or invoice.seller_vat_number, vat.cr_number or invoice.seller_cr_number)
     legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", invoice.seller_name_ar)
@@ -392,7 +393,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
         ]
         if any(not str(value or "").strip() for value in required_address) or not str(customer.address_postal).strip().isdigit() or len(str(customer.address_postal).strip()) != 5:
             raise HTTPException(422, "لا يمكن اختبار الفاتورة القياسية: يجب إدخال عنوان العميل الحقيقي (الشارع، المدينة، الرمز البريدي من 5 أرقام، الدولة)")
-    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", buyer_street); _q(caddr, CBC, "BuildingNumber", buyer_building); _q(caddr, CBC, "PlotIdentification", buyer_additional); _q(caddr, CBC, "CitySubdivisionName", buyer_district); _q(caddr, CBC, "CityName", buyer_city); _q(caddr, CBC, "PostalZone", buyer_postal); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", (customer.address_country if customer else None) or "SA")
+    caddr = _q(cparty, CAC, "PostalAddress"); _q(caddr, CBC, "StreetName", buyer_street); _q(caddr, CBC, "BuildingNumber", buyer_building); _q(caddr, CBC, "PlotIdentification", buyer_additional); _q(caddr, CBC, "CitySubdivisionName", buyer_district); _q(caddr, CBC, "CityName", buyer_city); _q(caddr, CBC, "PostalZone", buyer_postal); _q(caddr, CBC, "CountrySubentity", buyer_city); ccountry = _q(caddr, CAC, "Country"); _q(ccountry, CBC, "IdentificationCode", (customer.address_country if customer else None) or "SA")
     clegal = _q(cparty, CAC, "PartyLegalEntity"); _q(clegal, CBC, "RegistrationName", invoice.buyer_name_ar)
     delivery = _q(root, CAC, "Delivery"); _q(delivery, CBC, "ActualDeliveryDate", invoice.issue_date.date().isoformat())
     payment = _q(root, CAC, "PaymentMeans"); _q(payment, CBC, "PaymentMeansCode", "30")
@@ -561,6 +562,15 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         final_path = tmp_path / "signed-with-qr.xml"
         cert_path = tmp_path / "certificate.txt"
         key_path = tmp_path / "private-key.txt"
+        # SDK 3.0.8 creates ext:UBLExtensions during signing.  The namespace
+        # must already be declared on the UBL root; otherwise its serializer
+        # emits an unbound ext prefix before validation even starts.
+        if "xmlns:ext=" not in xml:
+            xml = xml.replace(
+                '<Invoice ',
+                f'<Invoice xmlns:ext="{EXT}" ',
+                1,
+            )
         input_path.write_text(xml, encoding="utf-8")
         cert_path.write_text(cert_text, encoding="utf-8")
         key_path.write_text(base64.b64encode(key_der).decode(), encoding="utf-8")
@@ -582,9 +592,20 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         if sign.returncode != 0 or not signed_path.exists():
             raise HTTPException(422, f"فشل توقيع XML بواسطة SDK الرسمي: {(sign.stdout + sign.stderr)[-3000:]}")
         qr = subprocess.run(["java", "-jar", str(sdk_jar), "-qr", "-invoice", str(signed_path), "-invoiceWithQr", str(final_path)], capture_output=True, text=True, timeout=45, env=env, check=False)
-        if qr.returncode != 0 or not final_path.exists():
+        qr_output = qr.stdout + qr.stderr
+        qr_match = re.search(r"QR code\s*=\s*([^\s]+)", qr_output)
+        if qr.returncode != 0 or not qr_match:
             raise HTTPException(422, f"فشل توليد QR بواسطة SDK الرسمي: {(qr.stdout + qr.stderr)[-3000:]}")
-        final_xml = final_path.read_text(encoding="utf-8")
+        # SDK 3.0.8's -qr command returns the official TLV payload in its
+        # output; it does not serialize a second XML file despite accepting
+        # the -invoiceWithQr argument. Preserve that official payload and
+        # place it in the existing UBL QR attachment without rebuilding TLV.
+        final_root = LET.parse(str(signed_path))
+        qr_nodes = final_root.xpath("./cac:AdditionalDocumentReference[cbc:ID='QR']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject", namespaces={"cac": CAC, "cbc": CBC})
+        if not qr_nodes:
+            raise HTTPException(422, "SDK الرسمي ولّد QR لكن XML لا يحتوي موضع QR القياسي")
+        qr_nodes[0].text = qr_match.group(1).strip()
+        final_xml = LET.tostring(final_root, encoding="utf-8", xml_declaration=True).decode()
         signed_root = LET.fromstring(final_xml.encode())
         digest_values = signed_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS})
         if not digest_values.strip():
@@ -615,6 +636,16 @@ def _validate_with_official_sdk(xml: str) -> None:
     with tempfile.TemporaryDirectory(prefix="zatca-sdk-") as tmp:
         invoice_path = Path(tmp) / "invoice.xml"
         invoice_path.write_text(xml, encoding="utf-8")
+        # The SDK's PIH validator compares the document PIH with the first
+        # line of its configured pih file. Supply the chain value already
+        # selected by the application instead of pointing at a missing demo
+        # file from the vendor bundle.
+        pih_value = LET.fromstring(xml.encode()).xpath(
+            "string(./cac:AdditionalDocumentReference[cbc:ID='PIH']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject)",
+            namespaces={"cac": CAC, "cbc": CBC},
+        ).strip()
+        pih_path = Path(tmp) / "pih.txt"
+        pih_path.write_text(pih_value, encoding="utf-8")
         # The official CLI reads all schemas/rules through SDK_CONFIG. Its
         # distributed config contains Windows paths, so provide equivalent
         # Linux paths for the container instead of relying on the host cwd.
@@ -625,7 +656,7 @@ def _validate_with_official_sdk(xml: str) -> None:
             "zatcaSchematron": str(sdk_data / "Rules/schematrons/20210819_ZATCA_E-invoice_Validation_Rules.xsl"),
             "certPath": str(sdk_data / "Certificates/cert.pem"),
             "privateKeyPath": str(sdk_data / "Certificates/ec-secp256k1-priv-key.pem"),
-            "pihPath": str(sdk_data / "PIH/pih.txt"),
+            "pihPath": str(pih_path),
             "certPassword": "123456789",
             "inputPath": str(sdk_data / "Input"),
             "usagePathFile": str(sdk_data / "Input/csr-config-example.properties"),
@@ -656,7 +687,9 @@ def _validate_with_official_sdk(xml: str) -> None:
         )
         output = (result.stdout + "\n" + result.stderr).strip()
         lowered = output.lower()
-        if result.returncode != 0 or "failed to validate" in lowered or "error" in lowered:
+        passed = "global validation result = passed" in lowered
+        failed = "global validation result = failed" in lowered
+        if result.returncode != 0 or failed or not passed:
             details = output[-8000:] or "لم يعرض SDK تفاصيل إضافية"
             logger.error("ZATCA official SDK rejected generated XML:\n%s", details)
             raise HTTPException(422, f"رفض SDK الرسمي ملف XML قبل الإرسال: {details}")
