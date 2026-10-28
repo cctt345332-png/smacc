@@ -339,6 +339,11 @@ def _money(value: Decimal) -> str:
     return f"{Decimal(str(value or 0)):.2f}"
 
 
+def _qr_seller_name(value: str | None) -> str:
+    """Keep QR seller name within ZATCA's 127-byte UTF-8 limit."""
+    return (str(value or "").strip().encode("utf-8")[:127]).decode("utf-8", errors="ignore")
+
+
 def _first_hash() -> str:
     return base64.b64encode(hashlib.sha256(b"0").digest()).decode()
 
@@ -521,13 +526,7 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool, signing_public_
     issue_date = root.xpath("string(./cbc:IssueDate)", namespaces=ns).strip()
     issue_time = root.xpath("string(./cbc:IssueTime)", namespaces=ns).strip()
     timestamp = f"{issue_date}T{issue_time}Z"
-    seller = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName)", namespaces=ns).strip()
-    # ZATCA QR tag 1 is limited to 127 UTF-8 bytes.  Limiting Python
-    # characters is insufficient for Arabic names because one character can
-    # occupy multiple UTF-8 bytes.  Truncate only at a valid code-point
-    # boundary so the TLV remains valid UTF-8.
-    seller_bytes = seller.encode("utf-8")[:127]
-    seller = seller_bytes.decode("utf-8", errors="ignore")
+    seller = _qr_seller_name(root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName)", namespaces=ns))
     vat_number = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID)", namespaces=ns).strip()
     total = root.xpath("string(./cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)", namespaces=ns).strip()
     tax_amount = root.xpath("string(./cac:TaxTotal[1]/cbc:TaxAmount)", namespaces=ns).strip()
@@ -551,8 +550,8 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool, signing_public_
         # encoding; the gateway validates the textual Base64 representation.
         base64.b64decode(signature_value, validate=True)
         invoice_signature = signature_value
-        public_key = base64.b64encode(certificate_public_key).decode()
-        certificate_signature = base64.b64encode(cert.signature).decode()
+        public_key = certificate_public_key
+        certificate_signature = cert.signature
     except (ValueError, TypeError, base64.binascii.Error) as exc:
         raise HTTPException(422, "تعذر استخراج المفتاح العام من شهادة X.509 لوسم QR رقم 8") from exc
     fields = [_tlv(1, seller), _tlv(2, vat_number), _tlv(3, timestamp), _tlv(4, total), _tlv(5, tax_amount), _tlv(6, digest), _tlv(7, invoice_signature), _tlv(8, public_key)]
@@ -935,7 +934,7 @@ def _build_credit_note_ubl(note: CreditNote, customer: Customer, original: Invoi
     ident = _q(party, CAC, "PartyIdentification"); _q(ident, CBC, "ID", _digits(vat.cr_number or vat.vat_number), schemeID="CRN")
     addr = _q(party, CAC, "PostalAddress"); _q(addr, CBC, "StreetName", vat.zatca_address_street or ""); _q(addr, CBC, "BuildingNumber", vat.zatca_address_building or "0000"); _q(addr, CBC, "PlotIdentification", vat.zatca_address_additional or "0000"); _q(addr, CBC, "CitySubdivisionName", vat.zatca_address_district or ""); _q(addr, CBC, "CityName", vat.zatca_address_city or vat.zatca_branch_name or "الرياض"); _q(addr, CBC, "PostalZone", vat.zatca_address_postal or "00000"); _q(addr, CBC, "CountrySubentity", vat.zatca_address_city or vat.zatca_branch_name or ""); country = _q(addr, CAC, "Country"); _q(country, CBC, "IdentificationCode", "SA")
     _add_party_tax_scheme(party, vat.vat_number, vat.cr_number)
-    legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", str(vat.zatca_activity or "").strip()[:127])
+    legal = _q(party, CAC, "PartyLegalEntity"); _q(legal, CBC, "RegistrationName", _qr_seller_name(vat.zatca_activity))
     buyer = _q(root, CAC, "AccountingCustomerParty"); bparty = _q(buyer, CAC, "Party")
     baddr = _q(bparty, CAC, "PostalAddress"); _q(baddr, CBC, "StreetName", getattr(customer, "address_street", None) or ""); _q(baddr, CBC, "BuildingNumber", getattr(customer, "address_building", None) or "0000"); _q(baddr, CBC, "PlotIdentification", getattr(customer, "address_additional", None) or "0000"); _q(baddr, CBC, "CitySubdivisionName", getattr(customer, "address_district", None) or ""); _q(baddr, CBC, "CityName", customer.address_city or "الرياض"); _q(baddr, CBC, "PostalZone", getattr(customer, "address_postal", None) or "00000"); _q(baddr, CBC, "CountrySubentity", customer.address_city or "الرياض"); bcountry = _q(baddr, CAC, "Country"); _q(bcountry, CBC, "IdentificationCode", customer.address_country or "SA")
     blegal = _q(bparty, CAC, "PartyLegalEntity"); _q(blegal, CBC, "RegistrationName", customer.name_ar)
