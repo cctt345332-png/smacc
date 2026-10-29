@@ -244,7 +244,7 @@ export default function TaxSettingsPage(props: { params: Promise<{ locale: strin
               )}
               {zatcaStatus?.has_compliance_credentials && !zatcaStatus?.has_production_credentials && (
                 <p className="form-hint" style={{ marginTop: 12, color: "#166534" }}>
-                  {ar ? "تم استلام رمز الربط. يجري النظام اختبارات الامتثال وإصدار شهادة الإنتاج تلقائيًا دون تدخل." : "The integration token is ready. Compliance checks and Production CSID issuance run automatically."}
+                  {ar ? "تم إصدار شهادة الامتثال. يكتمل الربط بعد نجاح اختبارات الامتثال الستة وإصدار شهادة الإنتاج." : "The Compliance CSID was issued. Integration is complete after all six compliance checks pass and the Production CSID is issued."}
                 </p>
               )}
               {zatcaStatus && <p className="form-hint">{ar ? "الحالة الحالية: " : "Current status: "}{zatcaStatus.status}</p>}
