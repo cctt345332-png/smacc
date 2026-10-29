@@ -100,6 +100,16 @@ async def session_transactions(session_id: str, tenant_id=Depends(get_tenant_id)
 
 # ─── Transactions ────────────────────────────────────────────────────
 
+@router.get("/transactions/my-history")
+async def my_transaction_history(
+    limit: int = 100,
+    user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """سجل فواتير المستخدم الحالي فقط، وليس كل فواتير المنشأة."""
+    return await service.get_my_transactions(db, user["tenant_id"], user["user_id"], limit)
+
+
 @router.post("/transactions", status_code=201)
 async def create_transaction(data: dict, user=Depends(require_role(["manager","cashier"])), db: AsyncSession = Depends(get_db)):
     return await service.create_transaction(db, user["tenant_id"], user["user_id"], data)

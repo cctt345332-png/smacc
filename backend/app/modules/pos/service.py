@@ -1096,6 +1096,36 @@ async def get_session_transactions(db: AsyncSession, tenant_id: str, session_id:
     ]
 
 
+async def get_my_transactions(db: AsyncSession, tenant_id: str, user_id: str, limit: int = 100) -> list:
+    """فواتير POS السابقة للمستخدم الحالي فقط، عبر جلساته هو دون بقية الكاشيرين."""
+    r = await db.execute(
+        select(POSTransaction)
+        .join(POSSession, POSTransaction.session_id == POSSession.id)
+        .where(
+            POSTransaction.tenant_id == tenant_id,
+            POSSession.tenant_id == tenant_id,
+            POSSession.cashier_id == user_id,
+        )
+        .order_by(POSTransaction.created_at.desc())
+        .limit(min(max(limit, 1), 200))
+    )
+    txs = r.scalars().all()
+    return [
+        {
+            "id": tx.id,
+            "transaction_number": tx.transaction_number,
+            "invoice_id": tx.invoice_id,
+            "total": float(tx.total),
+            "vat_amount": float(tx.vat_amount),
+            "payment_method": tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method),
+            "status": tx.status.value if hasattr(tx.status, "value") else str(tx.status),
+            "customer_name": tx.customer_name,
+            "created_at": tx.created_at.isoformat(),
+        }
+        for tx in txs
+    ]
+
+
 # ─── Refund Transaction ───────────────────────────────────────────────
 
 async def refund_transaction(db: AsyncSession, tenant_id: str, tx_id: str) -> dict:
@@ -1238,6 +1268,7 @@ async def get_transaction(db: AsyncSession, tenant_id: str, tx_id: str) -> dict:
         "payment_method": tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method),
         "cash_tendered": float(tx.cash_tendered or 0),
         "change_amount": float(tx.change_amount or 0),
+        "card_amount": float(tx.card_amount or 0),
         "qr_code": tx.qr_code,
         "invoice_id": tx.invoice_id,
         "status": tx.status.value if hasattr(tx.status, "value") else str(tx.status),

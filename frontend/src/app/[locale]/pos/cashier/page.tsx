@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase } from "@/lib/pos";
+import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase, getMyTransactions, getTransaction } from "@/lib/pos";
 import { getItemsForPicker, getAvailableSerials, searchSerial, getBatches, getVariants } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
@@ -88,6 +88,9 @@ export default function POSCashierPage() {
   const [completing,   setCompleting]   = useState(false);
   const [receiptModal, setReceiptModal] = useState<any>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // open session form
   const [showOpenForm,   setShowOpenForm]   = useState(false);
@@ -465,6 +468,41 @@ export default function POSCashierPage() {
     finally { setClosingSession(false); }
   };
 
+  const openPreviousInvoices = async () => {
+    setShowHistory(true);
+    setHistoryLoading(true);
+    try {
+      const { data } = await getMyTransactions(100);
+      setHistory(Array.isArray(data) ? data : []);
+    } catch (e: any) {
+      setHistory([]);
+      alert(e?.response?.data?.detail || (isAr ? "تعذر تحميل الفواتير السابقة" : "Could not load previous invoices"));
+    } finally { setHistoryLoading(false); }
+  };
+
+  const showPreviousInvoice = async (txId: string) => {
+    try {
+      const { data: tx } = await getTransaction(txId);
+      setShowHistory(false);
+      setReceiptModal({
+        ...tx,
+        grandTotal: tx.total,
+        payMethod: tx.payment_method,
+        cashTendered: String(tx.cash_tendered ?? ""),
+        cardAmount: String(tx.card_amount ?? ""),
+        change: tx.change_amount,
+        cart: (tx.lines || []).map((line: any) => ({
+          ...line,
+          id: line.inventory_item_id || line.product_name_ar,
+          inventory_item_id: line.inventory_item_id || "",
+          discount_pct: Number(line.discount_pct || 0),
+        })),
+      });
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (isAr ? "تعذر تحميل الفاتورة" : "Could not load invoice"));
+    }
+  };
+
   // ── pos purchase ───────────────────────────────────────────────────
   const handlePurchase = async () => {
     if (!purchaseProd || !purchaseForm.serial_number || !purchaseForm.cost_price) {
@@ -602,6 +640,10 @@ export default function POSCashierPage() {
           onClick={() => setShowShortcuts(true)} style={{ marginInlineStart: "auto", color: actCfg.color, border: `1px solid ${actCfg.color}40`, borderRadius: 8 }}>
           <Icon name="info" size={17} />
         </button>
+        <button className="btn btn-secondary btn-sm" onClick={openPreviousInvoices} title={isAr ? "فواتير هذا المستخدم السابقة فقط" : "This user's previous invoices only"}>
+          <Icon name="invoice" size={14} />
+          {isAr ? "الفواتير السابقة" : "Previous invoices"}
+        </button>
         {session && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
@@ -621,6 +663,35 @@ export default function POSCashierPage() {
           </div>
         )}
       </div>
+
+      {showHistory && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 480, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: 70 }}>
+          <div className="card" style={{ width: "100%", maxWidth: 760, maxHeight: "78vh", display: "flex", flexDirection: "column", boxShadow: "0 16px 45px rgba(0,0,0,.2)" }}>
+            <div className="card-header">
+              <h3 className="card-title"><Icon name="invoice" size={16} />{isAr ? "فواتير هذا المستخدم السابقة" : "This user's previous invoices"}</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowHistory(false)}><Icon name="close" size={18} /></button>
+            </div>
+            <div className="card-body" style={{ padding: 12, overflowY: "auto" }}>
+              {historyLoading ? (
+                <div style={{ textAlign: "center", padding: 30, color: "var(--text-muted)" }}>{isAr ? "جاري التحميل..." : "Loading..."}</div>
+              ) : history.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 30, color: "var(--text-muted)" }}>{isAr ? "لا توجد فواتير سابقة لهذا المستخدم" : "No previous invoices for this user"}</div>
+              ) : history.map((invoice) => (
+                <div key={invoice.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 4px", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700 }}>{invoice.transaction_number}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{new Date(invoice.created_at).toLocaleString(isAr ? "ar-SA" : "en-US")} — {invoice.customer_name || (isAr ? "عميل نقدي" : "Cash customer")}</div>
+                  </div>
+                  <div style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{fmt(Number(invoice.total))} {sar}</div>
+                  <button className="btn btn-primary btn-sm" onClick={() => showPreviousInvoice(invoice.id)}>
+                    <Icon name="print" size={14} />{isAr ? "عرض وطباعة" : "View & print"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showShortcuts && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 500, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", padding: 70 }}>

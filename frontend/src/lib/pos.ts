@@ -25,6 +25,8 @@ export const getSessionTransactions = (session_id: string) =>
   api.get(`/pos/sessions/${session_id}/transactions`);
 
 // ─── Transactions ────────────────────────────────────────────────────
+export const getMyTransactions = (limit = 100) =>
+  api.get("/pos/transactions/my-history", { params: { limit } });
 export const createTransaction = (data: any) => api.post("/pos/transactions", data);
 export const getTransaction = (id: string) => api.get(`/pos/transactions/${id}`);
 export const refundTransaction = (id: string) => api.post(`/pos/transactions/${id}/refund`);
