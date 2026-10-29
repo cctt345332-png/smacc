@@ -76,8 +76,8 @@ interface ThermalReceiptProps {
 }
 
 const PAYMENT_LABELS: Record<string, string> = {
-  cash: "نقداً", mada: "مدى", credit_card: "بطاقة ائتمان",
-  stc_pay: "STC Pay", split: "دفع مقسّم",
+  cash: "نقداً", mada: "شبكة",
+  split: "دفع مقسّم",
 };
 
 const fmt = (n: number) =>
@@ -255,7 +255,7 @@ export default function ThermalReceipt({
       {payment_method === "split" && card_amount != null && (
         <>
           <Row label="نقداً" value={`${fmt(total - card_amount)} ر.س`} />
-          <Row label="بطاقة" value={`${fmt(card_amount)} ر.س`} />
+          <Row label="شبكة" value={`${fmt(card_amount)} ر.س`} />
         </>
       )}
 

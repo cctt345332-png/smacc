@@ -535,6 +535,17 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         grand_total = max(Decimal("0"), grand_total - overall_discount)
         discount_total += overall_discount
 
+    if payment_method not in {"cash", "mada", "split"}:
+        raise HTTPException(400, "طريقة الدفع يجب أن تكون نقدي أو شبكة أو مقسّم")
+    if payment_method == "cash" and cash_tendered < grand_total:
+        raise HTTPException(400, "المبلغ النقدي أقل من إجمالي الفاتورة")
+    if payment_method == "mada":
+        cash_tendered = Decimal("0")
+        card_amount = grand_total
+    if payment_method == "split":
+        if cash_tendered < 0 or card_amount < 0 or abs(cash_tendered + card_amount - grand_total) > Decimal("0.01"):
+            raise HTTPException(400, "يجب أن يساوي مجموع النقد والشبكة إجمالي الفاتورة")
+
     change_amount = max(Decimal("0"), cash_tendered - grand_total) if payment_method == "cash" else Decimal("0")
 
     # QR Code زاتكا

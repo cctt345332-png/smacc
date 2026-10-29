@@ -42,7 +42,16 @@ const calcLine = (l: CartLine) => {
   return { gross, disc, taxable, vat, total: taxable + vat };
 };
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const PAYMENT_LABELS: Record<string, string> = { cash: "نقدي", mada: "مدى", credit_card: "بطاقة ائتمان", stc_pay: "STC Pay", split: "مقسّم" };
+const PAYMENT_LABELS: Record<string, string> = { cash: "نقدي", mada: "شبكة", split: "مقسّم" };
+const POS_SHORTCUTS = [
+  { key: "F2", label: "تركيز البحث عن صنف أو مسح الباركود" },
+  { key: "F4", label: "اختيار الدفع نقدي" },
+  { key: "F5", label: "اختيار الدفع شبكة" },
+  { key: "F6", label: "اختيار الدفع مقسّم" },
+  { key: "F8", label: "إتمام البيع" },
+  { key: "Esc", label: "إغلاق النافذة أو إلغاء البحث" },
+  { key: "Ctrl + Backspace", label: "مسح السلة بالكامل" },
+];
 
 export default function POSCashierPage() {
   const params        = useParams();
@@ -70,7 +79,7 @@ export default function POSCashierPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [cart,         setCart]         = useState<CartLine[]>([]);
-  const [payMethod,    setPayMethod]    = useState<"cash"|"mada"|"credit_card"|"stc_pay"|"split">("cash");
+  const [payMethod,    setPayMethod]    = useState<"cash"|"mada"|"split">("cash");
   const [cashTendered, setCashTendered] = useState("");
   const [cardAmount,   setCardAmount]   = useState("");
   const [custName,     setCustName]     = useState("");
@@ -78,6 +87,7 @@ export default function POSCashierPage() {
   const [overallDisc,  setOverallDisc]  = useState("0");
   const [completing,   setCompleting]   = useState(false);
   const [receiptModal, setReceiptModal] = useState<any>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // open session form
   const [showOpenForm,   setShowOpenForm]   = useState(false);
@@ -348,6 +358,16 @@ export default function POSCashierPage() {
     if (payMethod === "cash" && parseFloat(cashTendered || "0") < grandTotal) {
       alert(isAr ? "المبلغ المدفوع أقل من الإجمالي" : "Insufficient cash"); return;
     }
+    if (payMethod === "mada" && Math.abs(parseFloat(cardAmount || "0") - grandTotal) > 0.01) {
+      alert(isAr ? "أدخل مبلغ الشبكة مساويًا للإجمالي" : "Network amount must equal the total"); return;
+    }
+    if (payMethod === "split") {
+      const splitCash = parseFloat(cashTendered || "0");
+      const splitNetwork = parseFloat(cardAmount || "0");
+      if (splitCash < 0 || splitNetwork < 0 || Math.abs(splitCash + splitNetwork - grandTotal) > 0.01) {
+        alert(isAr ? "يجب أن يساوي مجموع النقد والشبكة الإجمالي" : "Cash plus network must equal the total"); return;
+      }
+    }
     setCompleting(true);
     try {
       const res = await createTransaction({
@@ -365,13 +385,13 @@ export default function POSCashierPage() {
           batch_id: l.batch_id,
         })),
         payment_method: payMethod,
-        cash_tendered: payMethod === "cash" ? parseFloat(cashTendered || String(grandTotal)) : grandTotal,
-        card_amount: payMethod === "split" ? parseFloat(cardAmount || "0") : undefined,
+        cash_tendered: payMethod === "cash" ? parseFloat(cashTendered || String(grandTotal)) : payMethod === "split" ? parseFloat(cashTendered || "0") : 0,
+        card_amount: payMethod === "mada" ? grandTotal : payMethod === "split" ? parseFloat(cardAmount || "0") : undefined,
         customer_name: custName || undefined,
         customer_phone: custPhone || undefined,
         discount_amount: overallDiscAmt,
       });
-      setReceiptModal({ ...res.data, cart: [...cart], grandTotal, change, payMethod });
+      setReceiptModal({ ...res.data, cart: [...cart], grandTotal, change, payMethod, cashTendered, cardAmount });
       setCart([]); setCashTendered(""); setCardAmount(""); setCustName(""); setCustPhone(""); setOverallDisc("0"); setPayMethod("cash");
       // طباعة تلقائية إذا كان الجهاز مضبوطاً على الطباعة — الإيصال فقط.
       if (terminal?.print_receipt) {
@@ -403,6 +423,22 @@ export default function POSCashierPage() {
     } catch (e: any) { setOpenError(e?.response?.data?.detail || (isAr ? "حدث خطأ" : "Error")); }
     finally { setOpeningSession(false); }
   };
+
+  // اختصارات شاشة POS — تُحفظ محليًا حتى تبقى متاحة على نفس الجهاز.
+  useEffect(() => {
+    try { localStorage.setItem("masar_pos_shortcuts", JSON.stringify(POS_SHORTCUTS)); } catch {}
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F2") { event.preventDefault(); searchRef.current?.focus(); return; }
+      if (event.key === "F4") { event.preventDefault(); setPayMethod("cash"); return; }
+      if (event.key === "F5") { event.preventDefault(); setPayMethod("mada"); return; }
+      if (event.key === "F6") { event.preventDefault(); setPayMethod("split"); return; }
+      if (event.key === "F8") { event.preventDefault(); void completeSale(); return; }
+      if (event.key === "Escape") { setShowShortcuts(false); return; }
+      if (event.ctrlKey && event.key === "Backspace") { event.preventDefault(); setCart([]); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   // ── close session ──────────────────────────────────────────────────
   const handleCloseSession = async () => {
@@ -562,8 +598,12 @@ export default function POSCashierPage() {
             </div>
           </div>
         )}
+        <button className="btn btn-ghost btn-sm btn-icon" title={isAr ? "اختصارات POS" : "POS shortcuts"}
+          onClick={() => setShowShortcuts(true)} style={{ marginInlineStart: "auto", color: actCfg.color, border: `1px solid ${actCfg.color}40`, borderRadius: 8 }}>
+          <Icon name="info" size={17} />
+        </button>
         {session && (
-          <div style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
               {isAr ? "مبيعات الجلسة:" : "Session sales:"}{" "}
               <span style={{ fontWeight: 700, color: "var(--success)" }}>{fmt(Number(session.total_sales))} {sar}</span>
@@ -581,6 +621,26 @@ export default function POSCashierPage() {
           </div>
         )}
       </div>
+
+      {showShortcuts && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 500, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", padding: 70 }}>
+          <div className="card" style={{ width: "100%", maxWidth: 380, boxShadow: "0 16px 45px rgba(0,0,0,.2)" }}>
+            <div className="card-header">
+              <h3 className="card-title"><Icon name="info" size={16} />{isAr ? "اختصارات نقطة البيع" : "POS Shortcuts"}</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowShortcuts(false)}><Icon name="close" size={18} /></button>
+            </div>
+            <div className="card-body" style={{ padding: 12 }}>
+              {POS_SHORTCUTS.map((shortcut) => (
+                <div key={shortcut.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "9px 4px", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 13 }}>{isAr ? shortcut.label : shortcut.key}</span>
+                  <kbd style={{ border: "1px solid var(--border)", borderRadius: 5, padding: "3px 7px", background: "var(--bg)", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{isAr ? shortcut.key : shortcut.label}</kbd>
+                </div>
+              ))}
+              <div style={{ marginTop: 12, color: "var(--text-muted)", fontSize: 11 }}>{isAr ? "تم حفظ قائمة الاختصارات على هذا الجهاز تلقائيًا." : "Shortcut settings are saved on this device automatically."}</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Body: products + cart ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
@@ -761,11 +821,11 @@ export default function POSCashierPage() {
 
             {/* Payment method */}
             <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
-              {(["cash","mada","credit_card","stc_pay","split"] as const).map((m) => (
+              {(["cash", "mada", "split"] as const).map((m) => (
                 <button key={m} onClick={() => setPayMethod(m)}
                   style={{ flex: 1, minWidth: 60, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${payMethod === m ? actCfg.color : "var(--border)"}`, background: payMethod === m ? actCfg.bg : "white", color: payMethod === m ? actCfg.color : "var(--text-secondary)", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
                   <Icon name={m === "cash" ? "cash" : "card"} size={12} />
-                  {m === "cash" ? (isAr ? "نقدي" : "Cash") : m === "mada" ? "مدى" : m === "credit_card" ? (isAr ? "بطاقة" : "Card") : m === "stc_pay" ? "STC" : (isAr ? "مقسّم" : "Split")}
+                  {m === "cash" ? (isAr ? "نقدي" : "Cash") : m === "mada" ? (isAr ? "شبكة" : "Network") : (isAr ? "مقسّم" : "Split")}
                 </button>
               ))}
             </div>
@@ -776,8 +836,14 @@ export default function POSCashierPage() {
                 {change > 0 && <div style={{ display: "flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6F4A84", whiteSpace: "nowrap" }}>{isAr ? "الباقي:" : "Change:"} {fmt(change)} {sar}</div>}
               </div>
             )}
+            {payMethod === "mada" && (
+              <input type="number" className="form-input" style={{ marginBottom: 8, fontSize: 13 }} placeholder={isAr ? "مبلغ الشبكة" : "Network amount"} value={cardAmount} onChange={(e) => setCardAmount(e.target.value)} />
+            )}
             {payMethod === "split" && (
-              <input type="number" className="form-input" style={{ marginBottom: 8, fontSize: 13 }} placeholder={isAr ? "مبلغ البطاقة" : "Card amount"} value={cardAmount} onChange={(e) => setCardAmount(e.target.value)} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
+                <input type="number" className="form-input" style={{ fontSize: 13 }} placeholder={isAr ? "مبلغ النقد" : "Cash amount"} value={cashTendered} onChange={(e) => setCashTendered(e.target.value)} />
+                <input type="number" className="form-input" style={{ fontSize: 13 }} placeholder={isAr ? "مبلغ الشبكة" : "Network amount"} value={cardAmount} onChange={(e) => setCardAmount(e.target.value)} />
+              </div>
             )}
 
             <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", fontSize: 15, height: 44 }}
@@ -992,7 +1058,7 @@ export default function POSCashierPage() {
                   { label: isAr ? "إجمالي المبيعات" : "Total Sales", val: `${fmt(Number(session?.total_sales))} ${sar}`, color: "var(--success)" },
                   { label: isAr ? "عدد المعاملات" : "Transactions",  val: String(session?.transaction_count), color: "var(--primary)" },
                   { label: isAr ? "نقدي" : "Cash",                   val: `${fmt(Number(session?.total_cash))} ${sar}`, color: "var(--text-primary)" },
-                  { label: isAr ? "بطاقة" : "Card",                  val: `${fmt(Number(session?.total_card))} ${sar}`, color: "var(--text-primary)" },
+                  { label: isAr ? "شبكة" : "Network",                 val: `${fmt(Number(session?.total_card))} ${sar}`, color: "var(--text-primary)" },
                 ].map(({ label, val, color }) => (
                   <div key={label} style={{ background: "var(--bg)", borderRadius: 8, padding: "8px 10px" }}>
                     <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>{label}</div>
@@ -1070,9 +1136,9 @@ export default function POSCashierPage() {
                   vat_amount={receiptModal.vat_amount || 0}
                   total={receiptModal.grandTotal}
                   payment_method={receiptModal.payMethod}
-                  cash_tendered={receiptModal.payMethod === "cash" ? parseFloat(receiptModal.cashTendered || String(receiptModal.grandTotal)) : undefined}
+                  cash_tendered={receiptModal.payMethod === "cash" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cashTendered || "0") : undefined}
                   change_amount={receiptModal.change}
-                  card_amount={receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || "0") : undefined}
+                  card_amount={receiptModal.payMethod === "mada" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
                   customer_name={receiptModal.customer_name}
                   customer_phone={receiptModal.customer_phone}
                   qr_code={receiptModal.qr_code}
@@ -1133,9 +1199,9 @@ export default function POSCashierPage() {
             vat_amount={receiptModal.vat_amount || 0}
             total={receiptModal.grandTotal}
             payment_method={receiptModal.payMethod}
-            cash_tendered={receiptModal.payMethod === "cash" ? parseFloat(receiptModal.cashTendered || String(receiptModal.grandTotal)) : undefined}
+            cash_tendered={receiptModal.payMethod === "cash" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cashTendered || "0") : undefined}
             change_amount={receiptModal.change}
-            card_amount={receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || "0") : undefined}
+            card_amount={receiptModal.payMethod === "mada" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
             customer_name={receiptModal.customer_name}
             customer_phone={receiptModal.customer_phone}
             qr_code={receiptModal.qr_code}
