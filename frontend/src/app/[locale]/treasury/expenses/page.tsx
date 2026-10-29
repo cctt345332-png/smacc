@@ -32,7 +32,7 @@ export default function ExpensesPage(props: { params: Promise<{ locale: string }
     finally { setActing(null); }
   };
 
-  const totalPosted = items.filter(i => i.status === "posted").reduce((s, i) => s + Number(i.amount), 0);
+  const totalPosted = items.filter(i => i.status === "posted").reduce((s, i) => s + Number(i.amount || 0) + Number(i.vat_amount || 0), 0);
 
   return (
     <>
@@ -86,6 +86,7 @@ export default function ExpensesPage(props: { params: Promise<{ locale: string }
                   <th>{ar ? "البيان" : "Description"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "المبلغ" : "Amount"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "الضريبة" : "VAT"}</th>
+                  <th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th>
                   <th>{ar ? "الحالة" : "Status"}</th>
                   <th>{ar ? "الإجراءات" : "Actions"}</th>
                 </tr>
@@ -101,6 +102,7 @@ export default function ExpensesPage(props: { params: Promise<{ locale: string }
                       <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{v.description_ar}</td>
                       <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(v.amount)}</td>
                       <td style={{ textAlign: "end", color: "#D97706" }}>{Number(v.vat_amount) > 0 ? fmt(v.vat_amount) : "—"}</td>
+                      <td style={{ textAlign: "end", fontWeight: 700, color: "#DC2626" }}>{fmt(Number(v.amount || 0) + Number(v.vat_amount || 0))}</td>
                       <td><span className={`badge ${s.badge}`}>{s.ar}</span></td>
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
