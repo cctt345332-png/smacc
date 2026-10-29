@@ -799,7 +799,10 @@ def _validate_with_official_sdk(xml: str, simplified: bool = False) -> None:
             raise HTTPException(422, f"ملف XML غير صالح حسب UBL/XSD: {details or str(exc)}") from exc
         except LET.DocumentInvalid as exc:
             details = "; ".join(f"line {e.line}, column {e.column}: {e.message}" for e in exc.error_log)
-            raise HTTPException(422, f"ترتيب أو بنية XML غير مطابقة لـ UBL 2.1: {details or str(exc)}") from exc
+            if simplified and "x509serialnumber" in details.lower() and "not a valid value" in details.lower():
+                logger.warning("Proceeding to official ZATCA SDK for simplified invoice; local lxml rejects the long certificate serial")
+            else:
+                raise HTTPException(422, f"ترتيب أو بنية XML غير مطابقة لـ UBL 2.1: {details or str(exc)}") from exc
         result = subprocess.run(
             [
                 "java", f"-Djava.security.properties={security_path}", "-jar", str(sdk_jar), "--globalVersion", "3.0.8",
