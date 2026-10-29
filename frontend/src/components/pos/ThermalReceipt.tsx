@@ -80,6 +80,14 @@ const PAYMENT_LABELS: Record<string, string> = {
   split: "دفع مقسّم",
 };
 
+const LABELS_EN: Record<string, string> = {
+  "رقم الفاتورة": "Invoice No.", "التاريخ": "Date", "الوقت": "Time", UUID: "UUID",
+  "العميل": "Customer", "الجوال": "Mobile", "المجموع قبل الضريبة": "Subtotal",
+  "إجمالي الخصم": "Discount", "ضريبة القيمة المضافة (15%)": "VAT (15%)",
+  "الإجمالي": "Total", "طريقة الدفع": "Payment", "المبلغ المدفوع": "Paid",
+  "الباقي": "Change", "نقداً": "Cash", "شبكة": "Card", "رمز الاستجابة السريعة": "QR Code",
+};
+
 const fmt = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -135,15 +143,15 @@ export default function ThermalReceipt({
 
       {/* ── شعار الشركة ── */}
       {company.logo_data && (
-        <div style={{ textAlign: "center", marginBottom: 6 }}>
-          <img src={company.logo_data} alt="logo" style={{ maxHeight: 50, maxWidth: 120, objectFit: "contain" }} />
+        <div style={{ textAlign: "center", margin: "2px auto 8px" }}>
+          <img src={company.logo_data} alt="logo" style={{ display: "block", margin: "0 auto", maxHeight: 64, maxWidth: 145, objectFit: "contain" }} />
         </div>
       )}
 
       {/* ── اسم الشركة ── */}
       <div style={{ textAlign: "center", marginBottom: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: 14 }}>{company.name}</div>
-        {company.name_en && <div style={{ fontSize: 11, color: "#333" }}>{company.name_en}</div>}
+        <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.45 }}>{company.name}</div>
+        {company.name_en && <div style={{ fontSize: 12, color: "#333", direction: "ltr", lineHeight: 1.45 }}>{company.name_en}</div>}
       </div>
 
       {/* ── بيانات زاتكا ── */}
@@ -164,8 +172,8 @@ export default function ThermalReceipt({
 
       {/* ── نوع الفاتورة ── */}
       <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
-        فاتورة ضريبية مبسّطة
-        <div style={{ fontSize: 9, fontWeight: 400, color: "#555" }}>Simplified Tax Invoice</div>
+        <div>فاتورة ضريبية مبسّطة</div>
+        <div style={{ fontSize: 10, fontWeight: 400, color: "#555", direction: "ltr" }}>Simplified Tax Invoice</div>
       </div>
 
       {/* ── رقم الفاتورة والتاريخ ── */}
@@ -187,10 +195,10 @@ export default function ThermalReceipt({
 
       {/* ── رأس جدول الأصناف ── */}
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, marginBottom: 3, borderBottom: "1px solid #000", paddingBottom: 2 }}>
-        <span style={{ flex: 2 }}>الصنف</span>
-        <span style={{ textAlign: "center", width: 30 }}>كمية</span>
-        <span style={{ textAlign: "center", width: 45 }}>سعر</span>
-        <span style={{ textAlign: "left", width: 50 }}>إجمالي</span>
+        <span style={{ flex: 2, display: "flex", justifyContent: "space-between" }}><span>Item</span><span>الصنف</span></span>
+        <span style={{ textAlign: "center", width: 30 }}>Qty<br /><small>كمية</small></span>
+        <span style={{ textAlign: "center", width: 45 }}>Price<br /><small>سعر</small></span>
+        <span style={{ textAlign: "left", width: 50 }}>Total<br /><small>إجمالي</small></span>
       </div>
 
       {/* ── أسطر الأصناف ── */}
@@ -306,14 +314,17 @@ function Divider() {
 function Row({ label, value, small, bold }: {
   label: string; value: string; small?: boolean; bold?: boolean;
 }) {
+  const english = LABELS_EN[label] || label;
   return (
     <div style={{
-      display: "flex", justifyContent: "space-between",
+      display: "flex", alignItems: "baseline", gap: 5,
       fontSize: small ? 9 : 11, marginBottom: 2,
       fontWeight: bold ? 700 : 400,
     }}>
-      <span style={{ color: "#444" }}>{label}</span>
-      <span style={{ fontWeight: bold ? 700 : 600 }}>{value}</span>
+      <span style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", gap: 4, color: "#444" }}>
+        <span dir="ltr">{english}</span><span dir="rtl">{label}</span>
+      </span>
+      <span style={{ fontWeight: bold ? 700 : 600, whiteSpace: "nowrap" }}>{value}</span>
     </div>
   );
 }
