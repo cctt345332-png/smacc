@@ -27,7 +27,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -150,6 +150,27 @@ csr.industry.business.category={business_category}
         # the key material.
         sdk_key_der = base64.b64decode("".join(key_path.read_text(encoding="utf-8").split()))
         key = serialization.load_der_private_key(sdk_key_der, password=None)
+        # SDK 3.0.8 exposes only its TSTZATCA non-production template.  The
+        # Fatoora Simulation production-CSID endpoint requires the official
+        # PREZATCA-Code-Signing template.  Keep the key, subject, SAN and all
+        # SDK-generated values, replacing only that template and re-signing
+        # the CSR with the same SDK-generated private key.
+        if environment == "simulation":
+            sdk_csr = x509.load_pem_x509_csr(base64.b64decode(csr_b64))
+            csr_builder = x509.CertificateSigningRequestBuilder().subject_name(sdk_csr.subject)
+            template_oid = ObjectIdentifier("1.3.6.1.4.1.311.20.2")
+            for extension in sdk_csr.extensions:
+                if extension.oid == template_oid:
+                    value = b"\x0c\x15PREZATCA-Code-Signing"
+                    csr_builder = csr_builder.add_extension(
+                        x509.UnrecognizedExtension(template_oid, value), critical=extension.critical
+                    )
+                else:
+                    csr_builder = csr_builder.add_extension(extension.value, critical=extension.critical)
+            rebuilt_csr = csr_builder.sign(key, hashes.SHA256())
+            csr_b64 = base64.b64encode(
+                rebuilt_csr.public_bytes(serialization.Encoding.PEM)
+            ).decode()
         private_key = key.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.TraditionalOpenSSL,
