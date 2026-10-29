@@ -318,7 +318,7 @@ export default function POSCashierPage() {
     }
     if (!extra.serial_item_id && !extra.variant_id) {
       const idx = cart.findIndex((l) => l.inventory_item_id === p.id && !l.serial_item_id && !l.variant_id);
-      if (idx >= 0) { setCart((c) => c.map((l, i) => i === idx ? { ...l, quantity: l.quantity + 1 } : l)); setSearch(""); setProducts([]); return; }
+      if (idx >= 0) { setCart((c) => c.map((l, i) => i === idx ? { ...l, quantity: l.quantity + 1 } : l)); setSearch(""); setProducts(allProducts); return; }
     }
     setCart((c) => [...c, {
       id: Math.random().toString(36).slice(2),
@@ -327,7 +327,7 @@ export default function POSCashierPage() {
       quantity: 1, unit_price: price,
       discount_pct: 0, vat_rate: p.vat_rate, ...extra,
     }]);
-    setSearch(""); setProducts([]);
+    setSearch(""); setProducts(allProducts);
     searchRef.current?.focus();
   };
 
@@ -379,6 +379,11 @@ export default function POSCashierPage() {
       const sr = await getSessions({ limit: 20 });
       const up = (sr.data || []).find((s: any) => s.id === session.id);
       if (up) setSession(up);
+      // تحديث قائمة الأصناف بعد الخصم بدون إعادة تحميل الصفحة.
+      const inventoryResult = await getItemsForPicker({ warehouse_id: terminal?.warehouse_id || undefined });
+      const refreshedProducts = (inventoryResult.data || []).filter((p: any) => p.pos_enabled !== false);
+      setAllProducts(refreshedProducts);
+      setProducts(refreshedProducts);
     } catch (e: any) { alert(e?.response?.data?.detail || (isAr ? "حدث خطأ" : "Error")); }
     finally { setCompleting(false); }
   };
