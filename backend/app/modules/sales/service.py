@@ -1164,14 +1164,9 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
 
     invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
-    from app.modules import zatca_service
-    zatca_settings = await zatca_service.get_settings(db, tenant_id)
-    if zatca_settings and zatca_settings.is_zatca_enabled and zatca_settings.zatca_production_token_encrypted:
-        try:
-            await zatca_service.submit_invoice(db, tenant_id, user_id, invoice_id)
-        except Exception as exc:
-            zatca_settings.zatca_last_error = str(exc)[:4000]
-            await db.commit()
+    # ZATCA submission is deliberately manual for ordinary sales invoices.
+    # Confirmation only posts the invoice and deducts inventory; the user
+    # must press «إرسال للهيئة» from the invoice page to submit it.
     return await get_invoice(db, tenant_id, invoice_id)
 
 
