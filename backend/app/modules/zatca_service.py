@@ -371,10 +371,10 @@ def _normalize_certificate(value: str | None) -> tuple[str, bytes, x509.Certific
 def _money(value: Decimal) -> str:
     return f"{Decimal(str(value or 0)):.2f}"
 def _zatca_issue_datetime(value: datetime) -> str:
-    """Render the stored Riyadh-local invoice time consistently in XML and QR."""
-    return value.strftime("%Y-%m-%dT%H:%M:%S+03:00")
+    """Render the stored invoice time identically in the XML and QR fields."""
+    return value.strftime("%Y-%m-%dT%H:%M:%S")
 def _zatca_issue_time(value: datetime) -> str:
-    return value.strftime("%H:%M:%S+03:00")
+    return value.strftime("%H:%M:%S")
 def _qr_seller_name(value: str | None) -> str:
     """Keep QR seller name within ZATCA's 127-byte UTF-8 limit."""
     return (str(value or "").strip().encode("utf-8")[:127]).decode("utf-8", errors="ignore")
