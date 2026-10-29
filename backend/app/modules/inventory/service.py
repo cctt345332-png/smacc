@@ -1047,20 +1047,30 @@ async def get_serial_profit_report(
     rows = []
     total_cost = Decimal("0")
     total_revenue = Decimal("0")
+    total_revenue_incl_vat = Decimal("0")
+    total_profit_incl_vat = Decimal("0")
 
     for s, invoice_id_value, invoice_number, serial_rep_id, rep_code, rep_name in serial_rows:
-        profit = (s.sale_price or Decimal("0")) - s.cost_price
+        sale_price = s.sale_price or Decimal("0")
+        sale_price_incl_vat = (sale_price * Decimal("1.15")).quantize(Decimal("0.01"))
+        profit = sale_price - s.cost_price
+        profit_incl_vat = sale_price_incl_vat - s.cost_price
         total_cost += s.cost_price
-        total_revenue += s.sale_price or Decimal("0")
+        total_revenue += sale_price
+        total_revenue_incl_vat += sale_price_incl_vat
+        total_profit_incl_vat += profit_incl_vat
         rows.append({
             "serial_id": s.id,
             "serial_number": s.serial_number,
             "product_name": s.product.name_ar if s.product else "",
             "condition": s.condition,
             "cost_price": float(s.cost_price),
-            "sale_price": float(s.sale_price or 0),
+            "sale_price": float(sale_price),
+            "sale_price_incl_vat": float(sale_price_incl_vat),
             "profit": float(profit),
             "profit_pct": float(profit / s.sale_price * 100) if s.sale_price else 0,
+            "profit_incl_vat": float(profit_incl_vat),
+            "profit_incl_vat_pct": float(profit_incl_vat / sale_price_incl_vat * 100) if sale_price_incl_vat else 0,
             "sold_at": s.sold_at.isoformat() if s.sold_at else None,
             "invoice_id": invoice_id_value,
             "invoice_number": invoice_number,
@@ -1077,6 +1087,8 @@ async def get_serial_profit_report(
             "total_cost": float(total_cost),
             "total_revenue": float(total_revenue),
             "total_profit": float(total_profit),
+            "total_revenue_incl_vat": float(total_revenue_incl_vat),
+            "total_profit_incl_vat": float(total_profit_incl_vat),
             "avg_profit_pct": float(total_profit / total_revenue * 100) if total_revenue else 0,
         }
     }

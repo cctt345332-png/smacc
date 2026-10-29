@@ -98,7 +98,7 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
           <h1 className="page-title">{ar ? "تقرير ربح السيريالات" : "Serial Profit Report"}</h1>
           <p className="page-subtitle">{ar ? "الربح الصافي لكل وحدة مباعة بالسيريال" : "Net profit per sold serial unit"}</p>
         </div>
-        {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير ربح السيريالات" : "Serial Profit Report"} subtitle={ar ? "ربحية الوحدات المباعة ذات التتبع التسلسلي" : "Profitability of serial-tracked sold units"} period={`${fromDate} — ${toDate}`} reportCode={`SER-PROFIT-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "الوحدات المباعة" : "Units sold", value: String(data.summary.count || 0), tone: "blue" }, { label: ar ? "إجمالي التكلفة" : "Total cost", value: `${fmt(data.summary.total_cost)} SAR`, tone: "red" }, { label: ar ? "إجمالي الإيرادات" : "Total revenue", value: `${fmt(data.summary.total_revenue)} SAR`, tone: "green" }, { label: ar ? "صافي الربح" : "Net profit", value: `${fmt(data.summary.total_profit)} SAR`, tone: data.summary.total_profit >= 0 ? "green" : "red" }, { label: ar ? "متوسط الهامش" : "Average margin", value: `${fmt(data.summary.avg_profit_pct)}%`, tone: "amber" }]} tables={[{ title: ar ? "تفاصيل ربح السيريالات" : "Serial profit details", headers: [ar ? "رقم السيريال" : "Serial #", ar ? "المنتج" : "Product", ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Sales rep", ar ? "الحالة" : "Condition", ar ? "تاريخ البيع" : "Sold date", ar ? "التكلفة" : "Cost", ar ? "سعر البيع" : "Sale price", ar ? "الربح" : "Profit", ar ? "هامش الربح" : "Margin"], rows: data.rows.map((row: any) => [row.serial_number || "—", row.product_name || "—", row.invoice_number || "—", row.rep_name || row.rep_code || "—", ar ? CONDITION[row.condition] || row.condition : row.condition, row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-GB") : "—", `${fmt(row.cost_price)} SAR`, `${fmt(row.sale_price)} SAR`, `${fmt(row.profit)} SAR`, `${fmt(row.profit_pct)}%`]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", "", "", "", `${fmt(data.summary.total_cost)} SAR`, `${fmt(data.summary.total_revenue)} SAR`, `${fmt(data.summary.total_profit)} SAR`, `${fmt(data.summary.avg_profit_pct)}%`] }]} />}
+        {data && <StructuredReportPrintButton locale={locale} title={ar ? "تقرير ربح السيريالات" : "Serial Profit Report"} subtitle={ar ? "ربحية الوحدات المباعة ذات التتبع التسلسلي" : "Profitability of serial-tracked sold units"} period={`${fromDate} — ${toDate}`} reportCode={`SER-PROFIT-${toDate.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "الوحدات المباعة" : "Units sold", value: String(data.summary.count || 0), tone: "blue" }, { label: ar ? "إجمالي التكلفة" : "Total cost", value: `${fmt(data.summary.total_cost)} SAR`, tone: "red" }, { label: ar ? "إجمالي البيع شامل الضريبة" : "Total sales incl. VAT", value: `${fmt(data.summary.total_revenue_incl_vat)} SAR`, tone: "green" }, { label: ar ? "الفرق شامل الضريبة" : "Difference incl. VAT", value: `${fmt(data.summary.total_profit_incl_vat)} SAR`, tone: data.summary.total_profit_incl_vat >= 0 ? "green" : "red" }, { label: ar ? "هامش الفرق" : "Difference margin", value: `${fmt(data.summary.total_profit_incl_vat / data.summary.total_revenue_incl_vat * 100)}%`, tone: "amber" }]} tables={[{ title: ar ? "تفاصيل ربح السيريالات" : "Serial profit details", headers: [ar ? "رقم السيريال" : "Serial #", ar ? "المنتج" : "Product", ar ? "الفاتورة" : "Invoice", ar ? "المندوب" : "Sales rep", ar ? "الحالة" : "Condition", ar ? "تاريخ البيع" : "Sold date", ar ? "التكلفة" : "Cost", ar ? "سعر البيع شامل الضريبة" : "Sale price incl. VAT", ar ? "الفرق شامل الضريبة" : "Difference incl. VAT", ar ? "هامش الفرق" : "Difference margin"], rows: data.rows.map((row: any) => [row.serial_number || "—", row.product_name || "—", row.invoice_number || "—", row.rep_name || row.rep_code || "—", ar ? CONDITION[row.condition] || row.condition : row.condition, row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-GB") : "—", `${fmt(row.cost_price)} SAR`, `${fmt(row.sale_price_incl_vat)} SAR`, `${fmt(row.profit_incl_vat)} SAR`, `${fmt(row.profit_incl_vat_pct)}%`]), totals: [ar ? "الإجمالي" : "TOTAL", "", "", "", "", "", `${fmt(data.summary.total_cost)} SAR`, `${fmt(data.summary.total_revenue_incl_vat)} SAR`, `${fmt(data.summary.total_profit_incl_vat)} SAR`, `${fmt(data.summary.total_profit_incl_vat / data.summary.total_revenue_incl_vat * 100)}%`] }]} />}
       </div>
 
       {/* Filters */}
@@ -216,8 +216,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
             {[
               { label: ar ? "عدد الوحدات المباعة" : "Units Sold", value: data.summary.count, color: "#5A187E" },
               { label: ar ? "إجمالي التكلفة" : "Total Cost", value: `${fmt(data.summary.total_cost)} SAR`, color: "#DC2626" },
-              { label: ar ? "إجمالي الإيرادات" : "Total Revenue", value: `${fmt(data.summary.total_revenue)} SAR`, color: "#6F4A84" },
-              { label: ar ? "صافي الربح" : "Net Profit", value: `${fmt(data.summary.total_profit)} SAR`, color: data.summary.total_profit >= 0 ? "#6F4A84" : "#DC2626" },
+              { label: ar ? "إجمالي البيع شامل الضريبة" : "Total Sales incl. VAT", value: `${fmt(data.summary.total_revenue_incl_vat)} SAR`, color: "#6F4A84" },
+              { label: ar ? "الفرق شامل الضريبة" : "Difference incl. VAT", value: `${fmt(data.summary.total_profit_incl_vat)} SAR`, color: data.summary.total_profit_incl_vat >= 0 ? "#6F4A84" : "#DC2626" },
             ].map(s => (
               <div key={s.label} className="card" style={{ padding: "14px 16px" }}>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4 }}>{s.label}</div>
@@ -245,8 +245,8 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                       <th>{ar ? "الحالة" : "Condition"}</th>
                       <th>{ar ? "تاريخ البيع" : "Sold Date"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "التكلفة" : "Cost"}</th>
-                      <th style={{ textAlign: "end" }}>{ar ? "سعر البيع" : "Sale Price"}</th>
-                      <th style={{ textAlign: "end" }}>{ar ? "الربح" : "Profit"}</th>
+                      <th style={{ textAlign: "end" }}>{ar ? "سعر البيع شامل الضريبة" : "Sale Price incl. VAT"}</th>
+                      <th style={{ textAlign: "end" }}>{ar ? "الفرق شامل الضريبة" : "Difference incl. VAT"}</th>
                       <th style={{ textAlign: "end" }}>{ar ? "هامش الربح%" : "Margin%"}</th>
                     </tr>
                   </thead>
@@ -260,10 +260,10 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                         <td><span className="badge badge-info">{ar ? CONDITION[row.condition] || row.condition : row.condition}</span></td>
                         <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{row.sold_at ? new Date(row.sold_at).toLocaleDateString("en-SA") : "—"}</td>
                         <td style={{ textAlign: "end" }}>{fmt(row.cost_price)}</td>
-                        <td style={{ textAlign: "end" }}>{fmt(row.sale_price)}</td>
-                        <td style={{ textAlign: "end", fontWeight: 700, color: row.profit >= 0 ? "#6F4A84" : "#DC2626" }}>{fmt(row.profit)}</td>
-                        <td style={{ textAlign: "end", color: row.profit_pct >= 20 ? "#6F4A84" : row.profit_pct >= 10 ? "#D97706" : "#DC2626" }}>
-                          {fmt(row.profit_pct)}%
+                        <td style={{ textAlign: "end" }}>{fmt(row.sale_price_incl_vat)}</td>
+                        <td style={{ textAlign: "end", fontWeight: 700, color: row.profit_incl_vat >= 0 ? "#6F4A84" : "#DC2626" }}>{fmt(row.profit_incl_vat)}</td>
+                        <td style={{ textAlign: "end", color: row.profit_incl_vat_pct >= 20 ? "#6F4A84" : row.profit_incl_vat_pct >= 10 ? "#D97706" : "#DC2626" }}>
+                          {fmt(row.profit_incl_vat_pct)}%
                         </td>
                       </tr>
                     ))}
@@ -272,9 +272,9 @@ export default function SerialProfitPage(props: { params: Promise<{ locale: stri
                     <tr style={{ background: "#F8FAFC", fontWeight: 700, borderTop: "2px solid var(--border)" }}>
                       <td colSpan={6} style={{ padding: "12px 16px" }}>{ar ? "الإجمالي" : "Total"}</td>
                       <td style={{ textAlign: "end", padding: "12px 16px", color: "#DC2626" }}>{fmt(data.summary.total_cost)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(data.summary.total_revenue)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84", fontSize: 15 }}>{fmt(data.summary.total_profit)}</td>
-                      <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(data.summary.avg_profit_pct)}%</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84" }}>{fmt(data.summary.total_revenue_incl_vat)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px", color: "#6F4A84", fontSize: 15 }}>{fmt(data.summary.total_profit_incl_vat)}</td>
+                      <td style={{ textAlign: "end", padding: "12px 16px" }}>{fmt(data.summary.total_profit_incl_vat / data.summary.total_revenue_incl_vat * 100)}%</td>
                     </tr>
                   </tfoot>
                 </table>
