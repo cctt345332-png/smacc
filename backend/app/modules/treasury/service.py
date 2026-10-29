@@ -43,6 +43,23 @@ async def create_voucher(db: AsyncSession, tenant_id: str, user_id: str, data: d
     voucher_date = datetime.fromisoformat(data["voucher_date"]).replace(tzinfo=None)
     cheque_date = datetime.fromisoformat(data["cheque_date"]).replace(tzinfo=None) if data.get("cheque_date") else None
 
+    # مصروف الشركة يستخدم روابط الحسابات التشغيلية تلقائيًا، مع إبقاء
+    # الحسابات المرسلة من الواجهة نافذة إذا أراد المحاسب تخصيص القيد.
+    debit_account_id = data.get("debit_account_id")
+    credit_account_id = data.get("credit_account_id")
+    vat_account_id = data.get("vat_account_id")
+    if vtype == VoucherType.EXPENSE:
+        from app.modules.accounting.service import get_operational_account
+        payment_mapping = {"cash": "default_cash", "bank_transfer": "default_bank", "cheque": "default_bank"}
+        if not debit_account_id:
+            debit_account_id = (await get_operational_account(db, tenant_id, "operating_expenses")).id
+        if not credit_account_id:
+            credit_account_id = (await get_operational_account(
+                db, tenant_id, payment_mapping.get(data.get("payment_method", "cash"), "default_cash")
+            )).id
+        if data.get("vat_amount", 0) and not vat_account_id:
+            vat_account_id = (await get_operational_account(db, tenant_id, "vat_input")).id
+
     voucher = Voucher(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
@@ -63,8 +80,8 @@ async def create_voucher(db: AsyncSession, tenant_id: str, user_id: str, data: d
         purchase_id=data.get("purchase_id"),
         asset_id=data.get("asset_id"),
         expense_category=data.get("expense_category"),
-        debit_account_id=data.get("debit_account_id"),
-        credit_account_id=data.get("credit_account_id"),
+        debit_account_id=debit_account_id,
+        credit_account_id=credit_account_id,
         cost_center_id=data.get("cost_center_id"),
         fiscal_year_id=data.get("fiscal_year_id"),
         to_bank_account_id=data.get("to_bank_account_id"),
@@ -72,7 +89,7 @@ async def create_voucher(db: AsyncSession, tenant_id: str, user_id: str, data: d
         description_en=data.get("description_en"),
         notes=data.get("notes"),
         reference=data.get("reference"),
-        vat_account_id=data.get("vat_account_id"),
+        vat_account_id=vat_account_id,
         created_by=user_id,
     )
     db.add(voucher)

@@ -3,7 +3,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createVoucher } from "@/lib/treasury";
-import { getAccounts, getFiscalYears, getCostCenters, getBankAccounts } from "@/lib/accounting";
+import { getAccounts, getFiscalYears, getCostCenters, getBankAccounts, getOperationalAccountMappings } from "@/lib/accounting";
 
 const today = () => new Date().toISOString().split("T")[0];
 const CATS = [
@@ -28,6 +28,7 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);
   const [costCenters, setCostCenters] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [accountMappings, setAccountMappings] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     voucher_date: today(), amount: "", vat_amount: "0",
@@ -39,12 +40,27 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
   });
 
   useEffect(() => {
-    Promise.all([getAccounts(), getFiscalYears(), getCostCenters(), getBankAccounts()])
-      .then(([a, f, cc, b]) => {
+    Promise.all([getAccounts(), getFiscalYears(), getCostCenters(), getBankAccounts(), getOperationalAccountMappings().catch(() => ({ data: [] }))])
+      .then(([a, f, cc, b, mappings]) => {
         setAccounts(a.data); setFiscalYears(f.data); setCostCenters(cc.data); setBankAccounts(b.data);
-        if (f.data.length) setForm(p => ({ ...p, fiscal_year_id: f.data[0].id }));
+        setAccountMappings(mappings.data || []);
+        const mappingByKey = Object.fromEntries((mappings.data || []).map((m: any) => [m.mapping_key, m.account_id]));
+        setForm(p => ({
+          ...p,
+          fiscal_year_id: f.data.length ? f.data[0].id : p.fiscal_year_id,
+          debit_account_id: mappingByKey.operating_expenses || p.debit_account_id,
+          credit_account_id: mappingByKey.default_cash || p.credit_account_id,
+          vat_account_id: mappingByKey.vat_input || p.vat_account_id,
+        }));
       });
   }, []);
+
+  useEffect(() => {
+    const paymentMapping: Record<string, string> = { cash: "default_cash", bank_transfer: "default_bank", cheque: "default_bank" };
+    const key = paymentMapping[form.payment_method] || "default_cash";
+    const selected = accountMappings.find((m: any) => m.mapping_key === key)?.account_id;
+    if (selected && selected !== form.credit_account_id) setForm(p => ({ ...p, credit_account_id: selected }));
+  }, [form.payment_method, accountMappings]);
 
   const upd = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
   const vatAmt = parseFloat(form.vat_amount) || 0;
