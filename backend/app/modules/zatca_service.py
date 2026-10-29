@@ -842,7 +842,10 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     if qr_value:
         invoice.qr_code = qr_value
     api_type = "reporting" if invoice.invoice_type.value == "simplified" else "clearance"
-    environment = "simulation" if simulation else vat.zatca_env
+    # Compliance tests must use the same gateway environment that issued the
+    # Compliance CSID.  Forcing the simulation gateway here makes a real
+    # production Compliance CSID fail with HTTP 401.
+    environment = vat.zatca_env
     url = f"{_api_base(environment)}/compliance/invoices" if compliance_test else f"{_api_base(environment)}/invoices/{api_type}/single"
     auth = base64.b64encode(f"{token}:{secret}".encode()).decode()
     body = {"invoiceHash": digest, "uuid": invoice.uuid, "invoice": base64.b64encode(signed.encode()).decode()}
