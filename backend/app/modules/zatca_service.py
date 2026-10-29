@@ -635,13 +635,20 @@ def _resign_after_x509_serial_fix(xml: str, key: Any) -> str:
     target = root.xpath(".//*[@Id='xadesSignedProperties']", namespaces=ns)
     if not reference or not target:
         return xml
-    canonical_target = LET.tostring(target[0], method="c14n", exclusive=False, with_comments=False)
+    transforms = reference[0].xpath("./ds:Transforms/ds:Transform/@Algorithm", namespaces=ns)
+    target_algorithm = transforms[-1] if transforms else ""
+    target_exclusive = "xml-exc-c14n" in target_algorithm
+    target_comments = "WithComments" in target_algorithm
+    canonical_target = LET.tostring(target[0], method="c14n", exclusive=target_exclusive, with_comments=target_comments)
     digest = base64.b64encode(hashlib.sha256(canonical_target).digest()).decode()
     digest_nodes = reference[0].xpath("./ds:DigestValue", namespaces=ns)
     if digest_nodes:
         digest_nodes[0].text = digest
     signed_info = root.xpath(".//ds:Signature/ds:SignedInfo", namespaces=ns)[0]
-    signed_info_bytes = LET.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
+    canonicalization = signed_info.xpath("string(./ds:CanonicalizationMethod/@Algorithm)", namespaces=ns)
+    signed_info_exclusive = "xml-exc-c14n" in canonicalization
+    signed_info_comments = "WithComments" in canonicalization
+    signed_info_bytes = LET.tostring(signed_info, method="c14n", exclusive=signed_info_exclusive, with_comments=signed_info_comments)
     r, s = decode_dss_signature(key.sign(signed_info_bytes, ec.ECDSA(hashes.SHA256())))
     signature_nodes = root.xpath(".//ds:Signature/ds:SignatureValue", namespaces=ns)
     if signature_nodes:
