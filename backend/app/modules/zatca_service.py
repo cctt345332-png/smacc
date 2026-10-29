@@ -379,7 +379,7 @@ def _compliance_fixture_invoice(vat: VATSetting, now: datetime, invoice_type: st
     line = SimpleNamespace(line_order=1, quantity=Decimal("1"), unit="PCE", description_ar="اختبار امتثال زاتكا", unit_price=subtotal, discount_amount=Decimal("0"), vat_rate=Decimal("15"), vat_category="S", subtotal=subtotal, vat_amount=vat_amount)
     return SimpleNamespace(
         invoice_type=SimpleNamespace(value=invoice_type), invoice_number=f"ZATCA-TEST-{uuid.uuid4().hex[:8]}", uuid=str(uuid.uuid4()),
-        issue_date=now, currency_code="SAR", seller_name_ar=vat.zatca_activity or "شركة اختبار", seller_cr_number=vat.cr_number or vat.vat_number,
+        issue_date=now, currency_code="SAR", seller_name_ar="شركة اختبار زاتكا", seller_cr_number=vat.cr_number or vat.vat_number,
         seller_vat_number=vat.vat_number, seller_address=vat.zatca_address_street or "", buyer_name_ar="عميل اختبار زاتكا",
         buyer_vat_number=None, buyer_address="Test Street، Test District، Riyadh، 12345", taxable_amount=subtotal,
         vat_amount=vat_amount, total=subtotal + vat_amount, lines=[line],
@@ -832,12 +832,12 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        # Reporting validates SignedProperties against the exact SDK output.
-        # Keep simplified documents byte-faithful; the serial workaround is
-        # retained only for standard documents, whose existing path is stable.
-        if not type_name.startswith("02"):
-            final_xml = _fix_x509_serial_for_zatca(final_xml)
-            final_root = LET.fromstring(final_xml.encode())
+        # ZATCA's XML parser validates X509SerialNumber as xs:integer and
+        # rejects the long serial emitted by some Production certificates.
+        # Apply the same interoperability fix to standard and simplified
+        # documents, including automatic POS reporting.
+        final_xml = _fix_x509_serial_for_zatca(final_xml)
+        final_root = LET.fromstring(final_xml.encode())
         digest = final_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS}).strip()
         if not digest:
             raise HTTPException(422, "SDK الرسمي لم يُرجع DigestValue داخل التوقيع")
