@@ -194,8 +194,8 @@ export default function ThermalReceipt({
       <Divider />
 
       {/* ── رأس جدول الأصناف ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, marginBottom: 3, borderBottom: "1px solid #000", paddingBottom: 2 }}>
-        <span style={{ flex: 2, display: "flex", justifyContent: "space-between" }}><span>Item</span><span>الصنف</span></span>
+      <div dir="ltr" style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, marginBottom: 3, borderBottom: "1px solid #000", paddingBottom: 2 }}>
+        <span style={{ flex: 2, display: "flex", justifyContent: "space-between" }}><span dir="rtl">الصنف</span><span dir="ltr">Item</span></span>
         <span style={{ textAlign: "center", width: 30 }}>Qty<br /><small>كمية</small></span>
         <span style={{ textAlign: "center", width: 45 }}>Price<br /><small>سعر</small></span>
         <span style={{ textAlign: "left", width: 50 }}>Total<br /><small>إجمالي</small></span>
@@ -317,12 +317,12 @@ function Row({ label, value, small, bold }: {
   const english = LABELS_EN[label] || label;
   return (
     <div style={{
-      display: "flex", alignItems: "baseline", gap: 5,
+      display: "flex", alignItems: "baseline", gap: 5, direction: "ltr",
       fontSize: small ? 9 : 11, marginBottom: 2,
       fontWeight: bold ? 700 : 400,
     }}>
-      <span style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", gap: 4, color: "#444" }}>
-        <span dir="ltr">{english}</span><span dir="rtl">{label}</span>
+      <span style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", gap: 4, color: "#444", direction: "ltr" }}>
+        <span dir="rtl">{label}</span><span dir="ltr">{english}</span>
       </span>
       <span style={{ fontWeight: bold ? 700 : 600, whiteSpace: "nowrap" }}>{value}</span>
     </div>
