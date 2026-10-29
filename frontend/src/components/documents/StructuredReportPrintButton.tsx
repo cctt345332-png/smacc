@@ -15,7 +15,7 @@ export default function StructuredReportPrintButton({ locale, title, subtitle, p
     if (!win) return;
     let company: any = null;
     try { company = (await getCompany()).data; } catch {}
-    const name = company?.name || company?.name_ar || "SMACC";
+    const name = company?.name || company?.name_ar || "مسار";
     const logo = company?.logo_data ? `<img src="${esc(company.logo_data)}" alt="logo">` : "";
     const detail = [company?.vat_number ? `${ar ? "الرقم الضريبي" : "VAT"}: ${company.vat_number}` : "", company?.cr_number ? `${ar ? "السجل التجاري" : "CR"}: ${company.cr_number}` : "", company?.address_city || ""].filter(Boolean).join(" · ");
     const metricsHtml = metrics.length ? `<section class="metrics">${metrics.map(m => `<div class="metric ${m.tone || "neutral"}"><span>${esc(m.label)}</span><b dir="ltr">${esc(m.value)}</b></div>`).join("")}</section>` : "";

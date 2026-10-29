@@ -27,7 +27,7 @@ export default function ReportPrintButton({ locale, title, reportType, period, c
 
     const address = [company?.address_building, company?.address_street, company?.address_district, company?.address_city, company?.address_postal].filter(Boolean).join("، ");
     const generated = new Date().toLocaleString(ar ? "ar-SA" : "en-GB");
-    const brand = company?.name || company?.name_ar || "SMACC";
+    const brand = company?.name || company?.name_ar || "مسار";
     const logo = company?.logo_data ? `<img src="${escapeHtml(company.logo_data)}" alt="Logo" />` : "";
     const tax = company?.vat_number ? `<span>${ar ? "الرقم الضريبي: " : "VAT No.: "}<b dir="ltr">${escapeHtml(company.vat_number)}</b></span>` : "";
     const cr = company?.cr_number ? `<span>${ar ? "السجل التجاري: " : "CR No.: "}<b dir="ltr">${escapeHtml(company.cr_number)}</b></span>` : "";

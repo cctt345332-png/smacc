@@ -12,9 +12,9 @@ export default function ReportPrintFrame({ locale }: { locale: string }) {
     <div className="report-print-frame" dir={ar ? "rtl" : "ltr"}>
       <div className="report-print-brand">
         {company?.logo_data && <img src={company.logo_data} alt="Logo" />}
-        <div><strong>{company?.name || company?.name_ar || "SMACC"}</strong><span>{ar ? "تقارير مالية وتشغيلية" : "Financial & operational reports"}</span></div>
+        <div><strong>{company?.name || company?.name_ar || "مسار"}</strong><span>{ar ? "تقارير مالية وتشغيلية" : "Financial & operational reports"}</span></div>
       </div>
-      <div className="report-print-meta"><strong>{ar ? "تقرير نظام SMACC" : "SMACC system report"}</strong><span>{ar ? `تاريخ الطباعة: ${generatedAt}` : `Printed: ${generatedAt}`}</span></div>
+      <div className="report-print-meta"><strong>{ar ? "تقرير نظام مسار" : "Masar system report"}</strong><span>{ar ? `تاريخ الطباعة: ${generatedAt}` : `Printed: ${generatedAt}`}</span></div>
     </div>
   );
 }

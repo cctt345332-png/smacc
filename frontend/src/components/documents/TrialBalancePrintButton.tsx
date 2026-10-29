@@ -40,7 +40,7 @@ export default function TrialBalancePrintButton({ locale, fromDate, toDate, rows
       <td class="serial">${i + 1}</td><td class="code">${esc(row.account_code)}</td><td class="name">${esc(ar ? row.account_name_ar : row.account_name_en || row.account_name_ar)}</td>
       <td>${num(row.opening_debit)}</td><td>${num(row.opening_credit)}</td><td>${num(row.period_debit)}</td><td>${num(row.period_credit)}</td><td>${num(row.closing_debit)}</td><td>${num(row.closing_credit)}</td>
     </tr>`).join("");
-    const companyName = company?.name || company?.name_ar || "SMACC";
+    const companyName = company?.name || company?.name_ar || "مسار";
     const address = [company?.address_building, company?.address_street, company?.address_district, company?.address_city, company?.address_postal].filter(Boolean).join("، ");
     const logo = company?.logo_data ? `<img src="${esc(company.logo_data)}" alt="logo" />` : "";
     const vat = company?.vat_number ? `<span>${ar ? "الرقم الضريبي: " : "VAT No.: "}<b dir="ltr">${esc(company.vat_number)}</b></span>` : "";
