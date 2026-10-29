@@ -759,6 +759,25 @@ def _fix_x509_serial_for_zatca(xml: str) -> str:
     return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
+def _repair_xades_after_serial_fix(xml: str, private_key_pem: str) -> str:
+    """Re-sign XAdES after the SDK serial interoperability workaround."""
+    root = LET.fromstring(xml.encode())
+    ns = {"ds": DS, "xades": "http://uri.etsi.org/01903/v1.3.2#"}
+    props = root.xpath(".//xades:SignedProperties[@Id='xadesSignedProperties']", namespaces=ns)
+    refs = root.xpath(".//ds:Reference[@URI='#xadesSignedProperties']/ds:DigestValue", namespaces=ns)
+    signed_info = root.xpath(".//ds:SignedInfo", namespaces=ns)
+    signature_value = root.xpath(".//ds:SignatureValue", namespaces=ns)
+    if not props or not refs or not signed_info or not signature_value:
+        raise HTTPException(422, "تعذر إعادة توقيع SignedProperties بعد معالجة شهادة X509")
+    props_c14n = LET.tostring(props[0], method="c14n", exclusive=False, with_comments=False)
+    refs[0].text = base64.b64encode(hashlib.sha256(props_c14n).digest()).decode()
+    key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+    signed_info_c14n = LET.tostring(signed_info[0], method="c14n", exclusive=False, with_comments=False)
+    r, s = decode_dss_signature(key.sign(signed_info_c14n, ec.ECDSA(hashes.SHA256())))
+    signature_value[0].text = base64.b64encode(r.to_bytes(32, "big") + s.to_bytes(32, "big")).decode()
+    return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
+
+
 def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tuple[str, str]:
     """Use the official SDK's signing and QR generators, never local replicas."""
     sdk_jar = Path("/app/vendor/zatca-sdk-3.0.8.jar")
@@ -832,12 +851,13 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        # ZATCA's XML parser validates X509SerialNumber as xs:integer and
-        # rejects the long serial emitted by some Production certificates.
-        # Apply the same interoperability fix to standard and simplified
-        # documents, including automatic POS reporting.
-        final_xml = _fix_x509_serial_for_zatca(final_xml)
-        final_root = LET.fromstring(final_xml.encode())
+        # The gateway rejects oversized certificate serials as xs:integer. If
+        # the compatibility fix changes XML, repair SignedProperties and sign
+        # SignedInfo again instead of leaving a stale XAdES hash.
+        fixed_xml = _fix_x509_serial_for_zatca(final_xml)
+        if fixed_xml != final_xml:
+            final_xml = _repair_xades_after_serial_fix(fixed_xml, private_key_pem)
+            final_root = LET.fromstring(final_xml.encode())
         digest = final_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS}).strip()
         if not digest:
             raise HTTPException(422, "SDK الرسمي لم يُرجع DigestValue داخل التوقيع")
