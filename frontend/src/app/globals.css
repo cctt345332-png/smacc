@@ -1241,6 +1241,7 @@ tbody tr:hover { background: #FAFBFC; }
     max-width: 80mm !important;
     margin: 0 !important;
     padding: 0 !important;
+    top: 0 !important;
     background: #fff !important;
     box-shadow: none !important;
   }
@@ -1251,7 +1252,10 @@ tbody tr:hover { background: #FAFBFC; }
     min-width: 80mm !important;
     max-width: 80mm !important;
     margin: 0 !important;
-    padding: 4mm 3mm !important;
+    padding: 0 3mm 3mm !important;
+    margin-top: 0 !important;
+    font-family: Arial, "DejaVu Sans", sans-serif !important;
+    font-size: 10pt !important;
     box-sizing: border-box !important;
     background: #fff !important;
     color: #000 !important;

@@ -125,11 +125,11 @@ export default function ThermalReceipt({
       className="thermal-receipt"
       style={{
         width: 302,           // عرض ورق 80mm ≈ 302px
-        fontFamily: "'Alexandria', 'Courier New', monospace",
+        fontFamily: "Arial, 'DejaVu Sans', sans-serif",
         fontSize: 12,
         color: "#000",
         background: "#fff",
-        padding: "8px 10px",
+        padding: "2px 8px 8px",
         direction: "rtl",
         lineHeight: 1.5,
       }}
