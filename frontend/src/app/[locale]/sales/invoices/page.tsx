@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { getInvoices, getInvoice, confirmInvoice, cancelInvoice, deleteInvoiceDraft } from "@/lib/sales";
+import { getVATSettings, submitInvoiceToZATCA, submitInvoiceToZATCASimulation } from "@/lib/accounting";
 import { getReps } from "@/lib/reps";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import { Icon } from "@/components/ui/Icons";
@@ -36,6 +37,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
   const [toDate, setToDate] = useState("");
   const [acting, setActing] = useState<string | null>(null);
   const [serialExporting, setSerialExporting] = useState<string | null>(null);
+  const [zatcaEnvironment, setZatcaEnvironment] = useState("production");
 
   const load = async () => {
     try {
@@ -46,6 +48,10 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
 
   useEffect(() => {
     getReps().then(({ data }) => setReps(Array.isArray(data) ? data : [])).catch(() => {});
+    getVATSettings().then(({ data }) => {
+      const env = String(data?.zatca_env || data?.environment || "production").toLowerCase();
+      setZatcaEnvironment(env === "simulation" ? "simulation" : "production");
+    }).catch(() => {});
   }, []);
   useEffect(() => { load(); }, [filterStatus, filterRep]);
 
@@ -89,6 +95,18 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
     try { await deleteInvoiceDraft(id); load(); }
     catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setActing(null); }
+  };
+
+  const handleZATCASubmit = async (invoice: any) => {
+    if (!confirm(ar ? `إرسال الفاتورة ${invoice.invoice_number} إلى الهيئة؟` : `Send invoice ${invoice.invoice_number} to ZATCA?`)) return;
+    setActing(invoice.id);
+    try {
+      if (zatcaEnvironment === "simulation") await submitInvoiceToZATCASimulation(invoice.id);
+      else await submitInvoiceToZATCA(invoice.id);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر إرسال الفاتورة إلى الهيئة" : "Unable to submit invoice to ZATCA"));
+    } finally { setActing(null); }
   };
 
   const exportInvoiceSerials = async (invoice: any) => {
@@ -265,6 +283,8 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                     not_sent: { ar: "غير مرسلة", en: "Not sent", badge: "badge-gray" },
                   };
                   const zatca = zatcaPresentation[inv.zatca_status || "not_sent"] || zatcaPresentation.not_sent;
+                  const zatcaApproved = ["cleared", "reported"].includes(String(inv.zatca_status || "").toLowerCase());
+                  const canSubmitToZATCA = ["confirmed", "paid", "partial"].includes(String(inv.status || "").toLowerCase()) && !zatcaApproved;
                   const today = new Date(); today.setHours(0,0,0,0);
                   const dueDate = inv.due_date ? new Date(inv.due_date) : null;
                   const isOverdue = dueDate && dueDate < today && !["paid","cancelled"].includes(inv.status);
@@ -325,6 +345,16 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                             title={ar ? "تحميل سيريالات الفاتورة Excel" : "Download invoice serials as Excel"}>
                             <Icon name="download" size={14} />
                           </button>
+                          <Link href={`/${locale}/sales/invoices/${inv.id}/print`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ color: "var(--primary)" }} title={ar ? "تحميل الفاتورة" : "Download invoice"}>
+                            <Icon name="print" size={14} />
+                          </Link>
+                          {canSubmitToZATCA && (
+                            <button className="btn btn-ghost btn-sm" style={{ color: "var(--primary)" }}
+                              onClick={() => handleZATCASubmit(inv)} disabled={acting === inv.id}
+                              title={ar ? "إرسال للهيئة" : "Send to ZATCA"}>
+                              <Icon name="upload" size={14} />
+                            </button>
+                          )}
                           {inv.status === "draft" && (
                             <button
                               className="btn btn-ghost btn-sm"
