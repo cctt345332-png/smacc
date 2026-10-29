@@ -1202,20 +1202,20 @@ tbody tr:hover { background: #FAFBFC; }
 /* ── POS thermal receipt: never print the cashier page ──────────────── */
 @media print {
   @page {
-    size: 80mm auto;
+    size: 78mm auto;
     margin: 0;
   }
 
   @page thermal80mm {
-    size: 80mm auto;
+    size: 78mm auto;
     margin: 0;
   }
 
   html:has(body.thermal-print-mode),
   body.thermal-print-mode {
-    width: 80mm !important;
-    min-width: 80mm !important;
-    max-width: 80mm !important;
+    width: 78mm !important;
+    min-width: 78mm !important;
+    max-width: 78mm !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
@@ -1236,11 +1236,11 @@ tbody tr:hover { background: #FAFBFC; }
   body.thermal-print-mode .thermal-print-area {
     display: block !important;
     position: static !important;
-    width: 80mm !important;
-    min-width: 80mm !important;
-    max-width: 80mm !important;
+    width: 78mm !important;
+    min-width: 78mm !important;
+    max-width: 78mm !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 2.5mm 5mm 0 2.5mm !important;
     top: 0 !important;
     background: #fff !important;
     box-shadow: none !important;
@@ -1252,9 +1252,9 @@ tbody tr:hover { background: #FAFBFC; }
     min-width: 0 !important;
     max-width: none !important;
     margin: 0 !important;
-    padding: 0 2.5mm 3mm !important;
+    padding: 0 0 3mm !important;
     margin-top: 0 !important;
-    font-family: Arial, "DejaVu Sans", sans-serif !important;
+    font-family: "Times New Roman", Times, serif !important;
     font-size: 10pt !important;
     line-height: 1.4 !important;
     -webkit-text-size-adjust: none !important;
@@ -1269,7 +1269,7 @@ tbody tr:hover { background: #FAFBFC; }
   /* توحيد الخط؛ اللون الرمادي والوزن الخفيف يخرجان متقطعين على الطابعة الحرارية. */
   body.thermal-print-mode .thermal-receipt,
   body.thermal-print-mode .thermal-receipt * {
-    font-family: Arial, "DejaVu Sans", sans-serif !important;
+    font-family: "Times New Roman", Times, serif !important;
   }
 
   body.thermal-print-mode .thermal-receipt .thermal-meta,

@@ -126,7 +126,7 @@ export default function ThermalReceipt({
       style={{
         width: "100%",        // العرض يحدده مقاس رول الطابعة، دون تحجيم داخلي إضافي
         maxWidth: 302,         // عرض مناسب للمعاينة على الشاشة فقط
-        fontFamily: "Arial, 'DejaVu Sans', sans-serif",
+        fontFamily: "'Times New Roman', Times, serif",
         fontSize: 12,
         color: "#000",
         background: "#fff",
