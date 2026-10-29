@@ -851,12 +851,12 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         type_name = final_root.xpath("string(./cbc:InvoiceTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:CreditNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
         type_name = type_name or final_root.xpath("string(./cbc:DebitNoteTypeCode/@name)", namespaces={"cbc": CBC}).strip()
-        # The gateway rejects oversized certificate serials as xs:integer. If
-        # the compatibility fix changes XML, repair SignedProperties and sign
-        # SignedInfo again instead of leaving a stale XAdES hash.
-        fixed_xml = _fix_x509_serial_for_zatca(final_xml)
-        if fixed_xml != final_xml:
-            final_xml = _repair_xades_after_serial_fix(fixed_xml, private_key_pem)
+        # Simplified/reporting documents must remain byte-faithful to the
+        # official SDK output: changing X509SerialNumber after SDK signing
+        # breaks the SignedProperties hash checked by ZATCA. Keep the legacy
+        # workaround only on standard/clearance documents.
+        if not type_name.startswith("02"):
+            final_xml = _fix_x509_serial_for_zatca(final_xml)
             final_root = LET.fromstring(final_xml.encode())
         digest = final_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS}).strip()
         if not digest:
