@@ -79,7 +79,7 @@ async def open_session(data: dict, user=Depends(require_role(["manager","cashier
 
 
 @router.post("/sessions/{session_id}/close")
-async def close_session(session_id: str, data: dict, user=Depends(require_role(["manager","cashier"])), db: AsyncSession = Depends(get_db)):
+async def close_session(session_id: str, data: dict, user=Depends(require_role(["manager", "accountant", "cashier"])), db: AsyncSession = Depends(get_db)):
     return await service.close_session(db, user["tenant_id"], session_id, data)
 
 

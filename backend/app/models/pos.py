@@ -143,6 +143,8 @@ class POSTerminal(Base):
     assigned_user_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("users.id"), nullable=True, index=True
     )
+    # كلمة مرور من 4 أرقام لإغلاق جلسة الجهاز؛ تُحفظ مشفرة ولا تُعاد للواجهة.
+    close_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # الربط المحاسبي
     cash_account_id: Mapped[str | None] = mapped_column(

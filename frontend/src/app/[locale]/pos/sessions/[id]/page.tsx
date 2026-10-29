@@ -36,6 +36,7 @@ export default function SessionDetailPage() {
   const [loading,        setLoading]        = useState(true);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [closingCash,    setClosingCash]    = useState("0");
+  const [closePin,       setClosePin]       = useState("");
   const [closeNotes,     setCloseNotes]     = useState("");
   const [closing,        setClosing]        = useState(false);
   const [closeError,     setCloseError]     = useState("");
@@ -52,13 +53,19 @@ export default function SessionDetailPage() {
   useEffect(() => { if (sessionId) load(); }, [sessionId]);
 
   const handleClose = async () => {
+    if (!/^\d{4}$/.test(closePin)) {
+      setCloseError(isAr ? "أدخل كلمة مرور الإغلاق المكونة من 4 أرقام" : "Enter the 4-digit close PIN");
+      return;
+    }
     setClosing(true); setCloseError("");
     try {
       await closeSession(sessionId, {
         closing_cash: parseFloat(closingCash) || 0,
+        close_pin: closePin,
         notes: closeNotes || undefined,
       });
       setShowCloseModal(false);
+      setClosePin("");
       await load();
     } catch (e: any) {
       setCloseError(e?.response?.data?.detail || (isAr ? "حدث خطأ" : "Error"));
@@ -135,7 +142,7 @@ export default function SessionDetailPage() {
         <div style={{ display: "flex", gap: 8 }}>
           <StructuredReportPrintButton locale={locale} title={isAr ? "تقرير جلسة نقطة البيع" : "POS Session Report"} subtitle={`${session.session_number || session.id}`} period={`${fmtDate(session.opened_at)} — ${session.closed_at ? fmtDate(session.closed_at) : (isAr ? "مفتوحة" : "Open")}`} orientation="landscape" reportCode={`PSS-${String(session.session_number || session.id).slice(-8)}`} metrics={[{ label: isAr ? "رصيد الافتتاح" : "Opening cash", value: `${fmt(Number(session.opening_cash || 0))} ${sar}`, tone: "neutral" }, { label: isAr ? "إجمالي المبيعات" : "Sales total", value: `${fmt(Number(session.total_sales || 0))} ${sar}`, tone: "green" }, { label: isAr ? "النقد المتوقع" : "Expected cash", value: `${fmt(expectedCash)} ${sar}`, tone: "blue" }, { label: isAr ? "فرق الإغلاق" : "Closing variance", value: difference == null ? "—" : `${fmt(difference)} ${sar}`, tone: difference === 0 ? "green" : "amber" }]} tables={[{ title: isAr ? "طرق الدفع" : "Payment methods", headers: [isAr ? "الطريقة" : "Method", isAr ? "المبلغ" : "Amount"], rows: Object.entries(byMethod).map(([method, amount]) => [PAYMENT_LABELS[method] || method, `${fmt(Number(amount || 0))} ${sar}`]) }, { title: isAr ? "المعاملات" : "Transactions", headers: [isAr ? "الوقت" : "Time", isAr ? "الرقم" : "Number", isAr ? "الدفع" : "Payment", isAr ? "الإجمالي" : "Total"], rows: transactions.map((txn: any) => [fmtDate(txn.created_at || txn.transaction_date), String(txn.transaction_number || txn.id || "—"), PAYMENT_LABELS[txn.payment_method] || txn.payment_method || "—", `${fmt(Number(txn.total || txn.total_amount || 0))} ${sar}`]) }]} />
           {isOpen && (
-            <button className="btn btn-primary" onClick={() => { setClosingCash(String(expectedCash.toFixed(2))); setShowCloseModal(true); }}>
+            <button className="btn btn-primary" onClick={() => { setClosingCash(String(expectedCash.toFixed(2))); setClosePin(""); setShowCloseModal(true); }}>
               <Icon name="lock" size={15} />
               {isAr ? "إغلاق الجلسة" : "Close Session"}
             </button>
@@ -389,6 +396,12 @@ export default function SessionDetailPage() {
                   onChange={(e) => setCloseNotes(e.target.value)}
                   placeholder={isAr ? "اختياري..." : "Optional..."}
                   style={{ resize: "none" }} />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">{isAr ? "كلمة مرور إغلاق الجلسة (4 أرقام)" : "Session Close PIN (4 digits)"}</label>
+                <input type="password" className="form-input" inputMode="numeric" maxLength={4} value={closePin}
+                  onChange={(e) => setClosePin(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="••••" />
               </div>
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

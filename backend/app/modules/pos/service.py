@@ -5,6 +5,7 @@
 import uuid
 import base64
 import logging
+import re
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,13 @@ TX_CANCELLED   = "cancelled"
 TX_REFUNDED    = "refunded"
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_close_pin(pin: str | None) -> str:
+    value = str(pin or "")
+    if not re.fullmatch(r"\d{4}", value):
+        raise HTTPException(400, "كلمة مرور إغلاق الجلسة يجب أن تكون 4 أرقام")
+    return value
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────
@@ -159,6 +167,8 @@ async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: st
 
 
 async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
+    from app.core.security import hash_password
+    close_pin = _validate_close_pin(data.get("close_pin"))
     if data.get("card_settlement_account_id"):
         from app.models.accounting import Account
         account = await db.get(Account, data["card_settlement_account_id"])
@@ -187,6 +197,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         max_discount_pct=Decimal(str(data.get("max_discount_pct", 10))),
         allow_purchase=allow_purchase,
         assigned_user_id=data.get("assigned_user_id"),
+        close_pin_hash=hash_password(close_pin),
     )
     db.add(terminal)
     await db.commit()
@@ -238,6 +249,9 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
     for k in allowed:
         if k in data and data[k] is not None:
             setattr(t, k, data[k])
+    if data.get("close_pin"):
+        from app.core.security import hash_password
+        t.close_pin_hash = hash_password(_validate_close_pin(data["close_pin"]))
     # إذا تغيّر النشاط، حدّث allow_purchase تلقائياً
     if "business_type" in data:
         bt = data["business_type"]
@@ -344,6 +358,12 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
         raise HTTPException(404, "الجلسة غير موجودة")
     if session.status != "open":
         raise HTTPException(400, "الجلسة مغلقة بالفعل")
+    terminal = await db.get(POSTerminal, session.terminal_id)
+    if not terminal or not terminal.close_pin_hash:
+        raise HTTPException(409, "لم يتم تعيين كلمة مرور إغلاق لهذا الجهاز؛ اطلب من المدير إعدادها")
+    from app.core.security import verify_password
+    if not verify_password(str(data.get("close_pin") or ""), terminal.close_pin_hash):
+        raise HTTPException(403, "كلمة مرور إغلاق الجلسة غير صحيحة")
 
     closing_cash = Decimal(str(data.get("closing_cash", 0)))
     expected = session.opening_cash + session.total_cash

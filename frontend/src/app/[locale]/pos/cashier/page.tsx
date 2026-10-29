@@ -88,6 +88,7 @@ export default function POSCashierPage() {
   // close session
   const [showCloseForm,  setShowCloseForm]  = useState(false);
   const [closingCash,    setClosingCash]    = useState("");
+  const [closePin,       setClosePin]       = useState("");
   const [closingSession, setClosingSession] = useState(false);
 
   // modals for tracking types
@@ -406,13 +407,18 @@ export default function POSCashierPage() {
   // ── close session ──────────────────────────────────────────────────
   const handleCloseSession = async () => {
     if (!session) return;
+    if (!/^\d{4}$/.test(closePin)) {
+      alert(isAr ? "أدخل كلمة مرور الإغلاق المكونة من 4 أرقام" : "Enter the 4-digit close PIN");
+      return;
+    }
     setClosingSession(true);
     try {
-      await closeSession(session.id, { closing_cash: parseFloat(closingCash || "0") });
+      await closeSession(session.id, { closing_cash: parseFloat(closingCash || "0"), close_pin: closePin });
       if (isCashierRole) {
         // الكاشير — أعد تعيين الجلسة وافتح نموذج جلسة جديدة
         setSession(null);
         setShowCloseForm(false);
+        setClosePin("");
         setCart([]);
         setShowOpenForm(true);
       } else {
@@ -571,23 +577,6 @@ export default function POSCashierPage() {
             <button className="btn btn-secondary btn-sm" onClick={() => { setClosingCash(String(session.total_cash || 0)); setShowCloseForm(true); }}>
               <Icon name="lock" size={14} />
               {isAr ? "إغلاق الجلسة" : "Close Session"}
-            </button>
-          </div>
-        )}
-        {/* زر تسجيل الخروج للكاشير */}
-        {isCashierRole && (
-          <div style={{ marginInlineStart: session ? 8 : "auto" }}>
-            <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)", fontSize: 12 }}
-              onClick={() => {
-                if (confirm(isAr ? "تسجيل الخروج؟" : "Log out?")) {
-                  useAuthStore.getState().logout();
-                  router.replace(`/${locale}/login`);
-                }
-              }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-              {isAr ? "خروج" : "Logout"}
             </button>
           </div>
         )}
@@ -1014,6 +1003,10 @@ export default function POSCashierPage() {
               <div className="form-group">
                 <label className="form-label">{isAr ? "النقد الفعلي في الصندوق" : "Actual Cash in Drawer"}</label>
                 <input type="number" className="form-input" min={0} step={0.01} value={closingCash} onChange={(e) => setClosingCash(e.target.value)} autoFocus />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{isAr ? "كلمة مرور إغلاق الجلسة (4 أرقام)" : "Session Close PIN (4 digits)"}</label>
+                <input type="password" className="form-input" inputMode="numeric" maxLength={4} value={closePin} onChange={(e) => setClosePin(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="••••" />
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button className="btn btn-secondary" onClick={() => setShowCloseForm(false)}>{isAr ? "إلغاء" : "Cancel"}</button>

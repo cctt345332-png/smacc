@@ -44,6 +44,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
 
   const emptyForm = {
     name: "", branch_name: "",
+    close_pin: "",
     warehouse_id: "", cash_account_id: "", sales_account_id: "",
     vat_account_id: "", bank_account_id: "", card_settlement_account_id: "", fiscal_year_id: "",
     receipt_header: "", receipt_footer: "",
@@ -110,6 +111,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
     setEditing(t);
     setForm({
       name: t.name || "", branch_name: t.branch_name || "",
+      close_pin: "",
       warehouse_id: t.warehouse_id || "",
       cash_account_id: t.cash_account_id || "",
       sales_account_id: t.sales_account_id || "",
@@ -406,6 +408,23 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
                     ? "إذا حددت مستخدماً، سيفتح الجهاز تلقائياً عند دخوله بدون اختيار"
                     : "If assigned, the terminal opens automatically when this user logs in"}
                 </p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  {ar ? "كلمة مرور إغلاق الجلسة (4 أرقام)" : "Session Close PIN (4 digits)"} {!editing && <span className="required">*</span>}
+                </label>
+                <input
+                  className="form-input"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  pattern="[0-9]{4}"
+                  value={form.close_pin}
+                  onChange={(e) => upd("close_pin", e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder={editing ? (ar ? "اتركه فارغًا للإبقاء على الكلمة الحالية" : "Leave blank to keep current PIN") : "••••"}
+                />
+                <p className="form-hint">{ar ? "يُطلب هذا الرمز عند إغلاق جلسة الكاشير، ولا يظهر لأي مستخدم." : "Required to close a cashier session; it is never displayed."}</p>
               </div>
 
               {/* المستودع والسنة المالية */}
