@@ -860,8 +860,8 @@ async def _get_or_create_pos_cash_customer(db: AsyncSession, tenant_id: str, use
 
 async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_settings) -> str | None:
     """إنشاء فاتورة مبسطة ZATCA تلقائياً عند كل عملية بيع"""
-    from app.models.sales import Invoice, InvoiceLine, InvoiceStatus
-    from app.modules.sales.service import _next_invoice_number
+    from app.models.sales import Invoice, InvoiceLine, InvoiceStatus, Payment, PaymentMethod
+    from app.modules.sales.service import _next_invoice_number, _next_payment_number
 
     terminal = await db.get(POSTerminal, session.terminal_id)
     fiscal_year_id = terminal.fiscal_year_id if terminal else None
@@ -898,10 +898,51 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         total=tx.total,
         currency_code="SAR",
         qr_code=tx.qr_code,
+        paid_amount=tx.total,
         status=InvoiceStatus.CONFIRMED,
         created_by=user_id,
     )
     db.add(invoice)
+
+    # عملية POS مدفوعة لحظيًا؛ سجّل الدفعة حتى تظهر في عمود «المدفوع»
+    # وتقارير المتبقي. لا ننشئ قيدًا هنا لأن قيد POS يُنشأ في create_transaction
+    # عبر _create_pos_journal، ومنعًا لتكرار القيد المحاسبي.
+    payment_parts: list[tuple[Decimal, PaymentMethod]] = []
+    if tx.payment_method == "split":
+        cash_amount = Decimal(str(tx.total or 0)) - Decimal(str(tx.card_amount or 0))
+        if cash_amount > 0:
+            payment_parts.append((cash_amount, PaymentMethod.CASH))
+        if Decimal(str(tx.card_amount or 0)) > 0:
+            payment_parts.append((Decimal(str(tx.card_amount)), PaymentMethod.MADA))
+    else:
+        method_map = {
+            "cash": PaymentMethod.CASH,
+            "mada": PaymentMethod.MADA,
+            "credit_card": PaymentMethod.CREDIT_CARD,
+            "stc_pay": PaymentMethod.STC_PAY,
+            "bank_transfer": PaymentMethod.BANK_TRANSFER,
+        }
+        payment_method = method_map.get(tx.payment_method, PaymentMethod.CASH)
+        payment_parts.append((Decimal(str(tx.total or 0)), payment_method))
+
+    for amount, payment_method in payment_parts:
+        if amount <= 0:
+            continue
+        db.add(Payment(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant_id,
+            payment_number=await _next_payment_number(db, tenant_id),
+            payment_type="receipt",
+            invoice_id=invoice_id,
+            customer_id=customer_id,
+            payment_date=now,
+            amount=amount,
+            payment_method=payment_method,
+            reference=tx.transaction_number,
+            notes=f"دفعة تلقائية من نقطة البيع {tx.transaction_number}",
+            created_by=user_id,
+        ))
+    invoice.status = InvoiceStatus.PAID
 
     # أسطر الفاتورة من أسطر المعاملة
     lines_r = await db.execute(
