@@ -63,8 +63,11 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
   }, [form.payment_method, accountMappings]);
 
   const upd = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
-  const vatAmt = parseFloat(form.vat_amount) || 0;
-  const total = (parseFloat(form.amount) || 0) + vatAmt;
+  // المستخدم يدخل الإجمالي شامل ضريبة القيمة المضافة، والنظام يفصلها تلقائيًا.
+  const grossAmount = parseFloat(form.amount) || 0;
+  const netAmount = grossAmount / 1.15;
+  const vatAmt = grossAmount - netAmount;
+  const total = grossAmount;
 
   const handleSave = async (post = false) => {
     if (!form.amount || !form.description_ar) return alert(ar ? "أدخل المبلغ والبيان" : "Enter amount and description");
@@ -73,7 +76,7 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
     try {
       const { data } = await createVoucher({
         ...form, voucher_type: "expense",
-        amount: parseFloat(form.amount), vat_amount: vatAmt,
+        amount: Number(netAmount.toFixed(2)), vat_amount: Number(vatAmt.toFixed(2)),
         voucher_date: new Date(form.voucher_date).toISOString(),
         bank_account_id: form.bank_account_id || null,
         party_type: "other", party_id: null,
@@ -128,18 +131,18 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
             </div>
             <div className="grid-2">
               <div className="form-group">
-                <label className="form-label">{ar ? "المبلغ قبل الضريبة (ر.س)" : "Amount (excl. VAT)"} <span className="required">*</span></label>
+                <label className="form-label">{ar ? "المبلغ شامل الضريبة (ر.س)" : "Total incl. VAT (SAR)"} <span className="required">*</span></label>
                 <input type="number" className="form-input" value={form.amount} onChange={e => upd("amount", e.target.value)} min="0" step="0.01" />
               </div>
               <div className="form-group">
-                <label className="form-label">{ar ? "ضريبة القيمة المضافة (ر.س)" : "VAT Amount"}</label>
-                <input type="number" className="form-input" value={form.vat_amount} onChange={e => upd("vat_amount", e.target.value)} min="0" step="0.01" />
+                <label className="form-label">{ar ? "ضريبة القيمة المضافة 15% (محسوبة تلقائيًا)" : "VAT 15% (calculated automatically)"}</label>
+                <input type="number" className="form-input" value={vatAmt.toFixed(2)} readOnly />
               </div>
             </div>
             {total > 0 && (
               <div style={{ background: "#F8FAFC", borderRadius: 8, padding: "10px 14px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "var(--text-secondary)" }}>{ar ? "الإجمالي شامل الضريبة:" : "Total incl. VAT:"}</span>
-                <span style={{ fontWeight: 700, color: "var(--primary)" }}>{total.toLocaleString("en-US", { minimumFractionDigits: 2 })} SAR</span>
+                <span style={{ color: "var(--text-secondary)" }}>{ar ? "قبل الضريبة / الإجمالي:" : "Excl. VAT / Total:"}</span>
+                <span style={{ fontWeight: 700, color: "var(--primary)" }}>{netAmount.toFixed(2)} / {total.toLocaleString("en-US", { minimumFractionDigits: 2 })} SAR</span>
               </div>
             )}
             <div className="grid-2" style={{ marginTop: 12 }}>
