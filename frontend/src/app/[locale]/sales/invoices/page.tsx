@@ -243,6 +243,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                   <th>{ar ? "العميل" : "Customer"}</th>
                   <th>{ar ? "المندوب" : "Sales Rep"}</th>
                   <th>{ar ? "النوع" : "Type"}</th>
+                  <th>{ar ? "حالة الهيئة" : "ZATCA status"}</th>
                   <th>{ar ? "التاريخ" : "Date"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "المدفوع" : "Paid"}</th>
@@ -254,6 +255,16 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                 {filteredInvoices.map(inv => {
                   const status = INVOICE_STATUS_PRESENTATION[inv.status] || { ar: "حالة غير معروفة", badge: "badge-gray" };
                   const itype = INVOICE_TYPES[inv.invoice_type] || { ar: inv.invoice_type, badge: "badge-gray" };
+                  const isPosInvoice = String(inv.notes || "").startsWith("POS:");
+                  const zatcaPresentation: Record<string, { ar: string; en: string; badge: string }> = {
+                    cleared: { ar: "معتمدة", en: "Cleared", badge: "badge-success" },
+                    reported: { ar: "مُبلّغ عنها", en: "Reported", badge: "badge-success" },
+                    compliance_passed: { ar: "تم التحقق", en: "Verified", badge: "badge-success" },
+                    rejected: { ar: "مرفوضة", en: "Rejected", badge: "badge-danger" },
+                    zatca_pending: { ar: "معلّقة", en: "Pending", badge: "badge-warning" },
+                    not_sent: { ar: "غير مرسلة", en: "Not sent", badge: "badge-gray" },
+                  };
+                  const zatca = zatcaPresentation[inv.zatca_status || "not_sent"] || zatcaPresentation.not_sent;
                   const today = new Date(); today.setHours(0,0,0,0);
                   const dueDate = inv.due_date ? new Date(inv.due_date) : null;
                   const isOverdue = dueDate && dueDate < today && !["paid","cancelled"].includes(inv.status);
@@ -276,7 +287,13 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                           <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{ar ? "مبيعات مباشرة" : "Direct sale"}</span>
                         )}
                       </td>
-                      <td><span className={`badge ${itype.badge}`}>{itype.ar}</span></td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                          {isPosInvoice && <span className="badge" style={{ background: "#EDE9FE", color: "#5B21B6", border: "1px solid #C4B5FD", fontSize: 10, padding: "2px 5px", lineHeight: 1.2 }}>POS</span>}
+                          <span className={`badge ${itype.badge}`}>{itype.ar}</span>
+                        </div>
+                      </td>
+                      <td><span className={`badge ${zatca.badge}`} title={inv.zatca_status || "not_sent"}>{ar ? zatca.ar : zatca.en}</span></td>
                       <td style={{ color: "var(--text-secondary)", fontSize: 12 }}>
                         <div>{inv.issue_date?.split("T")[0]}</div>
                         {dueDate && (
