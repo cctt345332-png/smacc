@@ -1167,11 +1167,11 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
     if invoice.invoice_type == InvoiceType.SIMPLIFIED:
         from app.modules import zatca_service
         zatca_settings = await zatca_service.get_settings(db, tenant_id)
-        if zatca_settings and zatca_settings.is_zatca_enabled and zatca_settings.zatca_production_token_encrypted:
-            try:
-                await zatca_service.submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
-            except Exception as exc:
-                zatca_settings.zatca_last_error = str(exc)[:4000]
+        try:
+            await zatca_service.submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
+        except Exception as exc:
+            if zatca_settings:
+                zatca_settings.zatca_last_error = f"Auto simplified reporting: {exc}"[:4000]
                 await db.commit()
     # Standard invoices remain manual: only «إرسال للهيئة» submits them.
     return await get_invoice(db, tenant_id, invoice_id)
@@ -3089,11 +3089,11 @@ async def confirm_approved_invoice(db: AsyncSession, tenant_id: str, user_id: st
     if invoice.invoice_type == InvoiceType.SIMPLIFIED:
         from app.modules import zatca_service
         zatca_settings = await zatca_service.get_settings(db, tenant_id)
-        if zatca_settings and zatca_settings.is_zatca_enabled and zatca_settings.zatca_production_token_encrypted:
-            try:
-                await zatca_service.submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
-            except Exception as exc:
-                zatca_settings.zatca_last_error = str(exc)[:4000]
+        try:
+            await zatca_service.submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
+        except Exception as exc:
+            if zatca_settings:
+                zatca_settings.zatca_last_error = f"Auto simplified reporting: {exc}"[:4000]
                 await db.commit()
     # Standard invoices remain manual: only «إرسال للهيئة» submits them.
     return await get_invoice(db, tenant_id, invoice_id)
