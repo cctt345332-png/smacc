@@ -37,9 +37,11 @@ interface Product {
 const calcLine = (l: CartLine) => {
   const gross = l.quantity * l.unit_price;
   const disc  = (gross * l.discount_pct) / 100;
-  const taxable = gross - disc;
-  const vat   = (taxable * l.vat_rate) / 100;
-  return { gross, disc, taxable, vat, total: taxable + vat };
+  // أسعار البيع في النظام شاملة الضريبة؛ لا نضيف 15% فوق السعر.
+  const total = gross - disc;
+  const vat   = l.vat_rate > 0 ? (total * l.vat_rate) / (100 + l.vat_rate) : 0;
+  const taxable = total - vat;
+  return { gross, disc, taxable, vat, total };
 };
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const PAYMENT_LABELS: Record<string, string> = { cash: "نقدي", mada: "شبكة", split: "مقسّم" };
@@ -1126,6 +1128,7 @@ export default function POSCashierPage() {
             <div className="card-body">
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16, fontSize: 13 }}>
                 {[
+                  { label: isAr ? "رصيد الافتتاح" : "Opening Cash",       val: `${fmt(Number(session?.opening_cash || 0))} ${sar}`, color: "var(--primary)" },
                   { label: isAr ? "إجمالي المبيعات" : "Total Sales", val: `${fmt(Number(session?.total_sales))} ${sar}`, color: "var(--success)" },
                   { label: isAr ? "عدد المعاملات" : "Transactions",  val: String(session?.transaction_count), color: "var(--primary)" },
                   { label: isAr ? "نقدي" : "Cash",                   val: `${fmt(Number(session?.total_cash))} ${sar}`, color: "var(--text-primary)" },

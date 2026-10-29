@@ -336,17 +336,67 @@ async def open_session(db: AsyncSession, tenant_id: str, user_id: str, data: dic
     if existing:
         raise HTTPException(400, "يوجد جلسة مفتوحة بالفعل لهذا الجهاز")
 
+    opening_cash = Decimal(str(data.get("opening_cash", 0)))
+    if opening_cash < 0:
+        raise HTTPException(400, "رصيد الافتتاح لا يمكن أن يكون سالبًا")
+
     session = POSSession(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
         terminal_id=terminal_id,
         cashier_id=user_id,
-        opening_cash=Decimal(str(data.get("opening_cash", 0))),
+        opening_cash=opening_cash,
         status="open",
         opened_at=datetime.utcnow(),
         notes=data.get("notes"),
     )
     db.add(session)
+
+    # الرصيد الافتتاحي ليس مبيعات؛ يُثبت كقيد مستقل: مدين صندوق الجهاز
+    # ودائن رأس المال/الأرصدة الافتتاحية، حتى يظهر في دفتر الأستاذ وفي تقرير الإغلاق.
+    if opening_cash > 0:
+        from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
+        from app.modules.accounting.service import get_operational_account
+
+        cash_account = await db.get(Account, terminal.cash_account_id) if terminal.cash_account_id else None
+        if not cash_account or cash_account.tenant_id != tenant_id or not cash_account.is_active or not cash_account.is_posting:
+            raise HTTPException(409, "اربط حساب صندوق نشط وقابل للقيد بجهاز نقطة البيع قبل إدخال رصيد افتتاحي")
+        try:
+            capital_account = await get_operational_account(db, tenant_id, "capital")
+        except HTTPException:
+            raise HTTPException(409, "حساب حقوق الملكية/الأرصدة الافتتاحية غير مهيأ في ربط الحسابات")
+        fiscal_id = terminal.fiscal_year_id
+        if fiscal_id:
+            fiscal = await db.get(FiscalYear, fiscal_id)
+        else:
+            fiscal = await db.scalar(select(FiscalYear).where(
+                FiscalYear.tenant_id == tenant_id,
+                FiscalYear.status == FiscalYearStatus.OPEN,
+            ).order_by(FiscalYear.start_date).limit(1))
+        if not fiscal:
+            raise HTTPException(409, "لا توجد سنة مالية مفتوحة لقيد رصيد افتتاح نقطة البيع")
+        entry_id = str(uuid.uuid4())
+        db.add(JournalEntry(
+            id=entry_id, tenant_id=tenant_id,
+            entry_number=f"POS-OPEN-{session.id[:8].upper()}",
+            entry_date=datetime.utcnow(), fiscal_year_id=fiscal.id,
+            description_ar=f"رصيد افتتاح صندوق نقطة البيع: {terminal.name}",
+            description_en=f"POS opening cash: {terminal.name}",
+            status=JournalEntryStatus.POSTED, reference=session.id,
+            source="pos_opening", total_debit=opening_cash, total_credit=opening_cash,
+            created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow(),
+        ))
+        db.add(JournalEntryLine(
+            id=str(uuid.uuid4()), entry_id=entry_id, account_id=cash_account.id,
+            description=f"رصيد افتتاح صندوق {terminal.name}", debit=opening_cash,
+            credit=Decimal("0"), line_order=0,
+        ))
+        db.add(JournalEntryLine(
+            id=str(uuid.uuid4()), entry_id=entry_id, account_id=capital_account.id,
+            description="مقابل رصيد افتتاح نقطة البيع", debit=Decimal("0"),
+            credit=opening_cash, line_order=1,
+        ))
+
     await db.commit()
     await db.refresh(session)
     return session
@@ -505,11 +555,15 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         disc_pct = Decimal(str(line.get("discount_pct", 0)))
         vat_rate = Decimal(str(line.get("vat_rate", 15)))
 
+        # أسعار البيع المخزنة والمستخدمة في POS شاملة الضريبة.
         gross = qty * price
         disc_amt = (gross * disc_pct / 100).quantize(Decimal("0.01"))
-        taxable = gross - disc_amt
-        vat_amt = (taxable * vat_rate / 100).quantize(Decimal("0.01"))
-        line_total = taxable + vat_amt
+        line_total = gross - disc_amt
+        vat_amt = (
+            (line_total * vat_rate / (Decimal("100") + vat_rate)).quantize(Decimal("0.01"))
+            if vat_rate > 0 else Decimal("0")
+        )
+        taxable = line_total - vat_amt
 
         subtotal += gross
         discount_total += disc_amt
