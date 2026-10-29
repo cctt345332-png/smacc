@@ -1266,4 +1266,20 @@ tbody tr:hover { background: #FAFBFC; }
     print-color-adjust: exact;
   }
 
+  /* توحيد الخط؛ اللون الرمادي والوزن الخفيف يخرجان متقطعين على الطابعة الحرارية. */
+  body.thermal-print-mode .thermal-receipt,
+  body.thermal-print-mode .thermal-receipt * {
+    font-family: Arial, "DejaVu Sans", sans-serif !important;
+  }
+
+  body.thermal-print-mode .thermal-receipt .thermal-meta,
+  body.thermal-print-mode .thermal-receipt .thermal-line-extra,
+  body.thermal-print-mode .thermal-receipt .thermal-line-tax,
+  body.thermal-print-mode .thermal-receipt .thermal-qr-note,
+  body.thermal-print-mode .thermal-receipt .thermal-receipt-number,
+  body.thermal-print-mode .thermal-receipt .thermal-footer > div {
+    color: #000 !important;
+    font-weight: 500 !important;
+  }
+
 }
