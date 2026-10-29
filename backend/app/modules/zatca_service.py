@@ -358,6 +358,21 @@ async def _run_background_compliance_tests(tenant_id: str) -> None:
             logger.exception("ZATCA background onboarding failed tenant=%s: %s", tenant_id, exc)
 
 
+async def resume_pending_compliance_tests() -> None:
+    """استئناف الاختبارات للشركات التي أصدرت Compliance CSID قبل نشر الأتمتة."""
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(select(VATSetting))).scalars().all()
+        for vat in rows:
+            if vat.zatca_compliance_token_encrypted and vat.zatca_compliance_secret_encrypted and not vat.zatca_production_token_encrypted:
+                try:
+                    steps = json.loads(vat.zatca_compliance_steps or "{}")
+                except (TypeError, ValueError):
+                    steps = {}
+                if not all(steps.get(step) is True for step in COMPLIANCE_STEPS):
+                    asyncio.create_task(_run_background_compliance_tests(vat.tenant_id))
+
+
 def _compliance_fixture_invoice(vat: VATSetting, now: datetime, invoice_type: str) -> Any:
     subtotal = Decimal("100.00")
     vat_amount = Decimal("15.00")

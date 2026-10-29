@@ -95,6 +95,13 @@ async def start_notification_scheduler() -> None:
 
 
 @app.on_event("startup")
+async def resume_zatca_onboarding() -> None:
+    """يشغّل اختبارات زاتكا للشركات التي كانت بانتظارها قبل إعادة النشر."""
+    from app.modules.zatca_service import resume_pending_compliance_tests
+    await resume_pending_compliance_tests()
+
+
+@app.on_event("startup")
 async def start_stocktake_scheduler() -> None:
     global _stocktake_scheduler_task
     _stocktake_scheduler_task = asyncio.create_task(_mandatory_stocktake_scheduler())
