@@ -310,7 +310,8 @@ export default function SessionDetailPage() {
                       }`}>
                         {txn.status === "completed" ? (isAr ? "مكتملة" : "Completed") :
                          txn.status === "refunded"  ? (isAr ? "مستردة" : "Refunded") :
-                         (isAr ? "ملغاة" : "Cancelled")}
+                         txn.status === "cancelled" ? (isAr ? "ملغاة" : "Cancelled") :
+                         (isAr ? "غير محددة" : "Unknown")}
                       </span>
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-muted)" }}>

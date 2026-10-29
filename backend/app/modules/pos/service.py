@@ -429,6 +429,7 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
                 "transaction_number": tx.transaction_number,
                 "total": float(tx.total),
                 "vat_amount": float(tx.vat_amount),
+                "status": tx.status.value if hasattr(tx.status, "value") else str(tx.status),
                 "payment_method": tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method),
                 "created_at": tx.created_at.isoformat(),
                 "lines_count": len(tx.lines),
