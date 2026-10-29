@@ -1206,6 +1206,11 @@ tbody tr:hover { background: #FAFBFC; }
     margin: 0;
   }
 
+  @page thermal80mm {
+    size: 80mm auto;
+    margin: 0;
+  }
+
   html:has(body.thermal-print-mode),
   body.thermal-print-mode {
     width: 80mm !important;
@@ -1241,6 +1246,7 @@ tbody tr:hover { background: #FAFBFC; }
   }
 
   body.thermal-print-mode .thermal-receipt {
+    page: thermal80mm;
     width: 80mm !important;
     min-width: 80mm !important;
     max-width: 80mm !important;
