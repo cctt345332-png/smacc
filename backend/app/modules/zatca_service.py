@@ -627,28 +627,6 @@ def _fix_x509_serial_for_zatca(xml: str) -> str:
     return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
 
 
-def _resign_after_x509_serial_fix(xml: str, key: Any) -> str:
-    """Re-sign XAdES after changing the oversized serial workaround value."""
-    root = LET.fromstring(xml.encode())
-    ns = {"ds": DS, "xades": "http://uri.etsi.org/01903/v1.3.2#"}
-    reference = root.xpath(".//ds:Reference[@URI='#xadesSignedProperties']", namespaces=ns)
-    target = root.xpath(".//*[@Id='xadesSignedProperties']", namespaces=ns)
-    if not reference or not target:
-        return xml
-    canonical_target = LET.tostring(target[0], method="c14n", exclusive=False, with_comments=False)
-    digest = base64.b64encode(hashlib.sha256(canonical_target).digest()).decode()
-    digest_nodes = reference[0].xpath("./ds:DigestValue", namespaces=ns)
-    if digest_nodes:
-        digest_nodes[0].text = digest
-    signed_info = root.xpath(".//ds:Signature/ds:SignedInfo", namespaces=ns)[0]
-    signed_info_bytes = LET.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
-    r, s = decode_dss_signature(key.sign(signed_info_bytes, ec.ECDSA(hashes.SHA256())))
-    signature_nodes = root.xpath(".//ds:Signature/ds:SignatureValue", namespaces=ns)
-    if signature_nodes:
-        signature_nodes[0].text = base64.b64encode(r.to_bytes(32, "big") + s.to_bytes(32, "big")).decode()
-    return LET.tostring(root, encoding="utf-8", xml_declaration=True).decode()
-
-
 def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tuple[str, str]:
     """Use the official SDK's signing and QR generators, never local replicas."""
     sdk_jar = Path("/app/vendor/zatca-sdk-3.0.8.jar")
@@ -719,9 +697,7 @@ def _sdk_sign_and_qr(xml: str, private_key_pem: str, certificate_b64: str) -> tu
         # the QR TLV with the current ZATCA Table 3 positions below.
         final_root = LET.parse(str(signed_path))
         final_xml = LET.tostring(final_root, encoding="utf-8", xml_declaration=True).decode()
-        normalized_xml = _fix_x509_serial_for_zatca(final_xml)
-        if normalized_xml != final_xml:
-            final_xml = _resign_after_x509_serial_fix(normalized_xml, key)
+        final_xml = _fix_x509_serial_for_zatca(final_xml)
         final_root = LET.fromstring(final_xml.encode())
         digest = final_root.xpath("string(.//ds:SignedInfo/ds:Reference/ds:DigestValue)", namespaces={"ds": DS}).strip()
         if not digest:
