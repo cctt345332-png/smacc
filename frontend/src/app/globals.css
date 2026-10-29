@@ -1254,9 +1254,9 @@ tbody tr:hover { background: #FAFBFC; }
     margin: 0 !important;
     padding: 0 2.5mm 3mm !important;
     margin-top: 0 !important;
-    font-family: Arial, Tahoma, "DejaVu Sans", sans-serif !important;
-    font-size: 11pt !important;
-    line-height: 1.35 !important;
+    font-family: Arial, "DejaVu Sans", sans-serif !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
     -webkit-text-size-adjust: none !important;
     box-sizing: border-box !important;
     background: #fff !important;
@@ -1266,28 +1266,4 @@ tbody tr:hover { background: #FAFBFC; }
     print-color-adjust: exact;
   }
 
-  /* النصوص الثانوية كانت تحمل أحجامًا inline صغيرة، لذلك لم تستفد من حجم الخط العام. */
-  body.thermal-print-mode .thermal-receipt .thermal-meta,
-  body.thermal-print-mode .thermal-receipt .thermal-invoice-type,
-  body.thermal-print-mode .thermal-receipt .thermal-items-header,
-  body.thermal-print-mode .thermal-receipt .thermal-line,
-  body.thermal-print-mode .thermal-receipt .thermal-grand-total,
-  body.thermal-print-mode .thermal-receipt .thermal-footer {
-    font-size: 11pt !important;
-  }
-
-  body.thermal-print-mode .thermal-receipt .thermal-line-extra,
-  body.thermal-print-mode .thermal-receipt .thermal-line-tax,
-  body.thermal-print-mode .thermal-receipt .thermal-qr-note,
-  body.thermal-print-mode .thermal-receipt .thermal-receipt-number {
-    font-size: 10pt !important;
-  }
-
-  body.thermal-print-mode .thermal-receipt .thermal-qr-title {
-    font-size: 11pt !important;
-  }
-
-  body.thermal-print-mode .thermal-receipt .thermal-line > div:first-child {
-    font-size: 11pt !important;
-  }
 }
