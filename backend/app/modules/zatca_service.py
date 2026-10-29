@@ -141,7 +141,14 @@ csr.industry.business.category={business_category}
         if result.returncode != 0 or not csr_path.exists() or not key_path.exists():
             detail = (result.stderr or result.stdout or "").strip()[-1000:]
             raise HTTPException(500, f"تعذر إنشاء CSR بواسطة SDK الرسمي لزاتكا: {detail}")
-        csr_b64 = "".join(csr_path.read_text(encoding="utf-8").split())
+        csr_text = "".join(csr_path.read_text(encoding="utf-8").split())
+        try:
+            csr_bytes = base64.b64decode(csr_text, validate=True)
+            if csr_bytes.startswith(b"-----BEGIN CERTIFICATE REQUEST-----"):
+                csr_bytes = x509.load_pem_x509_csr(csr_bytes).public_bytes(serialization.Encoding.DER)
+            csr_b64 = base64.b64encode(csr_bytes).decode()
+        except (ValueError, TypeError, base64.binascii.Error) as exc:
+            raise HTTPException(500, "تعذر تطبيع CSR الناتج من SDK الرسمي إلى Base64-DER") from exc
         # The SDK writes the private key as Base64(DER); the rest of SMACC
         # consumes a PEM key for XML signing, so convert it without changing
         # the key material.
