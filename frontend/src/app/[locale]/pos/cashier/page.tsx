@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase } from "@/lib/pos";
-import { getItemsForPicker, getAvailableSerials, getBatches, getVariants } from "@/lib/inventory";
+import { getItemsForPicker, getAvailableSerials, searchSerial, getBatches, getVariants } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 import ThermalReceipt from "@/components/pos/ThermalReceipt";
@@ -65,6 +65,7 @@ export default function POSCashierPage() {
 
   const [search,       setSearch]       = useState("");
   const [products,     setProducts]     = useState<Product[]>([]);
+  const [allProducts,  setAllProducts]  = useState<Product[]>([]);
   const [searching,    setSearching]    = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -170,26 +171,93 @@ export default function POSCashierPage() {
     })();
   }, []);
 
+  // شاشة POS تبدأ بقائمة الأصناف المتاحة، ولا تنتظر كتابة بحث.
+  useEffect(() => {
+    if (!terminal?.id) return;
+    let cancelled = false;
+    setSearching(true);
+    getItemsForPicker({ warehouse_id: terminal.warehouse_id || undefined })
+      .then((r) => {
+        if (cancelled) return;
+        const items = (r.data || []).filter((p: any) => p.pos_enabled !== false);
+        setAllProducts(items);
+        if (!search.trim()) setProducts(items);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAllProducts([]);
+          setProducts([]);
+        }
+      })
+      .finally(() => { if (!cancelled) setSearching(false); });
+    return () => { cancelled = true; };
+  }, [terminal?.id, terminal?.warehouse_id]);
+
   // ── search products ────────────────────────────────────────────────
   const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setProducts([]); return; }
+    const value = q.trim();
+    if (!value) { setProducts(allProducts); return; }
     setSearching(true);
     try {
-      const r = await getItemsForPicker({ search: q });
+      // قارئ السيريال يرسل الرقم مباشرة؛ افحص السيريال أولاً قبل بحث اسم/باركود الصنف.
+      if (value.length >= 3) {
+        const serialResult = await searchSerial(value).catch(() => ({ data: [] }));
+        const serialHit = (serialResult.data || []).find((s: any) =>
+          String(s.serial_number || "").trim().toLowerCase() === value.toLowerCase() && s.status === "in_stock"
+        );
+        if (serialHit) {
+          let product = allProducts.find((p) => p.id === serialHit.product_id);
+          if (!product) {
+            const productResult = await getItemsForPicker({
+              search: serialHit.product_name,
+              warehouse_id: terminal?.warehouse_id || undefined,
+            });
+            product = (productResult.data || []).find((p: Product) => p.id === serialHit.product_id);
+          }
+          if (product && product.tracking_type === "serial") {
+            const availableResult = terminal?.id
+              ? await getTerminalSerials(terminal.id, product.id).catch(() => ({ data: [] }))
+              : await getAvailableSerials(product.id).catch(() => ({ data: [] }));
+            const selectedSerial = (availableResult.data || []).find((s: any) =>
+              String(s.id) === String(serialHit.serial_id) ||
+              String(s.serial_number || "").trim().toLowerCase() === value.toLowerCase()
+            );
+            if (!selectedSerial) {
+              throw new Error(isAr ? "السيريال غير متاح في مستودع نقطة البيع" : "Serial is not available at this POS warehouse");
+            }
+            addLine(product, {
+              serial_item_id: selectedSerial.id,
+              serial_number: selectedSerial.serial_number,
+              unit_price: selectedSerial.sale_price || product.sale_price,
+            });
+            setSearch("");
+            setProducts(allProducts);
+            return;
+          }
+        }
+      }
+
+      const r = await getItemsForPicker({
+        search: value,
+        warehouse_id: terminal?.warehouse_id || undefined,
+      });
       const items = (r.data || []).filter((p: any) => p.pos_enabled !== false);
       setProducts(items);
       // باركود مطابق تماماً → أضف مباشرة بدون انتظار
       const exact = items.find((p: any) =>
-        p.barcode && p.barcode.trim() === q.trim()
+        p.barcode && p.barcode.trim() === value
       );
       if (exact && items.length === 1) {
         await addToCart(exact);
         setSearch("");
-        setProducts([]);
+        setProducts(allProducts);
       }
-    } catch { setProducts([]); }
+    } catch (e: any) {
+      if (e?.message) alert(e.message);
+      setProducts([]);
+    }
     finally { setSearching(false); }
-  }, []);
+  }, [allProducts, terminal?.id, terminal?.warehouse_id, isAr]);
 
   useEffect(() => {
     const t = setTimeout(() => doSearch(search), 300);
@@ -556,12 +624,12 @@ export default function POSCashierPage() {
                 <div style={{ marginTop: 8 }}>{isAr ? "لا توجد نتائج" : "No results"}</div>
               </div>
             )}
-            {!searching && !search && (
+            {!searching && !search && products.length === 0 && (
               <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: actCfg.color, opacity: 0.4 }}>
                   <Icon name={actCfg.icon} size={48} />
                 </div>
-                <div style={{ fontSize: 13 }}>{isAr ? "ابحث عن صنف لإضافته للسلة" : "Search for an item to add to cart"}</div>
+                <div style={{ fontSize: 13 }}>{isAr ? "لا توجد أصناف متاحة في مستودع نقطة البيع" : "No products available at this POS warehouse"}</div>
                 <div style={{ fontSize: 11, color: actCfg.color, fontWeight: 600, marginTop: 4 }}>{actCfg.label}</div>
               </div>
             )}
