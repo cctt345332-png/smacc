@@ -28,7 +28,8 @@ export default function SalesInvoicePrintPage(props: { params: Promise<{ locale:
           issue_date: invoice.issue_date,
           supply_date: invoice.supply_date,
           due_date: invoice.due_date,
-          status: invoice.status,
+          // حالة workflow داخلية للويب فقط؛ لا نطبع confirmed/cancelled على نسخة العميل.
+          // تبقى الحالة معروضة في صفحة الفاتورة الرئيسية دون تغيير.
           invoice_type: invoice.invoice_type,
           uuid: invoice.uuid,
           qr_code: invoice.qr_code,
