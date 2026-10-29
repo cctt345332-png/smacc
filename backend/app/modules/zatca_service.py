@@ -213,6 +213,16 @@ def _mark_compliance_step(vat: VATSetting, step: str) -> None:
     vat.zatca_compliance_steps = json.dumps(steps)
 
 
+def _compliance_already_completed(payload: dict[str, Any]) -> bool:
+    """ZATCA 406 means success already recorded, not a document failure."""
+    results = payload.get("validationResults") or {}
+    for error in results.get("errorMessages") or []:
+        message = str(error.get("message") or "").lower()
+        if "compliance check already completed for" in message:
+            return True
+    return False
+
+
 async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name: str, address: str, activity: str, env: str, invoice_type_map: str) -> dict[str, Any]:
     _validate_vat(vat_number)
     if env not in {"simulation", "sandbox", "production"}:
@@ -861,6 +871,7 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
         log.http_status = response.status_code; log.response_body = json.dumps(payload, ensure_ascii=False)[:100000]; log.responded_at = datetime.utcnow()
         zatca_state = str(payload.get("status") or payload.get("reportingStatus") or payload.get("clearanceStatus") or "").upper()
         compliance_ok = response.status_code in (200, 202) and not payload.get("errors")
+        compliance_ok = compliance_ok or (compliance_test and _compliance_already_completed(payload))
         accepted = compliance_ok if compliance_test else response.status_code in (200, 202) and zatca_state in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
         if accepted:
             if compliance_test:
@@ -1033,7 +1044,7 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
             response = await client.post(submit_url, headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Accept-Language": "en", "Content-Type": "application/json"}, json=body)
         payload = response.json() if response.content else {}
         log.http_status = response.status_code; log.response_body = json.dumps(payload, ensure_ascii=False)[:100000]; log.responded_at = datetime.utcnow()
-        accepted = (response.status_code in (200, 202) and not payload.get("errors")) if simulation else response.status_code in (200, 202) and str(payload.get("status", "")).upper() in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
+        accepted = ((response.status_code in (200, 202) and not payload.get("errors")) or _compliance_already_completed(payload)) if simulation else response.status_code in (200, 202) and str(payload.get("status", "")).upper() in {"REPORTED", "CLEARED", "CLEARED_WITH_WARNINGS"}
         if accepted:
             if simulation:
                 step = f"{'simplified' if simplified else 'standard'}-{'debit' if is_debit else 'credit'}-note-compliant"
