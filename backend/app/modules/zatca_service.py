@@ -331,7 +331,7 @@ async def _run_background_compliance_tests(tenant_id: str) -> None:
                     async with httpx.AsyncClient(timeout=45) as client:
                         response = await client.post(
                             f"{_api_base(vat.zatca_env)}/compliance/invoices",
-                            headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Content-Type": "application/json"},
+                            headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Accept-Language": "EN", "Content-Type": "application/json"},
                             json=body,
                         )
                     payload = response.json() if response.content else {}
