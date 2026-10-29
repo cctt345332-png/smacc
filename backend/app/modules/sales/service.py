@@ -1,4 +1,5 @@
 import uuid
+import logging
 import base64
 import json
 from datetime import datetime, timedelta
@@ -24,6 +25,8 @@ from app.modules.sales.schemas import (
 )
 from app.core.audit import record_audit
 from app.modules.accounting.service import is_operational_auto_posting_enabled
+
+logger = logging.getLogger(__name__)
 
 
 # ─── QR Code Generator (ZATCA TLV format) ───────────────────────────
@@ -1164,12 +1167,14 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
 
     invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
-    if invoice.invoice_type == InvoiceType.SIMPLIFIED:
+    if getattr(invoice.invoice_type, "value", invoice.invoice_type) == "simplified":
         from app.modules import zatca_service
         zatca_settings = await zatca_service.get_settings(db, tenant_id)
+        logger.info("ZATCA simplified auto-report start invoice_id=%s", invoice_id)
         try:
             await zatca_service.submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
         except Exception as exc:
+            logger.exception("ZATCA simplified auto-report failed invoice_id=%s", invoice_id)
             if zatca_settings:
                 zatca_settings.zatca_last_error = f"Auto simplified reporting: {exc}"[:4000]
                 await db.commit()
@@ -3086,12 +3091,14 @@ async def confirm_approved_invoice(db: AsyncSession, tenant_id: str, user_id: st
 
     invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
-    if invoice.invoice_type == InvoiceType.SIMPLIFIED:
+    if getattr(invoice.invoice_type, "value", invoice.invoice_type) == "simplified":
         from app.modules import zatca_service
         zatca_settings = await zatca_service.get_settings(db, tenant_id)
+        logger.info("ZATCA simplified auto-report start invoice_id=%s", invoice_id)
         try:
             await zatca_service.submit_invoice_reporting_simulation(db, tenant_id, user_id, invoice_id)
         except Exception as exc:
+            logger.exception("ZATCA simplified auto-report failed invoice_id=%s", invoice_id)
             if zatca_settings:
                 zatca_settings.zatca_last_error = f"Auto simplified reporting: {exc}"[:4000]
                 await db.commit()
