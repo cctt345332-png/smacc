@@ -252,11 +252,6 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
           <button className="btn btn-secondary btn-sm" onClick={handleDownloadXML} disabled={acting}>
             {ar ? "تحميل XML" : "Download XML"}
           </button>
-          {invoice.status !== "draft" && (
-            <button className="btn btn-secondary btn-sm" onClick={() => handleZATCASubmit(true)} disabled={acting}>
-              {ar ? "اختبار زاتكا" : "ZATCA Test"}
-            </button>
-          )}
           {invoice.status === "draft" && (
             <button className="btn btn-primary btn-sm" onClick={handleConfirm} disabled={acting}>
               <Icon name="check" size={14} />

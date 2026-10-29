@@ -337,6 +337,26 @@ async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str,
     return {"status": vat.zatca_onboarding_status, "message": "تم إصدار Production CSID وحفظه مشفرًا."}
 
 
+async def _auto_request_production_if_ready(db: AsyncSession, tenant_id: str) -> None:
+    """اطلب شهادة الإنتاج تلقائيًا بعد نجاح آخر اختبار امتثال."""
+    vat = await get_settings(db, tenant_id)
+    if not vat or vat.zatca_onboarding_status == "production_ready":
+        return
+    try:
+        steps = json.loads(vat.zatca_compliance_steps or "{}")
+    except (TypeError, ValueError):
+        steps = {}
+    if not all(steps.get(step) is True for step in COMPLIANCE_STEPS):
+        return
+    try:
+        await request_production_csid(db, tenant_id)
+        logger.info("ZATCA Production CSID auto-request completed tenant_id=%s", tenant_id)
+    except Exception as exc:
+        # لا نفشل حفظ الفاتورة بسبب طلب شهادة مستقل؛ تبقى النتيجة محفوظة
+        # ويستطيع النظام إعادة المحاولة عند اكتمال/تحديث حالة الربط.
+        logger.exception("ZATCA Production CSID auto-request failed tenant_id=%s: %s", tenant_id, exc)
+
+
 def _q(parent: ET.Element, ns: str, tag: str, text: str | None = None, **attrs) -> ET.Element:
     node = ET.SubElement(parent, f"{{{ns}}}{tag}", attrs)
     if text is not None:
@@ -919,6 +939,8 @@ async def submit_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
     except (httpx.HTTPError, ValueError) as exc:
         log.status = "retry_pending"; log.error_message = str(exc); log.next_retry_at = datetime.utcnow() + timedelta(minutes=5); invoice.zatca_status = "zatca_pending"; invoice.zatca_response = str(exc)
     await db.commit()
+    if compliance_test and accepted:
+        await _auto_request_production_if_ready(db, tenant_id)
     return {"status": invoice.zatca_status, "submission_id": log.id, "api_type": api_type, "http_status": log.http_status, "error": log.error_message}
 
 
@@ -1087,4 +1109,6 @@ async def submit_credit_note(db: AsyncSession, tenant_id: str, user_id: str, not
     except (httpx.HTTPError, ValueError) as exc:
         log.status = "retry_pending"; log.error_message = str(exc); log.next_retry_at = datetime.utcnow() + timedelta(minutes=5); note.zatca_status = "zatca_pending"
     await db.commit()
+    if simulation and accepted:
+        await _auto_request_production_if_ready(db, tenant_id)
     return {"status": note.zatca_status, "submission_id": log.id, "api_type": api_type, "http_status": log.http_status, "error": log.error_message}

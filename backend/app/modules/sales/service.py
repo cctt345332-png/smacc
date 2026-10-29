@@ -1167,6 +1167,15 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
 
     invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
+    # اختبار الامتثال الداخلي أثناء onboarding فقط؛ ليس إرسالًا تشغيليًا.
+    from app.models.accounting import VATSetting
+    onboarding_vat = await db.scalar(select(VATSetting).where(VATSetting.tenant_id == tenant_id))
+    if onboarding_vat and onboarding_vat.zatca_compliance_token_encrypted and not onboarding_vat.zatca_production_token_encrypted and invoice.zatca_status not in {"compliance_passed", "reported", "cleared"}:
+        from app.modules import zatca_service
+        try:
+            await zatca_service.submit_invoice_simulation(db, tenant_id, user_id, invoice_id)
+        except Exception:
+            logger.exception("ZATCA automatic compliance test failed invoice_id=%s", invoice_id)
     # الإرسال التلقائي مخصص لفواتير POS المبسطة فقط. فواتير المندوب،
     # حتى لو كانت مبسطة، تبقى يدوية ولا تُرسل إلا من زر «إرسال للهيئة».
     is_pos_invoice = (invoice.notes or "").startswith("POS:")
@@ -2298,6 +2307,13 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
         await db.rollback()
         raise
     await db.refresh(cn)
+    onboarding_vat = await db.scalar(select(VATSetting).where(VATSetting.tenant_id == tenant_id))
+    if onboarding_vat and onboarding_vat.zatca_compliance_token_encrypted and not onboarding_vat.zatca_production_token_encrypted:
+        from app.modules import zatca_service
+        try:
+            await zatca_service.submit_credit_note(db, tenant_id, user_id, cn.id, simulation=True)
+        except Exception:
+            logger.exception("ZATCA automatic compliance test failed note_id=%s", cn.id)
     return cn
 
 

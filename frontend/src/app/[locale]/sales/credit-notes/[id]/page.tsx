@@ -141,9 +141,6 @@ export default function CreditNoteDetailPage(props: { params: Promise<{ locale: 
             <Icon name="money" size={14} />
             {requestingRefund ? (ar ? "جاري الإرسال..." : "Sending...") : (ar ? "طلب استرداد" : "Request refund")}
           </button>
-          <button className="btn btn-secondary btn-sm" onClick={testZATCA} disabled={zatcaBusy}>
-            {ar ? "اختبار زاتكا" : "ZATCA Test"}
-          </button>
         </div>
       </div>
 
