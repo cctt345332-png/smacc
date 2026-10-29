@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import hashlib
 import json
 import logging
@@ -17,6 +18,7 @@ import uuid
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -280,10 +282,105 @@ async def request_compliance_csid(db: AsyncSession, tenant_id: str, otp: str) ->
     vat.zatca_compliance_secret_encrypted = _encrypt(payload.get("secret"))
     vat.zatca_compliance_request_id = str(payload.get("requestID") or payload.get("requestId") or "")
     vat.zatca_compliance_steps = json.dumps({})
-    vat.zatca_onboarding_status = "compliance_ready"; vat.zatca_last_error = None
+    vat.zatca_onboarding_status = "compliance_testing"; vat.zatca_last_error = None
     vat.zatca_certificate_expiry = datetime.utcnow() + timedelta(days=365)
     await db.commit()
-    return {"status": vat.zatca_onboarding_status, "request_id": vat.zatca_compliance_request_id, "message": "تم إصدار Compliance CSID. نفّذ اختبارات الامتثال ثم اطلب Production CSID."}
+    asyncio.create_task(_run_background_compliance_tests(tenant_id))
+    return {"status": vat.zatca_onboarding_status, "request_id": vat.zatca_compliance_request_id, "message": "تم إصدار Compliance CSID. بدأ السيرفر اختبارات زاتكا الستة وإصدار شهادة الإنتاج تلقائيًا."}
+
+
+async def _run_background_compliance_tests(tenant_id: str) -> None:
+    """اختبارات onboarding حقيقية بلا إنشاء فاتورة أو حركة في نظام العميل."""
+    from app.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        try:
+            vat = await get_settings(db, tenant_id)
+            if not vat:
+                return
+            customer = SimpleNamespace(
+                name_ar="عميل اختبار زاتكا", vat_number="", cr_number="",
+                address_street="Test Street", address_building="0000",
+                address_district="Test District", address_city="Riyadh",
+                address_postal="12345", address_additional="0000", address_country="SA",
+            )
+            now = datetime.utcnow().replace(microsecond=0)
+            steps = (
+                ("standard-compliant", "standard", "invoice"),
+                ("simplified-compliant", "simplified", "invoice"),
+                ("standard-credit-note-compliant", "standard", "credit"),
+                ("simplified-credit-note-compliant", "simplified", "credit"),
+                ("standard-debit-note-compliant", "standard", "debit"),
+                ("simplified-debit-note-compliant", "simplified", "debit"),
+            )
+            for step, invoice_type, document_type in steps:
+                try:
+                    if document_type == "invoice":
+                        document = _compliance_fixture_invoice(vat, now, invoice_type)
+                        xml, _ = _build_ubl(document, _first_hash(), vat, customer)
+                        uuid_value = document.uuid
+                    else:
+                        original = _compliance_fixture_invoice(vat, now, invoice_type)
+                        document = _compliance_fixture_note(vat, now, document_type)
+                        document.lines = [_compliance_fixture_note_line()]
+                        xml, _ = _build_credit_note_ubl(document, customer, original, _first_hash(), vat)
+                        uuid_value = document.uuid
+                    signed, digest = _sdk_sign_and_qr(xml, _decrypt(vat.zatca_private_key_encrypted) or "", _decrypt(vat.zatca_compliance_token_encrypted) or "")
+                    _validate_with_official_sdk(signed, simplified=invoice_type == "simplified")
+                    auth = base64.b64encode(f"{_decrypt(vat.zatca_compliance_token_encrypted)}:{_decrypt(vat.zatca_compliance_secret_encrypted)}".encode()).decode()
+                    body = {"invoiceHash": digest, "uuid": uuid_value, "invoice": base64.b64encode(signed.encode()).decode()}
+                    async with httpx.AsyncClient(timeout=45) as client:
+                        response = await client.post(
+                            f"{_api_base(vat.zatca_env)}/compliance/invoices",
+                            headers={"Authorization": f"Basic {auth}", "Accept-Version": "V2", "Content-Type": "application/json"},
+                            json=body,
+                        )
+                    payload = response.json() if response.content else {}
+                    accepted = (response.status_code in (200, 202) and not payload.get("errors")) or _compliance_already_completed(payload)
+                    if not accepted:
+                        raise RuntimeError(f"HTTP {response.status_code}: {json.dumps(payload, ensure_ascii=False)[:2000]}")
+                    vat = await get_settings(db, tenant_id)
+                    _mark_compliance_step(vat, step)
+                    vat.zatca_last_error = None
+                    await db.commit()
+                    logger.info("ZATCA background compliance test passed tenant=%s step=%s", tenant_id, step)
+                except Exception as exc:
+                    vat = await get_settings(db, tenant_id)
+                    vat.zatca_onboarding_status = "compliance_ready"
+                    vat.zatca_last_error = json.dumps({"step": step, "message": str(exc)}, ensure_ascii=False)[:4000]
+                    await db.commit()
+                    logger.exception("ZATCA background compliance test failed tenant=%s step=%s", tenant_id, step)
+                    return
+            vat = await get_settings(db, tenant_id)
+            vat.zatca_onboarding_status = "compliance_ready"
+            await db.commit()
+            await request_production_csid(db, tenant_id)
+        except Exception as exc:
+            logger.exception("ZATCA background onboarding failed tenant=%s: %s", tenant_id, exc)
+
+
+def _compliance_fixture_invoice(vat: VATSetting, now: datetime, invoice_type: str) -> Any:
+    subtotal = Decimal("100.00")
+    vat_amount = Decimal("15.00")
+    line = SimpleNamespace(line_order=1, quantity=Decimal("1"), unit="PCE", description_ar="اختبار امتثال زاتكا", unit_price=subtotal, discount_amount=Decimal("0"), vat_rate=Decimal("15"), vat_category="S", subtotal=subtotal, vat_amount=vat_amount)
+    return SimpleNamespace(
+        invoice_type=SimpleNamespace(value=invoice_type), invoice_number=f"ZATCA-TEST-{uuid.uuid4().hex[:8]}", uuid=str(uuid.uuid4()),
+        issue_date=now, currency_code="SAR", seller_name_ar=vat.zatca_activity or "شركة اختبار", seller_cr_number=vat.cr_number or vat.vat_number,
+        seller_vat_number=vat.vat_number, seller_address=vat.zatca_address_street or "", buyer_name_ar="عميل اختبار زاتكا",
+        buyer_vat_number=None, buyer_address="Test Street، Test District، Riyadh، 12345", taxable_amount=subtotal,
+        vat_amount=vat_amount, total=subtotal + vat_amount, lines=[line],
+    )
+
+
+def _compliance_fixture_note(vat: VATSetting, now: datetime, note_type: str) -> Any:
+    subtotal = Decimal("100.00")
+    return SimpleNamespace(
+        note_type=note_type, credit_note_number=f"ZATCA-TEST-{note_type.upper()}-{uuid.uuid4().hex[:8]}", uuid=str(uuid.uuid4()),
+        issue_date=now, reason="اختبار امتثال زاتكا", subtotal=subtotal, vat_amount=Decimal("15.00"), total=Decimal("115.00"), lines=[],
+    )
+
+
+def _compliance_fixture_note_line() -> Any:
+    return SimpleNamespace(line_order=1, quantity=Decimal("1"), description_ar="اختبار امتثال زاتكا", unit_price=Decimal("100.00"), vat_rate=Decimal("15"), subtotal=Decimal("100.00"), vat_amount=Decimal("15.00"))
 
 
 async def request_production_csid(db: AsyncSession, tenant_id: str) -> dict[str, Any]:
