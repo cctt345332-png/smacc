@@ -1202,12 +1202,12 @@ tbody tr:hover { background: #FAFBFC; }
 /* ── POS thermal receipt: never print the cashier page ──────────────── */
 @media print {
   @page {
-    size: 80mm 200mm;
+    size: 80mm auto;
     margin: 0;
   }
 
   @page thermal80mm {
-    size: 80mm 200mm;
+    size: 80mm auto;
     margin: 0;
   }
 
