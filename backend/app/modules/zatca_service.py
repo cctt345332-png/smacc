@@ -370,8 +370,11 @@ def _normalize_certificate(value: str | None) -> tuple[str, bytes, x509.Certific
 
 def _money(value: Decimal) -> str:
     return f"{Decimal(str(value or 0)):.2f}"
-
-
+def _zatca_issue_datetime(value: datetime) -> str:
+    """Render the stored Riyadh-local invoice time consistently in XML and QR."""
+    return value.strftime("%Y-%m-%dT%H:%M:%S+03:00")
+def _zatca_issue_time(value: datetime) -> str:
+    return value.strftime("%H:%M:%S+03:00")
 def _qr_seller_name(value: str | None) -> str:
     """Keep QR seller name within ZATCA's 127-byte UTF-8 limit."""
     return (str(value or "").strip().encode("utf-8")[:127]).decode("utf-8", errors="ignore")
@@ -389,7 +392,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     _q(root, CBC, "ID", invoice.invoice_number)
     _q(root, CBC, "UUID", invoice.uuid)
     _q(root, CBC, "IssueDate", invoice.issue_date.date().isoformat())
-    _q(root, CBC, "IssueTime", invoice.issue_date.strftime("%H:%M:%S"))
+    _q(root, CBC, "IssueTime", _zatca_issue_time(invoice.issue_date))
     _q(root, CBC, "InvoiceTypeCode", "388", name=invoice_kind)
     _q(root, CBC, "DocumentCurrencyCode", invoice.currency_code or "SAR")
     _q(root, CBC, "TaxCurrencyCode", "SAR")
@@ -406,7 +409,7 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     def _tlv(tag: int, value: str) -> bytes:
         raw = value.encode("utf-8")
         return bytes([tag, len(raw)]) + raw
-    qr_value = base64.b64encode(b"".join((_tlv(1, invoice.seller_name_ar or ""), _tlv(2, vat.vat_number or ""), _tlv(3, invoice.issue_date.isoformat()), _tlv(4, _money(invoice.total)), _tlv(5, _money(invoice.vat_amount))))).decode()
+    qr_value = base64.b64encode(b"".join((_tlv(1, invoice.seller_name_ar or ""), _tlv(2, vat.vat_number or ""), _tlv(3, _zatca_issue_datetime(invoice.issue_date)), _tlv(4, _money(invoice.total)), _tlv(5, _money(invoice.vat_amount))))).decode()
     _q(attachment, CBC, "EmbeddedDocumentBinaryObject", qr_value, mimeCode="text/plain", encodingCode="Base64")
     # UBL requires a document-level Signature reference in addition to the
     # XAdES cryptographic stamp placed in UBLExtensions.
@@ -558,7 +561,7 @@ def _complete_phase2_qr(xml: str, digest: str, simplified: bool, signing_public_
         raise HTTPException(422, "التوقيع لا يحتوي SignatureValue أو شهادة X.509 اللازمة لـQR")
     issue_date = root.xpath("string(./cbc:IssueDate)", namespaces=ns).strip()
     issue_time = root.xpath("string(./cbc:IssueTime)", namespaces=ns).strip()
-    timestamp = f"{issue_date}T{issue_time}Z"
+    timestamp = f"{issue_date}T{issue_time}"
     seller = _qr_seller_name(root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName)", namespaces=ns))
     vat_number = root.xpath("string(./cac:AccountingSupplierParty/cac:Party/cac:PartyTaxScheme/cbc:CompanyID)", namespaces=ns).strip()
     total = root.xpath("string(./cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount)", namespaces=ns).strip()
@@ -942,7 +945,7 @@ def _build_credit_note_ubl(note: CreditNote, customer: Customer, original: Invoi
     _q(root, CBC, "ID", note.credit_note_number)
     _q(root, CBC, "UUID", note.uuid)
     _q(root, CBC, "IssueDate", note.issue_date.date().isoformat())
-    _q(root, CBC, "IssueTime", note.issue_date.strftime("%H:%M:%S"))
+    _q(root, CBC, "IssueTime", _zatca_issue_time(note.issue_date))
     _q(root, CBC, "InvoiceTypeCode", "383" if is_debit else "381", name="0200000" if original and getattr(original.invoice_type, "value", original.invoice_type) == "simplified" else "0100000")
     _q(root, CBC, "Note", note.reason or "إشعار تصحيح فاتورة")
     _q(root, CBC, "DocumentCurrencyCode", "SAR")
