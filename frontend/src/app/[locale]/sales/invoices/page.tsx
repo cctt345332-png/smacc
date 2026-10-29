@@ -258,7 +258,7 @@ export default function InvoicesPage(props: { params: Promise<{ locale: string }
                   const isPosInvoice = String(inv.notes || "").startsWith("POS:");
                   const zatcaPresentation: Record<string, { ar: string; en: string; badge: string }> = {
                     cleared: { ar: "معتمدة", en: "Cleared", badge: "badge-success" },
-                    reported: { ar: "مُبلّغ عنها", en: "Reported", badge: "badge-success" },
+                    reported: { ar: "معتمدة", en: "Approved", badge: "badge-success" },
                     compliance_passed: { ar: "تم التحقق", en: "Verified", badge: "badge-success" },
                     rejected: { ar: "مرفوضة", en: "Rejected", badge: "badge-danger" },
                     zatca_pending: { ar: "معلّقة", en: "Pending", badge: "badge-warning" },

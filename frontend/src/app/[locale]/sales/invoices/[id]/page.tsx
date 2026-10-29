@@ -215,7 +215,7 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
   const zatcaStatus = invoice.zatca_status || "not_sent";
   const zatcaResponse = zatcaResponseView(invoice.zatca_response);
   const zatcaStatusMap: Record<string, { label: string; color: string }> = {
-    reported: { label: "مقبولة لدى الهيئة (Reporting)", color: "var(--success)" },
+    reported: { label: "معتمدة لدى الهيئة", color: "var(--success)" },
     cleared: { label: "معتمدة لدى الهيئة (Clearance)", color: "var(--success)" },
     compliance_passed: { label: "اجتازت اختبار زاتكا بنجاح", color: "var(--success)" },
     rejected: { label: "مرفوضة من الهيئة", color: "var(--danger)" },
@@ -293,7 +293,7 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
             <div style={{ width: "100%", borderRadius: 8, background: "var(--surface-subtle, #F8FAFC)", padding: 12, fontSize: 13 }}>
               {(zatcaResponse.cleared || zatcaResponse.reported || zatcaResponse.alreadyCompleted || zatcaResponse.validation?.status === "WARNING") && (
                 <div style={{ color: "var(--success)", fontWeight: 800, marginBottom: 6 }}>
-                  {zatcaResponse.cleared ? "تم اعتماد الفاتورة من زاتكا" : zatcaResponse.reported ? "تم الإبلاغ عن الفاتورة إلى زاتكا" : zatcaResponse.alreadyCompleted ? "تم اجتياز اختبار هذه الفاتورة مسبقًا لدى زاتكا" : "تم اجتياز التحقق من زاتكا"}
+                  {zatcaResponse.cleared || zatcaResponse.reported ? "تم اعتماد الفاتورة من زاتكا" : zatcaResponse.alreadyCompleted ? "تم اجتياز اختبار هذه الفاتورة مسبقًا لدى زاتكا" : "تم اجتياز التحقق من زاتكا"}
                 </div>
               )}
               {zatcaResponse.validation && (
@@ -324,7 +324,7 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
         {zatcaSubmissions.length > 0 && (
           <div className="table-wrapper" style={{ border: "none" }}>
             <table><thead><tr><th>التاريخ</th><th>المسار</th><th>الحالة</th><th>HTTP</th><th>الخطأ</th></tr></thead><tbody>
-              {zatcaSubmissions.map((s: any) => <tr key={s.id}><td>{s.created_at ? new Date(s.created_at).toLocaleString("ar-SA") : "—"}</td><td>{s.api_type === "clearance" ? "اعتماد الفاتورة" : "الإبلاغ"}</td><td>{s.status === "compliance_passed" ? "اجتاز الاختبار" : s.status === "cleared" ? "معتمدة" : s.status === "reported" ? "مُبلّغ عنها" : s.status === "rejected" ? "مرفوضة" : s.status === "sending" ? "جارٍ الإرسال" : s.status}</td><td>{s.http_status || "—"}</td><td>{s.error_message || "—"}</td></tr>)}
+              {zatcaSubmissions.map((s: any) => <tr key={s.id}><td>{s.created_at ? new Date(s.created_at).toLocaleString("ar-SA") : "—"}</td><td>{s.api_type === "clearance" ? "اعتماد الفاتورة" : "إرسال الفاتورة"}</td><td>{s.status === "compliance_passed" ? "اجتاز الاختبار" : s.status === "cleared" || s.status === "reported" ? "معتمدة" : s.status === "rejected" ? "مرفوضة" : s.status === "sending" ? "جارٍ الإرسال" : s.status}</td><td>{s.http_status || "—"}</td><td>{s.error_message || "—"}</td></tr>)}
             </tbody></table>
           </div>
         )}
