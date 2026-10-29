@@ -156,7 +156,7 @@ export default function ThermalReceipt({
       </div>
 
       {/* ── بيانات زاتكا ── */}
-      <div style={{ fontSize: 10, textAlign: "center", marginBottom: 4, color: "#333" }}>
+      <div className="thermal-meta" style={{ fontSize: 10, textAlign: "center", marginBottom: 4, color: "#333" }}>
         {company.vat_number && <div>الرقم الضريبي: {company.vat_number}</div>}
         {company.cr_number  && <div>السجل التجاري: {company.cr_number}</div>}
         {(company.address_building || company.address_street) && (
@@ -172,7 +172,7 @@ export default function ThermalReceipt({
       <Divider />
 
       {/* ── نوع الفاتورة ── */}
-      <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
+      <div className="thermal-invoice-type" style={{ textAlign: "center", fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
         <div>فاتورة ضريبية مبسّطة</div>
         <div style={{ fontSize: 10, fontWeight: 400, color: "#555", direction: "ltr" }}>Simplified Tax Invoice</div>
       </div>
@@ -195,7 +195,7 @@ export default function ThermalReceipt({
       <Divider />
 
       {/* ── رأس جدول الأصناف ── */}
-      <div dir="ltr" style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, marginBottom: 3, borderBottom: "1px solid #000", paddingBottom: 2 }}>
+      <div className="thermal-items-header" dir="ltr" style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, marginBottom: 3, borderBottom: "1px solid #000", paddingBottom: 2 }}>
         <span style={{ flex: 2, display: "flex", justifyContent: "space-between" }}><span dir="ltr">Item</span><span dir="rtl">الصنف</span></span>
         <span style={{ textAlign: "center", width: 30 }}>Qty<br /><small>كمية</small></span>
         <span style={{ textAlign: "center", width: 45 }}>Price<br /><small>سعر</small></span>
@@ -207,7 +207,7 @@ export default function ThermalReceipt({
         const lineSubtotal = line.quantity * line.unit_price;
         const lineDisc = (lineSubtotal * (line.discount_pct || 0)) / 100;
         return (
-          <div key={i} style={{ marginBottom: 4 }}>
+          <div key={i} className="thermal-line" style={{ marginBottom: 4 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
               <span style={{ flex: 2, lineHeight: 1.3 }}>{line.product_name_ar}</span>
               <span style={{ textAlign: "center", width: 30 }}>{line.quantity}</span>
@@ -216,20 +216,20 @@ export default function ThermalReceipt({
             </div>
             {/* تفاصيل إضافية */}
             {line.serial_number && (
-              <div style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>SN: {line.serial_number}</div>
+              <div className="thermal-line-extra" style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>SN: {line.serial_number}</div>
             )}
             {line.variant_label && (
-              <div style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>{line.variant_label}</div>
+              <div className="thermal-line-extra" style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>{line.variant_label}</div>
             )}
             {line.batch_label && (
-              <div style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>تشغيلة: {line.batch_label}</div>
+              <div className="thermal-line-extra" style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>تشغيلة: {line.batch_label}</div>
             )}
             {lineDisc > 0 && (
-              <div style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>
+              <div className="thermal-line-extra" style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>
                 خصم {line.discount_pct}%: -{fmt(lineDisc)}
               </div>
             )}
-            <div style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>
+            <div className="thermal-line-tax" style={{ fontSize: 9, color: "#555", paddingRight: 4 }}>
               ضريبة {line.vat_rate}%: {fmt(line.vat_amount)} ر.س
             </div>
           </div>
@@ -244,7 +244,7 @@ export default function ThermalReceipt({
         <Row label="إجمالي الخصم" value={`-${fmt(discount_amount)} ر.س`} />
       )}
       <Row label="ضريبة القيمة المضافة (15%)" value={`${fmt(vat_amount)} ر.س`} />
-      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 14, borderTop: "1px solid #000", paddingTop: 4, marginTop: 2 }}>
+      <div className="thermal-grand-total" style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 14, borderTop: "1px solid #000", paddingTop: 4, marginTop: 2 }}>
         <span>الإجمالي</span>
         <span>{fmt(total)} ر.س</span>
       </div>
@@ -272,12 +272,12 @@ export default function ThermalReceipt({
       {qr_code && (
         <>
           <Divider />
-          <div style={{ textAlign: "center", marginBottom: 4 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, marginBottom: 4 }}>
+          <div className="thermal-qr" style={{ textAlign: "center", marginBottom: 4 }}>
+            <div className="thermal-qr-title" style={{ fontSize: 10, fontWeight: 700, marginBottom: 4 }}>
               رمز الاستجابة السريعة — ZATCA QR
             </div>
             <canvas ref={qrCanvasRef} style={{ display: "block", margin: "0 auto" }} />
-            <div style={{ fontSize: 8, color: "#777", marginTop: 2 }}>
+            <div className="thermal-qr-note" style={{ fontSize: 8, color: "#777", marginTop: 2 }}>
               امسح الرمز للتحقق من الفاتورة
             </div>
           </div>
@@ -288,18 +288,18 @@ export default function ThermalReceipt({
 
       {/* ── ذيل مخصص من الجهاز ── */}
       {receipt_footer ? (
-        <div style={{ textAlign: "center", fontSize: 11, whiteSpace: "pre-line", marginBottom: 4 }}>
+        <div className="thermal-footer" style={{ textAlign: "center", fontSize: 11, whiteSpace: "pre-line", marginBottom: 4 }}>
           {receipt_footer}
         </div>
       ) : (
-        <div style={{ textAlign: "center", fontSize: 11, marginBottom: 4 }}>
+        <div className="thermal-footer" style={{ textAlign: "center", fontSize: 11, marginBottom: 4 }}>
           شكراً لزيارتكم
           <div style={{ fontSize: 9, color: "#555" }}>Thank you for your visit</div>
         </div>
       )}
 
       {/* ── رقم الفاتورة في الأسفل ── */}
-      <div style={{ textAlign: "center", fontSize: 9, color: "#777", marginTop: 4 }}>
+      <div className="thermal-receipt-number" style={{ textAlign: "center", fontSize: 9, color: "#777", marginTop: 4 }}>
         {transaction_number}
       </div>
     </div>
