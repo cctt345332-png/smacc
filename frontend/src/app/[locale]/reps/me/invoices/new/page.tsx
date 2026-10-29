@@ -162,7 +162,7 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
 
   const buildPayload = () => ({
     customer_id: form.customer_id,
-    invoice_type: "simplified",
+    invoice_type: "standard",
     invoice_payment_method: form.payment_type,
     credit_days: form.payment_type === "credit" ? (parseInt(form.credit_days) || 30) : null,
     issue_date: form.issue_date,

@@ -652,7 +652,7 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
     setState(() => saving = true);
     final payload = {
       'customer_id': customerId,
-      'invoice_type': 'simplified',
+      'invoice_type': 'standard',
       'invoice_payment_method': payment,
       'credit_days': payment == 'credit' ? defaultCreditDays : null,
       'issue_date': '${issue.text}T00:00:00',

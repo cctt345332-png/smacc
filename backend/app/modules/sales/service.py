@@ -1065,12 +1065,15 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
         if rep:
             rep_id = rep.id
 
+    # فواتير المناديب B2B ضريبية كاملة دائمًا؛ المبسطة مخصصة لـPOS فقط.
+    invoice_type = InvoiceType.STANDARD if rep_id else data.invoice_type
+
     invoice = Invoice(
         id=invoice_id,
         tenant_id=tenant_id,
         invoice_number=await _next_invoice_number(db, tenant_id),
         uuid=invoice_uuid,
-        invoice_type=data.invoice_type,
+        invoice_type=invoice_type,
         customer_id=data.customer_id,
         issue_date=issue_date,
         supply_date=supply_date,
@@ -3213,6 +3216,8 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
                             value = int(value)
                         except (TypeError, ValueError):
                             raise HTTPException(400, "مدة الآجل يجب أن تكون رقماً صحيحاً")
+                if key == "invoice_type" and invoice.rep_id:
+                    value = InvoiceType.STANDARD
                 setattr(invoice, key, value)
         for key in ("issue_date", "supply_date", "due_date"):
             if key in data: setattr(invoice, key, as_datetime(data[key]))
