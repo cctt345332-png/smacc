@@ -1167,7 +1167,10 @@ async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoic
 
     invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
-    if getattr(invoice.invoice_type, "value", invoice.invoice_type) == "simplified":
+    # الإرسال التلقائي مخصص لفواتير POS المبسطة فقط. فواتير المندوب،
+    # حتى لو كانت مبسطة، تبقى يدوية ولا تُرسل إلا من زر «إرسال للهيئة».
+    is_pos_invoice = (invoice.notes or "").startswith("POS:")
+    if getattr(invoice.invoice_type, "value", invoice.invoice_type) == "simplified" and is_pos_invoice:
         from app.modules import zatca_service
         zatca_settings = await zatca_service.get_settings(db, tenant_id)
         logger.info("ZATCA simplified auto-report start invoice_id=%s", invoice_id)
@@ -3091,7 +3094,10 @@ async def confirm_approved_invoice(db: AsyncSession, tenant_id: str, user_id: st
 
     invoice.status = InvoiceStatus.CONFIRMED
     await db.commit()
-    if getattr(invoice.invoice_type, "value", invoice.invoice_type) == "simplified":
+    # الإرسال التلقائي مخصص لفواتير POS المبسطة فقط. فواتير المندوب،
+    # حتى لو كانت مبسطة، تبقى يدوية ولا تُرسل إلا من زر «إرسال للهيئة».
+    is_pos_invoice = (invoice.notes or "").startswith("POS:")
+    if getattr(invoice.invoice_type, "value", invoice.invoice_type) == "simplified" and is_pos_invoice:
         from app.modules import zatca_service
         zatca_settings = await zatca_service.get_settings(db, tenant_id)
         logger.info("ZATCA simplified auto-report start invoice_id=%s", invoice_id)

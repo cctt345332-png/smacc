@@ -899,6 +899,7 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         currency_code="SAR",
         qr_code=tx.qr_code,
         paid_amount=tx.total,
+        notes=f"POS:{tx.transaction_number}",
         status=InvoiceStatus.CONFIRMED,
         created_by=user_id,
     )
