@@ -232,7 +232,7 @@ export default function POSCashierPage() {
           }
           if (product && product.tracking_type === "serial") {
             const availableResult = terminal?.id
-              ? await getTerminalSerials(terminal.id, product.id).catch(() => ({ data: [] }))
+              ? await getTerminalSerials(terminal.id, product.id, true).catch(() => ({ data: [] }))
               : await getAvailableSerials(product.id).catch(() => ({ data: [] }));
             const selectedSerial = (availableResult.data || []).find((s: any) =>
               String(s.id) === String(serialHit.serial_id) ||

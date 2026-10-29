@@ -24,9 +24,9 @@ async def get_my_terminal(user=Depends(get_current_user), db: AsyncSession = Dep
 
 
 @router.get("/terminals/{terminal_id}/serials/{product_id}")
-async def get_terminal_serials(terminal_id: str, product_id: str, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """سيريالات الفرع مع سيريالات الرئيسي القابلة للسحب التلقائي."""
-    return await service.get_terminal_serials(db, user["tenant_id"], terminal_id, product_id)
+async def get_terminal_serials(terminal_id: str, product_id: str, include_main: bool = False, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """قائمة الفرع فقط؛ include_main للاستخدام الداخلي عند مسح سيريال محدد."""
+    return await service.get_terminal_serials(db, user["tenant_id"], terminal_id, product_id, include_main=include_main)
 
 
 @router.post("/terminals", status_code=201)

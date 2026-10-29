@@ -122,8 +122,8 @@ async def get_terminal_by_user(db: AsyncSession, tenant_id: str, user_id: str):
     }
 
 
-async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: str, product_id: str) -> list[dict]:
-    """السيريالات المتاحة للفرع، مع إظهار سيريالات الرئيسي التي ستُنقل تلقائياً."""
+async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: str, product_id: str, include_main: bool = False) -> list[dict]:
+    """يعرض سيريالات الفرع فقط؛ ويقبل الرئيسي داخليًا لمسح سيريال محدد فقط."""
     from app.models.inventory import InventoryItem, SerialItem, Warehouse
     terminal = await db.get(POSTerminal, terminal_id)
     if not terminal or terminal.tenant_id != tenant_id or not terminal.is_active:
@@ -143,7 +143,7 @@ async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: st
     ))
     main = main_result.scalar_one_or_none()
     warehouse_ids = [terminal.warehouse_id]
-    if main and main.id not in warehouse_ids:
+    if include_main and main and main.id not in warehouse_ids:
         warehouse_ids.append(main.id)
     result = await db.execute(select(SerialItem).where(
         SerialItem.product_id == product_id,
