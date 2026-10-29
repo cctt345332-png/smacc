@@ -124,14 +124,15 @@ export default function ThermalReceipt({
     <div
       className="thermal-receipt"
       style={{
-        width: 302,           // عرض ورق 80mm ≈ 302px
-        fontFamily: "Arial, 'DejaVu Sans', sans-serif",
-        fontSize: 12,
+        width: "100%",        // العرض يحدده مقاس رول الطابعة، دون تحجيم داخلي إضافي
+        maxWidth: 302,         // عرض مناسب للمعاينة على الشاشة فقط
+        fontFamily: "Arial, Tahoma, 'DejaVu Sans', sans-serif",
+        fontSize: 13,
         color: "#000",
         background: "#fff",
         padding: "2px 8px 8px",
         direction: "rtl",
-        lineHeight: 1.5,
+        lineHeight: 1.4,
       }}
     >
       {/* ── رأس مخصص من الجهاز ── */}

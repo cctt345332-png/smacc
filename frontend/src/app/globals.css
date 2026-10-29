@@ -1247,15 +1247,17 @@ tbody tr:hover { background: #FAFBFC; }
   }
 
   body.thermal-print-mode .thermal-receipt {
-    page: thermal80mm;
-    width: 80mm !important;
-    min-width: 80mm !important;
-    max-width: 80mm !important;
+    page: auto;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
     margin: 0 !important;
-    padding: 0 3mm 3mm !important;
+    padding: 0 2.5mm 3mm !important;
     margin-top: 0 !important;
-    font-family: Arial, "DejaVu Sans", sans-serif !important;
-    font-size: 10pt !important;
+    font-family: Arial, Tahoma, "DejaVu Sans", sans-serif !important;
+    font-size: 11pt !important;
+    line-height: 1.35 !important;
+    -webkit-text-size-adjust: none !important;
     box-sizing: border-box !important;
     background: #fff !important;
     color: #000 !important;
