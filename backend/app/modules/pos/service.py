@@ -302,7 +302,10 @@ async def get_sessions(db: AsyncSession, tenant_id: str, terminal_id: str | None
     q = (
         select(POSSession)
         .options(selectinload(POSSession.terminal))
+        .join(POSTerminal, POSTerminal.id == POSSession.terminal_id)
         .where(POSSession.tenant_id == tenant_id)
+        # لا نعرض جلسة مفتوحة لجهاز حُذف/عُطّل، مع إبقاء الجلسات المغلقة كسجل تاريخي.
+        .where(or_(POSSession.status != SESSION_OPEN, POSTerminal.is_active == True))
     )
     if terminal_id:
         q = q.where(POSSession.terminal_id == terminal_id)
@@ -314,9 +317,10 @@ async def get_sessions(db: AsyncSession, tenant_id: str, terminal_id: str | None
 async def get_active_session(db: AsyncSession, tenant_id: str, terminal_id: str) -> POSSession | None:
     from sqlalchemy import cast, Text
     r = await db.execute(
-        select(POSSession).where(
+        select(POSSession).join(POSTerminal, POSTerminal.id == POSSession.terminal_id).where(
             POSSession.tenant_id == tenant_id,
             POSSession.terminal_id == terminal_id,
+            POSTerminal.is_active == True,
             cast(POSSession.status, Text) == "open",
         )
     )
@@ -328,7 +332,7 @@ async def open_session(db: AsyncSession, tenant_id: str, user_id: str, data: dic
 
     # التحقق من الجهاز
     terminal = await db.get(POSTerminal, terminal_id)
-    if not terminal or terminal.tenant_id != tenant_id:
+    if not terminal or terminal.tenant_id != tenant_id or not terminal.is_active:
         raise HTTPException(404, "الجهاز غير موجود")
 
     # التحقق من عدم وجود جلسة مفتوحة
