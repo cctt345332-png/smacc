@@ -101,7 +101,7 @@ def _csr_ascii(value: str, fallback: str) -> str:
     return out or fallback
 
 
-def _build_csr(vat_number: str, branch_name: str, organization_name: str, address: str, activity: str, invoice_type_map: str) -> tuple[str, str]:
+def _build_csr(vat_number: str, branch_name: str, organization_name: str, address: str, activity: str, invoice_type_map: str, environment: str = "simulation") -> tuple[str, str]:
     invoice_functionality = {"standard": "1000", "simplified": "0100", "both": "1100"}.get(invoice_type_map, "1100")
     egs_serial = f"1-SMACC|2-ERP|3-{uuid.uuid4().hex[:12]}"
     # Use the official ZATCA SDK so its CSR encoding, environment template,
@@ -131,9 +131,12 @@ csr.industry.business.category={business_category}
         csr_path = Path(tmp) / "csr.txt"
         cfg_path.write_text(config, encoding="utf-8")
         try:
+            csr_args = ["java", "-jar", str(sdk_jar), "-csr"]
+            if environment == "simulation":
+                csr_args.append("-nonprod")
+            csr_args.extend(["-csrConfig", str(cfg_path), "-privateKey", str(key_path), "-generatedCsr", str(csr_path)])
             result = subprocess.run(
-                ["java", "-jar", str(sdk_jar), "-csr", "-sim", "-csrConfig", str(cfg_path),
-                 "-privateKey", str(key_path), "-generatedCsr", str(csr_path)],
+                csr_args,
                 check=False, capture_output=True, text=True, cwd=str(sdk_jar.parent.parent), timeout=45,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
@@ -202,7 +205,7 @@ async def prepare(db: AsyncSession, tenant_id: str, vat_number: str, branch_name
     if not vat:
         vat = VATSetting(id=uuid.uuid4().hex, tenant_id=tenant_id)
         db.add(vat)
-    csr, private_key = _build_csr(vat_number, branch_name, tenant.name, address, activity or tenant.name, invoice_type_map)
+    csr, private_key = _build_csr(vat_number, branch_name, tenant.name, address, activity or tenant.name, invoice_type_map, env)
     vat.vat_number = vat_number; vat.zatca_env = env; vat.zatca_branch_name = branch_name
     vat.zatca_activity = activity or tenant.name; vat.zatca_invoice_type_map = invoice_type_map
     vat.zatca_csr = csr; vat.zatca_private_key_encrypted = _encrypt(private_key)
