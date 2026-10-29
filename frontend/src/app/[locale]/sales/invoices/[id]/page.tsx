@@ -46,9 +46,10 @@ function zatcaResponseView(value: any) {
   const validation = data?.validationResults;
   const warnings = validation?.warningMessages || [];
   const errors = validation?.errorMessages || [];
+  const alreadyCompleted = errors.some((item: any) => String(item?.message || "").toLowerCase().includes("compliance check already completed for"));
   const cleared = String(data?.clearanceStatus || "").toUpperCase() === "CLEARED";
   const reported = String(data?.reportingStatus || "").toUpperCase() === "REPORTED";
-  return { data, validation, warnings, errors, cleared, reported };
+  return { data, validation, warnings, errors, alreadyCompleted, cleared, reported };
 }
 
 const PAYMENT_METHODS = [
@@ -294,18 +295,18 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
           )}
           {invoice.zatca_response && zatcaResponse.data ? (
             <div style={{ width: "100%", borderRadius: 8, background: "var(--surface-subtle, #F8FAFC)", padding: 12, fontSize: 13 }}>
-              {(zatcaResponse.cleared || zatcaResponse.reported || zatcaResponse.validation?.status === "WARNING") && (
+              {(zatcaResponse.cleared || zatcaResponse.reported || zatcaResponse.alreadyCompleted || zatcaResponse.validation?.status === "WARNING") && (
                 <div style={{ color: "var(--success)", fontWeight: 800, marginBottom: 6 }}>
-                  {zatcaResponse.cleared ? "تم اعتماد الفاتورة من زاتكا" : zatcaResponse.reported ? "تم الإبلاغ عن الفاتورة إلى زاتكا" : "تم اجتياز التحقق من زاتكا"}
+                  {zatcaResponse.cleared ? "تم اعتماد الفاتورة من زاتكا" : zatcaResponse.reported ? "تم الإبلاغ عن الفاتورة إلى زاتكا" : zatcaResponse.alreadyCompleted ? "تم اجتياز اختبار هذه الفاتورة مسبقًا لدى زاتكا" : "تم اجتياز التحقق من زاتكا"}
                 </div>
               )}
               {zatcaResponse.validation && (
                 <div style={{ color: "var(--text-secondary)", marginBottom: 6 }}>
-                  نتيجة التحقق: {zatcaResponse.validation.status === "PASS" ? "ناجح" : zatcaResponse.validation.status === "WARNING" ? "ناجح مع تنبيه" : zatcaResponse.validation.status}
+                  نتيجة التحقق: {zatcaResponse.alreadyCompleted ? "ناجح — الاختبار مكتمل سابقًا" : zatcaResponse.validation.status === "PASS" ? "ناجح" : zatcaResponse.validation.status === "WARNING" ? "ناجح مع تنبيه" : zatcaResponse.validation.status}
                   {zatcaResponse.data.clearanceStatus && <> — حالة الاعتماد: {zatcaResponse.cleared ? "معتمدة" : zatcaResponse.data.clearanceStatus}</>}
                 </div>
               )}
-              {zatcaResponse.errors.length > 0 && (
+              {zatcaResponse.errors.length > 0 && !zatcaResponse.alreadyCompleted && (
                 <div style={{ color: "var(--danger)", marginTop: 6 }}>
                   <strong>أخطاء زاتكا:</strong>
                   {zatcaResponse.errors.map((item: any, index: number) => <div key={index}>{ZATCA_CODE_AR[item.code] || item.message || item.code}</div>)}
