@@ -106,6 +106,24 @@ export default function POSCashierPage() {
   // بيانات الشركة للفاتورة الحرارية
   const [company, setCompany] = useState<any>(null);
 
+  // طباعة الإيصال فقط، وليس صفحة الكاشير كاملة.
+  const printThermalReceipt = useCallback(() => {
+    const printArea = document.getElementById("thermal-print-area");
+    if (!printArea) return;
+
+    printArea.style.display = "block";
+    document.body.classList.add("thermal-print-mode");
+
+    const cleanup = () => {
+      printArea.style.display = "none";
+      document.body.classList.remove("thermal-print-mode");
+      window.removeEventListener("afterprint", cleanup);
+    };
+
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(() => window.print(), 100);
+  }, []);
+
   // ── init ───────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
@@ -286,9 +304,9 @@ export default function POSCashierPage() {
       });
       setReceiptModal({ ...res.data, cart: [...cart], grandTotal, change, payMethod });
       setCart([]); setCashTendered(""); setCardAmount(""); setCustName(""); setCustPhone(""); setOverallDisc("0"); setPayMethod("cash");
-      // طباعة تلقائية إذا كان الجهاز مضبوط على الطباعة
+      // طباعة تلقائية إذا كان الجهاز مضبوطاً على الطباعة — الإيصال فقط.
       if (terminal?.print_receipt) {
-        setTimeout(() => window.print(), 800);
+        setTimeout(() => printThermalReceipt(), 800);
       }
       const sr = await getSessions({ limit: 20 });
       const up = (sr.data || []).find((s: any) => s.id === session.id);
@@ -1001,21 +1019,7 @@ export default function POSCashierPage() {
               <button
                 className="btn btn-secondary"
                 style={{ flex: 1, justifyContent: "center" }}
-                onClick={() => {
-                  // طباعة الفاتورة الحرارية
-                  const printArea = document.getElementById("thermal-print-area");
-                  if (printArea) {
-                    printArea.style.display = "block";
-                    document.body.classList.add("thermal-print-mode");
-                    setTimeout(() => {
-                      window.print();
-                      setTimeout(() => {
-                        printArea.style.display = "none";
-                        document.body.classList.remove("thermal-print-mode");
-                      }, 1000);
-                    }, 100);
-                  }
-                }}
+                onClick={printThermalReceipt}
               >
                 <Icon name="print" size={15} />
                 {isAr ? "طباعة" : "Print"}

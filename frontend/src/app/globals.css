@@ -1198,3 +1198,59 @@ tbody tr:hover { background: #FAFBFC; }
     display: none;
   }
 }
+
+/* ── POS thermal receipt: never print the cashier page ──────────────── */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  html:has(body.thermal-print-mode),
+  body.thermal-print-mode {
+    width: 80mm !important;
+    min-width: 80mm !important;
+    max-width: 80mm !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body.thermal-print-mode * {
+    visibility: hidden !important;
+  }
+
+  body.thermal-print-mode .thermal-print-area,
+  body.thermal-print-mode .thermal-print-area * {
+    visibility: visible !important;
+  }
+
+  body.thermal-print-mode .thermal-print-area {
+    display: block !important;
+    position: static !important;
+    width: 80mm !important;
+    min-width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  body.thermal-print-mode .thermal-receipt {
+    width: 80mm !important;
+    min-width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 4mm 3mm !important;
+    box-sizing: border-box !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
