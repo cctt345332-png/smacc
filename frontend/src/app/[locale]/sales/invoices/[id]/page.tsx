@@ -223,6 +223,7 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
     not_sent: { label: "لم ترسل إلى الهيئة بعد", color: "var(--text-muted)" },
   };
   const zatcaView = zatcaStatusMap[zatcaStatus] || { label: zatcaStatus, color: "var(--text-muted)" };
+  const zatcaNeedsAttention = invoice.status !== "draft" && invoice.status !== "cancelled" && ["not_sent", "rejected", "zatca_pending"].includes(zatcaStatus);
 
   return (
     <>
@@ -249,6 +250,11 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
             <Icon name="print" size={14} />
             {ar ? "طباعة" : "Print"}
           </button>
+          {zatcaNeedsAttention && (
+            <button className="btn btn-primary btn-sm" onClick={() => handleZATCASubmit(false)} disabled={acting}>
+              {ar ? "إرسال للهيئة" : "Send to ZATCA"}
+            </button>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={handleDownloadXML} disabled={acting}>
             {ar ? "تحميل XML" : "Download XML"}
           </button>
@@ -277,17 +283,12 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20, borderInlineStart: `4px solid ${zatcaView.color}` }}>
+      {zatcaNeedsAttention && <div className="card" style={{ marginBottom: 20, borderInlineStart: `4px solid ${zatcaView.color}` }}>
         <div className="card-header">
           <span className="card-title">{ar ? "حالة الفاتورة لدى زاتكا" : "ZATCA status"}</span>
           <span style={{ fontWeight: 800, color: zatcaView.color }}>{zatcaView.label}</span>
         </div>
         <div style={{ padding: "0 20px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {invoice.status !== "draft" && (
-            <button className="btn btn-primary btn-sm" onClick={() => handleZATCASubmit(false)} disabled={acting}>
-              {ar ? "إرسال للهيئة" : "Send to ZATCA"}
-            </button>
-          )}
           {invoice.zatca_response && zatcaResponse.data ? (
             <div style={{ width: "100%", borderRadius: 8, background: "var(--surface-subtle, #F8FAFC)", padding: 12, fontSize: 13 }}>
               {(zatcaResponse.cleared || zatcaResponse.reported || zatcaResponse.alreadyCompleted || zatcaResponse.validation?.status === "WARNING") && (
@@ -327,7 +328,7 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
             </tbody></table>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Invoice Print View */}
       <div className="card" style={{ marginBottom: 20 }}>
