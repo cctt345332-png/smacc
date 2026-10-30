@@ -720,8 +720,8 @@ export default function POSCashierPage() {
       {/* ── Body: products + cart ── */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
-        {/* ── Left: product search ── */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", borderInlineEnd: "1px solid var(--border)", overflow: "hidden" }}>
+        {/* ── Products: مساحة مستقلة بجانب السلة ── */}
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderInlineEnd: "1px solid var(--border)", overflow: "hidden" }}>
           {/* Search bar */}
           <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
             <div style={{ position: "relative" }}>
@@ -784,8 +784,8 @@ export default function POSCashierPage() {
           </div>
         </div>
 
-        {/* ── Right: cart + payment ── */}
-        <div style={{ width: 360, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
+        {/* ── Cart + payment: عمود أكبر لعرض تفاصيل السلة بوضوح ── */}
+        <div style={{ width: "42%", minWidth: 430, maxWidth: 560, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, borderInlineStart: "1px solid var(--border)" }}>
           {/* Cart header */}
           <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 14 }}>
