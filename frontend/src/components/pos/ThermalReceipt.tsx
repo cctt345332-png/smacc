@@ -118,7 +118,8 @@ export default function ThermalReceipt({
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 
-  const taxableAmount = subtotal - discount_amount;
+  // السعر المدخل شامل الضريبة؛ الوعاء قبل الضريبة هو الإجمالي ناقص الضريبة.
+  const taxableAmount = subtotal - discount_amount - vat_amount;
 
   return (
     <div
@@ -151,8 +152,8 @@ export default function ThermalReceipt({
 
       {/* ── اسم الشركة ── */}
       <div style={{ textAlign: "center", marginBottom: 4 }}>
-        <div style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.45 }}>{company.name}</div>
-        {company.name_en && <div style={{ fontSize: 12, color: "#333", direction: "ltr", lineHeight: 1.45 }}>{company.name_en}</div>}
+        <div className="thermal-company-name" style={{ fontWeight: 800, fontSize: 15, lineHeight: 1.45 }}>{company.name}</div>
+        {company.name_en && <div className="thermal-company-name-en" style={{ fontSize: 12, color: "#333", direction: "ltr", lineHeight: 1.45 }}>{company.name_en}</div>}
       </div>
 
       {/* ── بيانات زاتكا ── */}
@@ -208,7 +209,7 @@ export default function ThermalReceipt({
         const lineDisc = (lineSubtotal * (line.discount_pct || 0)) / 100;
         return (
           <div key={i} className="thermal-line" style={{ marginBottom: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+            <div className="thermal-line-main" style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
               <span style={{ flex: 2, lineHeight: 1.3 }}>{line.product_name_ar}</span>
               <span style={{ textAlign: "center", width: 30 }}>{line.quantity}</span>
               <span style={{ textAlign: "center", width: 45 }}>{fmt(line.unit_price)}</span>
@@ -317,7 +318,7 @@ function Row({ label, value, small, bold }: {
 }) {
   const english = LABELS_EN[label] || label;
   return (
-    <div style={{
+    <div className="thermal-row" style={{
       display: "flex", alignItems: "baseline", gap: 5, direction: "ltr",
       fontSize: small ? 9 : 11, marginBottom: 2,
       fontWeight: bold ? 700 : 400,

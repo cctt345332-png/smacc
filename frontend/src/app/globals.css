@@ -1241,6 +1241,7 @@ tbody tr:hover { background: #FAFBFC; }
     max-width: 78mm !important;
     margin: 0 !important;
     padding: 2.5mm 5mm 0 2.5mm !important;
+    box-sizing: border-box !important;
     top: 0 !important;
     background: #fff !important;
     box-shadow: none !important;
@@ -1256,7 +1257,7 @@ tbody tr:hover { background: #FAFBFC; }
     margin-top: 0 !important;
     font-family: "Times New Roman", Times, serif !important;
     font-size: 10pt !important;
-    line-height: 1.4 !important;
+    line-height: 1.25 !important;
     -webkit-text-size-adjust: none !important;
     box-sizing: border-box !important;
     background: #fff !important;
@@ -1273,6 +1274,8 @@ tbody tr:hover { background: #FAFBFC; }
   }
 
   body.thermal-print-mode .thermal-receipt .thermal-meta,
+  body.thermal-print-mode .thermal-receipt .thermal-company-name-en,
+  body.thermal-print-mode .thermal-receipt .thermal-line-main,
   body.thermal-print-mode .thermal-receipt .thermal-line-extra,
   body.thermal-print-mode .thermal-receipt .thermal-line-tax,
   body.thermal-print-mode .thermal-receipt .thermal-qr-note,
@@ -1280,6 +1283,36 @@ tbody tr:hover { background: #FAFBFC; }
   body.thermal-print-mode .thermal-receipt .thermal-footer > div {
     color: #000 !important;
     font-weight: 500 !important;
+  }
+
+  /* نفس قالب FRX القديم: اسم الشركة 18pt، تفاصيل الصنف الثانوية 8pt. */
+  body.thermal-print-mode .thermal-receipt .thermal-company-name {
+    font-size: 18pt !important;
+    line-height: 1.15 !important;
+    font-weight: 700 !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-company-name-en {
+    font-size: 10pt !important;
+    line-height: 1.15 !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-line-main {
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-line-extra,
+  body.thermal-print-mode .thermal-receipt .thermal-line-tax {
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-row {
+    font-size: 10pt !important;
+    line-height: 1.2 !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-footer,
+  body.thermal-print-mode .thermal-receipt .thermal-footer > div {
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
+    font-weight: 700 !important;
   }
 
 }
