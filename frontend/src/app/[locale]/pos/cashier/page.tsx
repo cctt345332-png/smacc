@@ -24,7 +24,7 @@ const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg
 interface CartLine {
   id: string; inventory_item_id: string; product_name_ar: string;
   barcode?: string; tracking_type: string; quantity: number;
-  unit_price: number; discount_pct: number; vat_rate: number;
+  wholesale_price: number; unit_price: number; discount_pct: number; vat_rate: number;
   serial_item_id?: string; serial_number?: string;
   variant_id?: string; variant_label?: string;
   batch_id?: string; batch_label?: string;
@@ -244,6 +244,7 @@ export default function POSCashierPage() {
             addLine(product, {
               serial_item_id: selectedSerial.id,
               serial_number: selectedSerial.serial_number,
+              wholesale_price: selectedSerial.sale_price || product.sale_price,
               unit_price: selectedSerial.sale_price || product.sale_price,
             });
             setSearch("");
@@ -328,7 +329,6 @@ export default function POSCashierPage() {
   };
 
   const addLine = (p: Product, extra: Partial<CartLine> = {}) => {
-    const price = (extra as any).sale_price ?? p.sale_price;
     if (extra.serial_item_id && cart.find((l) => l.serial_item_id === extra.serial_item_id)) {
       alert(isAr ? "السيريال موجود بالفعل في السلة" : "Serial already in cart"); return;
     }
@@ -340,7 +340,8 @@ export default function POSCashierPage() {
       id: Math.random().toString(36).slice(2),
       inventory_item_id: p.id, product_name_ar: p.name_ar,
       barcode: p.barcode, tracking_type: p.tracking_type,
-      quantity: 1, unit_price: price,
+      wholesale_price: p.sale_price,
+      quantity: 1, unit_price: p.sale_price,
       discount_pct: 0, vat_rate: p.vat_rate, ...extra,
     }]);
     setSearch(""); setProducts(allProducts);
@@ -497,6 +498,7 @@ export default function POSCashierPage() {
           ...line,
           id: line.inventory_item_id || line.product_name_ar,
           inventory_item_id: line.inventory_item_id || "",
+          wholesale_price: Number(line.wholesale_price ?? line.unit_price ?? 0),
           discount_pct: Number(line.discount_pct || 0),
         })),
       });
@@ -768,7 +770,7 @@ export default function POSCashierPage() {
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--surface)"; }}>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, lineHeight: 1.3 }}>{p.name_ar}</div>
                   {p.barcode && <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{p.barcode}</div>}
-                  <div style={{ fontSize: 13, fontWeight: 700, color: actCfg.color }}>{fmt(p.sale_price)} {sar}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: actCfg.color }}>{isAr ? "سعر الجملة: " : "Wholesale: "}{fmt(p.sale_price)} {sar}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
                     {p.tracking_type === "serial" ? (isAr ? `${p.quantity_on_hand} سيريال` : `${p.quantity_on_hand} serials`) :
                      p.tracking_type === "batch"  ? (isAr ? "تشغيلة" : "Batch") :
@@ -814,6 +816,9 @@ export default function POSCashierPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3 }}>{line.product_name_ar}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                          {isAr ? "سعر الجملة: " : "Wholesale: "}{fmt(line.wholesale_price)} {sar}
+                        </div>
                         {line.serial_number && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>SN: {line.serial_number}</div>}
                         {line.variant_label  && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{line.variant_label}</div>}
                         {line.batch_label    && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{line.batch_label}</div>}
@@ -836,6 +841,21 @@ export default function POSCashierPage() {
                         </div>
                       )}
                       <div style={{ marginInlineStart: "auto", fontSize: 13, fontWeight: 700, color: actCfg.color }}>{fmt(c.total)} {sar}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5 }}>
+                      <label style={{ fontSize: 10, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                        {isAr ? "سعر البيع الفعلي" : "Actual sale price"}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className="form-input"
+                        style={{ flex: 1, height: 27, padding: "2px 6px", fontSize: 12, fontWeight: 700 }}
+                        value={line.unit_price}
+                        onChange={(e) => setCart((c) => c.map((l) => l.id === line.id ? { ...l, unit_price: Math.max(0, parseFloat(e.target.value) || 0) } : l))}
+                      />
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{sar}</span>
                     </div>
                     {terminal?.allow_discount && (
                       <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
@@ -939,7 +959,7 @@ export default function POSCashierPage() {
             <div style={{ padding: "8px 16px 4px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>{serialModal.product.name_ar}</div>
             <div style={{ overflowY: "auto", flex: 1, padding: "8px 16px 16px" }}>
               {serialModal.serials.map((s: any) => (
-                <button key={s.id} onClick={() => { addLine(serialModal.product, { serial_item_id: s.id, serial_number: s.serial_number, unit_price: s.sale_price || serialModal.product.sale_price }); setSerialModal(null); }}
+                <button key={s.id} onClick={() => { addLine(serialModal.product, { serial_item_id: s.id, serial_number: s.serial_number, wholesale_price: s.sale_price || serialModal.product.sale_price, unit_price: s.sale_price || serialModal.product.sale_price }); setSerialModal(null); }}
                   style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 6, background: "white", cursor: "pointer", textAlign: isAr ? "right" : "left" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = actCfg.color; e.currentTarget.style.background = actCfg.bg; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "white"; }}>
@@ -969,7 +989,7 @@ export default function POSCashierPage() {
             <div style={{ padding: "8px 16px 4px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>{variantModal.product.name_ar}</div>
             <div style={{ overflowY: "auto", flex: 1, padding: "8px 16px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
               {variantModal.variants.map((v: any) => (
-                <button key={v.id} onClick={() => { addLine(variantModal.product, { variant_id: v.id, variant_label: [v.size, v.color, v.other_attribute].filter(Boolean).join(" / "), unit_price: v.sale_price || variantModal.product.sale_price }); setVariantModal(null); }}
+                <button key={v.id} onClick={() => { addLine(variantModal.product, { variant_id: v.id, variant_label: [v.size, v.color, v.other_attribute].filter(Boolean).join(" / "), wholesale_price: v.sale_price || variantModal.product.sale_price, unit_price: v.sale_price || variantModal.product.sale_price }); setVariantModal(null); }}
                   style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 8px", background: "white", cursor: "pointer", textAlign: "center" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = actCfg.color; e.currentTarget.style.background = actCfg.bg; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "white"; }}>
