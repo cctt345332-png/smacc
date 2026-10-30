@@ -591,12 +591,20 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     tax_currency_total = _q(root, CAC, "TaxTotal"); _q(tax_currency_total, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     category = _q(subtotal, CAC, "TaxCategory"); _q(category, CBC, "ID", "S"); _q(category, CBC, "Percent", "15"); scheme = _q(category, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
     monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(invoice.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(invoice.total), currencyID="SAR")
+    pos_invoice = str(invoice.notes or "").startswith("POS:")
     for index, line in enumerate(sorted(invoice.lines, key=lambda x: x.line_order), 1):
-        il = _q(root, CAC, "InvoiceLine"); _q(il, CBC, "ID", index); _q(il, CBC, "InvoicedQuantity", str(line.quantity), unitCode=line.unit or "PCE"); _q(il, CBC, "LineExtensionAmount", _money(line.subtotal - line.discount_amount), currencyID="SAR")
+        # POS prices are stored/displayed as tax-inclusive prices. UBL's
+        # InvoiceLine net amount (BT-131) must exclude VAT. Other invoices
+        # already store subtotal before VAT.
         line_net = Decimal(str(line.subtotal or 0)) - Decimal(str(line.discount_amount or 0))
+        if pos_invoice:
+            line_net -= Decimal(str(line.vat_amount or 0))
+        il = _q(root, CAC, "InvoiceLine"); _q(il, CBC, "ID", index); _q(il, CBC, "InvoicedQuantity", str(line.quantity), unitCode=line.unit or "PCE"); _q(il, CBC, "LineExtensionAmount", _money(line_net), currencyID="SAR")
         line_tax = _q(il, CAC, "TaxTotal"); _q(line_tax, CBC, "TaxAmount", _money(line.vat_amount), currencyID="SAR"); _q(line_tax, CBC, "RoundingAmount", _money(line_net + Decimal(str(line.vat_amount or 0))), currencyID="SAR")
         item = _q(il, CAC, "Item"); _q(item, CBC, "Name", line.description_ar); tax = _q(item, CAC, "ClassifiedTaxCategory"); _q(tax, CBC, "ID", line.vat_category or "S"); _q(tax, CBC, "Percent", str(line.vat_rate)); ts = _q(tax, CAC, "TaxScheme"); _q(ts, CBC, "ID", "VAT")
-        price = _q(il, CAC, "Price"); _q(price, CBC, "PriceAmount", _money(line.unit_price), currencyID="SAR")
+        price = _q(il, CAC, "Price")
+        price_amount = line_net / Decimal(str(line.quantity or 1)) if pos_invoice else Decimal(str(line.unit_price or 0))
+        _q(price, CBC, "PriceAmount", _money(price_amount), currencyID="SAR")
     raw = ET.tostring(root, encoding="utf-8", xml_declaration=True)
     digest = base64.b64encode(hashlib.sha256(raw).digest()).decode()
     return raw.decode(), digest
