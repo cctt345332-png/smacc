@@ -983,7 +983,9 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         buyer_name_ar=tx.customer_name or "عميل نقدي",
         subtotal=tx.subtotal,
         discount_amount=tx.discount_amount,
-        taxable_amount=tx.subtotal - tx.discount_amount,
+        # السعر الذي يحدده الكاشير نهائي وشامل للضريبة؛ الوعاء هو الصافي
+        # بعد تفكيك الضريبة، وليس سعرًا يضاف إليه VAT مرة أخرى.
+        taxable_amount=tx.subtotal - tx.discount_amount - tx.vat_amount,
         vat_amount=tx.vat_amount,
         total=tx.total,
         currency_code="SAR",
