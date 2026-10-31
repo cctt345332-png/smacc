@@ -233,6 +233,28 @@ class POSSession(Base):
     transactions: Mapped[list["POSTransaction"]] = relationship(
         "POSTransaction", back_populates="session"
     )
+    cash_outflows: Mapped[list["POSCashOutflow"]] = relationship(
+        "POSCashOutflow", back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+# ─── POSCashOutflow ───────────────────────────────────────────────────
+class POSCashOutflow(Base):
+    """مخرج نقدي من درج الكاشير، وليس عملية بيع."""
+    __tablename__ = "pos_cash_outflows"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    session_id: Mapped[str] = mapped_column(String, ForeignKey("pos_sessions.id", ondelete="CASCADE"), index=True)
+    terminal_id: Mapped[str] = mapped_column(String, ForeignKey("pos_terminals.id"), index=True)
+    created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
+    outflow_type: Mapped[str] = mapped_column(String(40), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    session: Mapped["POSSession"] = relationship("POSSession", back_populates="cash_outflows")
 
 
 # ─── POSTransaction ───────────────────────────────────────────────────

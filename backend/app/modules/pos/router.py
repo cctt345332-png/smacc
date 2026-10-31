@@ -98,6 +98,12 @@ async def session_transactions(session_id: str, tenant_id=Depends(get_tenant_id)
     return await service.get_session_transactions(db, tenant_id, session_id)
 
 
+@router.post("/sessions/{session_id}/cash-outflows", status_code=201)
+async def create_cash_outflow(session_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    data = {**data, "session_id": session_id}
+    return await service.create_cash_outflow(db, user["tenant_id"], user["user_id"], data)
+
+
 # ─── Transactions ────────────────────────────────────────────────────
 
 @router.get("/transactions/my-history")

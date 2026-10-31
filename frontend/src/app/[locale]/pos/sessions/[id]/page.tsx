@@ -109,11 +109,13 @@ export default function SessionDetailPage() {
 
   const session      = report.session;
   const transactions = report.transactions || [];
+  const cashOutflows = report.cash_outflows || [];
   const byMethod     = report.by_payment_method || {};
   const isOpen       = session.status === "open";
   const actCfg       = ACTIVITY_CFG[session.business_type] || ACTIVITY_CFG.general;
 
-  const expectedCash = Number(session.opening_cash) + Number(session.total_cash);
+  const totalCashOutflows = Number(session.total_cash_outflows || cashOutflows.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0));
+  const expectedCash = Number(session.opening_cash) + Number(session.total_cash) - totalCashOutflows;
   const actualCash   = session.closing_cash != null ? Number(session.closing_cash) : null;
   const difference   = actualCash != null ? actualCash - expectedCash : null;
 
@@ -219,6 +221,7 @@ export default function SessionDetailPage() {
             {[
               { label: isAr ? "رصيد الافتتاح" : "Opening Cash",  value: fmt(Number(session.opening_cash)),  color: "" },
               { label: isAr ? "مبيعات نقدية" : "Cash Sales",     value: `+ ${fmt(Number(session.total_cash))}`, color: "#6F4A84" },
+              { label: isAr ? "مخرجات من الدرج" : "Cash Outflows", value: `− ${fmt(totalCashOutflows)}`, color: "#DC2626" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
                 <span style={{ color: "var(--text-muted)" }}>{label}</span>
@@ -335,6 +338,23 @@ export default function SessionDetailPage() {
                   </tr>
                 ))}
               </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Cash Outflows ───────────────────────────────────────────── */}
+      <div className="card" style={{ marginTop: 24 }}>
+        <div className="card-header">
+          <h3 className="card-title"><Icon name="cash" size={16} />{isAr ? "مخرجات النقد من الدرج" : "Cash outflows"}</h3>
+          <span className="badge badge-warning">{fmt(totalCashOutflows)} {sar}</span>
+        </div>
+        {cashOutflows.length === 0 ? (
+          <div style={{ padding: 20, color: "var(--text-muted)", fontSize: 13 }}>{isAr ? "لا توجد مخرجات نقدية" : "No cash outflows"}</div>
+        ) : (
+          <div className="table-wrapper" style={{ border: "none" }}>
+            <table><thead><tr><th>{isAr ? "النوع" : "Type"}</th><th>{isAr ? "المبلغ" : "Amount"}</th><th>{isAr ? "البيان" : "Description"}</th><th>{isAr ? "الوقت" : "Time"}</th></tr></thead>
+              <tbody>{cashOutflows.map((item: any) => <tr key={item.id}><td>{({ donation: "صدقة", food: "مصروف أكل", fuel: "مصروف بنزين", delivery: "مصروف توصيل", employee_advance: "سلفة موظف", other: "أخرى" } as Record<string, string>)[item.outflow_type] || item.outflow_type}</td><td style={{ fontWeight: 700, color: "#DC2626" }}>− {fmt(Number(item.amount))} {sar}</td><td>{item.description || "—"}</td><td style={{ fontSize: 12, color: "var(--text-muted)" }}>{fmtDate(item.created_at)}</td></tr>)}</tbody>
             </table>
           </div>
         )}

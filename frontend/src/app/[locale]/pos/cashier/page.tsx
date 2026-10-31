@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase, getMyTransactions, getTransaction } from "@/lib/pos";
+import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase, getMyTransactions, getTransaction, createCashOutflow } from "@/lib/pos";
 import { getItemsForPicker, getAvailableSerials, searchSerial, getBatches, getVariants } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
@@ -107,6 +107,9 @@ export default function POSCashierPage() {
   const [closingCash,    setClosingCash]    = useState("");
   const [closePin,       setClosePin]       = useState("");
   const [closingSession, setClosingSession] = useState(false);
+  const [showCashOutflow, setShowCashOutflow] = useState(false);
+  const [cashOutflowForm, setCashOutflowForm] = useState({ outflow_type: "donation", amount: "", description: "" });
+  const [savingCashOutflow, setSavingCashOutflow] = useState(false);
 
   // modals for tracking types
   const [serialModal,  setSerialModal]  = useState<{ product: Product; serials: any[] } | null>(null);
@@ -472,6 +475,20 @@ export default function POSCashierPage() {
     } catch (e: any) { alert(e?.response?.data?.detail || (isAr ? "حدث خطأ" : "Error")); }
     finally { setClosingSession(false); }
   };
+  const handleCashOutflow = async () => {
+    if (!session) return;
+    const amount = parseFloat(cashOutflowForm.amount);
+    if (!amount || amount <= 0) { alert(isAr ? "أدخل مبلغًا صحيحًا" : "Enter a valid amount"); return; }
+    setSavingCashOutflow(true);
+    try {
+      await createCashOutflow(session.id, cashOutflowForm);
+      const total = Number(session.total_cash_outflows || 0) + amount;
+      setSession({ ...session, total_cash_outflows: total });
+      setCashOutflowForm({ outflow_type: "donation", amount: "", description: "" });
+      setShowCashOutflow(false);
+    } catch (e: any) { alert(e?.response?.data?.detail || (isAr ? "تعذر تسجيل المخرج النقدي" : "Could not save cash outflow")); }
+    finally { setSavingCashOutflow(false); }
+  };
 
   const openPreviousInvoices = async () => {
     setShowHistory(true);
@@ -662,7 +679,11 @@ export default function POSCashierPage() {
                 {isAr ? "شراء" : "Purchase"}
               </button>
             )}
-            <button className="btn btn-secondary btn-sm" onClick={() => { setClosingCash(String(session.total_cash || 0)); setShowCloseForm(true); }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowCashOutflow(true)}>
+              <Icon name="cash" size={14} />
+              {isAr ? "مخرج نقدي" : "Cash outflow"}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setClosingCash(String((Number(session.opening_cash || 0) + Number(session.total_cash || 0) - Number(session.total_cash_outflows || 0)).toFixed(2))); setShowCloseForm(true); }}>
               <Icon name="lock" size={14} />
               {isAr ? "إغلاق الجلسة" : "Close Session"}
             </button>
@@ -1139,6 +1160,48 @@ export default function POSCashierPage() {
         </div>
       )}
 
+      {/* ── Cash Outflow Modal ── */}
+      {showCashOutflow && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div className="card" style={{ width: "100%", maxWidth: 400 }}>
+            <div className="card-header">
+              <h3 className="card-title"><Icon name="cash" size={16} />{isAr ? "مخرج نقدي من الدرج" : "Cash outflow"}</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowCashOutflow(false)}><Icon name="close" size={18} /></button>
+            </div>
+            <div className="card-body">
+              <div style={{ padding: "9px 11px", marginBottom: 14, borderRadius: 8, background: "#FFF7ED", color: "#9A3412", fontSize: 12 }}>
+                {isAr ? "هذه العملية تسحب نقدًا من الدرج فقط، ولا تُسجل كمبيعات ولا تؤثر على المخزون." : "This removes cash from the drawer only; it is not a sale and does not affect inventory."}
+              </div>
+              <div className="form-group">
+                <label className="form-label">{isAr ? "نوع المخرج" : "Outflow type"}</label>
+                <select className="form-input form-select" value={cashOutflowForm.outflow_type} onChange={(e) => setCashOutflowForm({ ...cashOutflowForm, outflow_type: e.target.value })}>
+                  <option value="donation">{isAr ? "صدقة" : "Donation"}</option>
+                  <option value="food">{isAr ? "مصروف أكل" : "Food expense"}</option>
+                  <option value="fuel">{isAr ? "مصروف بنزين" : "Fuel expense"}</option>
+                  <option value="delivery">{isAr ? "مصروف توصيل" : "Delivery expense"}</option>
+                  <option value="employee_advance">{isAr ? "سلفة موظف" : "Employee advance"}</option>
+                  <option value="other">{isAr ? "أخرى" : "Other"}</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{isAr ? "المبلغ" : "Amount"} ({sar})</label>
+                <input type="number" className="form-input" min={0.01} step={0.01} value={cashOutflowForm.amount} onChange={(e) => setCashOutflowForm({ ...cashOutflowForm, amount: e.target.value })} autoFocus />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{isAr ? "البيان / السبب" : "Description / reason"}</label>
+                <textarea className="form-input" rows={2} value={cashOutflowForm.description} onChange={(e) => setCashOutflowForm({ ...cashOutflowForm, description: e.target.value })} />
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn btn-secondary" onClick={() => setShowCashOutflow(false)}>{isAr ? "إلغاء" : "Cancel"}</button>
+                <button className="btn btn-primary" onClick={handleCashOutflow} disabled={savingCashOutflow}>
+                  <Icon name="check" size={15} />
+                  {savingCashOutflow ? (isAr ? "جاري الحفظ..." : "Saving...") : (isAr ? "حفظ المخرج" : "Save outflow")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Close Session Modal ── */}
       {showCloseForm && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>

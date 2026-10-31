@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 
 from app.models.pos import (
-    POSTerminal, POSSession, POSTransaction, POSTransactionLine,
+    POSTerminal, POSSession, POSTransaction, POSTransactionLine, POSCashOutflow,
     POS_PURCHASE_ACTIVITIES, ACTIVITY_CONFIG,
 )
 
@@ -440,7 +440,13 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
         raise HTTPException(403, "كلمة مرور إغلاق الجلسة غير صحيحة")
 
     closing_cash = Decimal(str(data.get("closing_cash", 0)))
-    expected = session.opening_cash + session.total_cash
+    outflows_total = await db.scalar(
+        select(func.coalesce(func.sum(POSCashOutflow.amount), 0)).where(
+            POSCashOutflow.session_id == session.id,
+            POSCashOutflow.tenant_id == tenant_id,
+        )
+    ) or Decimal("0")
+    expected = session.opening_cash + session.total_cash - Decimal(str(outflows_total))
     difference = closing_cash - expected
 
     session.closing_cash = closing_cash
@@ -466,6 +472,7 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
         "total_card": float(session.total_card),
         "total_tabby": float(session.total_tabby),
         "total_tamara": float(session.total_tamara),
+        "total_cash_outflows": float(outflows_total),
         "total_vat": float(session.total_vat),
         "transaction_count": session.transaction_count,
         "status": "closed",
@@ -495,6 +502,14 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
     )
     txs = txs_r.scalars().all()
 
+    outflows_r = await db.execute(
+        select(POSCashOutflow)
+        .where(POSCashOutflow.session_id == session_id, POSCashOutflow.tenant_id == tenant_id)
+        .order_by(POSCashOutflow.created_at)
+    )
+    outflows = outflows_r.scalars().all()
+    outflows_total = sum((Decimal(str(item.amount)) for item in outflows), Decimal("0"))
+
     by_method: dict[str, float] = {}
     for tx in txs:
         m = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
@@ -510,8 +525,8 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
             "closed_at": session.closed_at.isoformat() if session.closed_at else None,
             "opening_cash": float(session.opening_cash),
             "closing_cash": float(session.closing_cash or 0),
-            "expected_cash": float(session.expected_cash or 0),
-            "difference": float((session.closing_cash or 0) - (session.expected_cash or 0)),
+            "expected_cash": float(session.expected_cash if session.expected_cash is not None else (session.opening_cash + session.total_cash - outflows_total)),
+            "difference": float((session.closing_cash or 0) - (session.expected_cash if session.expected_cash is not None else (session.opening_cash + session.total_cash - outflows_total))),
             "total_sales": float(session.total_sales),
             "total_cash": float(session.total_cash),
             "total_card": float(session.total_card),
@@ -519,8 +534,20 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
             "total_tamara": float(session.total_tamara),
             "total_vat": float(session.total_vat),
             "transaction_count": session.transaction_count,
+            "total_cash_outflows": float(outflows_total),
         },
         "by_payment_method": by_method,
+        "cash_outflows": [
+            {
+                "id": item.id,
+                "outflow_type": item.outflow_type,
+                "amount": float(item.amount),
+                "description": item.description,
+                "journal_entry_id": item.journal_entry_id,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in outflows
+        ],
         "transactions": [
             {
                 "id": tx.id,
@@ -535,6 +562,77 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
             for tx in txs
         ],
     }
+
+
+# ─── Cash outflows (مخرجات درج الكاشير) ───────────────────────────────
+async def create_cash_outflow(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
+    """تسجيل سحب نقدي من درج الجلسة مع قيد مصروف/صندوق مستقل."""
+    session_id = str(data.get("session_id") or "")
+    outflow_type = str(data.get("outflow_type") or "").strip()
+    description = str(data.get("description") or "").strip() or None
+    allowed_types = {"donation", "food", "fuel", "delivery", "employee_advance", "other"}
+    if outflow_type not in allowed_types:
+        raise HTTPException(400, "نوع المخرج النقدي غير صحيح")
+    try:
+        amount = Decimal(str(data.get("amount")))
+    except Exception:
+        raise HTTPException(400, "مبلغ المخرج النقدي غير صحيح")
+    if amount <= 0:
+        raise HTTPException(400, "مبلغ المخرج النقدي يجب أن يكون أكبر من صفر")
+
+    session = await db.get(POSSession, session_id)
+    if not session or session.tenant_id != tenant_id:
+        raise HTTPException(404, "الجلسة غير موجودة")
+    if session.status != SESSION_OPEN:
+        raise HTTPException(400, "لا يمكن تسجيل مخرج نقدي لجلسة مغلقة")
+    terminal = await db.get(POSTerminal, session.terminal_id)
+    if not terminal or terminal.tenant_id != tenant_id:
+        raise HTTPException(404, "جهاز نقطة البيع غير موجود")
+
+    existing_total = await db.scalar(
+        select(func.coalesce(func.sum(POSCashOutflow.amount), 0)).where(
+            POSCashOutflow.session_id == session.id, POSCashOutflow.tenant_id == tenant_id
+        )
+    ) or Decimal("0")
+    available_cash = session.opening_cash + session.total_cash - Decimal(str(existing_total))
+    if amount > available_cash:
+        raise HTTPException(400, f"المبلغ أكبر من النقد المتاح في الدرج ({available_cash:.2f})")
+
+    from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
+    from app.modules.accounting.service import get_operational_account
+    cash_account = await db.get(Account, terminal.cash_account_id) if terminal.cash_account_id else None
+    if not cash_account or cash_account.tenant_id != tenant_id or not cash_account.is_active or not cash_account.is_posting:
+        raise HTTPException(409, "اربط حساب صندوق نشط وقابل للقيد بجهاز نقطة البيع أولًا")
+    expense_account = await get_operational_account(db, tenant_id, "other_expense")
+    fiscal = await db.get(FiscalYear, terminal.fiscal_year_id) if terminal.fiscal_year_id else None
+    if not fiscal:
+        fiscal = await db.scalar(select(FiscalYear).where(FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN).order_by(FiscalYear.start_date).limit(1))
+    if not fiscal:
+        raise HTTPException(409, "لا توجد سنة مالية مفتوحة لقيد المخرج النقدي")
+
+    label = {"donation": "صدقة", "food": "مصروف أكل", "fuel": "مصروف بنزين", "delivery": "مصروف توصيل", "employee_advance": "سلفة موظف", "other": "مخرج نقدي آخر"}[outflow_type]
+    outflow = POSCashOutflow(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, session_id=session.id,
+        terminal_id=terminal.id, created_by=user_id, outflow_type=outflow_type,
+        amount=amount, description=description,
+    )
+    entry_id = str(uuid.uuid4())
+    db.add(JournalEntry(
+        id=entry_id, tenant_id=tenant_id, entry_number=f"POS-OUT-{outflow.id[:8].upper()}",
+        entry_date=datetime.utcnow(), fiscal_year_id=fiscal.id,
+        description_ar=f"{label} من درج نقطة البيع: {description or ''}".strip(),
+        description_en=f"POS cash outflow: {label} {description or ''}".strip(),
+        status=JournalEntryStatus.POSTED, reference=outflow.id, source="pos_cash_outflow",
+        total_debit=amount, total_credit=amount, created_by=user_id,
+        posted_by=user_id, posted_at=datetime.utcnow(),
+    ))
+    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry_id, account_id=expense_account.id, description=label, debit=amount, credit=Decimal("0"), line_order=0))
+    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry_id, account_id=cash_account.id, description=f"سحب من صندوق {terminal.name}", debit=Decimal("0"), credit=amount, line_order=1))
+    outflow.journal_entry_id = entry_id
+    db.add(outflow)
+    await db.commit()
+    await db.refresh(outflow)
+    return {"id": outflow.id, "outflow_type": outflow.outflow_type, "amount": float(outflow.amount), "description": outflow.description, "journal_entry_id": outflow.journal_entry_id, "created_at": outflow.created_at.isoformat()}
 
 
 # ─── Transactions (عمليات البيع) ─────────────────────────────────────

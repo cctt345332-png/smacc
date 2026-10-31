@@ -23,6 +23,8 @@ export const getSessionReport = (session_id: string) =>
   api.get(`/pos/sessions/${session_id}/report`);
 export const getSessionTransactions = (session_id: string) =>
   api.get(`/pos/sessions/${session_id}/transactions`);
+export const createCashOutflow = (session_id: string, data: any) =>
+  api.post(`/pos/sessions/${session_id}/cash-outflows`, data);
 
 // ─── Transactions ────────────────────────────────────────────────────
 export const getMyTransactions = (limit = 100) =>
