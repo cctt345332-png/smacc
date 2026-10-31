@@ -15,6 +15,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_MAPBOX_TOKEN=""
 ENV NEXT_PUBLIC_MAPBOX_TOKEN=$NEXT_PUBLIC_MAPBOX_TOKEN
 
+# كسر كاش Docker صراحةً عند نشر تحديثات الواجهة.
+ARG MASAR_FRONTEND_BUILD=20261031-2311
+RUN echo "Building Masar frontend: ${MASAR_FRONTEND_BUILD}"
 RUN npm run build
 
 # ── Runner ──────────────────────────────────────────────────────────
