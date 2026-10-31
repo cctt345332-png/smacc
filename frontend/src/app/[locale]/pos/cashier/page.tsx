@@ -302,7 +302,7 @@ export default function POSCashierPage() {
   const addToCart = async (p: Product) => {
     if (p.tracking_type === "serial") {
       const r = terminal?.id
-        ? await getTerminalSerials(terminal.id, p.id).catch(() => ({ data: [] }))
+        ? await getTerminalSerials(terminal.id, p.id, true).catch(() => ({ data: [] }))
         : await getAvailableSerials(p.id).catch(() => ({ data: [] }));
       const serials = r.data || [];
       if (!serials.length) { alert(isAr ? "لا يوجد مخزون متاح" : "No stock available"); return; }

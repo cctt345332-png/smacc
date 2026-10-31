@@ -142,8 +142,8 @@ async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: st
         Warehouse.tenant_id == tenant_id,
         Warehouse.is_default == True,
         Warehouse.is_active == True,
-    ))
-    main = main_result.scalar_one_or_none()
+    ).order_by(Warehouse.created_at.asc()).limit(1))
+    main = main_result.scalars().first()
     warehouse_ids = [terminal.warehouse_id]
     if include_main and main and main.id not in warehouse_ids:
         warehouse_ids.append(main.id)
@@ -950,8 +950,8 @@ async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_i
                     Warehouse.tenant_id == tenant_id,
                     Warehouse.is_default == True,
                     Warehouse.is_active == True,
-                ))
-                main = main_result.scalar_one_or_none()
+                ).order_by(Warehouse.created_at.asc()).limit(1))
+                main = main_result.scalars().first()
                 if not main or serial.warehouse_id != main.id:
                     raise HTTPException(400, f"السيريال {serial.serial_number} ليس في مستودع نقطة البيع ولا المستودع الرئيسي")
                 source_warehouse_id = serial.warehouse_id
