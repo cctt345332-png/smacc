@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getItems, getCategories, updateItem, deleteItem } from "@/lib/inventory";
+import { getItems, getCategories, getWarehouses, updateItem, deleteItem } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { Icon } from "@/components/ui/Icons";
 
@@ -41,6 +41,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterTracking, setFilterTracking] = useState("");
@@ -64,6 +65,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
 
   useEffect(() => {
     getCategories().then(({ data }) => setCategories(data)).catch(() => {});
+    getWarehouses().then(({ data }) => setWarehouses(Array.isArray(data) ? data : (data?.items || []))).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [filterTracking, filterCategory, filterLowStock]);
@@ -77,6 +79,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
       vat_rate: item.vat_rate, reorder_point: item.reorder_point,
       color: item.color || "", storage: item.storage || "",
       pos_enabled: item.pos_enabled, store_enabled: item.store_enabled,
+      default_warehouse_id: item.default_warehouse_id || "",
       is_active: item.is_active,
     });
   };
@@ -91,6 +94,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
         cost_price: parseFloat(editForm.cost_price) || 0,
         vat_rate: parseFloat(editForm.vat_rate) || 15,
         reorder_point: parseFloat(editForm.reorder_point) || 0,
+        default_warehouse_id: editForm.default_warehouse_id || null,
         category_id: editForm.category_id || null,
         color: editForm.color || null,
         storage: editForm.storage || null,
@@ -318,7 +322,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
         <EditItemModal
           item={editItem} form={editForm} setForm={setEditForm}
           onSave={handleSaveEdit} onClose={() => setEditItem(null)}
-          saving={saving} ar={ar} categories={categories}
+          saving={saving} ar={ar} categories={categories} warehouses={warehouses}
         />
       )}
     </>
@@ -327,7 +331,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
 
 // ── Modal تعديل الصنف ─────────────────────────────────────────────────
 // هذا المكون منفصل لتجنب تعقيد الصفحة الرئيسية
-function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categories }: any) {
+function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categories, warehouses }: any) {
   if (!item) return null;
   const isSerial = item.tracking_type === "serial";
   return (
@@ -412,10 +416,20 @@ function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categ
             </div>
           )}
           {!isSerial && (
-            <div className="form-group">
-              <label className="form-label">{ar ? "نقطة إعادة الطلب" : "Reorder Point"}</label>
-              <input type="number" className="form-input" style={{ maxWidth: 160 }} value={form.reorder_point}
-                onChange={e => setForm((f: any) => ({ ...f, reorder_point: e.target.value }))} />
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">{ar ? "نقطة إعادة الطلب" : "Reorder Point"}</label>
+                <input type="number" className="form-input" value={form.reorder_point}
+                  onChange={e => setForm((f: any) => ({ ...f, reorder_point: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "مستودع الكمية" : "Quantity warehouse"}</label>
+                <select className="form-input form-select" value={form.default_warehouse_id || ""}
+                  onChange={e => setForm((f: any) => ({ ...f, default_warehouse_id: e.target.value }))}>
+                  <option value="">{ar ? "اختر المستودع" : "Select warehouse"}</option>
+                  {(warehouses || []).map((w: any) => <option key={w.id} value={w.id}>{w.name_ar}</option>)}
+                </select>
+              </div>
             </div>
           )}
           <div style={{ display: "flex", gap: 20, marginTop: 8 }}>
