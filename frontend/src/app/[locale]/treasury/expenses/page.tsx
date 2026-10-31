@@ -1,126 +1,109 @@
 "use client";
-import { useEffect, useState, use } from "react";
+import { useEffect, useMemo, useState, use } from "react";
 import Link from "next/link";
+import * as XLSX from "xlsx";
 import { getVouchers, postVoucher, cancelVoucher } from "@/lib/treasury";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
-const STATUS = { draft: { ar: "مسودة", badge: "badge-warning" }, posted: { ar: "مرحّل", badge: "badge-success" }, cancelled: { ar: "ملغي", badge: "badge-danger" } };
+const STATUS: Record<string, { ar: string; en: string; badge: string }> = {
+  draft: { ar: "مسودة", en: "Draft", badge: "badge-warning" },
+  posted: { ar: "مرحّل", en: "Posted", badge: "badge-success" },
+  cancelled: { ar: "ملغي", en: "Cancelled", badge: "badge-danger" },
+};
 const CATS: Record<string, string> = { rent: "إيجار", utilities: "كهرباء وماء", salaries: "رواتب", maintenance: "صيانة", transport: "مواصلات", marketing: "تسويق", office: "مستلزمات مكتبية", insurance: "تأمين", government: "رسوم حكومية", other: "أخرى" };
+const dateKey = (value: any) => String(value || "").slice(0, 10);
+const displayDate = (value: any, ar: boolean) => new Date(value).toLocaleDateString(ar ? "ar-SA" : "en-GB");
 
 export default function ExpensesPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
-
-  const {
-    locale
-  } = params;
-
+  const { locale } = params;
   const ar = locale === "ar";
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
+  const [status, setStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const load = async () => {
-    try { const { data } = await getVouchers({ voucher_type: "expense" }); setItems(data); }
-    catch {} finally { setLoading(false); }
+    try { const { data } = await getVouchers({ voucher_type: "expense" }); setItems(data || []); }
+    catch { setItems([]); }
+    finally { setLoading(false); }
   };
   useEffect(() => { load(); }, []);
 
+  const filteredItems = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return items.filter((item) => {
+      const text = [item.voucher_number, item.description_ar, item.description_en, item.expense_category].filter(Boolean).join(" ").toLowerCase();
+      const day = dateKey(item.voucher_date);
+      return (!needle || text.includes(needle)) && (!category || item.expense_category === category) && (!status || item.status === status) && (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo);
+    });
+  }, [items, search, category, status, dateFrom, dateTo]);
+
   const handle = async (fn: () => Promise<any>, id: string) => {
     setActing(id);
-    try { await fn(); load(); } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
+    try { await fn(); await load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر تنفيذ العملية" : "Operation failed")); }
     finally { setActing(null); }
   };
+  const clearFilters = () => { setSearch(""); setCategory(""); setStatus(""); setDateFrom(""); setDateTo(""); };
+  const printFiltered = () => window.print();
+  const exportExcel = () => {
+    const rows = filteredItems.map((v) => ({
+      [ar ? "رقم السند" : "Voucher #"]: v.voucher_number || "",
+      [ar ? "التاريخ" : "Date"]: displayDate(v.voucher_date, ar),
+      [ar ? "الفئة" : "Category"]: ar ? (CATS[v.expense_category] || v.expense_category || "") : (v.expense_category || ""),
+      [ar ? "البيان" : "Description"]: v.description_ar || v.description_en || "",
+      [ar ? "المبلغ قبل الضريبة" : "Amount before VAT"]: Number(v.amount || 0),
+      [ar ? "الضريبة" : "VAT"]: Number(v.vat_amount || 0),
+      [ar ? "الإجمالي" : "Total"]: Number(v.amount || 0) + Number(v.vat_amount || 0),
+      [ar ? "الحالة" : "Status"]: ar ? (STATUS[v.status]?.ar || v.status || "") : (STATUS[v.status]?.en || v.status || ""),
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!cols"] = [{ wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 35 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, ar ? "المصاريف" : "Expenses");
+    XLSX.writeFile(workbook, `expenses-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
-  const totalPosted = items.filter(i => i.status === "posted").reduce((s, i) => s + Number(i.amount || 0) + Number(i.vat_amount || 0), 0);
+  const totalPosted = filteredItems.filter(i => i.status === "posted").reduce((s, i) => s + Number(i.amount || 0) + Number(i.vat_amount || 0), 0);
+  const totalAll = filteredItems.reduce((s, i) => s + Number(i.amount || 0) + Number(i.vat_amount || 0), 0);
+  const categories = Array.from(new Set(items.map(i => i.expense_category).filter(Boolean)));
 
   return (
     <>
-      <div className="page-header">
-        <div>
-          <div className="breadcrumb">
-            <Link href={`/${locale}/dashboard`}>{ar ? "الرئيسية" : "Home"}</Link>
-            <span className="breadcrumb-sep">/</span>
-            <span>{ar ? "المصروفات" : "Expenses"}</span>
-          </div>
-          <h1 className="page-title">{ar ? "المصروفات" : "Expenses"}</h1>
-          <p className="page-subtitle">{ar ? "تسجيل المصروفات التشغيلية" : "Record operational expenses"}</p>
+      <style jsx global>{`@media print { .expense-no-print { display: none !important; } .expense-print-area .card { border: 0 !important; box-shadow: none !important; } .expense-print-area table { width: 100% !important; font-size: 10px !important; } .expense-print-area th, .expense-print-area td { padding: 6px 5px !important; } body { background: #fff !important; } @page { size: A4 landscape; margin: 10mm; } }`}</style>
+      <div className="expense-print-area">
+        <div className="page-header expense-no-print">
+          <div><div className="breadcrumb"><Link href={`/${locale}/dashboard`}>{ar ? "الرئيسية" : "Home"}</Link><span className="breadcrumb-sep">/</span><span>{ar ? "المصروفات" : "Expenses"}</span></div><h1 className="page-title">{ar ? "المصروفات" : "Expenses"}</h1><p className="page-subtitle">{ar ? "تسجيل المصروفات التشغيلية ومراجعة تقاريرها" : "Record and review operational expenses"}</p></div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button className="btn btn-secondary btn-sm" onClick={printFiltered}><Icon name="print" size={14} /> {ar ? "طباعة" : "Print"}</button><button className="btn btn-secondary btn-sm" onClick={exportExcel} disabled={!filteredItems.length}><Icon name="download" size={14} /> {ar ? "تصدير Excel" : "Export Excel"}</button><Link href={`/${locale}/treasury/expenses/batch`} className="btn btn-secondary btn-sm">{ar ? "مصروفات متعددة — قيد واحد" : "Batch Expenses — One Journal"}</Link><Link href={`/${locale}/treasury/expenses/new`} className="btn btn-primary btn-sm"><Icon name="plus" size={14} /> {ar ? "مصروف جديد" : "New Expense"}</Link></div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Link href={`/${locale}/treasury/expenses/batch`} className="btn btn-secondary btn-sm">{ar ? "مصروفات متعددة — قيد واحد" : "Batch Expenses — One Journal"}</Link>
-          <Link href={`/${locale}/treasury/expenses/new`} className="btn btn-primary btn-sm">
-            <Icon name="plus" size={14} /> {ar ? "مصروف جديد" : "New Expense"}
-          </Link>
-        </div>
-      </div>
 
-      <div className="grid-3" style={{ marginBottom: 20 }}>
-        {[
-          { label: ar ? "إجمالي المصروفات" : "Total Expenses", value: `${fmt(totalPosted)} SAR`, color: "#DC2626" },
-          { label: ar ? "عدد المصروفات" : "Count", value: items.length, color: "#5A187E" },
-          { label: ar ? "مسودة" : "Draft", value: items.filter(i => i.status === "draft").length, color: "#D97706" },
-        ].map(s => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-icon" style={{ background: s.color + "18", color: s.color }}><Icon name="trendingDown" size={20} /></div>
-            <div className="stat-content">
-              <div className="stat-label">{s.label}</div>
-              <div className="stat-value" style={{ color: s.color, fontSize: 18 }}>{s.value}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+        <div className="grid-3 expense-no-print" style={{ marginBottom: 20 }}>{[
+          { label: ar ? "إجمالي المصروفات المفلترة" : "Filtered Expenses", value: `${fmt(totalAll)} SAR`, color: "#DC2626" },
+          { label: ar ? "عدد النتائج" : "Filtered Count", value: filteredItems.length, color: "#5A187E" },
+          { label: ar ? "المصروفات المرحلة" : "Posted Expenses", value: `${fmt(totalPosted)} SAR`, color: "#047857" },
+        ].map(s => <div key={s.label} className="stat-card"><div className="stat-icon" style={{ background: s.color + "18", color: s.color }}><Icon name="trendingDown" size={20} /></div><div className="stat-content"><div className="stat-label">{s.label}</div><div className="stat-value" style={{ color: s.color, fontSize: 18 }}>{s.value}</div></div></div>)}</div>
 
-      <div className="card">
-        <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
-          {loading ? <div className="empty-state"><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div>
-          : items.length === 0 ? (
-            <div className="empty-state">
-              <div style={{ width: 48, height: 48, borderRadius: 12, background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", margin: "0 auto 12px" }}><Icon name="receipt" size={24} /></div>
-              <div className="empty-state-title">{ar ? "لا توجد مصروفات" : "No expenses"}</div>
-              <Link href={`/${locale}/treasury/expenses/new`} className="btn btn-primary btn-sm" style={{ marginTop: 12 }}>+ {ar ? "مصروف جديد" : "New"}</Link>
-            </div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>{ar ? "رقم السند" : "Voucher #"}</th>
-                  <th>{ar ? "التاريخ" : "Date"}</th>
-                  <th>{ar ? "الفئة" : "Category"}</th>
-                  <th>{ar ? "البيان" : "Description"}</th>
-                  <th style={{ textAlign: "end" }}>{ar ? "المبلغ" : "Amount"}</th>
-                  <th style={{ textAlign: "end" }}>{ar ? "الضريبة" : "VAT"}</th>
-                  <th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th>
-                  <th>{ar ? "الحالة" : "Status"}</th>
-                  <th>{ar ? "الإجراءات" : "Actions"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map(v => {
-                  const s = STATUS[v.status as keyof typeof STATUS] || { ar: v.status, badge: "badge-gray" };
-                  return (
-                    <tr key={v.id}>
-                      <td><Link href={`/${locale}/treasury/expenses/${v.id}`} style={{ fontWeight: 700, color: "#DC2626", textDecoration: "none" }}>{v.voucher_number}</Link></td>
-                      <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(v.voucher_date).toLocaleDateString("en-SA")}</td>
-                      <td style={{ fontSize: 12 }}>{v.expense_category ? (ar ? CATS[v.expense_category] || v.expense_category : v.expense_category) : "—"}</td>
-                      <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{v.description_ar}</td>
-                      <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(v.amount)}</td>
-                      <td style={{ textAlign: "end", color: "#D97706" }}>{Number(v.vat_amount) > 0 ? fmt(v.vat_amount) : "—"}</td>
-                      <td style={{ textAlign: "end", fontWeight: 700, color: "#DC2626" }}>{fmt(Number(v.amount || 0) + Number(v.vat_amount || 0))}</td>
-                      <td><span className={`badge ${s.badge}`}>{s.ar}</span></td>
-                      <td>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <Link href={`/${locale}/treasury/expenses/${v.id}`} className="btn btn-ghost btn-sm btn-icon"><Icon name="view" size={14} /></Link>
-                          {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "#6F4A84" }} onClick={() => handle(() => postVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="check" size={14} /></button>}
-                          {v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "var(--danger)" }} onClick={() => handle(() => cancelVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="cancel" size={14} /></button>}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <div className="card expense-no-print" style={{ marginBottom: 16 }}><div className="card-body" style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1.5fr) repeat(4, minmax(130px, 1fr)) auto", gap: 10, alignItems: "end" }}>
+          <label className="form-label" style={{ margin: 0 }}>{ar ? "بحث" : "Search"}<input className="form-input" style={{ marginTop: 5 }} value={search} onChange={e => setSearch(e.target.value)} placeholder={ar ? "رقم السند أو البيان" : "Voucher or description"} /></label>
+          <label className="form-label" style={{ margin: 0 }}>{ar ? "الفئة" : "Category"}<select className="form-input" style={{ marginTop: 5 }} value={category} onChange={e => setCategory(e.target.value)}><option value="">{ar ? "كل الفئات" : "All categories"}</option>{categories.map(c => <option key={c} value={c}>{ar ? CATS[c] || c : c}</option>)}</select></label>
+          <label className="form-label" style={{ margin: 0 }}>{ar ? "الحالة" : "Status"}<select className="form-input" style={{ marginTop: 5 }} value={status} onChange={e => setStatus(e.target.value)}><option value="">{ar ? "كل الحالات" : "All statuses"}</option>{Object.entries(STATUS).map(([key, value]) => <option key={key} value={key}>{ar ? value.ar : value.en}</option>)}</select></label>
+          <label className="form-label" style={{ margin: 0 }}>{ar ? "من تاريخ" : "From date"}<input type="date" className="form-input" style={{ marginTop: 5 }} value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></label>
+          <label className="form-label" style={{ margin: 0 }}>{ar ? "إلى تاريخ" : "To date"}<input type="date" className="form-input" style={{ marginTop: 5 }} value={dateTo} onChange={e => setDateTo(e.target.value)} /></label>
+          <button className="btn btn-ghost btn-sm" onClick={clearFilters}>{ar ? "مسح" : "Clear"}</button>
+        </div></div>
+
+        <div className="card"><div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div className="card-title">{ar ? "سجل المصاريف" : "Expenses register"}</div><div style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? `عدد النتائج: ${filteredItems.length}` : `${filteredItems.length} results`}</div></div><div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
+          {loading ? <div className="empty-state"><div style={{ color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div></div> : filteredItems.length === 0 ? <div className="empty-state"><div style={{ width: 48, height: 48, borderRadius: 12, background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8", margin: "0 auto 12px" }}><Icon name="receipt" size={24} /></div><div className="empty-state-title">{items.length ? (ar ? "لا توجد نتائج مطابقة للفلاتر" : "No matching results") : (ar ? "لا توجد مصروفات" : "No expenses")}</div></div> : <table>
+            <thead><tr><th>{ar ? "رقم السند" : "Voucher #"}</th><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "الفئة" : "Category"}</th><th>{ar ? "البيان" : "Description"}</th><th style={{ textAlign: "end" }}>{ar ? "المبلغ" : "Amount"}</th><th style={{ textAlign: "end" }}>{ar ? "الضريبة" : "VAT"}</th><th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th><th>{ar ? "الحالة" : "Status"}</th><th className="expense-no-print">{ar ? "الإجراءات" : "Actions"}</th></tr></thead>
+            <tbody>{filteredItems.map(v => { const s = STATUS[v.status] || { ar: v.status, en: v.status, badge: "badge-gray" }; return <tr key={v.id}><td><Link href={`/${locale}/treasury/expenses/${v.id}`} style={{ fontWeight: 700, color: "#DC2626", textDecoration: "none" }}>{v.voucher_number}</Link></td><td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{displayDate(v.voucher_date, ar)}</td><td style={{ fontSize: 12 }}>{v.expense_category ? (ar ? CATS[v.expense_category] || v.expense_category : v.expense_category) : "—"}</td><td style={{ maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{v.description_ar || v.description_en || "—"}</td><td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(v.amount)}</td><td style={{ textAlign: "end", color: "#D97706" }}>{Number(v.vat_amount) > 0 ? fmt(v.vat_amount) : "—"}</td><td style={{ textAlign: "end", fontWeight: 700, color: "#DC2626" }}>{fmt(Number(v.amount || 0) + Number(v.vat_amount || 0))}</td><td><span className={`badge ${s.badge}`}>{ar ? s.ar : s.en}</span></td><td className="expense-no-print"><div style={{ display: "flex", gap: 4 }}><Link href={`/${locale}/treasury/expenses/${v.id}`} className="btn btn-ghost btn-sm btn-icon"><Icon name="view" size={14} /></Link>{v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "#6F4A84" }} onClick={() => handle(() => postVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="check" size={14} /></button>}{v.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" style={{ color: "var(--danger)" }} onClick={() => handle(() => cancelVoucher(v.id), v.id)} disabled={acting === v.id}><Icon name="cancel" size={14} /></button>}</div></td></tr>; })}</tbody>
+          </table>}
+        </div></div>
       </div>
     </>
   );
