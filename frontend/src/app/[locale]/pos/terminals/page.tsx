@@ -46,7 +46,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
     name: "", branch_name: "",
     close_pin: "",
     warehouse_id: "", cash_account_id: "", sales_account_id: "",
-    vat_account_id: "", bank_account_id: "", card_settlement_account_id: "", fiscal_year_id: "",
+    vat_account_id: "", bank_account_id: "", card_settlement_account_id: "", tabby_account_id: "", tamara_account_id: "", fiscal_year_id: "",
     receipt_header: "", receipt_footer: "",
     print_receipt: true, allow_discount: true,
     max_discount_pct: "10",
@@ -117,7 +117,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
       sales_account_id: t.sales_account_id || "",
       vat_account_id: t.vat_account_id || "",
       bank_account_id: t.bank_account_id || "",
-      card_settlement_account_id: t.card_settlement_account_id || "",
+      card_settlement_account_id: t.card_settlement_account_id || "", tabby_account_id: t.tabby_account_id || "", tamara_account_id: t.tamara_account_id || "",
       fiscal_year_id: t.fiscal_year_id || "",
       receipt_header: t.receipt_header || "",
       receipt_footer: t.receipt_footer || "",
@@ -144,6 +144,8 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
         vat_account_id:   form.vat_account_id   || null,
         bank_account_id:  form.bank_account_id  || null,
         card_settlement_account_id: form.card_settlement_account_id || null,
+        tabby_account_id: form.tabby_account_id || null,
+        tamara_account_id: form.tamara_account_id || null,
         fiscal_year_id:   form.fiscal_year_id   || null,
         receipt_header:   form.receipt_header   || null,
         receipt_footer:   form.receipt_footer   || null,
@@ -486,6 +488,16 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
                   </select>
                   <p className="form-hint">{ar ? "تُسجل فيه مبيعات مدى والبطاقات حتى تتم تسويتها في البنك" : "Card sales remain here until settled into the bank"}</p>
                 </div>
+                {(["tabby_account_id", "tamara_account_id"] as const).map((key) => (
+                  <div className="form-group" key={key}>
+                    <label className="form-label">{ar ? (key === "tabby_account_id" ? "حساب تسوية تابي" : "حساب تسوية تمارا") : (key === "tabby_account_id" ? "Tabby Settlement Account" : "Tamara Settlement Account")}</label>
+                    <select className="form-input form-select" value={form[key]} onChange={(e) => upd(key, e.target.value)}>
+                      <option value="">{ar ? "— اختر من شجرة الحسابات —" : "— Select GL account —"}</option>
+                      {accounts.filter((a: any) => a.account_type === "asset" && a.is_posting === true && a.is_active !== false).map((a: any) => <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>)}
+                    </select>
+                    <p className="form-hint">{ar ? "يُرحّل المبلغ لهذا الحساب عند البيع" : "Sales are posted to this settlement account"}</p>
+                  </div>
+                ))}
                 <div className="form-group">
                   <label className="form-label">{ar ? "الحساب البنكي الفعلي (اختياري)" : "Actual Bank Account (Optional)"}</label>
                   <select className="form-input form-select" value={form.bank_account_id} onChange={(e) => upd("bank_account_id", e.target.value)}>

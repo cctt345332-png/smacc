@@ -77,6 +77,7 @@ interface ThermalReceiptProps {
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "نقداً", mada: "شبكة",
+  tabby: "تابي", tamara: "تمارا",
   split: "دفع مقسّم",
 };
 
@@ -85,7 +86,7 @@ const LABELS_EN: Record<string, string> = {
   "العميل": "Customer", "الجوال": "Mobile", "المجموع قبل الضريبة": "Subtotal",
   "إجمالي الخصم": "Discount", "ضريبة القيمة المضافة (15%)": "VAT (15%)",
   "الإجمالي": "Total", "طريقة الدفع": "Payment", "المبلغ المدفوع": "Paid",
-  "الباقي": "Change", "نقداً": "Cash", "شبكة": "Card", "رمز الاستجابة السريعة": "QR Code",
+  "الباقي": "Change", "نقداً": "Cash", "شبكة": "Card", "تابي": "Tabby", "تمارا": "Tamara", "رمز الاستجابة السريعة": "QR Code",
 };
 
 const fmt = (n: number) =>
