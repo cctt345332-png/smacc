@@ -490,11 +490,9 @@ async def review_run(db: AsyncSession, tenant_id: str, user_id: str, run_id: str
         raise HTTPException(409, "تم تطبيق تسوية هذا الجرد مسبقًا")
     if action == "reopened" and run.status == "approved":
         raise HTTPException(409, "لا يمكن إعادة فتح جرد تم اعتماد تسويته")
-    if action == "approved" and not run.is_test:
-        await _apply_run_adjustments(db, tenant_id, user_id, run)
-    elif action == "approved" and run.is_test:
-        run.adjustments_applied_at = datetime.utcnow()
-        run.adjustments_applied_by = user_id
+    # اعتماد الجرد للمراجعة فقط. لا نغيّر حالة السيريالات ولا نُنشئ
+    # حركات تسوية تلقائية؛ فقد يكون السيريال في الصيانة أو في موقع آخر.
+    # الإخراج الفعلي يتم لاحقًا عبر مستند إخراج مخزني يدوي عند الحاجة.
     run.status = action
     run.reviewed_at = datetime.utcnow()
     run.reviewed_by = user_id
@@ -584,8 +582,8 @@ async def _notify_review_result(
         db, tenant_id, actor_id, list(rep_ids),
         "تم اعتماد جرد المخزون" if approved else "تمت إعادة جرد المخزون للمراجعة",
         "Stocktake approved" if approved else "Stocktake reopened",
-        "تم اعتماد جرد مستودعك وتطبيق التسوية المخزنية." if approved else "أعادت الإدارة جرد مستودعك للمراجعة، يرجى إعادة الرفع.",
-        "Your warehouse stocktake was approved and adjustments were applied." if approved else "Management reopened your warehouse stocktake for review.",
+        "تم اعتماد جرد مستودعك للمراجعة فقط، ولم يتم إخراج أي سيريال أو تطبيق تسوية مخزنية." if approved else "أعادت الإدارة جرد مستودعك للمراجعة، يرجى إعادة الرفع.",
+        "Your warehouse stocktake was approved for review only; no serials were removed and no stock adjustment was applied." if approved else "Management reopened your warehouse stocktake for review.",
         reference_id=run.id, reference_type="mandatory_stocktake",
     )
 
@@ -595,6 +593,7 @@ async def assert_rep_unlocked(db: AsyncSession, tenant_id: str, user_id: str) ->
     if not rep:
         return
     run = await _run_for_rep(db, tenant_id, rep.id)
-    # بعد رفع الجرد يفتح التطبيق فورًا؛ الاعتماد الإداري يطبّق التسوية فقط.
+    # بعد رفع الجرد يفتح التطبيق فورًا؛ الاعتماد الإداري للمراجعة فقط ولا
+    # يغيّر المخزون تلقائيًا.
     if run and run.status in ("pending", "reopened"):
         raise HTTPException(423, "التطبيق مقفل حتى إكمال الجرد الأسبوعي ورفعه للإدارة")
