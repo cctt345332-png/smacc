@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, use } from "react";
 import Link from "next/link";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { getVouchers, postVoucher, cancelVoucher } from "@/lib/treasury";
 import { Icon } from "@/components/ui/Icons";
 
@@ -53,18 +53,45 @@ export default function ExpensesPage(props: { params: Promise<{ locale: string }
   const clearFilters = () => { setSearch(""); setCategory(""); setStatus(""); setDateFrom(""); setDateTo(""); };
   const printFiltered = () => window.print();
   const exportExcel = () => {
-    const rows = filteredItems.map((v) => ({
-      [ar ? "رقم السند" : "Voucher #"]: v.voucher_number || "",
-      [ar ? "التاريخ" : "Date"]: displayDate(v.voucher_date, ar),
-      [ar ? "الفئة" : "Category"]: ar ? (CATS[v.expense_category] || v.expense_category || "") : (v.expense_category || ""),
-      [ar ? "البيان" : "Description"]: v.description_ar || v.description_en || "",
-      [ar ? "المبلغ قبل الضريبة" : "Amount before VAT"]: Number(v.amount || 0),
-      [ar ? "الضريبة" : "VAT"]: Number(v.vat_amount || 0),
-      [ar ? "الإجمالي" : "Total"]: Number(v.amount || 0) + Number(v.vat_amount || 0),
-      [ar ? "الحالة" : "Status"]: ar ? (STATUS[v.status]?.ar || v.status || "") : (STATUS[v.status]?.en || v.status || ""),
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const headers = ar
+      ? ["رقم السند", "التاريخ", "الفئة", "البيان", "المبلغ قبل الضريبة", "الضريبة", "الإجمالي", "الحالة"]
+      : ["Voucher #", "Date", "Category", "Description", "Amount before VAT", "VAT", "Total", "Status"];
+    const rows = filteredItems.map((v) => [
+      v.voucher_number || "",
+      displayDate(v.voucher_date, ar),
+      ar ? (CATS[v.expense_category] || v.expense_category || "") : (v.expense_category || ""),
+      v.description_ar || v.description_en || "",
+      Number(v.amount || 0),
+      Number(v.vat_amount || 0),
+      Number(v.amount || 0) + Number(v.vat_amount || 0),
+      ar ? (STATUS[v.status]?.ar || v.status || "") : (STATUS[v.status]?.en || v.status || ""),
+    ]);
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const totalAmount = filteredItems.reduce((sum, v) => sum + Number(v.amount || 0), 0);
+    const totalVat = filteredItems.reduce((sum, v) => sum + Number(v.vat_amount || 0), 0);
+    const totalRow = rows.length + 2;
+    XLSX.utils.sheet_add_aoa(worksheet, [[ar ? "الإجمالي" : "TOTAL", "", "", "", totalAmount, totalVat, totalAmount + totalVat, ""]], { origin: -1 });
     worksheet["!cols"] = [{ wch: 16 }, { wch: 14 }, { wch: 20 }, { wch: 35 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+
+    const headerStyle = { fill: { fgColor: { rgb: "5A187E" } }, font: { color: { rgb: "FFFFFF" }, bold: true }, alignment: { horizontal: "center", vertical: "center" } };
+    const totalStyle = { fill: { fgColor: { rgb: "EDE7F2" } }, font: { color: { rgb: "3E0865" }, bold: true }, border: { top: { style: "thin", color: { rgb: "5A187E" } } } };
+    for (let col = 0; col < headers.length; col += 1) {
+      const headerCell = worksheet[XLSX.utils.encode_cell({ r: 0, c: col })];
+      if (headerCell) headerCell.s = headerStyle;
+      const totalCell = worksheet[XLSX.utils.encode_cell({ r: totalRow - 1, c: col })];
+      if (totalCell) totalCell.s = totalStyle;
+    }
+    for (let row = 1; row < totalRow; row += 1) {
+      for (const col of [4, 5, 6]) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: col })];
+        if (cell) cell.s = { numFmt: "#,##0.00", alignment: { horizontal: "right" } };
+      }
+    }
+    for (const col of [4, 5, 6]) {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: totalRow - 1, c: col })];
+      if (cell) cell.s = { ...totalStyle, numFmt: "#,##0.00", alignment: { horizontal: "right" } };
+    }
+    worksheet["!rows"] = [{ hpt: 24 }, ...rows.map(() => ({ hpt: 20 })), { hpt: 24 }];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, ar ? "المصاريف" : "Expenses");
     XLSX.writeFile(workbook, `expenses-${new Date().toISOString().slice(0, 10)}.xlsx`);
