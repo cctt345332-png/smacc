@@ -375,8 +375,18 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
     # المنتجات الكمية لا تظهر في نقاط البيع إلا من خلال inventory_stock.
     # أصلح الأصناف القديمة التي كان رصيدها محفوظاً في بطاقة الصنف فقط،
     # وانقل الرصيد الحالي إلى المستودع الذي اختاره المستخدم.
-    if _tracking_value(item.tracking_type) == "quantity" and data.get("default_warehouse_id"):
-        target_id = str(data["default_warehouse_id"])
+    warehouse_id = data.get("default_warehouse_id") or item.default_warehouse_id
+    if (
+        _tracking_value(item.tracking_type) == "quantity"
+        and data.get("pos_enabled") is True
+        and not warehouse_id
+    ):
+        warehouse_id = await _get_default_warehouse_id(db, tenant_id)
+        if warehouse_id:
+            item.default_warehouse_id = warehouse_id
+
+    if _tracking_value(item.tracking_type) == "quantity" and warehouse_id:
+        target_id = str(warehouse_id)
         target = await db.get(Warehouse, target_id)
         if not target or target.tenant_id != tenant_id:
             raise HTTPException(400, "المستودع المختار غير صحيح")
