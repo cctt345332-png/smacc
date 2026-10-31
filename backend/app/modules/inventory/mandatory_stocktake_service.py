@@ -429,12 +429,15 @@ async def replace_stocktake_serial(
     ).where(
         InventoryItem.tenant_id == tenant_id,
         SerialItem.product_id == line.item_id,
-        SerialItem.warehouse_id == line.warehouse_id,
-        SerialItem.status == "in_stock",
+        SerialItem.serial_number == from_serial,
     ))).scalars().all()
     serial = next((candidate for candidate in serial_candidates if _norm_serial(candidate.serial_number) == _norm_serial(from_serial)), None)
     if not serial:
         raise HTTPException(409, f"السيريال {from_serial} غير موجود كعنصر متاح في مخزون المندوب لهذا الصنف والمستودع")
+    if _value(serial.status) not in {"in_stock", "damaged"}:
+        raise HTTPException(409, f"السيريال {from_serial} غير قابل للاستبدال؛ حالته الحالية {_value(serial.status)}")
+    if serial.warehouse_id not in {line.warehouse_id, None}:
+        raise HTTPException(409, f"السيريال {from_serial} تابع لمستودع آخر ولا يمكن استبداله في هذا السطر")
     duplicate_candidates = (await db.execute(select(SerialItem, Warehouse).join(
         InventoryItem, InventoryItem.id == SerialItem.product_id
     ).outerjoin(Warehouse, Warehouse.id == SerialItem.warehouse_id).where(
@@ -446,8 +449,30 @@ async def replace_stocktake_serial(
         duplicate_item, duplicate_warehouse = duplicate
         status = _value(duplicate_item.status)
         location = duplicate_warehouse.name_ar if duplicate_warehouse else "خارج المستودعات"
+        if duplicate_item.id == serial.id:
+            raise HTTPException(409, "لا يمكن استبدال السيريال بنفس الرقم")
         if duplicate_item.warehouse_id == line.warehouse_id and status == "in_stock":
             raise HTTPException(409, f"السيريال المصور موجود فعلًا في نفس مخزون المندوب ({location}) لكنه لم يكن ضمن لقطة جلسة الجرد. لا تستبدله؛ أعد فتح الجرد أو حدّث الجلسة لتضمينه.")
+        if status == "damaged" and duplicate_item.warehouse_id is None and not duplicate_item.sale_invoice_id:
+            # بعض الجردات القديمة كانت تحول السيريال غير المصور إلى damaged.
+            # عند الاستبدال نبدّل الرقمين بين السجل المتاح وسجل التالف بدل رفض الرقم
+            # أو إنشاء حركة مخزون؛ وبذلك يبقى السيريال المصور هو الموجود في المخزون.
+            old_number = serial.serial_number
+            serial.serial_number = to_serial
+            serial.status = "in_stock"
+            serial.warehouse_id = line.warehouse_id
+            duplicate_item.serial_number = old_number
+            duplicate_item.status = "damaged"
+            duplicate_item.warehouse_id = None
+            serial.notes = (serial.notes or "") + f"\nاستبدال رقم سيريال في الجرد: {old_number} ← {to_serial} بواسطة {user_id}"
+            duplicate_item.notes = (duplicate_item.notes or "") + f"\nتم استبدال الرقم بالسيريال المصور {to_serial} في الجرد بواسطة {user_id}"
+            line.expected_serials_json = json.dumps([
+                to_serial if _norm_serial(value) == _norm_serial(from_serial) else value
+                for value in expected
+            ], ensure_ascii=False)
+            line.notes = (line.notes or "") + f"\nاستبدال سيريال يدويًا: {from_serial} ← {to_serial} بواسطة {user_id}"
+            await db.commit()
+            return await get_run(db, tenant_id, run_id)
         raise HTTPException(409, f"السيريال المصور موجود مسبقًا لهذا الصنف: الحالة {status}، الموقع {location}. لا يمكن استبداله حتى لا يتكرر الرقم.")
     serial.serial_number = to_serial
     line.expected_serials_json = json.dumps([
