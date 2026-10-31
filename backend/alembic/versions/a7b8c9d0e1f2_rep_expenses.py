@@ -1,13 +1,13 @@
 """rep expenses and attachments
 Revision ID: c3e4f5a6b7c8
-Revises: i5d6e7f8a9b0, z2a3b4c5d6e7
+Revises: i5d6e7f8a9b0
 Create Date: 2026-10-07
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "c3e4f5a6b7c8"
-down_revision = ("i5d6e7f8a9b0", "z2a3b4c5d6e7")
+down_revision = "i5d6e7f8a9b0"
 branch_labels = None
 depends_on = None
 

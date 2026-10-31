@@ -1,12 +1,12 @@
 """Add Tabby and Tamara POS settlement accounts and session totals.
 
-Revision ID: d2e3f4a5b6c7
+Revision ID: d2e3f4a5b6d7
 Revises: c1d2e3f4a5b7
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "d2e3f4a5b6c7"
+revision = "d2e3f4a5b6d7"
 down_revision = "c1d2e3f4a5b7"
 branch_labels = None
 depends_on = None
