@@ -1169,9 +1169,6 @@ export default function POSCashierPage() {
               <button className="btn btn-ghost btn-icon" onClick={() => setShowCashOutflow(false)}><Icon name="close" size={18} /></button>
             </div>
             <div className="card-body">
-              <div style={{ padding: "9px 11px", marginBottom: 14, borderRadius: 8, background: "#FFF7ED", color: "#9A3412", fontSize: 12 }}>
-                {isAr ? "هذه العملية تسحب نقدًا من الدرج فقط، ولا تُسجل كمبيعات ولا تؤثر على المخزون." : "This removes cash from the drawer only; it is not a sale and does not affect inventory."}
-              </div>
               <div className="form-group">
                 <label className="form-label">{isAr ? "نوع المخرج" : "Outflow type"}</label>
                 <select className="form-input form-select" value={cashOutflowForm.outflow_type} onChange={(e) => setCashOutflowForm({ ...cashOutflowForm, outflow_type: e.target.value })}>
