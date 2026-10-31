@@ -1,0 +1,49 @@
+{
+  "name": "masar-webview",
+  "version": "1.0.0",
+  "description": "تطبيق سطح مكتب خفيف لواجهة مسار ERP",
+  "main": "main.js",
+  "author": "Masar ERP",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:linux": "electron-builder --linux AppImage --publish never",
+    "dist:win": "electron-builder --win nsis portable --publish never",
+    "dist:all": "electron-builder --linux AppImage --win nsis portable --publish never"
+  },
+  "devDependencies": {
+    "electron": "^38.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.masar.erp",
+    "productName": "Masar ERP",
+    "artifactName": "Masar-ERP-${version}-${os}-${arch}.${ext}",
+    "asar": true,
+    "npmRebuild": false,
+    "compression": "maximum",
+    "publish": [],
+    "files": [
+      "main.js",
+      "assets/**/*",
+      "package.json"
+    ],
+    "icon": "assets/masar-icon.png",
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Office",
+      "executableName": "masar-erp"
+    },
+    "win": {
+      "target": ["nsis", "portable"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Masar ERP"
+    }
+  }
+}
