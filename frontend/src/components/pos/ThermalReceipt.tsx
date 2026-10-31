@@ -128,7 +128,9 @@ export default function ThermalReceipt({
       style={{
         width: "100%",        // العرض يحدده مقاس رول الطابعة، دون تحجيم داخلي إضافي
         maxWidth: 302,         // عرض مناسب للمعاينة على الشاشة فقط
-        fontFamily: "'Times New Roman', Times, serif",
+        // Times New Roman يطبع العربي بشكل رفيع ومكسّر على الطابعات الحرارية؛
+        // Arial/Tahoma أوضح في 80mm ويحافظان على حجم الإيصال الحالي.
+        fontFamily: "Arial, Tahoma, sans-serif",
         fontSize: 12,
         color: "#000",
         background: "#fff",
@@ -321,13 +323,13 @@ function Row({ label, value, small, bold }: {
   return (
     <div className="thermal-row" style={{
       display: "flex", alignItems: "baseline", gap: 5, direction: "ltr",
-      fontSize: small ? 9 : 11, marginBottom: 2,
+      fontSize: small ? 10 : 11.5, lineHeight: 1.3, marginBottom: 3,
       fontWeight: bold ? 700 : 400,
     }}>
-      <span style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", gap: 4, color: "#444", direction: "ltr" }}>
-        <span dir="ltr">{english}</span><span dir="rtl">{label}</span>
+      <span style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", gap: 4, color: "#000", direction: "ltr", fontWeight: 700 }}>
+        <span dir="ltr" style={{ whiteSpace: "nowrap" }}>{english}</span><span dir="rtl" style={{ whiteSpace: "nowrap" }}>{label}</span>
       </span>
-      <span style={{ fontWeight: bold ? 700 : 600, whiteSpace: "nowrap" }}>{value}</span>
+      <span style={{ fontWeight: bold ? 700 : 600, whiteSpace: "nowrap", color: "#000" }}>{value}</span>
     </div>
   );
 }
