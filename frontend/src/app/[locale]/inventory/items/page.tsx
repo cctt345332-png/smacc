@@ -72,14 +72,16 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
 
   const handleEdit = (item: any) => {
     setEditItem(item);
+    const fallbackWarehouse = (warehouses || []).find((w: any) => w.is_default)?.id || warehouses?.[0]?.id || "";
     setEditForm({
       name_ar: item.name_ar, name_en: item.name_en || "",
       barcode: item.barcode || "", category_id: item.category_id || "",
       sale_price: item.sale_price, cost_price: item.cost_price,
       vat_rate: item.vat_rate, reorder_point: item.reorder_point,
       color: item.color || "", storage: item.storage || "",
-      pos_enabled: item.pos_enabled, store_enabled: item.store_enabled,
-      default_warehouse_id: item.default_warehouse_id || "",
+      pos_enabled: item.pos_enabled === true,
+      store_enabled: item.store_enabled === true,
+      default_warehouse_id: item.default_warehouse_id || fallbackWarehouse,
       is_active: item.is_active,
     });
   };
@@ -88,17 +90,27 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
     if (!editForm.name_ar) return alert(ar ? "الاسم مطلوب" : "Name required");
     setSaving(true);
     try {
-      await updateItem(editItem.id, {
+      const selectedWarehouse = editForm.default_warehouse_id || (
+        editForm.pos_enabled && editItem.tracking_type !== "serial"
+          ? ((warehouses || []).find((w: any) => w.is_default)?.id || warehouses?.[0]?.id || null)
+          : null
+      );
+      const saved = await updateItem(editItem.id, {
         ...editForm,
+        pos_enabled: Boolean(editForm.pos_enabled),
+        store_enabled: Boolean(editForm.store_enabled),
         sale_price: parseFloat(editForm.sale_price) || 0,
         cost_price: parseFloat(editForm.cost_price) || 0,
         vat_rate: parseFloat(editForm.vat_rate) || 15,
         reorder_point: parseFloat(editForm.reorder_point) || 0,
-        default_warehouse_id: editForm.default_warehouse_id || null,
+        default_warehouse_id: selectedWarehouse,
         category_id: editForm.category_id || null,
         color: editForm.color || null,
         storage: editForm.storage || null,
       });
+      if (saved?.data?.pos_enabled === false && editForm.pos_enabled) {
+        throw new Error(ar ? "لم يتم حفظ تفعيل نقطة البيع" : "POS setting was not saved");
+      }
       setEditItem(null);
       load();
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
