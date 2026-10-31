@@ -9,7 +9,9 @@
   "scripts": {
     "start": "electron .",
     "dist:linux": "electron-builder --linux AppImage --publish never",
-    "dist:win": "electron-builder --win nsis portable --publish never",
+    "dist:win:setup": "electron-builder --win nsis --publish never --config.artifactName='Masar-ERP-Setup-${version}-${arch}.${ext}'",
+    "dist:win:portable": "electron-builder --win portable --publish never --config.artifactName='Masar-ERP-Portable-${version}-${arch}.${ext}'",
+    "dist:win": "npm run dist:win:setup && npm run dist:win:portable",
     "dist:all": "electron-builder --linux AppImage --win nsis portable --publish never"
   },
   "devDependencies": {
