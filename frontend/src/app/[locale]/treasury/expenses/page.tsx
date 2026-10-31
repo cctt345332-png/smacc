@@ -46,9 +46,12 @@ export default function ExpensesPage(props: { params: Promise<{ locale: string }
           <h1 className="page-title">{ar ? "المصروفات" : "Expenses"}</h1>
           <p className="page-subtitle">{ar ? "تسجيل المصروفات التشغيلية" : "Record operational expenses"}</p>
         </div>
-        <Link href={`/${locale}/treasury/expenses/new`} className="btn btn-primary btn-sm">
-          <Icon name="plus" size={14} /> {ar ? "مصروف جديد" : "New Expense"}
-        </Link>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link href={`/${locale}/treasury/expenses/batch`} className="btn btn-secondary btn-sm">{ar ? "مصروفات متعددة — قيد واحد" : "Batch Expenses — One Journal"}</Link>
+          <Link href={`/${locale}/treasury/expenses/new`} className="btn btn-primary btn-sm">
+            <Icon name="plus" size={14} /> {ar ? "مصروف جديد" : "New Expense"}
+          </Link>
+        </div>
       </div>
 
       <div className="grid-3" style={{ marginBottom: 20 }}>

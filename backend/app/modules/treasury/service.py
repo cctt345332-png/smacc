@@ -98,6 +98,51 @@ async def create_voucher(db: AsyncSession, tenant_id: str, user_id: str, data: d
     return voucher
 
 
+async def create_expense_batch(db: AsyncSession, tenant_id: str, user_id: str, data: dict):
+    """إنشاء عدة مصروفات وترحيلها داخل قيد يومية واحد."""
+    from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
+    from app.modules.accounting.service import _next_entry_number, get_operational_account
+    items = data.get("items") or []
+    if not items:
+        raise HTTPException(400, "يجب إضافة مصروف واحد على الأقل")
+    fiscal_year_id = data.get("fiscal_year_id")
+    if not fiscal_year_id:
+        raise HTTPException(400, "السنة المالية مطلوبة")
+    payment_mapping = {"cash": "default_cash", "bank_transfer": "default_bank", "cheque": "default_bank"}
+    prepared, total = [], Decimal("0")
+    for index, item in enumerate(items):
+        gross = Decimal(str(item.get("total_amount") or item.get("amount") or 0))
+        if gross <= 0:
+            raise HTTPException(400, f"مبلغ المصروف رقم {index + 1} غير صحيح")
+        net = (gross / Decimal("1.15")).quantize(Decimal("0.01")); vat = gross - net
+        method = item.get("payment_method", "cash")
+        debit = item.get("debit_account_id") or (await get_operational_account(db, tenant_id, "operating_expenses")).id
+        credit = item.get("credit_account_id") or (await get_operational_account(db, tenant_id, payment_mapping.get(method, "default_cash"))).id
+        vat_account = item.get("vat_account_id")
+        if vat > 0 and not vat_account:
+            vat_account = (await get_operational_account(db, tenant_id, "vat_input")).id
+        description = (item.get("description_ar") or "").strip()
+        if not description:
+            raise HTTPException(400, f"بيان المصروف رقم {index + 1} مطلوب")
+        prepared.append({"item": item, "gross": gross, "net": net, "vat": vat, "debit": debit, "credit": credit, "vat_account": vat_account, "method": method, "description": description})
+        total += gross
+    entry_id = str(uuid.uuid4())
+    entry = JournalEntry(id=entry_id, tenant_id=tenant_id, entry_number=await _next_entry_number(db, tenant_id), entry_date=datetime.fromisoformat(data["voucher_date"]).replace(tzinfo=None), fiscal_year_id=fiscal_year_id, description_ar=data.get("description_ar") or f"ترحيل {len(prepared)} مصروفات", description_en=data.get("description_en"), status=JournalEntryStatus.POSTED, source="expense_batch", reference=data.get("reference"), total_debit=total, total_credit=total, created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow())
+    db.add(entry); vouchers, order, credits = [], 0, {}
+    for index, row in enumerate(prepared):
+        item = row["item"]
+        voucher = Voucher(id=str(uuid.uuid4()), tenant_id=tenant_id, voucher_number=f"EX-B-{datetime.utcnow().strftime('%y%m%d')}-{index + 1:03d}", voucher_type=VoucherType.EXPENSE, status=VoucherStatus.POSTED, voucher_date=datetime.fromisoformat(item.get("voucher_date", data["voucher_date"])).replace(tzinfo=None), amount=row["net"], vat_amount=row["vat"], currency_code="SAR", payment_method=PaymentMethod(row["method"]), party_type="other", party_name=item.get("party_name"), expense_category=item.get("expense_category", "other"), debit_account_id=row["debit"], credit_account_id=row["credit"], vat_account_id=row["vat_account"], cost_center_id=item.get("cost_center_id"), fiscal_year_id=fiscal_year_id, journal_entry_id=entry_id, description_ar=row["description"], notes=item.get("notes"), reference=item.get("reference"), created_by=user_id, posted_by=user_id, posted_at=datetime.utcnow())
+        db.add(voucher); vouchers.append(voucher)
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry_id, account_id=row["debit"], cost_center_id=item.get("cost_center_id"), description=row["description"], debit=row["net"], credit=Decimal("0"), line_order=order)); order += 1
+        if row["vat"] > 0:
+            db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry_id, account_id=row["vat_account"], description="ضريبة القيمة المضافة", debit=row["vat"], credit=Decimal("0"), line_order=order)); order += 1
+        key = (row["credit"], row["method"]); credits[key] = credits.get(key, Decimal("0")) + row["gross"]
+    for (account_id, method), amount in credits.items():
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry_id, account_id=account_id, description=f"مصروفات مجمعة — {method}", debit=Decimal("0"), credit=amount, line_order=order)); order += 1
+    await db.commit()
+    return {"journal_entry_id": entry_id, "count": len(vouchers), "total": total, "vouchers": vouchers}
+
+
 async def post_voucher(db: AsyncSession, tenant_id: str, user_id: str, voucher_id: str):
     """ترحيل السند وإنشاء القيد المحاسبي"""
     voucher = await get_voucher(db, tenant_id, voucher_id)

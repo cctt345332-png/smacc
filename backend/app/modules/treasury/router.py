@@ -34,6 +34,11 @@ async def create_voucher(data: dict, user=Depends(require_role(["manager","accou
     return await service.create_voucher(db, user["tenant_id"], user["user_id"], data)
 
 
+@router.post("/vouchers/expense-batch", status_code=201)
+async def create_expense_batch(data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.create_expense_batch(db, user["tenant_id"], user["user_id"], data)
+
+
 @router.post("/vouchers/{voucher_id}/post")
 async def post_voucher(voucher_id: str, user=Depends(require_role(["manager","accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.post_voucher(db, user["tenant_id"], user["user_id"], voucher_id)
