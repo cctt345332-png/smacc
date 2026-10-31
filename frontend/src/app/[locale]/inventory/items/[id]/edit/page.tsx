@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getItem, getCategories, updateItem } from "@/lib/inventory";
+import { getItem, getCategories, getWarehouses, getItemStockLevels, updateItem } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 
 export default function EditItemPage(props: { params: Promise<{ locale: string; id: string }> }) {
@@ -18,20 +18,24 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [stockLevels, setStockLevels] = useState<any[]>([]);
   const [item, setItem] = useState<any>(null);
   const [form, setForm] = useState<any>({
     name_ar: "", name_en: "", barcode: "", category_id: "",
     sale_price: "", cost_price: "", vat_rate: "15",
     reorder_point: "", color: "", storage: "",
-    pos_enabled: true, store_enabled: false, is_active: true,
+    pos_enabled: true, store_enabled: false, is_active: true, default_warehouse_id: "",
   });
 
   useEffect(() => {
-    Promise.all([getItem(id), getCategories()])
-      .then(([itemRes, catRes]) => {
+    Promise.all([getItem(id), getCategories(), getWarehouses(), getItemStockLevels(id)])
+      .then(([itemRes, catRes, warehouseRes, stockRes]) => {
         const i = itemRes.data;
         setItem(i);
         setCategories(catRes.data);
+        setWarehouses(Array.isArray(warehouseRes.data) ? warehouseRes.data : (warehouseRes.data?.items || []));
+        setStockLevels(Array.isArray(stockRes.data) ? stockRes.data : (stockRes.data?.items || []));
         setForm({
           name_ar: i.name_ar || "",
           name_en: i.name_en || "",
@@ -43,6 +47,7 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
           reorder_point: i.reorder_point ?? "",
           color: i.color || "",
           storage: i.storage || "",
+          default_warehouse_id: i.default_warehouse_id || stockRes.data?.[0]?.warehouse_id || warehouseRes.data?.[0]?.id || "",
           pos_enabled: i.pos_enabled ?? true,
           store_enabled: i.store_enabled ?? false,
           is_active: i.is_active ?? true,
@@ -62,6 +67,7 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
         cost_price: parseFloat(form.cost_price) || 0,
         vat_rate: parseFloat(form.vat_rate) || 15,
         reorder_point: parseFloat(form.reorder_point) || 0,
+        default_warehouse_id: form.default_warehouse_id || null,
         category_id: form.category_id || null,
         color: form.color || null,
         storage: form.storage || null,
@@ -249,15 +255,22 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
           </div>
 
           {!isSerial && (
-            <div className="form-group" style={{ maxWidth: 200 }}>
-              <label className="form-label">{ar ? "نقطة إعادة الطلب" : "Reorder Point"}</label>
-              <input
-                type="number"
-                className="form-input"
-                value={form.reorder_point}
-                onChange={e => setForm((f: any) => ({ ...f, reorder_point: e.target.value }))}
-                min="0"
-              />
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">{ar ? "نقطة إعادة الطلب" : "Reorder Point"}</label>
+                <input type="number" className="form-input" value={form.reorder_point} onChange={e => setForm((f: any) => ({ ...f, reorder_point: e.target.value }))} min="0" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "مستودع الكمية" : "Quantity warehouse"}</label>
+                <select className="form-input form-select" value={form.default_warehouse_id} onChange={e => setForm((f: any) => ({ ...f, default_warehouse_id: e.target.value }))}>
+                  <option value="">{ar ? "اختر المستودع" : "Select warehouse"}</option>
+                  {warehouses.map((w: any) => {
+                    const level = stockLevels.find((s: any) => s.warehouse_id === w.id);
+                    return <option key={w.id} value={w.id}>{w.name_ar}{level ? ` — ${level.quantity}` : ""}</option>;
+                  })}
+                </select>
+                <p className="form-hint">{ar ? "سيُنقل الرصيد الحالي لهذا المستودع ويظهر في نقاط البيع المرتبطة به" : "The current quantity will be assigned here and shown in the linked POS."}</p>
+              </div>
             </div>
           )}
 

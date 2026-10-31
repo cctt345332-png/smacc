@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload, aliased
 from fastapi import HTTPException
 
 from app.models.inventory import (
-    InventoryItem, SerialItem, BatchItem, ProductVariant,
+    InventoryItem, InventoryStock, SerialItem, BatchItem, ProductVariant,
     StockMovement, StockDocument, StockDocumentLine, Warehouse, ProductCategory,
     TrackingType, SerialStatus, MovementType
 )
@@ -269,8 +269,18 @@ async def create_item(db: AsyncSession, tenant_id: str, data: dict) -> Inventory
     initial_qty = data.get("initial_qty", 0)
     if initial_qty and float(initial_qty) > 0 and item.tracking_type == "quantity":
         from decimal import Decimal as D
-        item.quantity_on_hand = D(str(initial_qty))
+        initial_quantity = D(str(initial_qty))
+        item.quantity_on_hand = initial_quantity
         item.cost_price = D(str(data.get("cost_price", 0)))
+        if data.get("default_warehouse_id"):
+            db.add(InventoryStock(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant_id,
+                item_id=item.id,
+                warehouse_id=data["default_warehouse_id"],
+                quantity=initial_quantity,
+                reorder_point=Decimal(str(data.get("reorder_point", 0))),
+            ))
         db.add(StockMovement(
             id=str(uuid.uuid4()),
             tenant_id=tenant_id,
@@ -335,7 +345,7 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
         "name_ar", "name_en", "barcode", "description_ar", "category_id",
         "cost_price", "sale_price", "vat_rate", "reorder_point", "store_enabled",
         "store_description_ar", "store_images_json", "store_price",
-        "store_featured", "pos_enabled", "is_active", "tracking_type",
+        "store_featured", "pos_enabled", "is_active", "tracking_type", "default_warehouse_id",
         # حقول الصيدلية
         "manufacturer", "sfda_number", "dosage_form", "concentration",
         "requires_prescription", "generic_name", "country_of_origin",
@@ -361,6 +371,52 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
             cost_price=price_updates.get("cost_price"),
             sale_price=price_updates.get("sale_price"),
         )
+
+    # المنتجات الكمية لا تظهر في نقاط البيع إلا من خلال inventory_stock.
+    # أصلح الأصناف القديمة التي كان رصيدها محفوظاً في بطاقة الصنف فقط،
+    # وانقل الرصيد الحالي إلى المستودع الذي اختاره المستخدم.
+    if _tracking_value(item.tracking_type) == "quantity" and data.get("default_warehouse_id"):
+        target_id = str(data["default_warehouse_id"])
+        target = await db.get(Warehouse, target_id)
+        if not target or target.tenant_id != tenant_id:
+            raise HTTPException(400, "المستودع المختار غير صحيح")
+        stock_result = await db.execute(
+            select(InventoryStock).where(
+                InventoryStock.tenant_id == tenant_id,
+                InventoryStock.item_id == item.id,
+            )
+        )
+        stocks = stock_result.scalars().all()
+        target_stock = next((s for s in stocks if s.warehouse_id == target_id), None)
+        if not target_stock:
+            target_stock = InventoryStock(
+                id=str(uuid.uuid4()), tenant_id=tenant_id, item_id=item.id,
+                warehouse_id=target_id, quantity=Decimal("0"),
+                reorder_point=Decimal(str(item.reorder_point or 0)),
+            )
+            db.add(target_stock)
+            stocks.append(target_stock)
+
+        total_stock = sum((Decimal(str(s.quantity or 0)) for s in stocks), Decimal("0"))
+        if total_stock == 0:
+            # الرصيد القديم في بطاقة الصنف فقط — أنشئ مستواه في المستودع.
+            target_stock.quantity = Decimal(str(item.quantity_on_hand or 0))
+        else:
+            # اختيار مستودع جديد يعني نقل الرصيد الحالي إليه، وليس مضاعفته.
+            for source in stocks:
+                if source is target_stock or Decimal(str(source.quantity or 0)) <= 0:
+                    continue
+                moved = Decimal(str(source.quantity))
+                source.quantity = Decimal("0")
+                target_stock.quantity = Decimal(str(target_stock.quantity or 0)) + moved
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+                    movement_type=MovementType.TRANSFER, quantity=moved,
+                    unit_cost=Decimal(str(item.cost_price or 0)),
+                    warehouse_id=source.warehouse_id, to_warehouse_id=target_id,
+                    reference_type="item_edit_warehouse", reference_id=item.id,
+                ))
+        target_stock.reorder_point = Decimal(str(item.reorder_point or 0))
 
     item.updated_at = datetime.utcnow()
     await db.commit()
