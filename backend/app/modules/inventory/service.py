@@ -759,8 +759,9 @@ async def _create_stock_document_line(
                 if duplicate:
                     # سند الإخراج لا يحذف السيريال؛ ينقله إلى حالة "تالف"
                     # ويتركه بلا مستودع حتى تبقى سلسلة التدقيق محفوظة.
-                    # إذا كان آخر إخراج هو سند إخراج مخزني فعلي، فالإدخال
-                    # اللاحق يعيد استخدام نفس السجل بدلاً من رفضه كتكرار.
+                    # إذا كان آخر إخراج هو سند إخراج مخزني فعلي أو تسوية
+                    # جرد إلزامي، فالإدخال اللاحق يعيد استخدام نفس السجل
+                    # بدلاً من رفضه كتكرار. لا ينطبق ذلك على السيريال المباع.
                     duplicate_status = getattr(duplicate.status, "value", duplicate.status)
                     if duplicate_status == SerialStatus.DAMAGED.value:
                         latest_result = await db.execute(
@@ -776,7 +777,7 @@ async def _create_stock_document_line(
                             latest
                             and latest_type == MovementType.ADJUSTMENT.value
                             and latest_quantity == Decimal("-1")
-                            and latest.reference_type == "stock_document"
+                            and latest.reference_type in {"stock_document", "mandatory_stocktake"}
                         ):
                             duplicate.status = SerialStatus.IN_STOCK
                             duplicate.warehouse_id = warehouse.id
