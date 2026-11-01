@@ -24,6 +24,9 @@ const CONDITION: Record<string, { ar: string; badge: string }> = {
 const TRACKING_AR: Record<string, string> = {
   quantity: "كمية", serial: "سيريال", batch: "تشغيلة", variant: "متغيرات", weight: "وزن",
 };
+const SERIAL_CLASS_AR: Record<string, string> = {
+  sale: "للبيع", custody: "عهدة", demo: "عرض", maintenance: "صيانة", internal: "داخلي",
+};
 
 export default function ItemDetailPage(props: { params: Promise<{ locale: string; id: string }> }) {
   const params = use(props.params);
@@ -422,7 +425,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
             {warehouses.map((w: any) => {
               const level = stockLevels.find((x: any) => x.warehouse_id === w.id);
               const count = Number(level?.quantity || 0);
-              return <button key={w.id} type="button" onClick={() => setSelectedWarehouseId(w.id)} style={{ border: selectedWarehouseId === w.id ? "1px solid #6F4A84" : "1px solid var(--border)", background: selectedWarehouseId === w.id ? "#F4EEF8" : "var(--surface)", borderRadius: 8, padding: "8px 12px", cursor: "pointer", textAlign: ar ? "right" : "left" }}><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{w.name_ar}</div><strong style={{ color: count > 0 ? "#6F4A84" : "var(--text-muted)" }}>{count.toLocaleString("en-US")} {ar ? "سيريال متاح" : "available"}</strong></button>;
+              return <button key={w.id} type="button" onClick={() => setSelectedWarehouseId(w.id)} style={{ border: selectedWarehouseId === w.id ? "1px solid #6F4A84" : "1px solid var(--border)", background: selectedWarehouseId === w.id ? "#F4EEF8" : "var(--surface)", borderRadius: 8, padding: "8px 12px", cursor: "pointer", textAlign: ar ? "right" : "left" }}><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{w.name_ar}</div><strong style={{ color: count > 0 ? "#6F4A84" : "var(--text-muted)" }}>{count.toLocaleString("en-US")} {ar ? "سيريال متاح" : "available"}</strong>{level?.classification_counts && <div style={{ display: "flex", gap: 3, flexWrap: "wrap", marginTop: 5 }}>{Object.entries(level.classification_counts).filter(([, n]) => Number(n) > 0).map(([kind, n]) => <span key={kind} className="badge" style={{ fontSize: 9, padding: "2px 4px", background: kind === "custody" ? "#FFF7ED" : kind === "demo" ? "#EFF6FF" : kind === "maintenance" ? "#FEF2F2" : "#ECFDF5", color: kind === "custody" ? "#C2410C" : kind === "demo" ? "#1D4ED8" : kind === "maintenance" ? "#B91C1C" : "#047857" }}>{SERIAL_CLASS_AR[kind] || kind}: {Number(n)}</span>)}</div>}</button>;
             })}
           </div>
           <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
@@ -444,6 +447,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
                     <th>{ar ? "رقم السيريال" : "Serial #"}</th>
                     <th>{ar ? "الحالة" : "Condition"}</th>
                     <th>{ar ? "الوضع" : "Status"}</th>
+                    <th>{ar ? "تصنيف السيريال" : "Serial Classification"}</th>
                     <th style={{ textAlign: "end" }}>{ar ? "التكلفة" : "Cost"}</th>
                     <th style={{ textAlign: "end" }}>{ar ? "سعر البيع" : "Sale Price"}</th>
                     <th style={{ textAlign: "end" }}>{ar ? "الربح" : "Profit"}</th>
@@ -460,6 +464,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
                         <td><code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>{s.serial_number}</code></td>
                         <td><span className={`badge ${cond.badge}`}>{cond.ar}</span></td>
                         <td><span className={`badge ${st.badge}`}>{st.ar}</span></td>
+                        <td><span className="badge badge-info">{SERIAL_CLASS_AR[s.serial_classification || "sale"] || s.serial_classification || "للبيع"}</span>{s.classification_reference && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>{s.classification_reference}</div>}</td>
                         <td style={{ textAlign: "end", fontFamily: "monospace" }}>{fmt(s.cost_price)}</td>
                         <td style={{ textAlign: "end", fontFamily: "monospace" }}>{s.sale_price ? fmt(s.sale_price) : "—"}</td>
                         <td style={{ textAlign: "end", fontWeight: 700, color: profit !== null ? (profit >= 0 ? "#6F4A84" : "#DC2626") : "var(--text-muted)" }}>

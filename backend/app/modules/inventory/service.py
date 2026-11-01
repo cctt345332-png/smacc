@@ -1782,12 +1782,22 @@ async def get_item_stock_levels(db: AsyncSession, tenant_id: str, item_id: str):
             )
             qty = r.scalar() or 0
             if qty > 0:
+                class_r = await db.execute(
+                    select(SerialItem.serial_classification, func.count(SerialItem.id))
+                    .where(
+                        SerialItem.product_id == item_id,
+                        SerialItem.warehouse_id == wh.id,
+                        SerialItem.status == "in_stock",
+                    )
+                    .group_by(SerialItem.serial_classification)
+                )
                 result.append({
                     "warehouse_id": wh.id,
                     "warehouse_name": wh.name_ar,
                     "quantity": qty,
                     "available_qty": qty,
                     "is_low_stock": False,
+                    "classification_counts": {kind or "sale": int(count or 0) for kind, count in class_r.all()},
                 })
         return result
     else:
