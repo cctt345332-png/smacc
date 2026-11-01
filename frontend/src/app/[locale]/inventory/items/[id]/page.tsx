@@ -62,13 +62,12 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
       setBusinessType(compRes.data?.business_type || "general");
       setWarehouses(whRes.data);
 
+      const levelsRes = await getItemStockLevels(id);
+      setStockLevels(Array.isArray(levelsRes.data) ? levelsRes.data : []);
+
       if (itemRes.data.tracking_type === "serial") {
-        const [allRes, levelsRes] = await Promise.all([
-          getSerials(id),
-          getItemStockLevels(id),
-        ]);
+        const allRes = await getSerials(id);
         setAllSerials(allRes.data);
-        setStockLevels(Array.isArray(levelsRes.data) ? levelsRes.data : []);
         setSerials([]);
         setSelectedWarehouseId("");
       }
@@ -352,6 +351,41 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* مستويات الكمية حسب المستودع */}
+      {item.tracking_type === "quantity" && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <span className="card-title">
+              {ar ? "المخزون حسب المستودع" : "Stock by warehouse"}
+              <span style={{ fontSize: 12, color: "var(--text-secondary)", marginInlineStart: 8 }}>
+                ({stockLevels.length} {ar ? "مستودعات" : "warehouses"})
+              </span>
+            </span>
+          </div>
+          {stockLevels.length === 0 ? (
+            <div className="empty-state" style={{ padding: "32px 20px" }}>
+              <div className="empty-state-title" style={{ fontSize: 13 }}>
+                {ar ? "لا يوجد رصيد مسجل في أي مستودع" : "No stock is registered in any warehouse"}
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: "12px 20px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {stockLevels.map((level: any) => (
+                <div key={level.warehouse_id} style={{ border: "1px solid var(--border)", background: "var(--surface)", borderRadius: 8, padding: "10px 14px", minWidth: 180 }}>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{level.warehouse_name || (ar ? "مستودع" : "Warehouse")}</div>
+                  <strong style={{ display: "block", marginTop: 4, color: Number(level.quantity) > 0 ? "#6F4A84" : "var(--text-muted)" }}>
+                    {fmt(level.quantity)} {item.unit_type || (ar ? "وحدة" : "units")}
+                  </strong>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                    {ar ? "متاح" : "Available"}: {fmt(level.available_qty)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
