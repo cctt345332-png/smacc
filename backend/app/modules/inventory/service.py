@@ -1685,6 +1685,29 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
     sr = await db.execute(serial_q)
     serial_rows = sr.all()
 
+    classification_counts: dict[tuple[str, str | None], dict[str, int]] = {}
+    classification_q = (
+        select(
+            SerialItem.product_id,
+            SerialItem.warehouse_id,
+            SerialItem.serial_classification,
+            func.count(SerialItem.id).label("qty"),
+        )
+        .join(InventoryItem, SerialItem.product_id == InventoryItem.id)
+        .where(
+            InventoryItem.tenant_id == tenant_id,
+            InventoryItem.is_active == True,
+            SerialItem.status == "in_stock",
+        )
+        .group_by(SerialItem.product_id, SerialItem.warehouse_id, SerialItem.serial_classification)
+    )
+    if warehouse_id:
+        classification_q = classification_q.where(SerialItem.warehouse_id == warehouse_id)
+    classification_result = await db.execute(classification_q)
+    for product_id, serial_warehouse_id, classification, qty in classification_result.all():
+        key = (product_id, serial_warehouse_id)
+        classification_counts.setdefault(key, {})[classification or "sale"] = int(qty or 0)
+
     if serial_rows:
         # جلب تفاصيل الأصناف والمستودعات
         product_ids = list({row.product_id for row in serial_rows})
@@ -1730,6 +1753,7 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
                 "stock_value": float(row.qty) * effective_cost,
                 "sale_value": float(row.qty) * effective_sale,
                 "maintenance_qty": float(maintenance_totals.get((str(row.product_id), str(row.warehouse_id)), 0)),
+                "classification_counts": classification_counts.get((row.product_id, row.warehouse_id), {"sale": int(row.qty)}),
             })
 
     results.sort(key=lambda x: x["item_name"])

@@ -12,6 +12,9 @@ const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFraction
 const TRACKING_AR: Record<string, string> = {
   quantity: "كمية", serial: "سيريال", batch: "تشغيلة", variant: "متغيرات", weight: "وزن",
 };
+const SERIAL_CLASS_AR: Record<string, string> = {
+  sale: "للبيع", custody: "عهدة", demo: "عرض", maintenance: "صيانة", internal: "داخلي",
+};
 
 // ─── نوع سطر الـ transfer ────────────────────────────────────────────────────
 interface TransferLine {
@@ -222,13 +225,14 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
       [ar ? "المستودع" : "Warehouse"]: row.warehouse_name || "",
       [ar ? "رقم السيريال" : "Serial Number"]: s.serial_number || "",
       [ar ? "الحالة" : "Status"]: s.status ? (TRACKING_AR[s.status] || s.status) : (ar ? "في المخزون" : "In Stock"),
+      [ar ? "التصنيف" : "Classification"]: SERIAL_CLASS_AR[s.serial_classification || "sale"] || s.serial_classification || "للبيع",
       [ar ? "الحالة/النوع" : "Condition"]: s.condition || "",
       [ar ? "التكلفة" : "Cost"]: Number(s.cost_price || 0),
       [ar ? "سعر البيع" : "Sale Price"]: s.sale_price == null ? "" : Number(s.sale_price),
     }));
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.json_to_sheet(exportRows);
-    sheet["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
+    sheet["!cols"] = [{ wch: 6 }, { wch: 32 }, { wch: 16 }, { wch: 28 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(workbook, sheet, "Serials");
     const safeName = String(row.item_name || "item").replace(/[^\u0600-\u06FFa-zA-Z0-9_-]+/g, "-").slice(0, 40);
     XLSX.writeFile(workbook, `${safeName}-${row.warehouse_name || "warehouse"}-serials.xlsx`);
@@ -358,7 +362,12 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
                       {row.item_sku && <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace" }}>{row.item_sku}</div>}
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{row.category_name || "—"}</td>
-                    <td>{row.item_tracking === "serial" ? <button type="button" className="badge badge-info" style={{ fontSize: 11, cursor: "pointer", border: "1px solid #4F7280", background: "#E8F3F5" }} onClick={() => openSerials(row)} title={ar ? "عرض سيريالات هذا الصنف في هذا المستودع" : "View this item's serials in this warehouse"}>{ar ? "سيريال" : "Serial"}</button> : <span className="badge badge-info" style={{ fontSize: 11 }}>{TRACKING_AR[row.item_tracking] || row.item_tracking}</span>}</td>
+                    <td>{row.item_tracking === "serial" ? <>
+                      <button type="button" className="badge badge-info" style={{ fontSize: 11, cursor: "pointer", border: "1px solid #4F7280", background: "#E8F3F5" }} onClick={() => openSerials(row)} title={ar ? "عرض سيريالات هذا الصنف في هذا المستودع" : "View this item's serials in this warehouse"}>{ar ? "سيريال" : "Serial"}</button>
+                      {row.classification_counts && <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6, maxWidth: 220 }}>
+                        {Object.entries(row.classification_counts).filter(([, qty]) => Number(qty) > 0).map(([kind, qty]) => <span key={kind} className="badge" style={{ fontSize: 10, background: kind === "sale" ? "#ECFDF5" : kind === "custody" ? "#FFF7ED" : kind === "demo" ? "#EFF6FF" : "#FEF2F2", color: kind === "sale" ? "#047857" : kind === "custody" ? "#C2410C" : kind === "demo" ? "#1D4ED8" : "#B91C1C" }}>{SERIAL_CLASS_AR[kind] || kind}: {Number(qty)}</span>)}
+                      </div>}
+                    </> : <span className="badge badge-info" style={{ fontSize: 11 }}>{TRACKING_AR[row.item_tracking] || row.item_tracking}</span>}</td>
                     {!selectedWarehouse && <td style={{ fontSize: 13 }}>{row.warehouse_name}</td>}
                     <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(row.quantity)}</td>
                     <td style={{ textAlign: "end", fontWeight: 600, color: row.available_qty > 0 ? "#6F4A84" : "#DC2626" }}>{fmt(row.available_qty)}</td>
@@ -410,8 +419,8 @@ export default function WarehousesPage(props: { params: Promise<{ locale: string
             <div className="table-wrapper" style={{ border: "none", borderRadius: 0, overflow: "auto" }}>
               {serialsLoading ? <div className="empty-state" style={{ padding: 40 }}>{ar ? "جاري تحميل السيريالات..." : "Loading serials..."}</div> : serialModal.serials.length === 0 ? <div className="empty-state" style={{ padding: 40 }}>{ar ? "لا توجد سيريالات متاحة لهذا الصنف في هذا المستودع" : "No available serials for this item in this warehouse"}</div> : (
                 <table>
-                  <thead><tr><th>#</th><th>{ar ? "رقم السيريال" : "Serial Number"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "النوع" : "Condition"}</th><th style={{ textAlign: "end" }}>{ar ? "التكلفة" : "Cost"}</th><th style={{ textAlign: "end" }}>{ar ? "سعر البيع" : "Sale Price"}</th></tr></thead>
-                  <tbody>{serialModal.serials.map((s: any, index: number) => <tr key={s.id || s.serial_number}><td>{index + 1}</td><td><code style={{ background: "#F1F5F9", padding: "3px 7px", borderRadius: 4, fontWeight: 700 }}>{s.serial_number}</code></td><td><span className="badge badge-success">{ar ? "في المخزون" : "In Stock"}</span></td><td>{s.condition || "—"}</td><td style={{ textAlign: "end", fontFamily: "monospace" }}>{fmt(s.cost_price)}</td><td style={{ textAlign: "end", fontFamily: "monospace" }}>{s.sale_price == null ? "—" : fmt(s.sale_price)}</td></tr>)}</tbody>
+                  <thead><tr><th>#</th><th>{ar ? "رقم السيريال" : "Serial Number"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "التصنيف" : "Classification"}</th><th>{ar ? "النوع" : "Condition"}</th><th style={{ textAlign: "end" }}>{ar ? "التكلفة" : "Cost"}</th><th style={{ textAlign: "end" }}>{ar ? "سعر البيع" : "Sale Price"}</th></tr></thead>
+                  <tbody>{serialModal.serials.map((s: any, index: number) => <tr key={s.id || s.serial_number}><td>{index + 1}</td><td><code style={{ background: "#F1F5F9", padding: "3px 7px", borderRadius: 4, fontWeight: 700 }}>{s.serial_number}</code></td><td><span className="badge badge-success">{ar ? "في المخزون" : "In Stock"}</span></td><td><span className="badge badge-info">{SERIAL_CLASS_AR[s.serial_classification || "sale"] || s.serial_classification || "للبيع"}</span>{s.classification_reference && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>{s.classification_reference}</div>}</td><td>{s.condition || "—"}</td><td style={{ textAlign: "end", fontFamily: "monospace" }}>{fmt(s.cost_price)}</td><td style={{ textAlign: "end", fontFamily: "monospace" }}>{s.sale_price == null ? "—" : fmt(s.sale_price)}</td></tr>)}</tbody>
                 </table>
               )}
             </div>

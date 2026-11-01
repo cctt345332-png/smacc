@@ -697,6 +697,8 @@ async def serials_by_warehouse(
             "product_id": s.product_id,
             "product_name": s.product.name_ar if s.product else "",
             "condition": s.condition,
+            "serial_classification": s.serial_classification,
+            "classification_reference": s.classification_reference,
             "cost_price": float(s.cost_price),
             "sale_price": float(s.product.sale_price) if s.product and s.product.sale_price else (float(s.sale_price) if s.sale_price else None),
         }
