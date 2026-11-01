@@ -22,7 +22,7 @@ def upgrade() -> None:
             reorder_point, updated_at
         )
         SELECT
-            md5(i.id || ':quantity-stock-repair') AS id,
+            md5(i.id || '_quantity_stock_repair') AS id,
             i.tenant_id,
             i.id,
             COALESCE(
