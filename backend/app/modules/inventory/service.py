@@ -519,6 +519,8 @@ async def add_serial(
     warehouse_id: str | None = None,
     purchase_bill_id: str | None = None,
     notes: str | None = None,
+    serial_classification: str = "sale",
+    classification_reference: str | None = None,
     auto_commit: bool = True,
 ) -> SerialItem:
     """إضافة سيريال جديد للمخزون"""
@@ -529,6 +531,8 @@ async def add_serial(
     # إذا ما أُرسل مستودع، استخدم المستودع الرئيسي تلقائياً
     if not warehouse_id:
         warehouse_id = await _get_default_warehouse_id(db, tenant_id)
+    if serial_classification not in {"sale", "custody", "demo", "maintenance", "internal"}:
+        raise HTTPException(400, "تصنيف السيريال غير صحيح")
 
     # التحقق من عدم تكرار السيريال
     existing = await db.execute(
@@ -631,6 +635,8 @@ async def add_serial(
         serial_number=serial_number,
         condition=condition,
         status="in_stock",
+        serial_classification=serial_classification,
+        classification_reference=classification_reference,
         cost_price=effective_cost,
         sale_price=effective_sale,
         purchase_bill_id=purchase_bill_id,
@@ -1380,9 +1386,11 @@ async def update_serial(
     # التحقق من الـ tenant عبر المنتج
     await get_item(db, tenant_id, serial.product_id)
 
-    allowed = ["condition", "status", "notes"]
+    allowed = ["condition", "status", "notes", "serial_classification", "classification_reference"]
     for k in allowed:
         if k in data and data[k] is not None:
+            if k == "serial_classification" and data[k] not in {"sale", "custody", "demo", "maintenance", "internal"}:
+                raise HTTPException(400, "تصنيف السيريال غير صحيح")
             setattr(serial, k, data[k])
 
     price_updates = {
@@ -1455,10 +1463,12 @@ async def update_serials_bulk(
     for serial in serials:
         await get_item(db, tenant_id, serial.product_id)
 
-    allowed = ("condition", "status", "notes")
+    allowed = ("condition", "status", "notes", "serial_classification", "classification_reference")
     changes = {key: data[key] for key in allowed if key in data and data[key] is not None}
     if not changes:
         raise HTTPException(400, "لم يتم اختيار تعديل")
+    if "serial_classification" in changes and changes["serial_classification"] not in {"sale", "custody", "demo", "maintenance", "internal"}:
+        raise HTTPException(400, "تصنيف السيريال غير صحيح")
     for serial in serials:
         for key, value in changes.items():
             setattr(serial, key, value)
@@ -2432,6 +2442,8 @@ async def get_serial_movements_report(
             "product_sku": item.sku,
             "condition": serial.condition.value if hasattr(serial.condition, "value") else str(serial.condition),
             "serial_status": serial.status.value if hasattr(serial.status, "value") else str(serial.status),
+            "serial_classification": serial.serial_classification,
+            "classification_reference": serial.classification_reference,
             "movement_type": movement_value,
             "movement_type_ar": {
                 "purchase": "شراء", "sale": "بيع", "return_in": "مرتجع وارد",

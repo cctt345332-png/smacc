@@ -150,6 +150,7 @@ async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: st
     result = await db.execute(select(SerialItem).where(
         SerialItem.product_id == product_id,
         SerialItem.status == "in_stock",
+        SerialItem.serial_classification == "sale",
         SerialItem.warehouse_id.in_(warehouse_ids),
     ).order_by(SerialItem.created_at.desc()))
     serials = result.scalars().all()
@@ -160,6 +161,8 @@ async def get_terminal_serials(db: AsyncSession, tenant_id: str, terminal_id: st
         "id": s.id,
         "serial_number": s.serial_number,
         "condition": s.condition,
+        "serial_classification": s.serial_classification,
+        "classification_reference": s.classification_reference,
         "cost_price": float(s.cost_price),
         "sale_price": float(item.sale_price) if item.sale_price else (float(s.sale_price) if s.sale_price else None),
         "warehouse_id": s.warehouse_id,

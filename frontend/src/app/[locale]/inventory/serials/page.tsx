@@ -19,6 +19,12 @@ const COND_AR: Record<string, string> = {
 const COND_BADGE: Record<string, string> = {
   new: "badge-success", used: "badge-warning", refurbished: "badge-info",
 };
+const SERIAL_CLASS_AR: Record<string, string> = {
+  sale: "للبيع", custody: "عهدة مندوب", demo: "جهاز عرض / ديمو", maintenance: "صيانة", internal: "استخدام داخلي",
+};
+const SERIAL_CLASS_BADGE: Record<string, string> = {
+  sale: "badge-success", custody: "badge-warning", demo: "badge-info", maintenance: "badge-danger", internal: "badge-gray",
+};
 
 export default function SerialsPage(props: { params: Promise<{ locale: string }> }) {
   const params = use(props.params);
@@ -36,7 +42,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
   const [filterWarehouse, setFilterWarehouse] = useState("");
   const [selectedSerialIds, setSelectedSerialIds] = useState<Set<string>>(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
-  const [bulkEditForm, setBulkEditForm] = useState({ condition: "", status: "", notes: "" });
+  const [bulkEditForm, setBulkEditForm] = useState({ condition: "", status: "", serial_classification: "", classification_reference: "", notes: "" });
   const [bulkSaving, setBulkSaving] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -149,6 +155,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
       status: s.status,
       cost_price: s.cost_price,
       sale_price: s.sale_price || "",
+      serial_classification: s.serial_classification || "sale",
+      classification_reference: s.classification_reference || "",
       notes: s.notes || "",
     });
   };
@@ -159,6 +167,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
       await updateSerial(editSerial.id, {
         condition: editSerialForm.condition,
         status: editSerialForm.status,
+        serial_classification: editSerialForm.serial_classification,
+        classification_reference: editSerialForm.classification_reference || null,
         notes: editSerialForm.notes,
       });
       setEditSerial(null);
@@ -192,6 +202,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
     const changes: any = {};
     if (bulkEditForm.condition) changes.condition = bulkEditForm.condition;
     if (bulkEditForm.status) changes.status = bulkEditForm.status;
+    if (bulkEditForm.serial_classification) changes.serial_classification = bulkEditForm.serial_classification;
+    if (bulkEditForm.classification_reference.trim()) changes.classification_reference = bulkEditForm.classification_reference.trim();
     if (bulkEditForm.notes.trim()) changes.notes = bulkEditForm.notes.trim();
     if (!Object.keys(changes).length) return alert(ar ? "اختر تعديلًا واحدًا على الأقل" : "Choose at least one change");
     setBulkSaving(true);
@@ -199,7 +211,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
       const { data } = await updateSerialsBulk([...selectedSerialIds], changes);
       alert(ar ? `تم تعديل ${data.updated} سيريال` : `Updated ${data.updated} serials`);
       setShowBulkEditModal(false);
-      setBulkEditForm({ condition: "", status: "", notes: "" });
+      setBulkEditForm({ condition: "", status: "", serial_classification: "", classification_reference: "", notes: "" });
       if (selectedProduct) loadSerials(selectedProduct.id, filterStatus, filterWarehouse);
     } catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر تعديل السيريالات" : "Could not update serials")); }
     finally { setBulkSaving(false); }
@@ -428,6 +440,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                     <th>{ar ? "رقم السيريال" : "Serial #"}</th>
                     <th>{ar ? "الحالة" : "Condition"}</th>
                     <th>{ar ? "الوضع" : "Status"}</th>
+                    <th>{ar ? "التصنيف" : "Classification"}</th>
                     <th>{ar ? "اللون" : "Color"}</th>
                     <th>{ar ? "السعة" : "Storage"}</th>
                     <th style={{ textAlign: "end" }}>{ar ? "التكلفة" : "Cost"}</th>
@@ -445,6 +458,7 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                         <td><code style={{ background: "#F1F5F9", padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>{s.serial_number}</code></td>
                         <td><span className={`badge ${COND_BADGE[s.condition] || "badge-gray"}`}>{COND_AR[s.condition] || s.condition}</span></td>
                         <td><span className={`badge ${STATUS_BADGE[s.status] || "badge-gray"}`}>{STATUS_AR[s.status] || s.status}</span></td>
+                        <td><span className={`badge ${SERIAL_CLASS_BADGE[s.serial_classification || "sale"] || "badge-gray"}`}>{SERIAL_CLASS_AR[s.serial_classification || "sale"] || s.serial_classification || "للبيع"}</span>{s.classification_reference && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{s.classification_reference}</div>}</td>
                         <td style={{ fontSize: 13 }}>{s.color || "—"}</td>
                         <td style={{ fontSize: 13 }}>{s.storage || "—"}</td>
                         <td style={{ textAlign: "end", fontFamily: "monospace" }}>{fmt(s.cost_price)}</td>
@@ -514,6 +528,16 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                   <option value="sold">{ar ? "مباع" : "Sold"}</option>
                 </select>
               </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "تصنيف السيريال" : "Serial classification"}</label>
+                <select className="form-input form-select" value={editSerialForm.serial_classification || "sale"} onChange={e => setEditSerialForm((f: any) => ({ ...f, serial_classification: e.target.value }))}>
+                  {Object.entries(SERIAL_CLASS_AR).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "المندوب أو الموقع" : "Custodian or location"}</label>
+                <input className="form-input" value={editSerialForm.classification_reference || ""} onChange={e => setEditSerialForm((f: any) => ({ ...f, classification_reference: e.target.value }))} placeholder={ar ? "مثال: وليد أو محل العليا" : "Example: Waleed or Al Olaya store"} />
+              </div>
               <div style={{ marginBottom: 12, padding: "8px 10px", border: "1px solid #D5C8DD", background: "#F7F2F8", color: "#6F4A84", fontSize: 12, lineHeight: 1.7 }}>
                 {ar
                   ? "أسعار التكلفة والبيع موحدة لهذا الصنف وتُدار من بطاقة الصنف. لا يمكن إنشاء سعر مختلف لهذا السيريال."
@@ -568,6 +592,17 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
                   <option value="damaged">{ar ? "تالف" : "Damaged"}</option>
                   <option value="sold">{ar ? "مباع" : "Sold"}</option>
                 </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "تصنيف السيريال" : "Serial classification"}</label>
+                <select className="form-input form-select" value={bulkEditForm.serial_classification} onChange={e => setBulkEditForm(f => ({ ...f, serial_classification: e.target.value }))}>
+                  <option value="">{ar ? "بدون تغيير" : "No change"}</option>
+                  {Object.entries(SERIAL_CLASS_AR).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{ar ? "المندوب أو الموقع" : "Custodian or location"}</label>
+                <input className="form-input" value={bulkEditForm.classification_reference} onChange={e => setBulkEditForm(f => ({ ...f, classification_reference: e.target.value }))} placeholder={ar ? "اتركه فارغًا لعدم التغيير" : "Leave blank to keep current"} />
               </div>
               <div className="form-group">
                 <label className="form-label">{ar ? "إضافة ملاحظة" : "Add note"}</label>

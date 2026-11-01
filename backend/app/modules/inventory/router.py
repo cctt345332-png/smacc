@@ -367,6 +367,8 @@ async def add_serial(product_id: str, data: dict, user=Depends(get_current_user)
         warehouse_id=data.get("warehouse_id"),
         purchase_bill_id=data.get("purchase_bill_id"),
         notes=data.get("notes"),
+        serial_classification=data.get("serial_classification", "sale"),
+        classification_reference=data.get("classification_reference"),
     )
 
 @router.post("/items/{product_id}/serials/bulk", status_code=201)
@@ -384,6 +386,8 @@ async def add_serials_bulk(product_id: str, data: dict, user=Depends(get_current
                 sale_price=Decimal(str(s.get("sale_price") or data.get("sale_price"))) if (s.get("sale_price") or data.get("sale_price")) else None,
                 warehouse_id=data.get("warehouse_id"),
                 notes=s.get("notes"),
+                serial_classification=s.get("serial_classification", data.get("serial_classification", "sale")),
+                classification_reference=s.get("classification_reference", data.get("classification_reference")),
             )
             results.append({"serial_number": s["serial_number"], "status": "added", "id": result.id})
         except Exception as e:
@@ -423,6 +427,8 @@ async def search_serial(
             "serial_number": s.serial_number,
             "condition": s.condition,
             "status": s.status,
+            "serial_classification": s.serial_classification,
+            "classification_reference": s.classification_reference,
             "cost_price": float(s.cost_price),
             "sale_price": float(s.product.sale_price) if s.product and s.product.sale_price else (float(s.sale_price) if s.sale_price else None),
             "product_id": s.product_id,
@@ -502,6 +508,7 @@ async def available_serials_for_invoice(
     q = sa_select(SerialItem).where(
         SerialItem.product_id == product_id,
         SerialItem.status == "in_stock",
+        SerialItem.serial_classification == "sale",
     )
     if warehouse_filter:
         q = q.where(SerialItem.warehouse_id == warehouse_filter)
@@ -515,6 +522,8 @@ async def available_serials_for_invoice(
             "serial_number": s.serial_number,
             "condition": s.condition,
             "cost_price": float(s.cost_price),
+            "serial_classification": s.serial_classification,
+            "classification_reference": s.classification_reference,
             "sale_price": float(item.sale_price) if item.sale_price else (float(s.sale_price) if s.sale_price else None),
             "warehouse_id": s.warehouse_id,
         }

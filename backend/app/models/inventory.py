@@ -304,6 +304,9 @@ class SerialItem(Base):
     status: Mapped[SerialStatus] = mapped_column(
         SAEnum(SerialStatus, values_callable=lambda x: [e.value for e in x]), default="in_stock"
     )
+    # تصنيف إداري مستقل عن حالة السيريال: للبيع أو عهدة أو ديمو أو صيانة
+    serial_classification: Mapped[str] = mapped_column(String(30), default="sale", index=True)
+    classification_reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # ── التكلفة والسعر لهذه الوحدة تحديداً ─────────────────────────
     # هذا هو جوهر ميزة "ربح لكل سيريال"
