@@ -20,6 +20,7 @@ from app.models.purchases import Bill, BillLine
 from app.models.sales import Invoice, InvoiceLine, CreditNote, CreditNoteLine
 from app.core.audit import record_audit
 from app.models.reps import SalesRep
+from app.models.pos import POSTerminal
 from app.models.user import User
 from sqlalchemy import select
 
@@ -521,6 +522,8 @@ async def add_serial(
     notes: str | None = None,
     serial_classification: str = "sale",
     classification_reference: str | None = None,
+    custodian_rep_id: str | None = None,
+    demo_terminal_id: str | None = None,
     auto_commit: bool = True,
 ) -> SerialItem:
     """إضافة سيريال جديد للمخزون"""
@@ -533,6 +536,23 @@ async def add_serial(
         warehouse_id = await _get_default_warehouse_id(db, tenant_id)
     if serial_classification not in {"sale", "custody", "demo", "maintenance", "internal"}:
         raise HTTPException(400, "تصنيف السيريال غير صحيح")
+    if serial_classification == "custody":
+        if not custodian_rep_id:
+            raise HTTPException(400, "اختر المندوب المرتبط بالعهدة")
+        rep = await db.scalar(select(SalesRep).where(SalesRep.id == custodian_rep_id, SalesRep.tenant_id == tenant_id, SalesRep.is_active == True))
+        if not rep:
+            raise HTTPException(400, "المندوب غير موجود أو غير نشط")
+        demo_terminal_id = None
+    elif serial_classification == "demo":
+        if not demo_terminal_id:
+            raise HTTPException(400, "اختر جهاز نقطة البيع المرتبط بالديمو")
+        terminal = await db.scalar(select(POSTerminal).where(POSTerminal.id == demo_terminal_id, POSTerminal.tenant_id == tenant_id, POSTerminal.is_active == True))
+        if not terminal:
+            raise HTTPException(400, "جهاز نقطة البيع غير موجود أو غير نشط")
+        custodian_rep_id = None
+    else:
+        custodian_rep_id = None
+        demo_terminal_id = None
 
     # التحقق من عدم تكرار السيريال
     existing = await db.execute(
@@ -637,6 +657,8 @@ async def add_serial(
         status="in_stock",
         serial_classification=serial_classification,
         classification_reference=classification_reference,
+        custodian_rep_id=custodian_rep_id,
+        demo_terminal_id=demo_terminal_id,
         cost_price=effective_cost,
         sale_price=effective_sale,
         purchase_bill_id=purchase_bill_id,
@@ -1393,6 +1415,25 @@ async def update_serial(
                 raise HTTPException(400, "تصنيف السيريال غير صحيح")
             setattr(serial, k, data[k])
 
+    classification = serial.serial_classification
+    if classification == "custody":
+        if not serial.custodian_rep_id:
+            raise HTTPException(400, "اختر المندوب المرتبط بالعهدة")
+        rep = await db.scalar(select(SalesRep).where(SalesRep.id == serial.custodian_rep_id, SalesRep.tenant_id == tenant_id, SalesRep.is_active == True))
+        if not rep:
+            raise HTTPException(400, "المندوب غير موجود أو غير نشط")
+        serial.demo_terminal_id = None
+    elif classification == "demo":
+        if not serial.demo_terminal_id:
+            raise HTTPException(400, "اختر جهاز نقطة البيع المرتبط بالديمو")
+        terminal = await db.scalar(select(POSTerminal).where(POSTerminal.id == serial.demo_terminal_id, POSTerminal.tenant_id == tenant_id, POSTerminal.is_active == True))
+        if not terminal:
+            raise HTTPException(400, "جهاز نقطة البيع غير موجود أو غير نشط")
+        serial.custodian_rep_id = None
+    else:
+        serial.custodian_rep_id = None
+        serial.demo_terminal_id = None
+
     price_updates = {
         key: _decimal_price(data[key])
         for key in ("cost_price", "sale_price")
@@ -1463,12 +1504,20 @@ async def update_serials_bulk(
     for serial in serials:
         await get_item(db, tenant_id, serial.product_id)
 
-    allowed = ("condition", "status", "notes", "serial_classification", "classification_reference")
+    allowed = ("condition", "status", "notes", "serial_classification", "classification_reference", "custodian_rep_id", "demo_terminal_id")
     changes = {key: data[key] for key in allowed if key in data and data[key] is not None}
     if not changes:
         raise HTTPException(400, "لم يتم اختيار تعديل")
     if "serial_classification" in changes and changes["serial_classification"] not in {"sale", "custody", "demo", "maintenance", "internal"}:
         raise HTTPException(400, "تصنيف السيريال غير صحيح")
+    if changes.get("custodian_rep_id"):
+        rep = await db.scalar(select(SalesRep).where(SalesRep.id == changes["custodian_rep_id"], SalesRep.tenant_id == tenant_id, SalesRep.is_active == True))
+        if not rep:
+            raise HTTPException(400, "المندوب غير موجود أو غير نشط")
+    if changes.get("demo_terminal_id"):
+        terminal = await db.scalar(select(POSTerminal).where(POSTerminal.id == changes["demo_terminal_id"], POSTerminal.tenant_id == tenant_id, POSTerminal.is_active == True))
+        if not terminal:
+            raise HTTPException(400, "جهاز نقطة البيع غير موجود أو غير نشط")
     for serial in serials:
         for key, value in changes.items():
             setattr(serial, key, value)

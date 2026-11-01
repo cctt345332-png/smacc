@@ -2,6 +2,8 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getItems, getSerials, addSerialsBulk, searchSerial, getWarehouses, updateSerial, deleteSerial, updateSerialsBulk, deleteSerialsBulk } from "@/lib/inventory";
+import { getReps } from "@/lib/reps";
+import { getTerminals } from "@/lib/pos";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -36,6 +38,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
   const ar = locale === "ar";
   const [products, setProducts] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [reps, setReps] = useState<any[]>([]);
+  const [terminals, setTerminals] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [serials, setSerials] = useState<any[]>([]);
   const [filterStatus, setFilterStatus] = useState("in_stock");
@@ -119,8 +123,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
   };
 
   useEffect(() => {
-    Promise.all([getItems({ tracking_type: "serial" }), getWarehouses()])
-      .then(([p, w]) => { setProducts(p.data); setWarehouses(w.data); })
+    Promise.all([getItems({ tracking_type: "serial" }), getWarehouses(), getReps(), getTerminals()])
+      .then(([p, w, r, t]) => { setProducts(p.data); setWarehouses(w.data); setReps(r.data); setTerminals(t.data); })
       .catch(() => {});
   }, []);
 
@@ -157,6 +161,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
       sale_price: s.sale_price || "",
       serial_classification: s.serial_classification || "sale",
       classification_reference: s.classification_reference || "",
+      custodian_rep_id: s.custodian_rep_id || "",
+      demo_terminal_id: s.demo_terminal_id || "",
       notes: s.notes || "",
     });
   };
@@ -169,6 +175,8 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
         status: editSerialForm.status,
         serial_classification: editSerialForm.serial_classification,
         classification_reference: editSerialForm.classification_reference || null,
+        custodian_rep_id: editSerialForm.serial_classification === "custody" ? editSerialForm.custodian_rep_id : null,
+        demo_terminal_id: editSerialForm.serial_classification === "demo" ? editSerialForm.demo_terminal_id : null,
         notes: editSerialForm.notes,
       });
       setEditSerial(null);
@@ -530,14 +538,24 @@ export default function SerialsPage(props: { params: Promise<{ locale: string }>
               </div>
               <div className="form-group">
                 <label className="form-label">{ar ? "تصنيف السيريال" : "Serial classification"}</label>
-                <select className="form-input form-select" value={editSerialForm.serial_classification || "sale"} onChange={e => setEditSerialForm((f: any) => ({ ...f, serial_classification: e.target.value }))}>
+                <select className="form-input form-select" value={editSerialForm.serial_classification || "sale"} onChange={e => setEditSerialForm((f: any) => ({ ...f, serial_classification: e.target.value, custodian_rep_id: "", demo_terminal_id: "", classification_reference: "" }))}>
                   {Object.entries(SERIAL_CLASS_AR).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                 </select>
               </div>
-              <div className="form-group">
-                <label className="form-label">{ar ? "المندوب أو الموقع" : "Custodian or location"}</label>
-                <input className="form-input" value={editSerialForm.classification_reference || ""} onChange={e => setEditSerialForm((f: any) => ({ ...f, classification_reference: e.target.value }))} placeholder={ar ? "مثال: وليد أو محل العليا" : "Example: Waleed or Al Olaya store"} />
-              </div>
+              {editSerialForm.serial_classification === "custody" && <div className="form-group">
+                <label className="form-label">{ar ? "المندوب صاحب العهدة" : "Custodian representative"}</label>
+                <select className="form-input form-select" value={editSerialForm.custodian_rep_id || ""} onChange={e => setEditSerialForm((f: any) => ({ ...f, custodian_rep_id: e.target.value, classification_reference: reps.find(r => r.id === e.target.value)?.full_name || "" }))}>
+                  <option value="">{ar ? "اختر المندوب" : "Select representative"}</option>
+                  {reps.filter(r => r.is_active !== false).map(r => <option key={r.id} value={r.id}>{r.full_name} — {r.rep_code}</option>)}
+                </select>
+              </div>}
+              {editSerialForm.serial_classification === "demo" && <div className="form-group">
+                <label className="form-label">{ar ? "جهاز نقطة البيع" : "POS terminal"}</label>
+                <select className="form-input form-select" value={editSerialForm.demo_terminal_id || ""} onChange={e => setEditSerialForm((f: any) => ({ ...f, demo_terminal_id: e.target.value, classification_reference: terminals.find(t => t.id === e.target.value)?.name || "" }))}>
+                  <option value="">{ar ? "اختر جهاز نقطة البيع" : "Select POS terminal"}</option>
+                  {terminals.filter(t => t.is_active !== false).map(t => <option key={t.id} value={t.id}>{t.name}{t.branch_name ? ` — ${t.branch_name}` : ""}</option>)}
+                </select>
+              </div>}
               <div style={{ marginBottom: 12, padding: "8px 10px", border: "1px solid #D5C8DD", background: "#F7F2F8", color: "#6F4A84", fontSize: 12, lineHeight: 1.7 }}>
                 {ar
                   ? "أسعار التكلفة والبيع موحدة لهذا الصنف وتُدار من بطاقة الصنف. لا يمكن إنشاء سعر مختلف لهذا السيريال."

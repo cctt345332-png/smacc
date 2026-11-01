@@ -21,6 +21,16 @@ def upgrade() -> None:
         "serial_items",
         sa.Column("classification_reference", sa.String(length=200), nullable=True),
     )
+    op.add_column(
+        "serial_items",
+        sa.Column("custodian_rep_id", sa.String(), sa.ForeignKey("sales_reps.id"), nullable=True),
+    )
+    op.add_column(
+        "serial_items",
+        sa.Column("demo_terminal_id", sa.String(), sa.ForeignKey("pos_terminals.id"), nullable=True),
+    )
+    op.create_index("ix_serial_items_custodian_rep_id", "serial_items", ["custodian_rep_id"], unique=False)
+    op.create_index("ix_serial_items_demo_terminal_id", "serial_items", ["demo_terminal_id"], unique=False)
     op.create_index(
         "ix_serial_items_serial_classification",
         "serial_items",
@@ -31,5 +41,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_serial_items_serial_classification", table_name="serial_items")
+    op.drop_index("ix_serial_items_demo_terminal_id", table_name="serial_items")
+    op.drop_index("ix_serial_items_custodian_rep_id", table_name="serial_items")
+    op.drop_column("serial_items", "demo_terminal_id")
+    op.drop_column("serial_items", "custodian_rep_id")
     op.drop_column("serial_items", "classification_reference")
     op.drop_column("serial_items", "serial_classification")

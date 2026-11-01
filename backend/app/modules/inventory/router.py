@@ -369,6 +369,8 @@ async def add_serial(product_id: str, data: dict, user=Depends(get_current_user)
         notes=data.get("notes"),
         serial_classification=data.get("serial_classification", "sale"),
         classification_reference=data.get("classification_reference"),
+        custodian_rep_id=data.get("custodian_rep_id"),
+        demo_terminal_id=data.get("demo_terminal_id"),
     )
 
 @router.post("/items/{product_id}/serials/bulk", status_code=201)
@@ -388,6 +390,8 @@ async def add_serials_bulk(product_id: str, data: dict, user=Depends(get_current
                 notes=s.get("notes"),
                 serial_classification=s.get("serial_classification", data.get("serial_classification", "sale")),
                 classification_reference=s.get("classification_reference", data.get("classification_reference")),
+                custodian_rep_id=s.get("custodian_rep_id", data.get("custodian_rep_id")),
+                demo_terminal_id=s.get("demo_terminal_id", data.get("demo_terminal_id")),
             )
             results.append({"serial_number": s["serial_number"], "status": "added", "id": result.id})
         except Exception as e:
@@ -429,6 +433,8 @@ async def search_serial(
             "status": s.status,
             "serial_classification": s.serial_classification,
             "classification_reference": s.classification_reference,
+            "custodian_rep_id": s.custodian_rep_id,
+            "demo_terminal_id": s.demo_terminal_id,
             "cost_price": float(s.cost_price),
             "sale_price": float(s.product.sale_price) if s.product and s.product.sale_price else (float(s.sale_price) if s.sale_price else None),
             "product_id": s.product_id,
@@ -524,6 +530,8 @@ async def available_serials_for_invoice(
             "cost_price": float(s.cost_price),
             "serial_classification": s.serial_classification,
             "classification_reference": s.classification_reference,
+            "custodian_rep_id": s.custodian_rep_id,
+            "demo_terminal_id": s.demo_terminal_id,
             "sale_price": float(item.sale_price) if item.sale_price else (float(s.sale_price) if s.sale_price else None),
             "warehouse_id": s.warehouse_id,
         }

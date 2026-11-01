@@ -307,6 +307,8 @@ class SerialItem(Base):
     # تصنيف إداري مستقل عن حالة السيريال: للبيع أو عهدة أو ديمو أو صيانة
     serial_classification: Mapped[str] = mapped_column(String(30), default="sale", index=True)
     classification_reference: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    custodian_rep_id: Mapped[str | None] = mapped_column(String, ForeignKey("sales_reps.id"), nullable=True, index=True)
+    demo_terminal_id: Mapped[str | None] = mapped_column(String, ForeignKey("pos_terminals.id"), nullable=True, index=True)
 
     # ── التكلفة والسعر لهذه الوحدة تحديداً ─────────────────────────
     # هذا هو جوهر ميزة "ربح لكل سيريال"
