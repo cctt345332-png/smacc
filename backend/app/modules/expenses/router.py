@@ -29,8 +29,16 @@ async def get_expense(expense_id: str, user=Depends(require_role(["manager", "ac
     return result
 
 @router.post("", response_model=ExpenseOut, status_code=201)
-async def create_expense(data: ExpenseCreate, user=Depends(require_role(["manager", "accountant", "sales_rep"])), db: AsyncSession = Depends(get_db)):
-    return await service.create_expense(db, user["tenant_id"], user["user_id"], data)
+async def create_expense(
+    data: ExpenseCreate,
+    rep_id: str | None = None,
+    user=Depends(require_role(["manager", "accountant", "sales_rep"])),
+    db: AsyncSession = Depends(get_db),
+):
+    # الإدارة تستطيع تسجيل المصروف باسم أي مندوب؛ المندوب لا يستطيع تغيير نفسه.
+    if user.get("role") == "sales_rep":
+        rep_id = None
+    return await service.create_expense(db, user["tenant_id"], user["user_id"], data, rep_id=rep_id)
 
 @router.post("/{expense_id}/approve", response_model=ExpenseOut)
 async def approve_expense(expense_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
