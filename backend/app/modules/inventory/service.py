@@ -115,6 +115,7 @@ async def get_items(
     tracking_type: str | None = None,
     low_stock: bool = False,
 ):
+    await ensure_quantity_stock_records(db, tenant_id)
     q = select(InventoryItem).options(
         selectinload(InventoryItem.category)
     ).where(
@@ -220,6 +221,53 @@ async def _get_default_warehouse_id(db: AsyncSession, tenant_id: str) -> str | N
     return wh2.id if wh2 else None
 
 
+async def ensure_quantity_stock_records(db: AsyncSession, tenant_id: str) -> int:
+    """إصلاح الأصناف الكمية القديمة التي لديها رصيد بلا سجل مستودع.
+
+    بعض الأصناف أُنشئت سابقًا قبل إنشاء inventory_stock، فكانت تظهر في بطاقة
+    الصنف فقط ولا تظهر في المستودعات أو POS. ننقل رصيدها الحالي إلى مستودعها
+    الافتراضي (أو الرئيسي) مرة واحدة وبشكل آمن، ولا نلمس الأصناف التي لديها
+    سجلات مخزون قائمة.
+    """
+    items_result = await db.execute(
+        select(InventoryItem).where(
+            InventoryItem.tenant_id == tenant_id,
+            InventoryItem.tracking_type == TrackingType.QUANTITY,
+            InventoryItem.quantity_on_hand > 0,
+        )
+    )
+    items = items_result.scalars().all()
+    if not items:
+        return 0
+
+    item_ids = [item.id for item in items]
+    stocks_result = await db.execute(
+        select(InventoryStock.item_id).where(
+            InventoryStock.tenant_id == tenant_id,
+            InventoryStock.item_id.in_(item_ids),
+        ).distinct()
+    )
+    with_stock = {row[0] for row in stocks_result.all()}
+    default_warehouse_id = await _get_default_warehouse_id(db, tenant_id)
+    repaired = 0
+    for item in items:
+        if item.id in with_stock:
+            continue
+        warehouse_id = item.default_warehouse_id or default_warehouse_id
+        if not warehouse_id:
+            continue
+        item.default_warehouse_id = warehouse_id
+        db.add(InventoryStock(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, item_id=item.id,
+            warehouse_id=warehouse_id, quantity=Decimal(str(item.quantity_on_hand or 0)),
+            reorder_point=Decimal(str(item.reorder_point or 0)),
+        ))
+        repaired += 1
+    if repaired:
+        await db.commit()
+    return repaired
+
+
 async def create_item(db: AsyncSession, tenant_id: str, data: dict) -> InventoryItem:
     # إذا ما أُرسل مستودع افتراضي، استخدم المستودع الرئيسي تلقائياً
     if not data.get("default_warehouse_id"):
@@ -267,20 +315,20 @@ async def create_item(db: AsyncSession, tenant_id: str, data: dict) -> Inventory
 
     # إذا كانت هناك كمية أولية للمنتجات العادية
     initial_qty = data.get("initial_qty", 0)
+    if item.tracking_type == "quantity" and data.get("default_warehouse_id"):
+        initial_quantity = Decimal(str(initial_qty or 0))
+        existing_stock = InventoryStock(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, item_id=item.id,
+            warehouse_id=data["default_warehouse_id"], quantity=initial_quantity,
+            reorder_point=Decimal(str(data.get("reorder_point", 0))),
+        )
+        db.add(existing_stock)
+
     if initial_qty and float(initial_qty) > 0 and item.tracking_type == "quantity":
         from decimal import Decimal as D
         initial_quantity = D(str(initial_qty))
         item.quantity_on_hand = initial_quantity
         item.cost_price = D(str(data.get("cost_price", 0)))
-        if data.get("default_warehouse_id"):
-            db.add(InventoryStock(
-                id=str(uuid.uuid4()),
-                tenant_id=tenant_id,
-                item_id=item.id,
-                warehouse_id=data["default_warehouse_id"],
-                quantity=initial_quantity,
-                reorder_point=Decimal(str(data.get("reorder_point", 0))),
-            ))
         db.add(StockMovement(
             id=str(uuid.uuid4()),
             tenant_id=tenant_id,
@@ -1509,6 +1557,7 @@ async def get_stock_by_warehouse(db: AsyncSession, tenant_id: str, warehouse_id:
     from app.models.inventory import InventoryStock
     from sqlalchemy.orm import selectinload as sil
 
+    await ensure_quantity_stock_records(db, tenant_id)
     results = []
     maintenance_totals = await _get_maintenance_return_totals(db, tenant_id, warehouse_id)
 

@@ -219,6 +219,7 @@ async def items_for_picker(
 ):
     """أصناف للـ picker — المندوب يرى مستودعه فقط تلقائياً"""
     tenant_id = user["tenant_id"]
+    await service.ensure_quantity_stock_records(db, tenant_id)
     effective_wh = warehouse_id
 
     # المندوب → مستودعه فقط
