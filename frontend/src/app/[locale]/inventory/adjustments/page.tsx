@@ -44,6 +44,8 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   const [serialsData, setSerialsData] = useState<any[]>([]);
   const [loadingSerials, setLoadingSerials] = useState(false);
   const [serialChanges, setSerialChanges] = useState<Record<string, string>>({});
+  const [serialInlineInput, setSerialInlineInput] = useState("");
+  const [serialInlineAudit, setSerialInlineAudit] = useState<any | null>(null);
   const [serialAudit, setSerialAudit] = useState<any | null>(null);
   const [selectedSerialProduct, setSelectedSerialProduct] = useState("");
   const [serialAuditLoading, setSerialAuditLoading] = useState(false);
@@ -111,6 +113,8 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
     if (openSerials === itemId) { setOpenSerials(null); return; }
     setOpenSerials(itemId);
     setSerialChanges({});
+    setSerialInlineInput("");
+    setSerialInlineAudit(null);
     setLoadingSerials(true);
     try {
       const { data } = await getSerials(itemId, "in_stock", selectedWarehouse === "all" ? undefined : selectedWarehouse);
@@ -119,6 +123,18 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
   };
 
   const normalizeSerial = (value: any) => String(value ?? "").trim().replace(/\s+/g, "");
+
+  const checkInlineSerials = () => {
+    const values = serialInlineInput.split(/[\n,;،]+/).map(normalizeSerial).filter(Boolean);
+    const unique = [...new Set(values)];
+    const systemRows = Array.isArray(serialsData) ? serialsData : [];
+    const systemMap = new Map(systemRows.map((row: any) => [normalizeSerial(row.serial_number), row]));
+    const enteredSet = new Set(unique);
+    const matched = unique.filter(serial => systemMap.has(serial));
+    const unmatched = unique.filter(serial => !systemMap.has(serial));
+    const missing = systemRows.filter((row: any) => !enteredSet.has(normalizeSerial(row.serial_number)));
+    setSerialInlineAudit({ entered: unique, matched, unmatched, missing });
+  };
 
   const handleSerialAuditFile = async (file?: File) => {
     if (!file) return;
@@ -410,7 +426,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
             <div>
               <div className="card-title" style={{ color: "#4C1768" }}>{ar ? "جرد السيريالات الذكي" : "Smart Serial Count"}</div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
-                {ar ? "اختر منتجاً واحداً، ثم ارفع ملف Excel بسيريالاته لمطابقة الجرد بدقة" : "Choose one product, then upload its serial Excel file for an accurate count"}
+                {ar ? "اختر المنتج وافتح سيريالاته، ثم اكتب أو الصق السيريالات الموجودة مباشرة لمطابقة الجرد" : "Choose a product, open its serials, then type or paste the serials directly to match the count"}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -418,11 +434,7 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                 <option value="">{ar ? "اختر المنتج المراد جرده" : "Choose product to count"}</option>
                 {items.filter((item: any) => item.tracking_type === "serial").map((item: any) => <option key={item.id} value={item.id}>{item.name_ar}{item.sku ? ` — ${item.sku}` : ""}</option>)}
               </select>
-              <label className="btn btn-primary btn-sm" style={{ cursor: serialAuditLoading ? "wait" : "pointer" }}>
-                {serialAuditLoading ? (ar ? "جاري المطابقة..." : "Matching...") : (ar ? "رفع ملف Excel للجرد" : "Upload Count Excel")}
-                <input type="file" accept=".xlsx,.xls,.csv" hidden disabled={serialAuditLoading} onChange={e => { handleSerialAuditFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
-              </label>
-              {serialAudit && <button className="btn btn-secondary btn-sm" onClick={exportSerialAudit}>{ar ? "تصدير النتيجة Excel" : "Export Result Excel"}</button>}
+              <span className="badge badge-info">{ar ? "إدخال مباشر بدون Excel" : "Direct entry without Excel"}</span>
             </div>
           </div>
           {selectedWarehouse === "all" && <div style={{ marginTop: 10, color: "#92400E", fontSize: 12, fontWeight: 600 }}>{ar ? "اختر مستودعاً محدداً ثم منتجاً واحداً قبل رفع ملف السيريالات" : "Choose a warehouse and one product before uploading serials"}</div>}
@@ -676,7 +688,14 @@ export default function StockCountPage(props: { params: Promise<{ locale: string
                           ) : (
                             <div style={{ padding: "12px 24px" }}>
                               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                                {ar ? "السيريالات — غيّر الحالة إذا وجدت فرقاً" : "Serials — change status if there's a discrepancy"}
+                                {ar ? "الجرد المباشر للسيريالات" : "Direct serial count"}
+                              </div>
+                              <div style={{ background: "white", border: "1px solid #D8C5E2", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: "#4C1768", marginBottom: 5 }}>{ar ? "اكتب أو الصق السيريالات الموجودة فعليًا" : "Type or paste the serials physically present"}</div>
+                                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>{ar ? "ضع كل سيريال في سطر أو افصل بينها بفاصلة، ثم اضغط فحص المطابقة." : "Put one serial per line or separate with commas, then check the match."}</div>
+                                <textarea className="form-input" rows={3} value={serialInlineInput} onChange={e => { setSerialInlineInput(e.target.value); setSerialInlineAudit(null); }} placeholder={ar ? "مثال: 356752240856897\n356752240856898" : "Example: 356752240856897\n356752240856898"} style={{ direction: "ltr", textAlign: "left", fontFamily: "monospace" }} />
+                                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}><button className="btn btn-primary btn-sm" onClick={checkInlineSerials} disabled={!serialInlineInput.trim()}>{ar ? "فحص المطابقة" : "Check match"}</button>{serialInlineAudit && <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{ar ? `تم فحص ${serialInlineAudit.entered.length} سيريال` : `Checked ${serialInlineAudit.entered.length} serials`}</span>}</div>
+                                {serialInlineAudit && <><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginTop: 10 }}><div style={{ border: "1px solid #BBF7D0", background: "#F0FDF4", borderRadius: 6, padding: 8, color: "#166534" }}><strong>{serialInlineAudit.matched.length}</strong><div style={{ fontSize: 11 }}>{ar ? "مطابق وموجود" : "Matched and found"}</div></div><div style={{ border: "1px solid #FECACA", background: "#FEF2F2", borderRadius: 6, padding: 8, color: "#B91C1C" }}><strong>{serialInlineAudit.unmatched.length}</strong><div style={{ fontSize: 11 }}>{ar ? "غير مطابق / غير موجود" : "Unmatched / not found"}</div></div><div style={{ border: "1px solid #FDE68A", background: "#FFFBEB", borderRadius: 6, padding: 8, color: "#92400E" }}><strong>{serialInlineAudit.missing.length}</strong><div style={{ fontSize: 11 }}>{ar ? "موجود بالنظام ولم يُدخل" : "In system but not entered"}</div></div></div><div style={{ marginTop: 10, maxHeight: 150, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6 }}>{serialInlineAudit.entered.map((serial: string) => { const ok = serialInlineAudit.matched.includes(serial); return <div key={serial} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "5px 8px", borderBottom: "1px solid #E5E7EB", direction: "ltr" }}><code>{serial}</code><span style={{ color: ok ? "#166534" : "#B91C1C", fontSize: 11, fontWeight: 700 }}>{ok ? (ar ? "مطابق" : "Matched") : (ar ? "غير مطابق" : "Unmatched")}</span></div>; })}{serialInlineAudit.missing.map((row: any) => <div key={`missing-${row.serial_number}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "5px 8px", borderBottom: "1px solid #E5E7EB", direction: "ltr", background: "#FFFBEB" }}><code>{row.serial_number}</code><span style={{ color: "#92400E", fontSize: 11, fontWeight: 700 }}>{ar ? "موجود بالنظام ولم يُدخل" : "In system, not entered"}</span></div>)}</div></>}
                               </div>
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 8 }}>
                                 {serialsData.map((s: any) => {
