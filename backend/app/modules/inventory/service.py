@@ -323,6 +323,9 @@ async def create_item(db: AsyncSession, tenant_id: str, data: dict) -> Inventory
             reorder_point=Decimal(str(data.get("reorder_point", 0))),
         )
         db.add(existing_stock)
+        if not initial_qty or float(initial_qty) <= 0:
+            await db.commit()
+            await db.refresh(item)
 
     if initial_qty and float(initial_qty) > 0 and item.tracking_type == "quantity":
         from decimal import Decimal as D
