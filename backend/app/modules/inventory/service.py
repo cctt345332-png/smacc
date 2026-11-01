@@ -232,7 +232,7 @@ async def ensure_quantity_stock_records(db: AsyncSession, tenant_id: str) -> int
     items_result = await db.execute(
         select(InventoryItem).where(
             InventoryItem.tenant_id == tenant_id,
-            InventoryItem.tracking_type == TrackingType.QUANTITY,
+            InventoryItem.tracking_type == "quantity",
             InventoryItem.quantity_on_hand > 0,
         )
     )
@@ -1680,6 +1680,7 @@ async def get_item_stock_levels(db: AsyncSession, tenant_id: str, item_id: str):
     from sqlalchemy.orm import selectinload as sil
 
     item = await get_item(db, tenant_id, item_id)
+    await ensure_quantity_stock_records(db, tenant_id)
 
     if item.tracking_type == "serial":
         # للسيريالات: نجمع من serial_items
