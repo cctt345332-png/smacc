@@ -315,7 +315,7 @@ async def create_item(db: AsyncSession, tenant_id: str, data: dict) -> Inventory
 
     # إذا كانت هناك كمية أولية للمنتجات العادية
     initial_qty = data.get("initial_qty", 0)
-    if item.tracking_type == "quantity" and data.get("default_warehouse_id"):
+    if _tracking_value(item.tracking_type) == "quantity" and data.get("default_warehouse_id"):
         initial_quantity = Decimal(str(initial_qty or 0))
         existing_stock = InventoryStock(
             id=str(uuid.uuid4()), tenant_id=tenant_id, item_id=item.id,
@@ -327,7 +327,7 @@ async def create_item(db: AsyncSession, tenant_id: str, data: dict) -> Inventory
             await db.commit()
             await db.refresh(item)
 
-    if initial_qty and float(initial_qty) > 0 and item.tracking_type == "quantity":
+    if initial_qty and float(initial_qty) > 0 and _tracking_value(item.tracking_type) == "quantity":
         from decimal import Decimal as D
         initial_quantity = D(str(initial_qty))
         item.quantity_on_hand = initial_quantity
