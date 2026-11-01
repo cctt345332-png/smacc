@@ -1408,7 +1408,10 @@ async def update_serial(
     # التحقق من الـ tenant عبر المنتج
     await get_item(db, tenant_id, serial.product_id)
 
-    allowed = ["condition", "status", "notes", "serial_classification", "classification_reference"]
+    allowed = [
+        "condition", "status", "notes", "serial_classification", "classification_reference",
+        "custodian_rep_id", "demo_terminal_id",
+    ]
     for k in allowed:
         if k in data and data[k] is not None:
             if k == "serial_classification" and data[k] not in {"sale", "custody", "demo", "maintenance", "internal"}:
