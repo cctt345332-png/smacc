@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { getItemsForPicker, getAvailableSerials } from "@/lib/inventory";
+import { getItemsForPicker, getAvailableSerials, getItem } from "@/lib/inventory";
 import SerialPicker from "./SerialPicker";
 import PurchaseSerialInput, { NewSerial } from "./PurchaseSerialInput";
 
@@ -135,7 +135,17 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
   }, [showDrop, calcDropPos]);
 
   // اختيار صنف من نتائج البحث
-  const pickItem = (item: any) => {
+  const pickItem = async (item: any) => {
+    // نتيجة البحث قد تكون قديمة أو لا تحتوي سعر البطاقة؛ اجلب الصنف نفسه
+    // عند الاختيار واجعل سعر البيع الموحد في بطاقة الصنف هو المصدر الوحيد.
+    let source = item;
+    try {
+      const { data } = await getItem(item.id);
+      if (data) source = { ...item, ...data };
+    } catch {
+      // نستخدم نتيجة البحث كخطة بديلة إذا تعذر طلب التفاصيل.
+    }
+    item = source;
     const isSerial  = item.tracking_type === "serial";
     const isBatch   = item.tracking_type === "batch";
     const isVariant = item.tracking_type === "variant";
