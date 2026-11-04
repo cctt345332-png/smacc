@@ -134,11 +134,12 @@ async def list_invoices(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # المندوب يشوف فواتيره التشغيلية كلها، أما قائمة المبيعات العامة
-    # فتستبعد المسودات والفواتير المقدمة للمراجعة من الأثر المالي.
+    # تعرض قائمة المبيعات المسودات أيضًا حتى لا تختفي الفاتورة المحفوظة
+    # من الإدارة أو من ملف العميل. هذا لا يغيّر حالتها ولا يدخلها في
+    # الأثر المالي؛ فهي تبقى draft حتى يعتمدها المستخدم.
     rep_id = None
-    include_unconfirmed = user["role"] == "sales_rep"
-    if include_unconfirmed:
+    include_unconfirmed = True
+    if user["role"] == "sales_rep":
         rep_id = await get_rep_id_for_user(db, user["user_id"])
     return await service.get_invoices(
         db,
