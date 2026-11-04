@@ -30,8 +30,10 @@ function calcLine(line: Line) {
   const taxRate = parseFloat(line.vat_rate) || 0;
   const gross = qty * price;
   const discAmt = gross * (disc / 100);
-  const taxable = gross - discAmt;
-  const tax = taxable * (taxRate / 100);
+  // سعر البيع من بطاقة الصنف شامل الضريبة؛ نفصل الضريبة بدل إضافتها فوق السعر.
+  const totalIncludingVat = gross - discAmt;
+  const taxable = taxRate > 0 ? totalIncludingVat / (1 + taxRate / 100) : totalIncludingVat;
+  const tax = totalIncludingVat - taxable;
   return { gross, discAmt, taxable, tax, total: taxable + tax };
 }
 

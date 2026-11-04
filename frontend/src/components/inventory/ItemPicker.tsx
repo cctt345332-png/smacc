@@ -169,7 +169,7 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
   const pickSerial = (s: any) => {
     const price = purchaseMode
       ? Number(s.cost_price)
-      : (s.sale_price != null ? Number(s.sale_price) : 0);
+      : (Number(s.sale_price || 0) > 0 ? Number(s.sale_price) : Number(value.unit_price || 0));
     onChange({
       ...value,
       serial_item_id: s.id,
