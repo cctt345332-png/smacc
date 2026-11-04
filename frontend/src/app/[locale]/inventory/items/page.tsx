@@ -24,7 +24,7 @@ function SerialsButton({ locale, ar }: { locale: string; ar: boolean }) {
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 
 const TRACKING_TYPES = [
-  { value: "quantity", ar: "كمية",     en: "Quantity",  badge: "badge-info",    desc: "بقالات، عطارات" },
+  { value: "quantity", ar: "كمية",     en: "Quantity",  badge: "badge-info",    desc: "" },
   { value: "serial",   ar: "سيريال",   en: "Serial",    badge: "badge-success", desc: "جوالات، إلكترونيات" },
   { value: "batch",    ar: "تشغيلة",   en: "Batch",     badge: "badge-warning", desc: "صيدليات" },
   { value: "variant",  ar: "متغيرات",  en: "Variants",  badge: "badge-gray",    desc: "ملابس، أحذية" },
@@ -285,7 +285,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
                         <span className={`badge ${tracking?.badge || "badge-gray"}`}>
                           {ar ? tracking?.ar : tracking?.en}
                         </span>
-                        <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{tracking?.desc}</div>
+                        {tracking?.desc && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{tracking.desc}</div>}
                       </td>
                       <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{item.category?.name_ar || "—"}</td>
                       <td style={{ textAlign: "end" }}>
