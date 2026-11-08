@@ -159,33 +159,33 @@ export default function POSCashierPage() {
         const allS: any[] = sRes.data || [];
         setTerminals(allT);
 
-        const openS = allS.find((s: any) => s.status === "open");
-        if (openS) {
-          setSession(openS);
-          const t = allT.find((x: any) => x.id === openS.terminal_id) || null;
-          setTerminal(t);
-          setActCfg(ACTIVITY_CFG[t?.business_type || "general"] || ACTIVITY_CFG.general);
-        } else if (terminalParam) {
-          const t = allT.find((x: any) => x.id === terminalParam) || null;
-          setTerminal(t);
-          setActCfg(ACTIVITY_CFG[t?.business_type || "general"] || ACTIVITY_CFG.general);
-          setOpenForm((f) => ({ ...f, terminal_id: terminalParam }));
-          setShowOpenForm(true);
-        } else if (isCashierRole) {
-          // الكاشير — ابحث عن الجهاز المخصص له
+        // لا نأخذ أول جلسة مفتوحة من جميع الأجهزة؛ ذلك كان يسبب عرض
+        // مستودع وحسابات جهاز آخر عند وجود أكثر من جهاز POS.
+        let assignedTerminalId = terminalParam || "";
+        if (!assignedTerminalId && isCashierRole) {
           try {
             const myRes = await getMyTerminal();
-            if (myRes?.data?.id) {
-              const t = allT.find((x: any) => x.id === myRes.data.id) || myRes.data;
-              setTerminal(t);
-              setActCfg(ACTIVITY_CFG[t?.business_type || "general"] || ACTIVITY_CFG.general);
-              setOpenForm((f) => ({ ...f, terminal_id: myRes.data.id }));
-              setShowOpenForm(true);
-              return;
-            }
+            assignedTerminalId = myRes?.data?.id || "";
           } catch {}
-          setShowOpenForm(true);
+        }
+
+        const openSessions = allS.filter((s: any) => s.status === "open");
+        const selectedOpenSession = assignedTerminalId
+          ? openSessions.find((s: any) => s.terminal_id === assignedTerminalId)
+          : openSessions.length === 1 ? openSessions[0] : null;
+        const selectedTerminalId = assignedTerminalId || selectedOpenSession?.terminal_id || "";
+        const selectedTerminal = allT.find((x: any) => x.id === selectedTerminalId) || null;
+
+        if (selectedOpenSession && selectedTerminal) {
+          setSession(selectedOpenSession);
+          setTerminal(selectedTerminal);
+          setActCfg(ACTIVITY_CFG[selectedTerminal.business_type || "general"] || ACTIVITY_CFG.general);
         } else {
+          if (selectedTerminal) {
+            setTerminal(selectedTerminal);
+            setActCfg(ACTIVITY_CFG[selectedTerminal.business_type || "general"] || ACTIVITY_CFG.general);
+          }
+          setOpenForm((f) => ({ ...f, terminal_id: selectedTerminalId }));
           setShowOpenForm(true);
         }
       } finally { setLoading(false); }
