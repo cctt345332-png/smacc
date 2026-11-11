@@ -17,7 +17,7 @@ from app.modules.sales.schemas import (
     InvoiceCreate, InvoiceOut, InvoiceReject,
     PaymentCreate, PaymentUpdate, PaymentOut,
     QuotationCreate, QuotationOut,
-    CreditNoteCreate, RefundRequestCreate, RefundRequestDecision,
+    CreditNoteCreate, RefundRequestCreate, RefundRequestDecision, ReplaceSimplifiedInvoice,
 )
 
 router = APIRouter(prefix="/sales", tags=["sales"], dependencies=[Depends(mandatory_stocktake_guard)])
@@ -186,6 +186,19 @@ async def create_invoice(
 @router.post("/invoices/{invoice_id}/confirm", response_model=InvoiceOut)
 async def confirm_invoice(invoice_id: str, user=Depends(require_role(["manager","accountant","sales","sales_rep"])), db: AsyncSession = Depends(get_db)):
     return await service.confirm_invoice(db, user["tenant_id"], user["user_id"], invoice_id)
+
+
+@router.post("/invoices/{invoice_id}/replace-simplified")
+async def replace_simplified_invoice(
+    invoice_id: str,
+    data: ReplaceSimplifiedInvoice,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    """استبدال فاتورة POS مبسطة بفاتورة كاملة بطلب العميل."""
+    return await service.replace_simplified_pos_invoice(
+        db, user["tenant_id"], user["user_id"], invoice_id, data.customer_id
+    )
 
 
 @router.post("/invoices/{invoice_id}/submit", response_model=InvoiceOut)

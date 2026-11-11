@@ -224,6 +224,11 @@ class InvoiceReject(BaseModel):
     rejection_note: str
 
 
+class ReplaceSimplifiedInvoice(BaseModel):
+    """بيانات تحويل فاتورة POS مبسطة إلى فاتورة ضريبية كاملة."""
+    customer_id: str
+
+
 # ─── Payment ─────────────────────────────────────────────────────────
 class PaymentCreate(BaseModel):
     # يكون invoice_id موجودًا عند التحصيل على فاتورة، وفارغًا عند التحصيل

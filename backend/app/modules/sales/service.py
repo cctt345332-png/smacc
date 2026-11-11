@@ -1152,6 +1152,85 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
     return await get_invoice(db, tenant_id, invoice_id)
 
 
+async def replace_simplified_pos_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, customer_id: str):
+    """إنشاء إشعار دائن وفاتورة كاملة بديلة دون إعادة خصم المخزون."""
+    original = await get_invoice(db, tenant_id, invoice_id)
+    if getattr(original.invoice_type, "value", original.invoice_type) != "simplified" or not (original.notes or "").startswith("POS:"):
+        raise HTTPException(400, "الاستبدال متاح لفواتير نقاط البيع المبسطة فقط")
+    if original.status in (InvoiceStatus.DRAFT, InvoiceStatus.CANCELLED):
+        raise HTTPException(400, "لا يمكن استبدال فاتورة مسودة أو ملغاة")
+    existing = await db.scalar(select(CreditNote).where(
+        CreditNote.tenant_id == tenant_id,
+        CreditNote.original_invoice_id == original.id,
+        CreditNote.reason.like("استبدال فاتورة POS%"),
+    ))
+    if existing:
+        raise HTTPException(409, "تم إنشاء مستند استبدال لهذه الفاتورة مسبقًا")
+    customer = await get_customer(db, tenant_id, customer_id)
+    from app.models.tenant import Tenant
+    from app.modules.accounting.service import get_vat_settings
+    tenant = await db.get(Tenant, tenant_id)
+    vat_settings = await get_vat_settings(db, tenant_id)
+    issue_date = datetime.utcnow()
+    cn = CreditNote(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        credit_note_number=await _next_credit_note_number(db, tenant_id), uuid=str(uuid.uuid4()),
+        note_type="credit", original_invoice_id=original.id, customer_id=original.customer_id,
+        issue_date=issue_date, reason=f"استبدال فاتورة POS {original.invoice_number} بطلب العميل",
+        subtotal=original.taxable_amount, vat_amount=original.vat_amount, total=original.total,
+        qr_code=_generate_qr_tlv(tenant.name if tenant else "", vat_settings.vat_number if vat_settings else "", issue_date.isoformat(), original.total, original.vat_amount),
+        created_by=user_id,
+    )
+    db.add(cn)
+    new_id = str(uuid.uuid4())
+    replacement = Invoice(
+        id=new_id, tenant_id=tenant_id, invoice_number=await _next_invoice_number(db, tenant_id), uuid=str(uuid.uuid4()),
+        invoice_type=InvoiceType.STANDARD, status=InvoiceStatus.CONFIRMED, customer_id=customer.id,
+        issue_date=issue_date, supply_date=issue_date, due_date=original.due_date,
+        seller_name_ar=original.seller_name_ar, seller_vat_number=original.seller_vat_number,
+        seller_cr_number=original.seller_cr_number, seller_address=original.seller_address,
+        buyer_name_ar=customer.name_ar, buyer_vat_number=customer.vat_number,
+        buyer_address="، ".join(p for p in [customer.address_street, customer.address_district, customer.address_city, customer.address_postal] if p),
+        subtotal=original.subtotal, discount_amount=original.discount_amount, taxable_amount=original.taxable_amount,
+        vat_amount=original.vat_amount, total=original.total, paid_amount=original.paid_amount,
+        currency_code=original.currency_code,
+        qr_code=_generate_qr_tlv(tenant.name if tenant else "", vat_settings.vat_number if vat_settings else "", issue_date.isoformat(), original.total, original.vat_amount),
+        notes=f"استبدال فاتورة POS: {original.invoice_number}", terms=original.terms, rep_id=original.rep_id,
+        invoice_payment_method=original.invoice_payment_method, credit_days=original.credit_days,
+        bank_name=original.bank_name, created_by=user_id,
+    )
+    if replacement.paid_amount >= replacement.total:
+        replacement.status = InvoiceStatus.PAID
+    db.add(replacement)
+    for line in original.lines:
+        db.add(CreditNoteLine(
+            id=str(uuid.uuid4()), credit_note_id=cn.id, original_invoice_line_id=line.id,
+            line_order=line.line_order, description_ar=line.description_ar, quantity=line.quantity,
+            unit_price=line.unit_price, vat_rate=line.vat_rate, subtotal=line.subtotal - line.discount_amount,
+            vat_amount=line.vat_amount, total=line.total, inventory_item_id=line.inventory_item_id,
+            variant_id=line.variant_id, serial_ids_json=line.serial_ids_json, return_condition="resalable",
+        ))
+        db.add(InvoiceLine(
+            id=str(uuid.uuid4()), invoice_id=new_id, line_order=line.line_order,
+            description_ar=line.description_ar, description_en=line.description_en, quantity=line.quantity,
+            unit=line.unit, unit_price=line.unit_price, discount_pct=line.discount_pct,
+            discount_amount=line.discount_amount, vat_rate=line.vat_rate, vat_category=line.vat_category,
+            subtotal=line.subtotal, vat_amount=line.vat_amount, total=line.total,
+            inventory_item_id=line.inventory_item_id, serial_item_id=line.serial_item_id,
+            serial_ids_json=line.serial_ids_json, variant_id=line.variant_id,
+        ))
+    await db.flush()
+    if original.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
+        await _create_credit_note_journal(db, tenant_id, user_id, cn, original)
+        replacement.journal_entry_id = await _create_invoice_journal(db, tenant_id, user_id, replacement)
+    record_audit(db, tenant_id, user_id, "replace", "invoice", original.id,
+                 original_invoice=original.invoice_number, replacement_invoice=replacement.invoice_number, credit_note=cn.credit_note_number)
+    await db.commit()
+    return {"original_invoice_number": original.invoice_number, "credit_note_number": cn.credit_note_number,
+            "replacement_invoice_id": replacement.id, "replacement_invoice_number": replacement.invoice_number,
+            "message": "تم إنشاء فاتورة كاملة وإشعار دائن بدون خصم المخزون مرة أخرى"}
+
+
 async def confirm_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str):
     """تأكيد الفاتورة — تقبل draft أو approved"""
     invoice = await get_invoice(db, tenant_id, invoice_id)

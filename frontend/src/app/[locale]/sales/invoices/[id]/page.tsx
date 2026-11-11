@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, use } from "react";
 import Link from "next/link";
-import { getInvoice, confirmInvoice, createPayment, getPayments, deleteInvoiceDraft } from "@/lib/sales";
+import { getInvoice, confirmInvoice, createPayment, getPayments, deleteInvoiceDraft, getCustomers, replaceSimplifiedInvoice } from "@/lib/sales";
 import { submitInvoiceToZATCA, submitInvoiceToZATCASimulation, getInvoiceXML, getZATCASubmissions } from "@/lib/accounting";
 import { Icon } from "@/components/ui/Icons";
 import SellerBlock from "@/components/documents/SellerBlock";
@@ -98,6 +98,9 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
   const [acting, setActing] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [zatcaSubmissions, setZatcaSubmissions] = useState<any[]>([]);
+  const [showReplacementModal, setShowReplacementModal] = useState(false);
+  const [replacementCustomers, setReplacementCustomers] = useState<any[]>([]);
+  const [replacementCustomerId, setReplacementCustomerId] = useState("");
 
   const load = async () => {
     try {
@@ -181,6 +184,28 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
     finally { setActing(false); }
   };
 
+  const openReplacementModal = async () => {
+    try {
+      const res = await getCustomers();
+      setReplacementCustomers(res.data || []);
+      setReplacementCustomerId("");
+      setShowReplacementModal(true);
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر تحميل العملاء"); }
+  };
+
+  const handleReplacement = async () => {
+    if (!replacementCustomerId) return alert(ar ? "اختر العميل أولاً" : "Select the customer first");
+    if (!confirm(ar ? "سيتم إنشاء إشعار دائن وفاتورة كاملة جديدة بدون خصم المخزون مرة أخرى. هل تريد المتابعة؟" : "Create a credit note and a new standard invoice without deducting inventory again?")) return;
+    setActing(true);
+    try {
+      const res = await replaceSimplifiedInvoice(id, replacementCustomerId);
+      setShowReplacementModal(false);
+      alert(`${res.data?.message || "تم الاستبدال"}\n${res.data?.replacement_invoice_number || ""}`);
+      await load();
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر استبدال الفاتورة"); }
+    finally { setActing(false); }
+  };
+
   const handleDownloadXML = async () => {
     try {
       const res = await getInvoiceXML(id);
@@ -253,6 +278,11 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
           {zatcaNeedsAttention && (
             <button className="btn btn-primary btn-sm" onClick={() => handleZATCASubmit(false)} disabled={acting}>
               {ar ? "إرسال للهيئة" : "Send to ZATCA"}
+            </button>
+          )}
+          {invoice.invoice_type === "simplified" && String(invoice.notes || "").startsWith("POS:") && invoice.status !== "draft" && invoice.status !== "cancelled" && (
+            <button className="btn btn-secondary btn-sm" onClick={openReplacementModal} disabled={acting}>
+              {ar ? "تحويل إلى ضريبية كاملة" : "Replace with standard invoice"}
             </button>
           )}
           <button className="btn btn-secondary btn-sm" onClick={handleDownloadXML} disabled={acting}>
@@ -562,6 +592,28 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
         </div>
       </div>
 
+      {showReplacementModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "white", borderRadius: 16, width: "100%", maxWidth: 520 }}>
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700 }}>{ar ? "تحويل إلى فاتورة ضريبية كاملة" : "Replace with standard invoice"}</h2>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowReplacementModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: 24 }}>
+              <p style={{ marginTop: 0, color: "var(--text-secondary)", lineHeight: 1.7 }}>{ar ? "سيُنشأ إشعار دائن للفاتورة المبسطة وفاتورة كاملة جديدة باسم العميل الذي تختاره. لن يُخصم المخزون مرة أخرى." : "A credit note and a new standard invoice will be created. Inventory will not be deducted again."}</p>
+              <label className="form-label">{ar ? "العميل" : "Customer"}</label>
+              <select className="form-input form-select" value={replacementCustomerId} onChange={e => setReplacementCustomerId(e.target.value)}>
+                <option value="">{ar ? "اختر العميل" : "Select customer"}</option>
+                {replacementCustomers.map(c => <option key={c.id} value={c.id}>{c.name_ar}{c.vat_number ? ` — ${c.vat_number}` : ""}</option>)}
+              </select>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
+                <button className="btn btn-secondary" onClick={() => setShowReplacementModal(false)}>{ar ? "إلغاء" : "Cancel"}</button>
+                <button className="btn btn-primary" onClick={handleReplacement} disabled={acting || !replacementCustomerId}>{ar ? "إنشاء الاستبدال" : "Create replacement"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Add Payment Modal */}
       {showPayModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>

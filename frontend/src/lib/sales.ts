@@ -30,6 +30,8 @@ export const approveInvoice = (id: string) => api.post(`/sales/invoices/${id}/ap
 export const rejectInvoice = (id: string, rejection_note: string) => api.post(`/sales/invoices/${id}/reject`, { rejection_note });
 export const updateInvoice = (id: string, data: any) => api.patch(`/sales/invoices/${id}`, data);
 export const deleteInvoiceDraft = (id: string) => api.delete(`/sales/invoices/${id}`);
+export const replaceSimplifiedInvoice = (id: string, customer_id: string) =>
+  api.post(`/sales/invoices/${id}/replace-simplified`, { customer_id });
 
 // Payments
 export const getPayments = (params?: string | { invoice_id?: string; rep_id?: string; payment_method?: string; date_from?: string; date_to?: string }) => {
