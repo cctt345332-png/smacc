@@ -1394,6 +1394,11 @@ tbody tr:hover { background: #FAFBFC; }
     font-size: 8pt !important;
     line-height: 1.2 !important;
   }
+  body.thermal-print-mode .thermal-receipt .thermal-line-main > span:first-child {
+    font-size: 10pt !important;
+    line-height: 1.2 !important;
+    font-weight: 600 !important;
+  }
   body.thermal-print-mode .thermal-receipt .thermal-line-extra,
   body.thermal-print-mode .thermal-receipt .thermal-line-tax {
     font-size: 8pt !important;
