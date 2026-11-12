@@ -1202,20 +1202,20 @@ tbody tr:hover { background: #FAFBFC; }
 /* ── POS thermal receipt: never print the cashier page ──────────────── */
 @media print {
   @page {
-    size: 78mm auto;
+    size: 80mm auto;
     margin: 0;
   }
 
   @page thermal80mm {
-    size: 78mm auto;
+    size: 80mm auto;
     margin: 0;
   }
 
   html:has(body.thermal-print-mode),
   body.thermal-print-mode {
-    width: 78mm !important;
-    min-width: 78mm !important;
-    max-width: 78mm !important;
+    width: 80mm !important;
+    min-width: 80mm !important;
+    max-width: 80mm !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
@@ -1236,11 +1236,11 @@ tbody tr:hover { background: #FAFBFC; }
   body.thermal-print-mode .thermal-print-area {
     display: block !important;
     position: static !important;
-    width: 78mm !important;
-    min-width: 78mm !important;
-    max-width: 78mm !important;
+    width: 80mm !important;
+    min-width: 80mm !important;
+    max-width: 80mm !important;
     margin: 0 !important;
-    padding: 2.5mm 5mm 0 2.5mm !important;
+    padding: 2mm 2mm 0 !important;
     box-sizing: border-box !important;
     top: 0 !important;
     background: #fff !important;
@@ -1265,6 +1265,30 @@ tbody tr:hover { background: #FAFBFC; }
     box-shadow: none !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* إبقاء كل أعمدة الإيصال داخل المساحة القابلة للطباعة حتى مع أسماء طويلة. */
+  body.thermal-print-mode .thermal-receipt .thermal-items-header,
+  body.thermal-print-mode .thermal-receipt .thermal-line-main {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-items-header > span,
+  body.thermal-print-mode .thermal-receipt .thermal-line-main > span {
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    flex-shrink: 1 !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-items-header > span:first-child,
+  body.thermal-print-mode .thermal-receipt .thermal-line-main > span:first-child {
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-items-header > span:not(:first-child),
+  body.thermal-print-mode .thermal-receipt .thermal-line-main > span:not(:first-child) {
+    flex: 0 1 auto !important;
   }
 
   /* توحيد الخط؛ اللون الرمادي والوزن الخفيف يخرجان متقطعين على الطابعة الحرارية. */
