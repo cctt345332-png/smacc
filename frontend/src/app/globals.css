@@ -1240,7 +1240,7 @@ tbody tr:hover { background: #FAFBFC; }
     min-width: 80mm !important;
     max-width: 80mm !important;
     margin: 0 !important;
-    padding: 2mm 2mm 0 !important;
+    padding: 0 !important;
     box-sizing: border-box !important;
     top: 0 !important;
     background: #fff !important;
@@ -1265,6 +1265,42 @@ tbody tr:hover { background: #FAFBFC; }
     box-shadow: none !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* مساحة الطابعة الفعلية 76mm داخل رول 80mm؛ يمنع ذلك خروج الجدول من اليسار. */
+  body.thermal-print-mode .thermal-receipt,
+  body.thermal-print-mode .thermal-receipt * {
+    box-sizing: border-box !important;
+  }
+  body.thermal-print-mode .thermal-receipt {
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 auto !important;
+    overflow: hidden !important;
+  }
+
+  /* شبكة ثابتة بدل flex؛ مجموع الأعمدة لا يتجاوز عرض الورقة. */
+  body.thermal-print-mode .thermal-receipt .thermal-items-header,
+  body.thermal-print-mode .thermal-receipt .thermal-line-main {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) 24px 40px 48px !important;
+    column-gap: 1px !important;
+    align-items: start !important;
+    justify-content: stretch !important;
+    overflow: hidden !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-items-header > span,
+  body.thermal-print-mode .thermal-receipt .thermal-line-main > span {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: none !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-items-header > span:first-child,
+  body.thermal-print-mode .thermal-receipt .thermal-line-main > span:first-child {
+    overflow: hidden !important;
   }
 
   /* إبقاء كل أعمدة الإيصال داخل المساحة القابلة للطباعة حتى مع أسماء طويلة. */
