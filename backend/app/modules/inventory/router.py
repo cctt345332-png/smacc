@@ -200,6 +200,10 @@ async def list_items(
             "is_active": item.is_active,
             "color": item.color,
             "storage": item.storage,
+            "description_ar": item.description_ar,
+            "store_images_json": item.store_images_json,
+            "manufacturer": item.manufacturer,
+            "country_of_origin": item.country_of_origin,
             "category": {"id": item.category.id, "name_ar": item.category.name_ar} if item.category else None,
         }
         for item in items

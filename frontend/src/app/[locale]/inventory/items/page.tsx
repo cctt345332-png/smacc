@@ -42,6 +42,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [company, setCompany] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterTracking, setFilterTracking] = useState("");
@@ -50,6 +51,12 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
   const [editItem, setEditItem] = useState<any>(null);
   const [editForm, setEditForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogFields, setCatalogFields] = useState({
+    image: true, name: true, sku: true, barcode: false, price: true,
+    category: true, quantity: false, description: false, color: false,
+  });
 
   const load = async () => {
     try {
@@ -66,6 +73,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
   useEffect(() => {
     getCategories().then(({ data }) => setCategories(data)).catch(() => {});
     getWarehouses().then(({ data }) => setWarehouses(Array.isArray(data) ? data : (data?.items || []))).catch(() => {});
+    getCompany().then(({ data }) => setCompany(data || {})).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [filterTracking, filterCategory, filterLowStock]);
@@ -125,55 +133,38 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
   };
 
-  const exportToPDF = () => {
-    const filtered = items.filter(item => {
-      const q = search.toLowerCase();
-      return !q || item.name_ar?.toLowerCase().includes(q) || item.sku?.toLowerCase().includes(q) || item.barcode?.toLowerCase().includes(q);
-    });
-
-    const rows = filtered.map(item => `
-      <tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px">${item.sku || "—"}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-family:monospace;font-size:12px">${item.barcode || "—"}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;font-weight:500">${item.name_ar || ""}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280">${item.name_en || ""}</td>
-      </tr>`).join("");
-
-    const html = `<!DOCTYPE html><html dir="rtl" lang="ar">
-    <head><meta charset="UTF-8"><title>${ar ? "قائمة الأصناف" : "Items List"}</title>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #111; }
-      h1 { font-size: 18px; margin-bottom: 4px; }
-      .sub { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
-      table { width: 100%; border-collapse: collapse; }
-      thead tr { background: #5A187E; color: white; }
-      thead th { padding: 8px 10px; font-size: 12px; font-weight: 700; text-align: start; }
-      tbody tr:nth-child(even) { background: #f9fafb; }
-      @media print {
-        @page { margin: 15mm; size: A4 portrait; }
-        body { padding: 0; }
-      }
-    </style></head>
-    <body>
-      <h1>${ar ? "قائمة الأصناف" : "Items List"}</h1>
-      <p class="sub">${ar ? "الإجمالي:" : "Total:"} ${filtered.length} ${ar ? "صنف" : "items"} — ${new Date().toLocaleDateString("ar-SA")}</p>
-      <table>
-        <thead><tr>
-          <th>SKU</th>
-          <th>${ar ? "الباركود" : "Barcode"}</th>
-          <th>${ar ? "اسم الصنف" : "Item Name"}</th>
-          <th>${ar ? "الاسم بالإنجليزي" : "English Name"}</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </body></html>`;
-
+  const exportCatalog = () => {
+    const selected = items.filter(item => selectedIds.includes(item.id));
+    if (!selected.length) return alert(ar ? "حدد منتجًا واحدًا على الأقل" : "Select at least one product");
+    const esc = (value: any) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+    const imageOf = (item: any) => {
+      try {
+        const parsed = item.store_images_json ? JSON.parse(item.store_images_json) : [];
+        return Array.isArray(parsed) ? parsed[0] : (typeof parsed === "string" ? parsed : "");
+      } catch { return ""; }
+    };
+    const field = (item: any, key: string, label: string, value: any) => catalogFields[key as keyof typeof catalogFields] ? `<div class="field"><b>${label}</b><span>${esc(value || "—")}</span></div>` : "";
+    const cards = selected.map(item => `
+      <article class="product-card">
+        ${catalogFields.image ? `<div class="image-box">${imageOf(item) ? `<img src="${esc(imageOf(item))}" alt="${esc(item.name_ar)}" />` : `<span>مسار</span>`}</div>` : ""}
+        <div class="product-body">
+          ${catalogFields.name ? `<h2>${esc(item.name_ar)}</h2>${item.name_en ? `<div class="en-name">${esc(item.name_en)}</div>` : ""}` : ""}
+          ${field(item, "sku", "SKU", item.sku)}
+          ${field(item, "barcode", ar ? "الباركود" : "Barcode", item.barcode)}
+          ${field(item, "price", ar ? "سعر البيع شامل الضريبة" : "Sale price incl. VAT", item.sale_price ? `${fmt(item.sale_price)} SAR` : "—")}
+          ${field(item, "category", ar ? "التصنيف" : "Category", item.category?.name_ar)}
+          ${field(item, "quantity", ar ? "المتاح" : "Available", item.quantity_on_hand)}
+          ${field(item, "color", ar ? "اللون / السعة" : "Color / Storage", [item.color, item.storage].filter(Boolean).join(" / "))}
+          ${catalogFields.description && item.description_ar ? `<p class="description">${esc(item.description_ar)}</p>` : ""}
+        </div>
+      </article>`).join("");
+    const html = `<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>كتالوج المنتجات</title><style>
+      *{box-sizing:border-box}body{font-family:"Segoe UI",Tahoma,Arial,sans-serif;color:#24152d;background:#fff;margin:0;padding:12mm}header{display:flex;align-items:center;gap:18px;border-bottom:3px solid #5a187e;padding-bottom:12px;margin-bottom:18px}header img{width:76px;height:76px;object-fit:contain}header h1{margin:0;color:#5a187e;font-size:25px}header p{margin:4px 0 0;color:#6b7280;font-size:12px}.catalog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.product-card{border:1px solid #ded4e5;border-radius:10px;overflow:hidden;break-inside:avoid;background:#fff;box-shadow:0 2px 7px #32104412}.image-box{height:145px;background:#faf7fc;display:flex;align-items:center;justify-content:center;border-bottom:1px solid #eee}.image-box img{width:100%;height:100%;object-fit:contain;padding:8px}.image-box span{font-size:22px;font-weight:700;color:#5a187e}.product-body{padding:10px}.product-body h2{font-size:15px;margin:0;color:#351044;line-height:1.35}.en-name{font-size:10px;color:#777;margin-top:2px;direction:ltr;text-align:right}.field{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed #eee;padding:4px 0;font-size:10px}.field b{color:#777;font-weight:500}.field span{font-weight:700;text-align:left}.description{font-size:10px;color:#555;line-height:1.5;margin:7px 0 0}footer{margin-top:18px;border-top:1px solid #ddd;padding-top:8px;color:#777;font-size:10px;text-align:center}@media print{@page{size:A4 portrait;margin:10mm}body{padding:0}.product-card{box-shadow:none}.catalog-grid{gap:8px}}
+    </style></head><body><header>${company.logo_data ? `<img src="${esc(company.logo_data)}" alt="الشعار" />` : ""}<div><h1>${esc(company.name || "مسار")}</h1><p>كتالوج المنتجات — ${selected.length} صنف — ${new Date().toLocaleDateString("ar-SA")}</p></div></header><main class="catalog-grid">${cards}</main><footer>${esc(company.vat_number ? `الرقم الضريبي: ${company.vat_number}` : "مسار ERP")}</footer></body></html>`;
     const win = window.open("", "_blank");
     if (!win) return;
-    win.document.write(html);
-    win.document.close();
-    win.onload = () => { win.print(); };
+    win.document.write(html); win.document.close();
+    win.onload = () => setTimeout(() => win.print(), 300);
   };
 
   const getTrackingInfo = (type: string) => TRACKING_TYPES.find(t => t.value === type);
@@ -196,14 +187,14 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
           </Link>
           {/* زر إضافة سيريالات — يظهر فقط لنشاط الجوالات */}
           <SerialsButton locale={locale} ar={ar} />
-          <button className="btn btn-secondary" onClick={exportToPDF} title={ar ? "تصدير PDF" : "Export PDF"} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button className="btn btn-secondary" onClick={() => setCatalogOpen(true)} title={ar ? "إنشاء كتالوج" : "Create catalog"} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
               <line x1="12" y1="12" x2="12" y2="18"/>
               <polyline points="9 15 12 18 15 15"/>
             </svg>
-            {ar ? "تصدير PDF" : "Export PDF"}
+            {ar ? `كتالوج PDF${selectedIds.length ? ` (${selectedIds.length})` : ""}` : `PDF Catalog${selectedIds.length ? ` (${selectedIds.length})` : ""}`}
           </button>
           <Link href={`/${locale}/inventory/items/new`} className="btn btn-primary">
             <Icon name="plus" size={16} /> {ar ? "+ صنف جديد" : "+ New Item"}
@@ -255,6 +246,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
             <table>
               <thead>
                 <tr>
+                  <th style={{ width: 42 }}><input type="checkbox" checked={items.length > 0 && items.every(item => selectedIds.includes(item.id))} onChange={e => setSelectedIds(e.target.checked ? items.map(item => item.id) : [])} /></th>
                   <th>{ar ? "الصنف" : "Item"}</th>
                   <th>{ar ? "SKU / الباركود" : "SKU / Barcode"}</th>
                   <th>{ar ? "نوع التتبع" : "Tracking"}</th>
@@ -271,6 +263,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
                   const isLow = item.tracking_type === "quantity" && Number(item.quantity_on_hand) <= Number(item.reorder_point);
                   return (
                     <tr key={item.id} style={isLow ? { background: "#FFF5F5" } : {}}>
+                      <td><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={e => setSelectedIds(ids => e.target.checked ? [...new Set([...ids, item.id])] : ids.filter(id => id !== item.id))} /></td>
                       <td>
                         <Link href={`/${locale}/inventory/items/${item.id}`} style={{ fontWeight: 600, color: "var(--primary)", textDecoration: "none" }}>
                           {item.name_ar}
@@ -329,6 +322,34 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
           )}
         </div>
       </div>
+      {catalogOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 210, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 520, padding: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 18 }}>{ar ? "إعداد كتالوج المنتجات" : "Product catalog settings"}</h2>
+              <button className="btn btn-ghost btn-icon" onClick={() => setCatalogOpen(false)}>✕</button>
+            </div>
+            <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 0 }}>{ar ? `سيتم تصدير ${selectedIds.length} منتج محدد` : `${selectedIds.length} selected products will be exported`}</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, margin: "18px 0" }}>
+              {([
+                ["image", ar ? "صورة المنتج" : "Product image"], ["name", ar ? "اسم المنتج" : "Product name"],
+                ["sku", "SKU"], ["barcode", ar ? "الباركود" : "Barcode"], ["price", ar ? "سعر البيع" : "Sale price"],
+                ["category", ar ? "التصنيف" : "Category"], ["quantity", ar ? "الكمية" : "Quantity"],
+                ["color", ar ? "اللون والسعة" : "Color / Storage"], ["description", ar ? "الوصف" : "Description"],
+              ] as const).map(([key, label]) => (
+                <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer" }}>
+                  <input type="checkbox" checked={catalogFields[key]} onChange={e => setCatalogFields(fields => ({ ...fields, [key]: e.target.checked }))} />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => setCatalogOpen(false)}>{ar ? "إلغاء" : "Cancel"}</button>
+              <button className="btn btn-primary" onClick={() => { setCatalogOpen(false); setTimeout(exportCatalog, 0); }}>{ar ? "طباعة الكتالوج" : "Print catalog"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Modal التعديل */}
       {editItem && (
         <EditItemModal
