@@ -606,7 +606,9 @@ async def create_cash_outflow(db: AsyncSession, tenant_id: str, user_id: str, da
     cash_account = await db.get(Account, terminal.cash_account_id) if terminal.cash_account_id else None
     if not cash_account or cash_account.tenant_id != tenant_id or not cash_account.is_active or not cash_account.is_posting:
         raise HTTPException(409, "اربط حساب صندوق نشط وقابل للقيد بجهاز نقطة البيع أولًا")
-    expense_account = await get_operational_account(db, tenant_id, "other_expense")
+    # الخرج النقدي يستخدم حساب المصروفات التشغيلية المربوط في دليل الحسابات.
+    # other_expense ليس مفتاح ربط معتمدًا في DEFAULT_MAPPING_CODES.
+    expense_account = await get_operational_account(db, tenant_id, "operating_expenses")
     fiscal = await db.get(FiscalYear, terminal.fiscal_year_id) if terminal.fiscal_year_id else None
     if not fiscal:
         fiscal = await db.scalar(select(FiscalYear).where(FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN).order_by(FiscalYear.start_date).limit(1))
