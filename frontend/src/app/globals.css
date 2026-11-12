@@ -1220,7 +1220,8 @@ tbody tr:hover { background: #FAFBFC; }
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
-    overflow: visible !important;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
     background: #fff !important;
   }
 
@@ -1277,13 +1278,46 @@ tbody tr:hover { background: #FAFBFC; }
     max-width: 76mm !important;
     margin: 0 auto !important;
     overflow: hidden !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  /* حماية كل أجزاء الإيصال، وليس جدول الأصناف فقط، من إنشاء عرض أفقي زائد. */
+  body.thermal-print-mode .thermal-receipt > *,
+  body.thermal-print-mode .thermal-receipt .thermal-row,
+  body.thermal-print-mode .thermal-receipt .thermal-meta,
+  body.thermal-print-mode .thermal-receipt .thermal-line,
+  body.thermal-print-mode .thermal-receipt .thermal-line-extra,
+  body.thermal-print-mode .thermal-receipt .thermal-line-tax,
+  body.thermal-print-mode .thermal-receipt .thermal-footer,
+  body.thermal-print-mode .thermal-receipt .thermal-qr {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-row > *,
+  body.thermal-print-mode .thermal-receipt .thermal-meta > *,
+  body.thermal-print-mode .thermal-receipt .thermal-line-extra,
+  body.thermal-print-mode .thermal-receipt .thermal-line-tax,
+  body.thermal-print-mode .thermal-receipt .thermal-footer > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+  body.thermal-print-mode .thermal-receipt .thermal-row > span:last-child {
+    white-space: normal !important;
+    text-align: end !important;
   }
 
   /* شبكة ثابتة بدل flex؛ مجموع الأعمدة لا يتجاوز عرض الورقة. */
   body.thermal-print-mode .thermal-receipt .thermal-items-header,
   body.thermal-print-mode .thermal-receipt .thermal-line-main {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) 24px 40px 48px !important;
+    grid-template-columns: minmax(0, 1fr) 28px 58px !important;
     column-gap: 1px !important;
     align-items: start !important;
     justify-content: stretch !important;

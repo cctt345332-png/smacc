@@ -203,7 +203,6 @@ export default function ThermalReceipt({
         <span style={{ flex: 2, display: "flex", justifyContent: "space-between" }}><span dir="ltr">Item</span><span dir="rtl">الصنف</span></span>
         <span style={{ textAlign: "center", width: 30 }}>Qty<br /><small>كمية</small></span>
         <span style={{ textAlign: "center", width: 45 }}>Price<br /><small>سعر</small></span>
-        <span style={{ textAlign: "left", width: 50 }}>Total<br /><small>إجمالي</small></span>
       </div>
 
       {/* ── أسطر الأصناف ── */}
@@ -216,7 +215,6 @@ export default function ThermalReceipt({
               <span style={{ flex: 2, lineHeight: 1.3 }}>{line.product_name_ar}</span>
               <span style={{ textAlign: "center", width: 30 }}>{line.quantity}</span>
               <span style={{ textAlign: "center", width: 45 }}>{fmt(line.unit_price)}</span>
-              <span style={{ textAlign: "left", width: 50, fontWeight: 600 }}>{fmt(line.total)}</span>
             </div>
             {/* تفاصيل إضافية */}
             {line.serial_number && (
