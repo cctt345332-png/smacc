@@ -151,3 +151,17 @@ async def pos_top_items_report(
 ):
     """أفضل الأصناف مبيعاً في POS"""
     return await service.get_top_items_report(db, tenant_id, from_date, to_date, limit)
+
+
+@router.get("/reports/terminal-performance")
+async def pos_terminal_performance_report(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    terminal_id: Optional[str] = None,
+    tenant_id=Depends(get_tenant_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """أداء كل جهاز: المبيعات، التكلفة، الربح، ومصروفات درج الكاشير."""
+    return await service.get_terminal_performance_report(
+        db, tenant_id, from_date, to_date, terminal_id
+    )

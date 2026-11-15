@@ -1564,3 +1564,130 @@ async def get_top_items_report(
             "period_to": to_date,
         }
     }
+
+
+async def get_terminal_performance_report(
+    db: AsyncSession,
+    tenant_id: str,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    terminal_id: str | None = None,
+) -> dict:
+    """تقرير أداء أجهزة POS: المبيعات والتكلفة والربح ومخرجات النقد."""
+    from datetime import datetime as dt, time as dt_time
+    from app.models.inventory import InventoryItem, SerialItem, BatchItem, ProductVariant
+
+    try:
+        start = dt.fromisoformat(from_date).replace(hour=0, minute=0, second=0, microsecond=0) if from_date else None
+        end = dt.fromisoformat(to_date).replace(hour=23, minute=59, second=59, microsecond=999999) if to_date else None
+    except ValueError:
+        raise HTTPException(400, "صيغة التاريخ غير صحيحة")
+
+    terminals_q = select(POSTerminal).where(POSTerminal.tenant_id == tenant_id)
+    if terminal_id:
+        terminals_q = terminals_q.where(POSTerminal.id == terminal_id)
+    terminals = (await db.execute(terminals_q.order_by(POSTerminal.name))).scalars().all()
+    if terminal_id and not terminals:
+        raise HTTPException(404, "جهاز نقطة البيع غير موجود")
+
+    tx_q = (
+        select(POSTransaction)
+        .join(POSSession, POSSession.id == POSTransaction.session_id)
+        .where(
+            POSTransaction.tenant_id == tenant_id,
+            POSTransaction.status == TX_COMPLETED,
+        )
+        .options(selectinload(POSTransaction.lines))
+    )
+    if terminal_id:
+        tx_q = tx_q.where(POSSession.terminal_id == terminal_id)
+    if start:
+        tx_q = tx_q.where(POSTransaction.created_at >= start)
+    if end:
+        tx_q = tx_q.where(POSTransaction.created_at <= end)
+    transactions = (await db.execute(tx_q)).scalars().all()
+
+    outflow_q = (
+        select(POSCashOutflow)
+        .join(POSSession, POSSession.id == POSCashOutflow.session_id)
+        .where(POSCashOutflow.tenant_id == tenant_id)
+    )
+    if terminal_id:
+        outflow_q = outflow_q.where(POSCashOutflow.terminal_id == terminal_id)
+    if start:
+        outflow_q = outflow_q.where(POSCashOutflow.created_at >= start)
+    if end:
+        outflow_q = outflow_q.where(POSCashOutflow.created_at <= end)
+    outflows = (await db.execute(outflow_q)).scalars().all()
+
+    # تكلفة السطر تؤخذ من الوحدة الفعلية عند وجود سيريال/تشغيلة/متغير،
+    # وإلا من متوسط تكلفة الصنف. هذا يمنع احتساب الربح من سعر البيع فقط.
+    serial_ids = {line.serial_item_id for tx in transactions for line in tx.lines if line.serial_item_id}
+    batch_ids = {line.batch_id for tx in transactions for line in tx.lines if line.batch_id}
+    variant_ids = {line.variant_id for tx in transactions for line in tx.lines if line.variant_id}
+    item_ids = {line.inventory_item_id for tx in transactions for line in tx.lines if line.inventory_item_id}
+    serial_costs = {x.id: x.cost_price for x in (await db.execute(select(SerialItem).where(SerialItem.id.in_(serial_ids)))).scalars().all()} if serial_ids else {}
+    batch_costs = {x.id: x.cost_price for x in (await db.execute(select(BatchItem).where(BatchItem.id.in_(batch_ids)))).scalars().all()} if batch_ids else {}
+    variant_costs = {x.id: x.cost_price for x in (await db.execute(select(ProductVariant).where(ProductVariant.id.in_(variant_ids)))).scalars().all()} if variant_ids else {}
+    item_costs = {x.id: x.cost_price for x in (await db.execute(select(InventoryItem).where(InventoryItem.id.in_(item_ids)))).scalars().all()} if item_ids else {}
+
+    def blank(t: POSTerminal) -> dict:
+        return {
+            "terminal_id": t.id, "terminal_name": t.name, "branch_name": t.branch_name,
+            "warehouse_id": t.warehouse_id, "sessions": 0, "transactions": 0,
+            "sales": Decimal("0"), "cost": Decimal("0"), "gross_profit": Decimal("0"),
+            "expenses": Decimal("0"), "net_profit": Decimal("0"),
+            "cash": Decimal("0"), "card": Decimal("0"), "tabby": Decimal("0"), "tamara": Decimal("0"),
+        }
+
+    rows = {t.id: blank(t) for t in terminals}
+    session_ids = {tx.session_id for tx in transactions}
+    session_terminal_rows = await db.execute(select(POSSession.id, POSSession.terminal_id).where(POSSession.id.in_(session_ids))) if session_ids else None
+    session_terminal = dict(session_terminal_rows.all()) if session_terminal_rows else {}
+
+    for tx in transactions:
+        tid = session_terminal.get(tx.session_id)
+        if tid not in rows:
+            continue
+        row = rows[tid]
+        row["transactions"] += 1
+        row["sales"] += tx.total or Decimal("0")
+        method = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
+        if method == "cash": row["cash"] += tx.total or Decimal("0")
+        elif method in ("tabby",): row["tabby"] += tx.total or Decimal("0")
+        elif method in ("tamara",): row["tamara"] += tx.total or Decimal("0")
+        else: row["card"] += tx.total or Decimal("0")
+        for line in tx.lines:
+            if line.serial_item_id:
+                unit_cost = serial_costs.get(line.serial_item_id, Decimal("0"))
+            elif line.batch_id:
+                unit_cost = batch_costs.get(line.batch_id, Decimal("0"))
+            elif line.variant_id:
+                unit_cost = variant_costs.get(line.variant_id, Decimal("0"))
+            else:
+                unit_cost = item_costs.get(line.inventory_item_id, Decimal("0"))
+            row["cost"] += (line.quantity or Decimal("0")) * (unit_cost or Decimal("0"))
+
+    for outflow in outflows:
+        if outflow.terminal_id in rows:
+            rows[outflow.terminal_id]["expenses"] += outflow.amount or Decimal("0")
+    for row in rows.values():
+        row["gross_profit"] = row["sales"] - row["cost"]
+        row["net_profit"] = row["gross_profit"] - row["expenses"]
+        row["sales"] = float(row["sales"]); row["cost"] = float(row["cost"])
+        row["gross_profit"] = float(row["gross_profit"]); row["expenses"] = float(row["expenses"])
+        row["net_profit"] = float(row["net_profit"])
+        for key in ("cash", "card", "tabby", "tamara"):
+            row[key] = float(row[key])
+
+    # عدد الجلسات حسب تاريخ الفتح، مستقل عن وجود مبيعات في الجلسة.
+    sessions_q = select(POSSession.terminal_id).where(POSSession.tenant_id == tenant_id)
+    if terminal_id: sessions_q = sessions_q.where(POSSession.terminal_id == terminal_id)
+    if start: sessions_q = sessions_q.where(POSSession.opened_at >= start)
+    if end: sessions_q = sessions_q.where(POSSession.opened_at <= end)
+    for tid in (await db.execute(sessions_q)).scalars().all():
+        if tid in rows: rows[tid]["sessions"] += 1
+
+    values = list(rows.values())
+    totals = {key: sum((r[key] for r in values), 0) for key in ("sessions", "transactions", "sales", "cost", "gross_profit", "expenses", "net_profit", "cash", "card", "tabby", "tamara")}
+    return {"from_date": from_date, "to_date": to_date, "terminal_id": terminal_id, "totals": totals, "terminals": values}

@@ -5,199 +5,30 @@ import api from "@/lib/api";
 import { Icon } from "@/components/ui/Icons";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 
-const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: "نقدي", mada: "مدى", credit_card: "بطاقة ائتمان", stc_pay: "STC Pay", split: "مقسّم",
-};
+const fmt = (n: number) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const today = () => new Date().toISOString().slice(0, 10);
+const monthAgo = () => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); };
+type Row = { terminal_id: string; terminal_name: string; branch_name?: string | null; sessions: number; transactions: number; sales: number; cost: number; gross_profit: number; expenses: number; net_profit: number; cash: number; card: number; tabby: number; tamara: number; };
 
 export default function POSSalesReportPage(props: { params: Promise<{ locale: string }> }) {
-  const params = use(props.params);
-
-  const {
-    locale
-  } = params;
-
-  const ar = locale === "ar";
-  const sar = ar ? "ر.س" : "SAR";
-
-  const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 30);
-    return d.toISOString().slice(0, 10);
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().slice(0, 10));
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const r = await api.get("/pos/sessions", { params: { limit: 200 } });
-      setSessions(r.data || []);
-    } catch { setSessions([]); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, []);
-
-  // فلترة حسب التاريخ
-  const filtered = sessions.filter(s => {
-    const d = s.opened_at?.slice(0, 10);
-    return d >= dateFrom && d <= dateTo;
-  });
-
-  // إجماليات
-  const totalSales = filtered.reduce((s, x) => s + Number(x.total_sales || 0), 0);
-  const totalCash  = filtered.reduce((s, x) => s + Number(x.total_cash  || 0), 0);
-  const totalCard  = filtered.reduce((s, x) => s + Number(x.total_card  || 0), 0);
-  const totalVat   = filtered.reduce((s, x) => s + Number(x.total_vat   || 0), 0);
-  const totalTxns  = filtered.reduce((s, x) => s + Number(x.transaction_count || 0), 0);
-
-  // مبيعات يومية
-  const byDay: Record<string, number> = {};
-  filtered.forEach(s => {
-    const day = s.opened_at?.slice(0, 10) || "";
-    byDay[day] = (byDay[day] || 0) + Number(s.total_sales || 0);
-  });
-  const days = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
-
-  return (
-    <>
-      <div className="page-header">
-        <div>
-          <div className="breadcrumb">
-            <Link href={`/${locale}/reports`}>{ar ? "التقارير" : "Reports"}</Link>
-            <span className="breadcrumb-sep">/</span>
-            <span>{ar ? "مبيعات نقطة البيع" : "POS Sales"}</span>
-          </div>
-          <h1 className="page-title">{ar ? "تقرير مبيعات نقطة البيع" : "POS Sales Report"}</h1>
-        </div>
-        <StructuredReportPrintButton locale={locale} title={ar ? "تقرير مبيعات نقطة البيع" : "POS Sales Report"} subtitle={ar ? "المبيعات اليومية والجلسات وطرق التحصيل" : "Daily sales, sessions and collections"} period={`${dateFrom} — ${dateTo}`} reportCode={`POS-SALES-${dateTo.replaceAll("-", "")}`} orientation="landscape" metrics={[{ label: ar ? "إجمالي المبيعات" : "Total sales", value: `${fmt(totalSales)} ${sar}`, tone: "green" }, { label: ar ? "إجمالي النقد" : "Cash", value: `${fmt(totalCash)} ${sar}`, tone: "blue" }, { label: ar ? "إجمالي البطاقة" : "Card", value: `${fmt(totalCard)} ${sar}`, tone: "blue" }, { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: `${fmt(totalVat)} ${sar}`, tone: "amber" }, { label: ar ? "المعاملات" : "Transactions", value: String(totalTxns), tone: "green" }]} tables={[{ title: ar ? "المبيعات اليومية" : "Daily sales", headers: [ar ? "التاريخ" : "Date", ar ? "المبيعات" : "Sales", ar ? "النسبة" : "Share"], rows: days.map(([day, amount]) => [new Date(day).toLocaleDateString(ar ? "ar-SA" : "en-US"), `${fmt(amount)} ${sar}`, `${totalSales > 0 ? ((amount / totalSales) * 100).toFixed(1) : "0.0"}%`]), totals: [ar ? "الإجمالي" : "TOTAL", `${fmt(totalSales)} ${sar}`, "100.0%"] }, { title: ar ? "ملخص الجلسات" : "Session summary", headers: [ar ? "التاريخ" : "Date", ar ? "المبيعات" : "Sales", ar ? "نقدي" : "Cash", ar ? "بطاقة" : "Card", ar ? "الضريبة" : "VAT", ar ? "المعاملات" : "Txns", ar ? "الحالة" : "Status"], rows: filtered.map(s => [new Date(s.opened_at).toLocaleString(ar ? "ar-SA" : "en-US"), `${fmt(Number(s.total_sales || 0))} ${sar}`, `${fmt(Number(s.total_cash || 0))} ${sar}`, `${fmt(Number(s.total_card || 0))} ${sar}`, `${fmt(Number(s.total_vat || 0))} ${sar}`, String(s.transaction_count || 0), s.status === "open" ? (ar ? "مفتوحة" : "Open") : (ar ? "مغلقة" : "Closed")]) }]} />
-      </div>
-
-      {/* فلتر التاريخ */}
-      <div className="card" style={{ padding: "14px 20px", marginBottom: 20, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">{ar ? "من" : "From"}</label>
-          <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-        </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">{ar ? "إلى" : "To"}</label>
-          <input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-        </div>
-        <button className="btn btn-primary" onClick={load}>
-          <Icon name="search" size={15} />{ar ? "تحديث" : "Refresh"}
-        </button>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid-4" style={{ marginBottom: 24 }}>
-        {[
-          { label: ar ? "إجمالي المبيعات"       : "Total Sales",    value: `${fmt(totalSales)} ${sar}`, icon: "revenue" as const, color: "#6F4A84", bg: "#F4EFF7" },
-          { label: ar ? "إجمالي النقد"           : "Cash",           value: `${fmt(totalCash)} ${sar}`,  icon: "cash"    as const, color: "#5A187E", bg: "#EFF6FF" },
-          { label: ar ? "إجمالي البطاقة"         : "Card",           value: `${fmt(totalCard)} ${sar}`,  icon: "card"    as const, color: "#75617F", bg: "#F5F3FF" },
-          { label: ar ? "ضريبة القيمة المضافة"   : "VAT",            value: `${fmt(totalVat)} ${sar}`,   icon: "tax"     as const, color: "#D97706", bg: "#FFFBEB" },
-        ].map(s => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-icon" style={{ background: s.bg, color: s.color }}><Icon name={s.icon} size={20} /></div>
-            <div className="stat-value">{s.value}</div>
-            <div className="stat-label">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* مبيعات يومية */}
-      {days.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header">
-            <h3 className="card-title"><Icon name="chart" size={16} />{ar ? "المبيعات اليومية" : "Daily Sales"}</h3>
-            <span className="badge badge-gray">{totalTxns} {ar ? "معاملة" : "txns"}</span>
-          </div>
-          <div className="table-wrapper" style={{ border: "none" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>{ar ? "التاريخ" : "Date"}</th>
-                  <th>{ar ? "المبيعات" : "Sales"}</th>
-                  <th>{ar ? "النسبة" : "%"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {days.map(([day, amount]) => (
-                  <tr key={day}>
-                    <td style={{ fontWeight: 600 }}>{new Date(day).toLocaleDateString(ar ? "ar-SA" : "en-US", { weekday: "short", year: "numeric", month: "short", day: "numeric" })}</td>
-                    <td style={{ fontWeight: 700, color: "var(--success)" }}>{fmt(amount)} {sar}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${totalSales > 0 ? (amount / totalSales) * 100 : 0}%`, background: "#6F4A84", borderRadius: 3 }} />
-                        </div>
-                        <span style={{ fontSize: 11, color: "var(--text-muted)", minWidth: 36 }}>
-                          {totalSales > 0 ? ((amount / totalSales) * 100).toFixed(1) : 0}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* الجلسات */}
-      <div className="card">
-        <div className="card-header">
-          <h3 className="card-title"><Icon name="session" size={16} />{ar ? "الجلسات" : "Sessions"}</h3>
-          <span className="badge badge-gray">{filtered.length}</span>
-        </div>
-        {loading ? (
-          <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)" }}>{ar ? "جاري التحميل..." : "Loading..."}</div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state"><div className="empty-state-title">{ar ? "لا توجد بيانات" : "No data"}</div></div>
-        ) : (
-          <div className="table-wrapper" style={{ border: "none" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>{ar ? "التاريخ" : "Date"}</th>
-                  <th>{ar ? "المبيعات" : "Sales"}</th>
-                  <th>{ar ? "نقدي" : "Cash"}</th>
-                  <th>{ar ? "بطاقة" : "Card"}</th>
-                  <th>{ar ? "ضريبة" : "VAT"}</th>
-                  <th>{ar ? "معاملات" : "Txns"}</th>
-                  <th>{ar ? "الحالة" : "Status"}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(s => (
-                  <tr key={s.id}>
-                    <td style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                      {new Date(s.opened_at).toLocaleDateString(ar ? "ar-SA" : "en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </td>
-                    <td style={{ fontWeight: 700, color: "var(--success)" }}>{fmt(Number(s.total_sales))} {sar}</td>
-                    <td>{fmt(Number(s.total_cash))} {sar}</td>
-                    <td>{fmt(Number(s.total_card))} {sar}</td>
-                    <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{fmt(Number(s.total_vat))} {sar}</td>
-                    <td><span className="badge badge-gray">{s.transaction_count}</span></td>
-                    <td>
-                      <span className={`badge ${s.status === "open" ? "badge-success" : "badge-gray"}`}>
-                        {s.status === "open" ? (ar ? "مفتوحة" : "Open") : (ar ? "مغلقة" : "Closed")}
-                      </span>
-                    </td>
-                    <td>
-                      <Link href={`/${locale}/pos/sessions/${s.id}`} className="btn btn-ghost btn-sm">
-                        <Icon name="view" size={13} />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </>
-  );
+  const { locale } = use(props.params); const ar = locale === "ar"; const sar = ar ? "ر.س" : "SAR";
+  const [dateFrom, setDateFrom] = useState(monthAgo); const [dateTo, setDateTo] = useState(today); const [terminalId, setTerminalId] = useState("");
+  const [terminals, setTerminals] = useState<any[]>([]); const [rows, setRows] = useState<Row[]>([]); const [totals, setTotals] = useState<any>({}); const [loading, setLoading] = useState(true);
+  const load = async () => { setLoading(true); try { const r = await api.get("/pos/reports/terminal-performance", { params: { from_date: dateFrom, to_date: dateTo, terminal_id: terminalId || undefined } }); setRows(r.data?.terminals || []); setTotals(r.data?.totals || {}); } catch { setRows([]); setTotals({}); } finally { setLoading(false); } };
+  useEffect(() => { api.get("/pos/terminals").then(r => setTerminals(r.data || [])).catch(() => setTerminals([])); load(); }, []);
+  const money = (value: number) => `${fmt(value)} ${sar}`;
+  const printRows = rows.map(r => [r.terminal_name, r.branch_name || "—", money(r.sales), money(r.cost), money(r.gross_profit), money(r.expenses), money(r.net_profit), String(r.transactions)]);
+  const metrics = [
+    { label: ar ? "إجمالي المبيعات" : "Total Sales", value: money(totals.sales), icon: "revenue" as const, color: "#6F4A84", bg: "#F4EFF7" },
+    { label: ar ? "إجمالي الربح" : "Gross Profit", value: money(totals.gross_profit), icon: "chart" as const, color: "#15803D", bg: "#F0FDF4" },
+    { label: ar ? "إجمالي المصروفات" : "Expenses", value: money(totals.expenses), icon: "cash" as const, color: "#B45309", bg: "#FFFBEB" },
+    { label: ar ? "الصافي بعد المصروفات" : "Net Profit", value: money(totals.net_profit), icon: "revenue" as const, color: "#5A187E", bg: "#F5F3FF" },
+  ];
+  return <>
+    <div className="page-header"><div><div className="breadcrumb"><Link href={`/${locale}/reports`}>{ar ? "التقارير" : "Reports"}</Link><span className="breadcrumb-sep">/</span><span>{ar ? "أداء نقاط البيع" : "POS Performance"}</span></div><h1 className="page-title">{ar ? "تقرير أداء أجهزة نقاط البيع" : "POS Terminal Performance"}</h1><p style={{ margin: "6px 0 0", color: "var(--text-muted)", fontSize: 13 }}>{ar ? "المبيعات والتكلفة والربح ومصروفات كل جهاز خلال الفترة المحددة" : "Sales, cost, profit and cash expenses for each terminal"}</p></div><StructuredReportPrintButton locale={locale} title={ar ? "تقرير أداء أجهزة نقاط البيع" : "POS Terminal Performance"} subtitle={ar ? "المبيعات والأرباح والمصروفات حسب الجهاز" : "Sales, profit and expenses by terminal"} period={`${dateFrom} — ${dateTo}`} reportCode={`POS-PERF-${dateTo.replaceAll("-", "")}`} orientation="landscape" metrics={metrics.map((m, i) => ({ label: m.label, value: m.value, tone: i === 2 ? "amber" : "green" }))} tables={[{ title: ar ? "أداء الأجهزة" : "Terminal performance", headers: [ar ? "الجهاز" : "Terminal", ar ? "المحل" : "Branch", ar ? "المبيعات" : "Sales", ar ? "التكلفة" : "Cost", ar ? "الربح" : "Profit", ar ? "المصروفات" : "Expenses", ar ? "الصافي" : "Net", ar ? "العمليات" : "Txns"], rows: printRows, totals: [ar ? "الإجمالي" : "TOTAL", "", money(totals.sales), money(totals.cost), money(totals.gross_profit), money(totals.expenses), money(totals.net_profit), String(totals.transactions || 0)] }]} /></div>
+    <div className="card" style={{ padding: "14px 20px", marginBottom: 20, display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap" }}><div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">{ar ? "من تاريخ" : "From"}</label><input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div><div className="form-group" style={{ marginBottom: 0 }}><label className="form-label">{ar ? "إلى تاريخ" : "To"}</label><input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div><div className="form-group" style={{ marginBottom: 0, minWidth: 220 }}><label className="form-label">{ar ? "الجهاز / الكاشير" : "Terminal"}</label><select className="form-input" value={terminalId} onChange={e => setTerminalId(e.target.value)}><option value="">{ar ? "كل الأجهزة" : "All terminals"}</option>{terminals.map(t => <option key={t.id} value={t.id}>{t.name}{t.branch_name ? ` — ${t.branch_name}` : ""}</option>)}</select></div><button className="btn btn-primary" onClick={load}><Icon name="search" size={15} />{ar ? "عرض التقرير" : "Run report"}</button></div>
+    <div className="grid-4" style={{ marginBottom: 24 }}>{metrics.map(m => <div key={m.label} className="stat-card"><div className="stat-icon" style={{ background: m.bg, color: m.color }}><Icon name={m.icon} size={20} /></div><div className="stat-value">{m.value}</div><div className="stat-label">{m.label}</div></div>)}</div>
+    <div className="grid-4" style={{ marginBottom: 24 }}>{[{ label: ar ? "عدد الأجهزة" : "Terminals", value: rows.length, icon: "terminal" }, { label: ar ? "الجلسات" : "Sessions", value: totals.sessions || 0, icon: "session" }, { label: ar ? "العمليات" : "Transactions", value: totals.transactions || 0, icon: "receipt" }, { label: ar ? "تكلفة البضاعة" : "COGS", value: money(totals.cost), icon: "inventory" }].map((x: any) => <div className="card" key={x.label} style={{ padding: 16, display: "flex", alignItems: "center", gap: 12 }}><Icon name={x.icon} size={20} /><div><div style={{ fontSize: 12, color: "var(--text-muted)" }}>{x.label}</div><strong style={{ fontSize: 18 }}>{typeof x.value === "number" ? x.value.toLocaleString("en-US") : x.value}</strong></div></div>)}</div>
+    <div className="card"><div className="card-header"><h3 className="card-title"><Icon name="chart" size={16} />{ar ? "أداء الأجهزة" : "Terminal Performance"}</h3><span className="badge badge-gray">{rows.length} {ar ? "جهاز" : "terminals"}</span></div>{loading ? <div style={{ padding: 32, textAlign: "center", color: "var(--text-muted)" }}>{ar ? "جاري تحميل التقرير..." : "Loading report..."}</div> : rows.length === 0 ? <div className="empty-state"><div className="empty-state-title">{ar ? "لا توجد مبيعات أو أجهزة ضمن الفترة" : "No terminals or sales in this period"}</div></div> : <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "الجهاز" : "Terminal"}</th><th>{ar ? "المحل" : "Branch"}</th><th>{ar ? "الجلسات" : "Sessions"}</th><th>{ar ? "العمليات" : "Txns"}</th><th>{ar ? "المبيعات" : "Sales"}</th><th>{ar ? "التكلفة" : "Cost"}</th><th>{ar ? "الربح" : "Gross Profit"}</th><th>{ar ? "المصروفات" : "Expenses"}</th><th>{ar ? "الصافي" : "Net Profit"}</th><th>{ar ? "طرق الدفع" : "Payments"}</th></tr></thead><tbody>{rows.map(r => <tr key={r.terminal_id}><td style={{ fontWeight: 700 }}>{r.terminal_name}</td><td>{r.branch_name || "—"}</td><td>{r.sessions}</td><td><span className="badge badge-gray">{r.transactions}</span></td><td style={{ fontWeight: 700, color: "var(--success)" }}>{money(r.sales)}</td><td>{money(r.cost)}</td><td style={{ fontWeight: 700, color: r.gross_profit >= 0 ? "var(--success)" : "var(--danger)" }}>{money(r.gross_profit)}</td><td style={{ color: "#B45309" }}>{money(r.expenses)}</td><td style={{ fontWeight: 800, color: r.net_profit >= 0 ? "var(--success)" : "var(--danger)" }}>{money(r.net_profit)}</td><td style={{ fontSize: 11, lineHeight: 1.7 }}>{ar ? "نقدي" : "Cash"}: {fmt(r.cash)}<br />{ar ? "بطاقة" : "Card"}: {fmt(r.card)}<br />Tabby: {fmt(r.tabby)}<br />Tamara: {fmt(r.tamara)}</td></tr>)}</tbody><tfoot><tr><th colSpan={2}>{ar ? "الإجمالي" : "TOTAL"}</th><th>{totals.sessions || 0}</th><th>{totals.transactions || 0}</th><th>{money(totals.sales)}</th><th>{money(totals.cost)}</th><th>{money(totals.gross_profit)}</th><th>{money(totals.expenses)}</th><th>{money(totals.net_profit)}</th><th /></tr></tfoot></table></div>}</div>
+  </>;
 }
