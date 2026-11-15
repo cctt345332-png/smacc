@@ -22,6 +22,7 @@ import app.models.system_config  # noqa
 import app.models.reps  # noqa
 import app.models.maintenance  # noqa
 import app.models.expenses  # noqa
+import app.models.settlements  # noqa
 import app.models.audit  # noqa
 import app.models.notifications  # noqa
 
