@@ -102,6 +102,15 @@ async def ingest_logs(db: AsyncSession, tenant_id: str, device_id: str, payload:
     return {"accepted": accepted, "skipped": skipped, "processed": processed, "message": "تم استقبال سجلات البصمة بدون تكرار"}
 
 
+async def ingest_logs_by_device_key(db: AsyncSession, device_id: str, payload: list[dict], device_key: str | None = None):
+    device = await db.scalar(select(BiometricDevice).where(BiometricDevice.id == device_id, BiometricDevice.is_active.is_(True)))
+    if not device:
+        raise HTTPException(404, "جهاز البصمة غير موجود أو غير فعال")
+    if not device_key or not device.api_key_hash or not secrets.compare_digest(hashlib.sha256(device_key.encode()).hexdigest(), device.api_key_hash):
+        raise HTTPException(401, "مفتاح جهاز البصمة غير صحيح")
+    return await ingest_logs(db, device.tenant_id, device_id, payload, device_key)
+
+
 async def list_logs(db: AsyncSession, tenant_id: str, device_id: str | None = None, unprocessed_only: bool = False):
     q = select(BiometricLog).where(BiometricLog.tenant_id == tenant_id).order_by(BiometricLog.occurred_at.desc()).limit(500)
     if device_id: q = q.where(BiometricLog.device_id == device_id)

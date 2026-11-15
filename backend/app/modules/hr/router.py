@@ -37,9 +37,9 @@ async def save_biometric_link(data: dict, user=Depends(require_role(["manager", 
 
 
 @router.post("/biometric/devices/{device_id}/logs")
-async def ingest_biometric_logs(device_id: str, data: dict, x_device_key: Optional[str] = Header(None), tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+async def ingest_biometric_logs(device_id: str, data: dict, x_device_key: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     logs = data.get("logs") if isinstance(data, dict) else data
-    return await biometric_service.ingest_logs(db, tenant_id, device_id, logs or [], x_device_key)
+    return await biometric_service.ingest_logs_by_device_key(db, device_id, logs or [], x_device_key)
 
 
 @router.get("/biometric/logs")
