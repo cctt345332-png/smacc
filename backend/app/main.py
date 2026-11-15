@@ -19,6 +19,7 @@ from app.modules.admin.router import router as admin_router
 from app.modules.ai.router import router as ai_router
 from app.modules.ai.admin_router import router as ai_admin_router
 from app.modules.hr.router import router as hr_router
+from app.modules.hr.adms_router import router as adms_router
 from app.modules.ecommerce.router import router as ecommerce_router
 from app.modules.reps.router import router as reps_router
 from app.modules.supervisor.router import router as supervisor_router
@@ -189,6 +190,7 @@ app.include_router(admin_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 app.include_router(ai_admin_router, prefix="/api/v1")
 app.include_router(hr_router, prefix="/api/v1")
+app.include_router(adms_router)
 app.include_router(ecommerce_router, prefix="/api/v1")
 app.include_router(reps_router, prefix="/api/v1")
 app.include_router(supervisor_router, prefix="/api/v1")

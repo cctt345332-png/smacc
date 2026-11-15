@@ -14,6 +14,7 @@ def _device_dict(device: BiometricDevice, include_key: str | None = None):
     row = {
         "id": device.id, "name": device.name, "device_type": device.device_type,
         "connection_mode": device.connection_mode, "host": device.host, "port": device.port,
+        "serial_number": device.serial_number,
         "branch_id": device.branch_id, "is_active": device.is_active,
         "last_sync_at": device.last_sync_at, "last_sync_status": device.last_sync_status,
     }
@@ -32,6 +33,7 @@ async def create_device(db: AsyncSession, tenant_id: str, data: dict):
     device = BiometricDevice(
         id=str(uuid.uuid4()), tenant_id=tenant_id, name=str(data.get("name") or "جهاز بصمة"),
         device_type=str(data.get("device_type") or "generic"), connection_mode=str(data.get("connection_mode") or "agent"),
+        serial_number=str(data.get("serial_number") or "").strip() or None,
         host=data.get("host"), port=int(data["port"]) if data.get("port") else None, branch_id=data.get("branch_id"),
         api_key_hash=hashlib.sha256(key.encode()).hexdigest(), is_active=bool(data.get("is_active", True)),
     )
@@ -45,7 +47,7 @@ async def update_device(db: AsyncSession, tenant_id: str, device_id: str, data: 
     device = await db.scalar(select(BiometricDevice).where(BiometricDevice.id == device_id, BiometricDevice.tenant_id == tenant_id))
     if not device:
         raise HTTPException(404, "جهاز البصمة غير موجود")
-    for field in ("name", "device_type", "connection_mode", "host", "branch_id", "last_sync_status"):
+    for field in ("name", "device_type", "connection_mode", "serial_number", "host", "branch_id", "last_sync_status"):
         if field in data: setattr(device, field, data[field])
     if "port" in data: device.port = int(data["port"]) if data["port"] else None
     if "is_active" in data: device.is_active = bool(data["is_active"])
@@ -109,6 +111,37 @@ async def ingest_logs_by_device_key(db: AsyncSession, device_id: str, payload: l
     if not device_key or not device.api_key_hash or not secrets.compare_digest(hashlib.sha256(device_key.encode()).hexdigest(), device.api_key_hash):
         raise HTTPException(401, "مفتاح جهاز البصمة غير صحيح")
     return await ingest_logs(db, device.tenant_id, device_id, payload, device_key)
+
+
+async def ingest_adms_logs(db: AsyncSession, device: BiometricDevice, payload: list[dict]):
+    """Store rows received through the device's authenticated ADMS identity."""
+    accepted = 0
+    skipped = 0
+    for item in payload:
+        user_id = str(item.get("device_user_id") or "").strip()
+        occurred = item.get("occurred_at")
+        if not user_id or not occurred:
+            continue
+        try:
+            occurred_at = datetime.fromisoformat(str(occurred).replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            continue
+        external_id = str(item.get("external_id") or f"adms:{device.id}:{user_id}:{occurred_at.isoformat()}")
+        exists = await db.scalar(select(BiometricLog.id).where(BiometricLog.external_id == external_id))
+        if exists:
+            skipped += 1
+            continue
+        db.add(BiometricLog(
+            id=str(uuid.uuid4()), tenant_id=device.tenant_id, device_id=device.id,
+            device_user_id=user_id, occurred_at=occurred_at,
+            event_type=item.get("event_type") or "punch",
+            external_id=external_id, raw_payload=json.dumps(item, ensure_ascii=False), processed=False,
+        ))
+        accepted += 1
+    device.last_sync_at = datetime.utcnow()
+    device.last_sync_status = f"adms:{accepted}"
+    await db.commit()
+    return {"accepted": accepted, "skipped": skipped}
 
 
 async def list_logs(db: AsyncSession, tenant_id: str, device_id: str | None = None, unprocessed_only: bool = False):

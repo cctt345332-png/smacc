@@ -114,6 +114,7 @@ class BiometricDevice(Base):
     name: Mapped[str] = mapped_column(String(150))
     device_type: Mapped[str] = mapped_column(String(40), default="generic")
     connection_mode: Mapped[str] = mapped_column(String(20), default="agent")
+    serial_number: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     host: Mapped[str | None] = mapped_column(String(255), nullable=True)
     port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     branch_id: Mapped[str | None] = mapped_column(String, nullable=True)

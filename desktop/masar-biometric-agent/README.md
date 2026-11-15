@@ -10,7 +10,7 @@
 
 ```json
 {
-  "server_url": "https://www.masa-erp.com",
+  "server_url": "https://api.masa-erp.com",
   "device_id": "معرف الجهاز من مسار",
   "device_key": "مفتاح الجهاز من مسار",
   "watch_folder": "C:/MasarBiometricAgent/inbox",
@@ -43,4 +43,4 @@ shell:startup
 
 ## المرحلة الحالية
 
-هذه النسخة تدعم ملفات CSV المصدرة من أجهزة البصمة. الاتصال المباشر بموديلات ZKTeco وHikvision وAnviz يضاف كـ adapter مستقل بعد معرفة موديل الجهاز وبروتوكوله، دون تغيير API أو قاعدة البيانات في Masar.
+هذه النسخة تدعم ملفات CSV المصدرة من أجهزة البصمة. جهاز ZKTeco F22 يمكن ربطه مباشرة عبر ADMS، ولا يحتاج هذا البرنامج الوسيط عند تفعيل ADMS في الجهاز. يبقى البرنامج مفيداً للأجهزة التي تصدّر CSV فقط.
