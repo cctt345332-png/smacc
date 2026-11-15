@@ -1637,7 +1637,10 @@ async def get_terminal_performance_report(
             "warehouse_id": t.warehouse_id, "sessions": 0, "transactions": 0,
             "sales": Decimal("0"), "cost": Decimal("0"), "gross_profit": Decimal("0"),
             "expenses": Decimal("0"), "net_profit": Decimal("0"),
-            "cash": Decimal("0"), "card": Decimal("0"), "tabby": Decimal("0"), "tamara": Decimal("0"),
+            "cash": Decimal("0"), "mada": Decimal("0"), "credit_card": Decimal("0"),
+            "stc_pay": Decimal("0"), "tabby": Decimal("0"), "tamara": Decimal("0"),
+            "split_cash": Decimal("0"), "split_card": Decimal("0"), "bank_transfer": Decimal("0"),
+            "other_payment": Decimal("0"),
         }
 
     rows = {t.id: blank(t) for t in terminals}
@@ -1653,10 +1656,14 @@ async def get_terminal_performance_report(
         row["transactions"] += 1
         row["sales"] += tx.total or Decimal("0")
         method = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
-        if method == "cash": row["cash"] += tx.total or Decimal("0")
-        elif method in ("tabby",): row["tabby"] += tx.total or Decimal("0")
-        elif method in ("tamara",): row["tamara"] += tx.total or Decimal("0")
-        else: row["card"] += tx.total or Decimal("0")
+        if method == "split":
+            row["split_cash"] += tx.cash_tendered or Decimal("0")
+            row["split_card"] += tx.card_amount or Decimal("0")
+        elif method in ("cash", "mada", "credit_card", "stc_pay", "tabby", "tamara", "bank_transfer"):
+            row[method] += tx.total or Decimal("0")
+        else:
+            row.setdefault("other_payment", Decimal("0"))
+            row["other_payment"] += tx.total or Decimal("0")
         for line in tx.lines:
             if line.serial_item_id:
                 unit_cost = serial_costs.get(line.serial_item_id, Decimal("0"))
@@ -1677,7 +1684,7 @@ async def get_terminal_performance_report(
         row["sales"] = float(row["sales"]); row["cost"] = float(row["cost"])
         row["gross_profit"] = float(row["gross_profit"]); row["expenses"] = float(row["expenses"])
         row["net_profit"] = float(row["net_profit"])
-        for key in ("cash", "card", "tabby", "tamara"):
+        for key in ("cash", "mada", "credit_card", "stc_pay", "tabby", "tamara", "split_cash", "split_card", "bank_transfer", "other_payment"):
             row[key] = float(row[key])
 
     # عدد الجلسات حسب تاريخ الفتح، مستقل عن وجود مبيعات في الجلسة.
@@ -1689,5 +1696,9 @@ async def get_terminal_performance_report(
         if tid in rows: rows[tid]["sessions"] += 1
 
     values = list(rows.values())
-    totals = {key: sum((r[key] for r in values), 0) for key in ("sessions", "transactions", "sales", "cost", "gross_profit", "expenses", "net_profit", "cash", "card", "tabby", "tamara")}
+    payment_keys = ("cash", "mada", "credit_card", "stc_pay", "tabby", "tamara", "split_cash", "split_card", "bank_transfer", "other_payment")
+    totals = {key: sum((r[key] for r in values), 0) for key in ("sessions", "transactions", "sales", "cost", "gross_profit", "expenses", "net_profit", *payment_keys)}
+    totals["payments"] = {key: totals[key] for key in payment_keys}
+    for row in values:
+        row["payments"] = {key: row[key] for key in payment_keys}
     return {"from_date": from_date, "to_date": to_date, "terminal_id": terminal_id, "totals": totals, "terminals": values}
