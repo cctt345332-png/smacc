@@ -1,6 +1,6 @@
 "use client";
 import { use, useEffect, useState } from "react";
-import { createBiometricDevice, createEmployee, getBiometricDevices, getBiometricLinks, getEmployees, saveBiometricLink } from "@/lib/hr";
+import { createBiometricDevice, getBiometricDevices, getBiometricLinks, getEmployees, processBiometricLogs, saveBiometricLink } from "@/lib/hr";
 
 export default function BiometricPage(props: { params: Promise<{ locale: string }> }) {
   const { locale } = use(props.params); const ar = locale === "ar";
@@ -12,8 +12,9 @@ export default function BiometricPage(props: { params: Promise<{ locale: string 
   useEffect(() => { load(); }, []);
   const addDevice = async (ev: React.FormEvent) => { ev.preventDefault(); setMessage(""); try { const r = await createBiometricDevice({ ...device, port: Number(device.port) || null }); setKey(r.data?.device_key || ""); setMessage(ar ? "تم حفظ الجهاز. احفظ مفتاح الجهاز للمزامنة." : "Device saved. Keep the device key for synchronization."); setDevice({ name: "", device_type: "generic", connection_mode: "agent", host: "", port: "4370" }); await load(); } catch (e: any) { setMessage(e?.response?.data?.detail || "Error"); } };
   const addLink = async (ev: React.FormEvent) => { ev.preventDefault(); try { await saveBiometricLink(link); setMessage(ar ? "تم ربط الموظف بالجهاز" : "Employee linked"); setLink({ ...link, device_user_id: "" }); const r = await getBiometricLinks(); setLinks(r.data || []); } catch (e: any) { setMessage(e?.response?.data?.detail || "Error"); } };
+  const process = async () => { try { const r = await processBiometricLogs(); setMessage(ar ? `تمت معالجة ${r.data?.processed_logs || 0} سجل وإنشاء/تحديث ${r.data?.attendance_days || 0} يوم حضور` : `Processed ${r.data?.processed_logs || 0} logs for ${r.data?.attendance_days || 0} attendance days`); } catch (e: any) { setMessage(e?.response?.data?.detail || "Error"); } };
   return <div>
-    <div className="page-header"><div><h1 className="page-title">{ar ? "أجهزة البصمة" : "Biometric devices"}</h1><p className="page-subtitle">{ar ? "ربط أجهزة الحضور بالموظفين بدون تكرار سجلات البصمة" : "Connect attendance devices to employees without duplicate logs"}</p></div></div>
+    <div className="page-header"><div><h1 className="page-title">{ar ? "أجهزة البصمة" : "Biometric devices"}</h1><p className="page-subtitle">{ar ? "ربط أجهزة الحضور بالموظفين بدون تكرار سجلات البصمة" : "Connect attendance devices to employees without duplicate logs"}</p></div><button className="btn btn-primary" onClick={process}>{ar ? "معالجة سجلات البصمة" : "Process biometric logs"}</button></div>
     {message && <div className="alert alert-info" style={{ marginBottom: 16 }}>{message}</div>}
     {key && <div className="card" style={{ marginBottom: 16, borderColor: "#D97706" }}><div className="card-body"><b>{ar ? "مفتاح الجهاز — يظهر مرة واحدة فقط" : "Device key — shown once"}</b><code style={{ display: "block", marginTop: 8, wordBreak: "break-all" }}>{key}</code></div></div>}
     <div className="grid-2" style={{ alignItems: "start", gap: 16 }}>

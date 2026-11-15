@@ -35,6 +35,7 @@ export const createBiometricDevice = (data: any) => api.post("/hr/biometric/devi
 export const updateBiometricDevice = (id: string, data: any) => api.patch(`/hr/biometric/devices/${id}`, data);
 export const getBiometricLinks = (params?: any) => api.get("/hr/biometric/links", { params });
 export const saveBiometricLink = (data: any) => api.post("/hr/biometric/links", data);
+export const processBiometricLogs = () => api.post("/hr/biometric/process");
 
 // ─── Leaves ──────────────────────────────────────────────────────────
 export const getLeaves = (params?: any) => api.get("/hr/leaves", { params });

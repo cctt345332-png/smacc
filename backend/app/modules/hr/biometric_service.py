@@ -2,12 +2,12 @@ import hashlib
 import json
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, date, time, timedelta
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.hr import BiometricDevice, BiometricEmployeeLink, BiometricLog, Employee, AttendanceRecord
+from app.models.hr import BiometricDevice, BiometricEmployeeLink, BiometricLog, Employee, AttendanceRecord, HRSettings
 
 
 def _device_dict(device: BiometricDevice, include_key: str | None = None):
@@ -100,3 +100,50 @@ async def ingest_logs(db: AsyncSession, tenant_id: str, device_id: str, payload:
     device.last_sync_at = datetime.utcnow(); device.last_sync_status = f"received:{accepted}"
     await db.commit()
     return {"accepted": accepted, "skipped": skipped, "processed": processed, "message": "تم استقبال سجلات البصمة بدون تكرار"}
+
+
+async def list_logs(db: AsyncSession, tenant_id: str, device_id: str | None = None, unprocessed_only: bool = False):
+    q = select(BiometricLog).where(BiometricLog.tenant_id == tenant_id).order_by(BiometricLog.occurred_at.desc()).limit(500)
+    if device_id: q = q.where(BiometricLog.device_id == device_id)
+    if unprocessed_only: q = q.where(BiometricLog.processed.is_(False))
+    rows = (await db.execute(q)).scalars().all()
+    return [{"id": x.id, "device_id": x.device_id, "device_user_id": x.device_user_id, "occurred_at": x.occurred_at, "event_type": x.event_type, "processed": x.processed} for x in rows]
+
+
+async def process_logs(db: AsyncSession, tenant_id: str):
+    """تحويل السجلات الخام إلى سجل يومي: أول بصمة دخول وآخر بصمة انصراف."""
+    logs = (await db.execute(select(BiometricLog).where(BiometricLog.tenant_id == tenant_id, BiometricLog.processed.is_(False)).order_by(BiometricLog.occurred_at))).scalars().all()
+    if not logs:
+        return {"processed_logs": 0, "attendance_days": 0, "unmatched": 0}
+    links = (await db.execute(select(BiometricEmployeeLink).where(BiometricEmployeeLink.tenant_id == tenant_id))).scalars().all()
+    link_map = {(x.device_id, x.device_user_id): x.employee_id for x in links}
+    grouped: dict[tuple[str, date], list[BiometricLog]] = {}
+    unmatched = 0
+    for log in logs:
+        employee_id = link_map.get((log.device_id, log.device_user_id))
+        if not employee_id:
+            unmatched += 1
+            continue
+        grouped.setdefault((employee_id, log.occurred_at.date()), []).append(log)
+    settings = await db.scalar(select(HRSettings).where(HRSettings.tenant_id == tenant_id))
+    start_text = settings.work_start_time if settings else "09:00"
+    grace = settings.grace_minutes if settings else 15
+    try: expected_start = datetime.strptime(start_text, "%H:%M").time()
+    except ValueError: expected_start = time(9, 0)
+    for (employee_id, work_date), day_logs in grouped.items():
+        day_logs.sort(key=lambda x: x.occurred_at)
+        check_in = day_logs[0].occurred_at
+        check_out = day_logs[-1].occurred_at if len(day_logs) > 1 and day_logs[-1].occurred_at != check_in else None
+        expected = datetime.combine(work_date, expected_start)
+        status = "late" if check_in > expected + timedelta(minutes=grace) else "present"
+        record = await db.scalar(select(AttendanceRecord).where(AttendanceRecord.tenant_id == tenant_id, AttendanceRecord.employee_id == employee_id, AttendanceRecord.date == work_date))
+        if record:
+            record.check_in = min(record.check_in, check_in) if record.check_in else check_in
+            record.check_out = max(record.check_out, check_out) if record.check_out and check_out else (record.check_out or check_out)
+            if record.status in (None, "absent") or status == "late": record.status = status
+            record.notes = "تمت المزامنة من جهاز البصمة"
+        else:
+            db.add(AttendanceRecord(id=str(uuid.uuid4()), tenant_id=tenant_id, employee_id=employee_id, date=work_date, check_in=check_in, check_out=check_out, status=status, notes="تمت المزامنة من جهاز البصمة"))
+        for log in day_logs: log.processed = True
+    await db.commit()
+    return {"processed_logs": len(logs) - unmatched, "attendance_days": len(grouped), "unmatched": unmatched}

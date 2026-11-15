@@ -42,6 +42,16 @@ async def ingest_biometric_logs(device_id: str, data: dict, x_device_key: Option
     return await biometric_service.ingest_logs(db, tenant_id, device_id, logs or [], x_device_key)
 
 
+@router.get("/biometric/logs")
+async def list_biometric_logs(device_id: Optional[str] = None, unprocessed_only: bool = False, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.list_logs(db, tenant_id, device_id, unprocessed_only)
+
+
+@router.post("/biometric/process")
+async def process_biometric_logs(user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.process_logs(db, user["tenant_id"])
+
+
 # ─── Summary ─────────────────────────────────────────────────────────
 @router.get("/summary")
 async def hr_summary(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
