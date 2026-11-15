@@ -131,6 +131,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "الموظفون" : "Employees",                href: `${base}/hr/employees` },
           { label: ar ? "الأقسام" : "Departments",               href: `${base}/hr/departments` },
           { label: ar ? "الحضور والانصراف" : "Attendance",       href: `${base}/hr/attendance` },
+          { label: ar ? "أجهزة البصمة" : "Biometric devices",      href: `${base}/hr/biometric` },
           { label: ar ? "الإجازات" : "Leaves",                   href: `${base}/hr/leaves` },
           { label: ar ? "الرواتب" : "Payroll",                   href: `${base}/hr/payroll` },
           { label: ar ? "السلف والسحبيات" : "Advances & withdrawals", href: `${base}/hr/advances` },

@@ -90,6 +90,67 @@ class HRSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class HRWorkShift(Base):
+    __tablename__ = "hr_work_shifts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    name_ar: Mapped[str] = mapped_column(String(120))
+    name_en: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    start_time: Mapped[str] = mapped_column(String(5), default="09:00")
+    end_time: Mapped[str] = mapped_column(String(5), default="17:00")
+    grace_minutes: Mapped[int] = mapped_column(Integer, default=15)
+    working_days: Mapped[str] = mapped_column(String(30), default="0,1,2,3,4")
+    is_overnight: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BiometricDevice(Base):
+    __tablename__ = "hr_biometric_devices"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    name: Mapped[str] = mapped_column(String(150))
+    device_type: Mapped[str] = mapped_column(String(40), default="generic")
+    connection_mode: Mapped[str] = mapped_column(String(20), default="agent")
+    host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    branch_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    api_key_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_sync_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BiometricEmployeeLink(Base):
+    __tablename__ = "hr_biometric_employee_links"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    device_id: Mapped[str] = mapped_column(String, ForeignKey("hr_biometric_devices.id", ondelete="CASCADE"), index=True)
+    employee_id: Mapped[str] = mapped_column(String, ForeignKey("hr_employees.id", ondelete="CASCADE"), index=True)
+    device_user_id: Mapped[str] = mapped_column(String(80), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BiometricLog(Base):
+    __tablename__ = "hr_biometric_logs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    device_id: Mapped[str] = mapped_column(String, ForeignKey("hr_biometric_devices.id", ondelete="CASCADE"), index=True)
+    device_user_id: Mapped[str] = mapped_column(String(80), index=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    event_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(160), nullable=True, unique=True)
+    raw_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    processed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class EmployeeAdvance(Base):
     __tablename__ = "hr_employee_advances"
 

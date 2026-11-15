@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from datetime import date
@@ -6,8 +6,40 @@ from datetime import date
 from app.core.database import get_db
 from app.core.tenant import get_current_user, get_tenant_id, require_role
 from app.modules.hr import service
+from app.modules.hr import biometric_service
 
 router = APIRouter(prefix="/hr", tags=["hr"])
+
+
+@router.get("/biometric/devices")
+async def list_biometric_devices(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.list_devices(db, tenant_id)
+
+
+@router.post("/biometric/devices", status_code=201)
+async def create_biometric_device(data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.create_device(db, user["tenant_id"], data)
+
+
+@router.patch("/biometric/devices/{device_id}")
+async def update_biometric_device(device_id: str, data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.update_device(db, user["tenant_id"], device_id, data)
+
+
+@router.get("/biometric/links")
+async def list_biometric_links(device_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.list_links(db, tenant_id, device_id)
+
+
+@router.post("/biometric/links", status_code=201)
+async def save_biometric_link(data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.save_link(db, user["tenant_id"], data)
+
+
+@router.post("/biometric/devices/{device_id}/logs")
+async def ingest_biometric_logs(device_id: str, data: dict, x_device_key: Optional[str] = Header(None), tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    logs = data.get("logs") if isinstance(data, dict) else data
+    return await biometric_service.ingest_logs(db, tenant_id, device_id, logs or [], x_device_key)
 
 
 # ─── Summary ─────────────────────────────────────────────────────────
