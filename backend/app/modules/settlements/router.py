@@ -10,7 +10,8 @@ from app.models.settlements import CustodySettlement
 from app.models.reps import SalesRep
 from app.models.user import User
 from app.models.pos import POSTerminal, POSSession, POSCashOutflow
-from app.models.sales import Invoice
+from app.models.sales import Invoice, Payment
+from app.models.expenses import RepExpense
 
 router = APIRouter(prefix="/settlements", tags=["custody-settlements"])
 MANAGER_ROLES = ["manager", "accountant"]
@@ -33,13 +34,23 @@ async def _balance(db, tenant_id, source_type, source_id, last, date_from=None, 
     start = date_from or since
     end = date_to
     if source_type == "rep":
-        q = select(func.coalesce(func.sum(Invoice.paid_amount), 0)).where(
-            Invoice.tenant_id == tenant_id, Invoice.rep_id == source_id,
-            Invoice.status != "draft", Invoice.status != "cancelled",
+        q = select(func.coalesce(func.sum(Payment.amount), 0)).where(
+            Payment.tenant_id == tenant_id, Payment.rep_id == source_id,
+            Payment.payment_type == "receipt",
         )
-        if start: q = q.where(Invoice.issue_date >= start)
-        if end: q = q.where(Invoice.issue_date <= end)
-        return Decimal(str((await db.execute(q)).scalar() or 0))
+        if start: q = q.where(Payment.payment_date >= start)
+        if end: q = q.where(Payment.payment_date <= end)
+        # الإقفال النقدي يخص النقد فقط، مثل حاسبة التسوية؛ البطاقات والتحويلات لا تسلّم نقداً.
+        q = q.where(Payment.payment_method == "cash")
+        cash = Decimal(str((await db.execute(q)).scalar() or 0))
+        expense_q = select(func.coalesce(func.sum(RepExpense.amount), 0)).where(
+            RepExpense.tenant_id == tenant_id, RepExpense.rep_id == source_id,
+            RepExpense.status == "approved", RepExpense.payment_method.in_(["cash", "rep_advance"]),
+        )
+        if start: expense_q = expense_q.where(RepExpense.expense_date >= start)
+        if end: expense_q = expense_q.where(RepExpense.expense_date <= end)
+        expenses = Decimal(str((await db.execute(expense_q)).scalar() or 0))
+        return cash - expenses
     q = select(func.coalesce(func.sum(POSSession.total_cash + POSSession.opening_cash), 0)).where(
         POSSession.tenant_id == tenant_id, POSSession.terminal_id == source_id,
         cast(POSSession.status, Text) == "closed",
