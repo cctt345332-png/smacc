@@ -111,6 +111,7 @@ class POSPaymentMethod(str, enum.Enum):
     MADA        = "mada"
     TABBY       = "tabby"
     TAMARA      = "tamara"
+    BANK_TRANSFER = "bank_transfer"
     CREDIT_CARD = "credit_card"
     STC_PAY     = "stc_pay"
     SPLIT       = "split"
@@ -170,6 +171,9 @@ class POSTerminal(Base):
     tamara_account_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("accounts.id"), nullable=True
     )
+    bank_transfer_account_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("accounts.id"), nullable=True
+    )
     fiscal_year_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("fiscal_years.id"), nullable=True
     )
@@ -217,6 +221,7 @@ class POSSession(Base):
     total_card: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     total_tabby: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     total_tamara: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    total_bank_transfer: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     total_vat: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     transaction_count: Mapped[int] = mapped_column(Integer, default=0)
 

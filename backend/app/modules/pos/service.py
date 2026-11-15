@@ -83,6 +83,7 @@ async def get_terminals(db: AsyncSession, tenant_id: str):
             "card_settlement_account_id": t.card_settlement_account_id,
             "tabby_account_id": t.tabby_account_id,
             "tamara_account_id": t.tamara_account_id,
+            "bank_transfer_account_id": t.bank_transfer_account_id,
             "fiscal_year_id": t.fiscal_year_id,
             "receipt_header": t.receipt_header,
             "receipt_footer": t.receipt_footer,
@@ -180,7 +181,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         if not account or account.tenant_id != tenant_id or account.account_type != "asset" or not account.is_active or not account.is_posting:
             raise HTTPException(400, "حساب تسوية الشبكة يجب أن يكون حساب أصول تفصيليًا ونشطًا")
     from app.models.accounting import Account
-    for key, label in (("tabby_account_id", "تابي"), ("tamara_account_id", "تمارا")):
+    for key, label in (("tabby_account_id", "تابي"), ("tamara_account_id", "تمارا"), ("bank_transfer_account_id", "التحويل البنكي")):
         if data.get(key):
             account = await db.get(Account, data[key])
             if not account or account.tenant_id != tenant_id or account.account_type != "asset" or not account.is_active or not account.is_posting:
@@ -202,6 +203,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         card_settlement_account_id=data.get("card_settlement_account_id"),
         tabby_account_id=data.get("tabby_account_id"),
         tamara_account_id=data.get("tamara_account_id"),
+        bank_transfer_account_id=data.get("bank_transfer_account_id"),
         fiscal_year_id=data.get("fiscal_year_id"),
         receipt_header=data.get("receipt_header"),
         receipt_footer=data.get("receipt_footer"),
@@ -233,6 +235,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         "card_settlement_account_id": terminal.card_settlement_account_id,
         "tabby_account_id": terminal.tabby_account_id,
         "tamara_account_id": terminal.tamara_account_id,
+        "bank_transfer_account_id": terminal.bank_transfer_account_id,
         "fiscal_year_id": terminal.fiscal_year_id,
         "receipt_header": terminal.receipt_header,
         "receipt_footer": terminal.receipt_footer,
@@ -254,7 +257,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         if not account or account.tenant_id != tenant_id or account.account_type != "asset" or not account.is_active or not account.is_posting:
             raise HTTPException(400, "حساب تسوية الشبكة يجب أن يكون حساب أصول تفصيليًا ونشطًا")
     from app.models.accounting import Account
-    for key, label in (("tabby_account_id", "تابي"), ("tamara_account_id", "تمارا")):
+    for key, label in (("tabby_account_id", "تابي"), ("tamara_account_id", "تمارا"), ("bank_transfer_account_id", "التحويل البنكي")):
         if data.get(key):
             account = await db.get(Account, data[key])
             if not account or account.tenant_id != tenant_id or account.account_type != "asset" or not account.is_active or not account.is_posting:
@@ -262,7 +265,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
     allowed = [
         "name", "branch_name", "business_type", "warehouse_id",
         "cash_account_id", "sales_account_id", "vat_account_id",
-        "bank_account_id", "card_settlement_account_id", "tabby_account_id", "tamara_account_id", "fiscal_year_id",
+        "bank_account_id", "card_settlement_account_id", "tabby_account_id", "tamara_account_id", "bank_transfer_account_id", "fiscal_year_id",
         "receipt_header", "receipt_footer", "print_receipt",
         "allow_discount", "max_discount_pct", "allow_purchase", "is_active",
         "assigned_user_id",
@@ -299,6 +302,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         "card_settlement_account_id": t.card_settlement_account_id,
         "tabby_account_id": t.tabby_account_id,
         "tamara_account_id": t.tamara_account_id,
+        "bank_transfer_account_id": t.bank_transfer_account_id,
         "fiscal_year_id": t.fiscal_year_id,
         "receipt_header": t.receipt_header,
         "receipt_footer": t.receipt_footer,
@@ -475,6 +479,7 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
         "total_card": float(session.total_card),
         "total_tabby": float(session.total_tabby),
         "total_tamara": float(session.total_tamara),
+        "total_bank_transfer": float(session.total_bank_transfer),
         "total_cash_outflows": float(outflows_total),
         "total_vat": float(session.total_vat),
         "transaction_count": session.transaction_count,
@@ -535,6 +540,7 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
             "total_card": float(session.total_card),
             "total_tabby": float(session.total_tabby),
             "total_tamara": float(session.total_tamara),
+        "total_bank_transfer": float(session.total_bank_transfer),
             "total_vat": float(session.total_vat),
             "transaction_count": session.transaction_count,
             "total_cash_outflows": float(outflows_total),
@@ -720,11 +726,11 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         grand_total = max(Decimal("0"), grand_total - overall_discount)
         discount_total += overall_discount
 
-    if payment_method not in {"cash", "mada", "tabby", "tamara", "split"}:
-        raise HTTPException(400, "طريقة الدفع يجب أن تكون نقدي أو شبكة أو تابي أو تمارا أو مقسّم")
+    if payment_method not in {"cash", "mada", "tabby", "tamara", "bank_transfer", "split"}:
+        raise HTTPException(400, "طريقة الدفع يجب أن تكون نقدي أو شبكة أو تابي أو تمارا أو تحويل بنكي أو مقسّم")
     if payment_method == "cash" and cash_tendered < grand_total:
         raise HTTPException(400, "المبلغ النقدي أقل من إجمالي الفاتورة")
-    if payment_method in {"mada", "tabby", "tamara"}:
+    if payment_method in {"mada", "tabby", "tamara", "bank_transfer"}:
         cash_tendered = Decimal("0")
         card_amount = grand_total
     if payment_method == "split":
@@ -758,7 +764,7 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         payment_method=payment_method,
         cash_tendered=cash_tendered,
         change_amount=change_amount,
-        card_amount=card_amount if payment_method == "split" else (grand_total if payment_method in {"mada", "tabby", "tamara"} else None),
+        card_amount=card_amount if payment_method == "split" else (grand_total if payment_method in {"mada", "tabby", "tamara", "bank_transfer"} else None),
         qr_code=qr,
         uuid=str(uuid.uuid4()),
         status="completed",
@@ -802,6 +808,8 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         session.total_tabby += grand_total
     elif payment_method == "tamara":
         session.total_tamara += grand_total
+    elif payment_method == "bank_transfer":
+        session.total_bank_transfer += grand_total
     elif payment_method == "split":
         session.total_cash += (grand_total - card_amount)
         session.total_card += card_amount
@@ -880,7 +888,7 @@ async def _create_pos_journal(db: AsyncSession, tenant_id: str, user_id: str, tx
     if not cash_account or not sales_account or (tx.vat_amount > 0 and not vat_account):
         raise HTTPException(409, "إعداد الحسابات المحاسبية لنقطة البيع غير مكتمل")
 
-    card_amount = Decimal(str(tx.card_amount or 0)) if tx.payment_method == "split" else (tx.total if tx.payment_method in ("mada", "credit_card", "stc_pay", "tabby", "tamara") else Decimal("0"))
+    card_amount = Decimal(str(tx.card_amount or 0)) if tx.payment_method == "split" else (tx.total if tx.payment_method in ("mada", "credit_card", "stc_pay", "tabby", "tamara", "bank_transfer") else Decimal("0"))
     cash_amount = tx.total - card_amount
     settlement_account = None
     if card_amount > 0:
@@ -889,11 +897,13 @@ async def _create_pos_journal(db: AsyncSession, tenant_id: str, user_id: str, tx
             account_id = terminal.tabby_account_id
         elif tx.payment_method == "tamara":
             account_id = terminal.tamara_account_id
+        elif tx.payment_method == "bank_transfer":
+            account_id = terminal.bank_transfer_account_id
         settlement_account = await db.get(Account, account_id) if account_id else None
-        if not settlement_account and tx.payment_method not in ("tabby", "tamara"):
+        if not settlement_account and tx.payment_method not in ("tabby", "tamara", "bank_transfer"):
             settlement_account = await get_operational_account(db, tenant_id, "default_card")
         if not settlement_account:
-            label = "تابي" if tx.payment_method == "tabby" else "تمارا" if tx.payment_method == "tamara" else "الشبكة/مدى"
+            label = "تابي" if tx.payment_method == "tabby" else "تمارا" if tx.payment_method == "tamara" else "التحويل البنكي" if tx.payment_method == "bank_transfer" else "الشبكة/مدى"
             raise HTTPException(409, f"يجب تحديد حساب تسوية {label} من شجرة الحسابات")
 
     entry = JournalEntry(

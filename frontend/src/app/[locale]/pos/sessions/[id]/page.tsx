@@ -18,7 +18,7 @@ const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
-  cash: "نقدي", mada: "مدى", credit_card: "بطاقة ائتمان", stc_pay: "STC Pay", split: "مقسّم",
+  cash: "نقدي", mada: "مدى", credit_card: "بطاقة ائتمان", stc_pay: "STC Pay", bank_transfer: "تحويل بنكي", tabby: "تابي", tamara: "تمارا", split: "مقسّم",
 };
 
 const fmt = (n: number) =>

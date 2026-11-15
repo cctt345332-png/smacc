@@ -44,7 +44,7 @@ const calcLine = (l: CartLine) => {
   return { gross, disc, taxable, vat, total };
 };
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const PAYMENT_LABELS: Record<string, string> = { cash: "نقدي", mada: "شبكة", tabby: "تابي", tamara: "تمارا", split: "مقسّم" };
+const PAYMENT_LABELS: Record<string, string> = { cash: "نقدي", mada: "شبكة", tabby: "تابي", tamara: "تمارا", bank_transfer: "تحويل بنكي", split: "مقسّم" };
 const POS_SHORTCUTS = [
   { key: "F2", label: "تركيز البحث عن صنف أو مسح الباركود" },
   { key: "F4", label: "اختيار الدفع نقدي" },
@@ -52,6 +52,7 @@ const POS_SHORTCUTS = [
   { key: "F6", label: "اختيار الدفع مقسّم" },
   { key: "Alt + T", label: "اختيار الدفع تابي" },
   { key: "Alt + M", label: "اختيار الدفع تمارا" },
+  { key: "Alt + B", label: "اختيار الدفع تحويل بنكي" },
   { key: "F8", label: "إتمام البيع" },
   { key: "Esc", label: "إغلاق النافذة أو إلغاء البحث" },
   { key: "Ctrl + Backspace", label: "مسح السلة بالكامل" },
@@ -83,7 +84,7 @@ export default function POSCashierPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const [cart,         setCart]         = useState<CartLine[]>([]);
-  const [payMethod,    setPayMethod]    = useState<"cash"|"mada"|"tabby"|"tamara"|"split">("cash");
+  const [payMethod,    setPayMethod]    = useState<"cash"|"mada"|"tabby"|"tamara"|"bank_transfer"|"split">("cash");
   const [cashTendered, setCashTendered] = useState("");
   const [cardAmount,   setCardAmount]   = useState("");
   const [custName,     setCustName]     = useState("");
@@ -369,7 +370,7 @@ export default function POSCashierPage() {
     if (payMethod === "cash" && parseFloat(cashTendered || "0") < grandTotal) {
       alert(isAr ? "المبلغ المدفوع أقل من الإجمالي" : "Insufficient cash"); return;
     }
-    if ((["mada", "tabby", "tamara"] as string[]).includes(payMethod) && Math.abs(parseFloat(cardAmount || "0") - grandTotal) > 0.01) {
+    if ((["mada", "tabby", "tamara", "bank_transfer"] as string[]).includes(payMethod) && Math.abs(parseFloat(cardAmount || "0") - grandTotal) > 0.01) {
       alert(isAr ? "أدخل مبلغ الشبكة مساويًا للإجمالي" : "Network amount must equal the total"); return;
     }
     if (payMethod === "split") {
@@ -397,7 +398,7 @@ export default function POSCashierPage() {
         })),
         payment_method: payMethod,
         cash_tendered: payMethod === "cash" ? parseFloat(cashTendered || String(grandTotal)) : payMethod === "split" ? parseFloat(cashTendered || "0") : 0,
-        card_amount: (["mada", "tabby", "tamara"] as string[]).includes(payMethod) ? grandTotal : payMethod === "split" ? parseFloat(cardAmount || "0") : undefined,
+        card_amount: (["mada", "tabby", "tamara", "bank_transfer"] as string[]).includes(payMethod) ? grandTotal : payMethod === "split" ? parseFloat(cardAmount || "0") : undefined,
         customer_name: custName || undefined,
         customer_phone: custPhone || undefined,
         discount_amount: overallDiscAmt,
@@ -443,6 +444,7 @@ export default function POSCashierPage() {
       if (event.key === "F4") { event.preventDefault(); setPayMethod("cash"); return; }
       if (event.key === "F5") { event.preventDefault(); setPayMethod("mada"); return; }
       if (event.key === "F6") { event.preventDefault(); setPayMethod("split"); return; }
+      if (event.altKey && event.key.toLowerCase() === "b") { event.preventDefault(); setPayMethod("bank_transfer"); return; }
       if (event.key === "F8") { event.preventDefault(); void completeSale(); return; }
       if (event.key === "Escape") { setShowShortcuts(false); return; }
       if (event.ctrlKey && event.key === "Backspace") { event.preventDefault(); setCart([]); }
@@ -937,11 +939,11 @@ export default function POSCashierPage() {
 
             {/* Payment method */}
             <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap" }}>
-              {(["cash", "mada", "tabby", "tamara", "split"] as const).map((m) => (
+              {(["cash", "mada", "tabby", "tamara", "bank_transfer", "split"] as const).map((m) => (
                 <button key={m} onClick={() => setPayMethod(m)}
                   style={{ flex: 1, minWidth: 60, padding: "5px 4px", borderRadius: 8, border: `1.5px solid ${payMethod === m ? actCfg.color : "var(--border)"}`, background: payMethod === m ? actCfg.bg : "white", color: payMethod === m ? actCfg.color : "var(--text-secondary)", fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
                   <Icon name={m === "cash" ? "cash" : "card"} size={12} />
-                  {m === "cash" ? (isAr ? "نقدي" : "Cash") : m === "mada" ? (isAr ? "شبكة" : "Network") : m === "tabby" ? "تابي" : m === "tamara" ? "تمارا" : (isAr ? "مقسّم" : "Split")}
+                  {m === "cash" ? (isAr ? "نقدي" : "Cash") : m === "mada" ? (isAr ? "شبكة" : "Network") : m === "tabby" ? "تابي" : m === "tamara" ? "تمارا" : m === "bank_transfer" ? (isAr ? "تحويل بنكي" : "Bank transfer") : (isAr ? "مقسّم" : "Split")}
                 </button>
               ))}
             </div>
@@ -952,7 +954,7 @@ export default function POSCashierPage() {
                 {change > 0 && <div style={{ display: "flex", alignItems: "center", fontSize: 12, fontWeight: 700, color: "#6F4A84", whiteSpace: "nowrap" }}>{isAr ? "الباقي:" : "Change:"} {fmt(change)} {sar}</div>}
               </div>
             )}
-            {(["mada", "tabby", "tamara"] as string[]).includes(payMethod) && (
+            {(["mada", "tabby", "tamara", "bank_transfer"] as string[]).includes(payMethod) && (
               <input type="number" className="form-input" style={{ marginBottom: 8, fontSize: 13 }} placeholder={isAr ? "مبلغ الشبكة" : "Network amount"} value={cardAmount} onChange={(e) => setCardAmount(e.target.value)} />
             )}
             {payMethod === "split" && (
@@ -1294,7 +1296,7 @@ export default function POSCashierPage() {
                   payment_method={receiptModal.payMethod}
                   cash_tendered={receiptModal.payMethod === "cash" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cashTendered || "0") : undefined}
                   change_amount={receiptModal.change}
-                  card_amount={receiptModal.payMethod === "mada" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
+                  card_amount={["mada", "bank_transfer"].includes(receiptModal.payMethod) || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
                   customer_name={receiptModal.customer_name}
                   customer_phone={receiptModal.customer_phone}
                   qr_code={receiptModal.qr_code}
@@ -1357,7 +1359,7 @@ export default function POSCashierPage() {
             payment_method={receiptModal.payMethod}
             cash_tendered={receiptModal.payMethod === "cash" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cashTendered || "0") : undefined}
             change_amount={receiptModal.change}
-            card_amount={receiptModal.payMethod === "mada" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
+            card_amount={["mada", "bank_transfer"].includes(receiptModal.payMethod) || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
             customer_name={receiptModal.customer_name}
             customer_phone={receiptModal.customer_phone}
             qr_code={receiptModal.qr_code}

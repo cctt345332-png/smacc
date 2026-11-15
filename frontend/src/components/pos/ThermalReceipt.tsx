@@ -77,7 +77,7 @@ interface ThermalReceiptProps {
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "نقداً", mada: "شبكة",
-  tabby: "تابي", tamara: "تمارا",
+  tabby: "تابي", tamara: "تمارا", bank_transfer: "تحويل بنكي",
   split: "دفع مقسّم",
 };
 
