@@ -17,6 +17,7 @@ class CustodySettlement(Base):
     source_type: Mapped[str] = mapped_column(String(20), index=True)  # rep | pos
     source_id: Mapped[str] = mapped_column(String, index=True)
     period_from: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    period_to: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     settled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     expected_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     received_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
