@@ -39,6 +39,7 @@ export const getSalarySettlements = (month: number, year: number, employee_id?: 
 export const getSalarySettlementReport = (month: number, year: number, employee_id?: string) => api.get("/hr/salary-settlements/report", { params: { month, year, employee_id } });
 export const createSalarySettlement = (data: any) => api.post("/hr/salary-settlements", data);
 export const recordSalarySettlementPayment = (id: string, data: any) => api.post(`/hr/salary-settlements/${id}/payments`, data);
+export const deleteSalarySettlementPayment = (id: string) => api.delete(`/hr/salary-settlement-payments/${id}`);
 
 // ─── Attendance ──────────────────────────────────────────────────────
 export const getAttendance = (params?: { date_from?: string; date_to?: string; employee_id?: string }) => api.get("/hr/attendance", { params });

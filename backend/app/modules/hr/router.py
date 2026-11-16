@@ -218,6 +218,11 @@ async def record_salary_settlement_payment(
     return await service.record_salary_settlement_payment(db, user["tenant_id"], user["user_id"], settlement_id, data)
 
 
+@router.delete("/salary-settlement-payments/{payment_id}")
+async def delete_salary_settlement_payment(payment_id: str, user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.delete_salary_settlement_payment(db, user["tenant_id"], payment_id)
+
+
 @router.get("/deductions")
 async def list_deductions(status: Optional[str] = None, employee_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await service.get_deductions(db, tenant_id, status, employee_id)

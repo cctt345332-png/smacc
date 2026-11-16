@@ -695,6 +695,12 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
         basic, allowances, gross, withdrawal_total, deduction_total, loan_total, calculated_net = values
         row = existing.get(employee.id)
         cash_paid = Decimal(str(row.paid_amount or 0)) if row else Decimal("0")
+        manual_payments = []
+        if row:
+            manual_payments = (await db.execute(select(SalarySettlementPayment).where(
+                SalarySettlementPayment.tenant_id == tenant_id,
+                SalarySettlementPayment.settlement_id == row.id,
+            ).order_by(SalarySettlementPayment.paid_at.desc()))).scalars().all()
         display_withdrawals = (Decimal(str(row.withdrawals_total or 0)) + withdrawal_total) if row else withdrawal_total
         display_deductions = (Decimal(str(row.deductions_total or 0)) + deduction_total) if row else deduction_total
         display_loans = Decimal(str(row.loan_installments_total or 0)) if row else loan_total
@@ -717,6 +723,9 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
             "carryover_amount": float(carryover),
             "carried_from_previous": float(carried_from_previous),
             "withdrawals": withdrawals, "deductions": deductions,
+            "manual_paid_amount": float(cash_paid),
+            "payments": [{"id": p.id, "amount": float(p.amount), "payment_method": p.payment_method,
+                          "paid_at": p.paid_at.isoformat() if p.paid_at else None} for p in manual_payments],
         })
     return {"month": month, "year": year, "rows": result}
 
@@ -754,6 +763,22 @@ async def record_salary_settlement_payment(db: AsyncSession, tenant_id: str, use
     return {"payment": payment, "settlement": settlement}
 
 
+async def delete_salary_settlement_payment(db: AsyncSession, tenant_id: str, payment_id: str):
+    payment = await db.scalar(select(SalarySettlementPayment).where(
+        SalarySettlementPayment.id == payment_id, SalarySettlementPayment.tenant_id == tenant_id,
+    ))
+    if not payment:
+        raise HTTPException(404, "دفعة الراتب غير موجودة")
+    settlement = await db.get(SalarySettlement, payment.settlement_id)
+    if settlement:
+        settlement.paid_amount = max(Decimal("0"), Decimal(str(settlement.paid_amount or 0)) - Decimal(str(payment.amount or 0)))
+        settlement.status = "partially_paid" if settlement.paid_amount > 0 else "draft"
+        settlement.updated_at = datetime.utcnow()
+    await db.delete(payment)
+    await db.commit()
+    return {"deleted": True, "id": payment_id}
+
+
 async def create_salary_settlement(db: AsyncSession, tenant_id: str, user_id: str, employee_id: str, month: int, year: int):
     existing = await db.scalar(select(SalarySettlement).where(
         SalarySettlement.tenant_id == tenant_id, SalarySettlement.employee_id == employee_id,
@@ -774,6 +799,14 @@ async def create_salary_settlement(db: AsyncSession, tenant_id: str, user_id: st
     for withdrawal in withdrawals:
         withdrawal.settlement_id = settlement.id
         withdrawal.status = "settled"
+    # القسط الشهري يُسدّد من الراتب عند حفظ التسوية، لذلك نرحّله إلى رصيد السلفة
+    # حتى ينخفض القسط المتبقي في الشهر التالي ولا يظهر القسط نفسه مرة أخرى.
+    for advance in advances:
+        installment = min(
+            Decimal(str(advance.monthly_installment or 0)),
+            max(Decimal("0"), Decimal(str(advance.total_amount or 0)) - Decimal(str(advance.paid_amount or 0))),
+        )
+        advance.paid_amount = Decimal(str(advance.paid_amount or 0)) + installment
     await db.commit(); await db.refresh(settlement); await db.refresh(settlement, attribute_names=["employee"])
     return settlement
 
