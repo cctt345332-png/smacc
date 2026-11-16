@@ -332,7 +332,15 @@ async def _assert_refund_credit_note_access(credit_note_id: str, user: dict, db:
 
 @router.post("/credit-notes", status_code=201)
 async def create_credit_note(data: CreditNoteCreate, user=Depends(require_role(["manager","accountant"])), db: AsyncSession = Depends(get_db)):
-    return await service.create_credit_note(db, user["tenant_id"], user["user_id"], data)
+    created = await service.create_credit_note(db, user["tenant_id"], user["user_id"], data)
+    # لا نعيد كائن SQLAlchemy بعلاقاته lazy بعد commit؛ فقد يسبب 500
+    # رغم أن إشعار الدائن وحركة المخزون تم حفظهما بنجاح.
+    return {
+        "id": created.id,
+        "credit_note_number": created.credit_note_number,
+        "total": float(created.total or 0),
+        "message": "تم حفظ المرتجع بنجاح",
+    }
 
 
 @router.post("/debit-notes", status_code=201)
