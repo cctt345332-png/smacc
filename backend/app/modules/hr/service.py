@@ -805,6 +805,66 @@ async def create_deduction(db: AsyncSession, tenant_id: str, user_id: str, data:
     return deduction
 
 
+async def update_deduction(db: AsyncSession, tenant_id: str, deduction_id: str, data: dict) -> EmployeeDeduction:
+    deduction = await db.scalar(select(EmployeeDeduction).where(EmployeeDeduction.id == deduction_id, EmployeeDeduction.tenant_id == tenant_id))
+    if not deduction:
+        raise HTTPException(404, "الخصم غير موجود")
+    if "employee_id" in data:
+        employee = await db.scalar(select(Employee).where(Employee.id == data["employee_id"], Employee.tenant_id == tenant_id))
+        if not employee:
+            raise HTTPException(404, "الموظف غير موجود")
+        deduction.employee_id = employee.id
+    if "amount" in data:
+        amount = Decimal(str(data["amount"]))
+        if amount <= 0:
+            raise HTTPException(400, "مبلغ الخصم يجب أن يكون أكبر من صفر")
+        deduction.amount = amount
+    if "deduction_date" in data:
+        deduction.deduction_date = _parse_date(data.get("deduction_date"), "تاريخ الخصم", deduction.deduction_date)
+    if "reason" in data:
+        reason = _optional_text(data.get("reason"))
+        if not reason:
+            raise HTTPException(400, "سبب الخصم مطلوب")
+        deduction.reason = reason
+    await db.commit(); await db.refresh(deduction)
+    return deduction
+
+
+async def delete_deduction(db: AsyncSession, tenant_id: str, deduction_id: str):
+    deduction = await db.scalar(select(EmployeeDeduction).where(EmployeeDeduction.id == deduction_id, EmployeeDeduction.tenant_id == tenant_id))
+    if not deduction:
+        raise HTTPException(404, "الخصم غير موجود")
+    await db.delete(deduction)
+    await db.commit()
+    return {"deleted": True, "id": deduction_id}
+
+
+async def get_deduction_report(db: AsyncSession, tenant_id: str, month: int, year: int, employee_id: str | None = None):
+    start = date(year, month, 1)
+    end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
+    q = select(EmployeeDeduction).options(selectinload(EmployeeDeduction.employee)).where(
+        EmployeeDeduction.tenant_id == tenant_id, EmployeeDeduction.deduction_date >= start,
+        EmployeeDeduction.deduction_date <= end,
+    ).order_by(EmployeeDeduction.deduction_date.desc(), EmployeeDeduction.created_at.desc())
+    if employee_id:
+        q = q.where(EmployeeDeduction.employee_id == employee_id)
+    rows = (await db.execute(q)).scalars().all()
+    totals = {"all": Decimal("0"), "approved": Decimal("0"), "pending": Decimal("0"), "rejected": Decimal("0")}
+    result = []
+    for row in rows:
+        amount = Decimal(str(row.amount or 0))
+        status = str(row.status.value if hasattr(row.status, "value") else row.status)
+        totals["all"] += amount
+        totals[status] = totals.get(status, Decimal("0")) + amount
+        result.append({"id": row.id, "employee_id": row.employee_id,
+            "employee_name": row.employee.full_name_ar if row.employee else row.employee_id,
+            "employee_number": row.employee.employee_number if row.employee else "",
+            "deduction_date": row.deduction_date.isoformat(), "amount": float(amount),
+            "reason": row.reason, "status": status})
+    return {"month": month, "year": year, "rows": result,
+            "totals": {key: float(value) for key, value in totals.items()}}
+
+
 async def review_deduction(db: AsyncSession, tenant_id: str, deduction_id: str, user_id: str, approved: bool) -> EmployeeDeduction:
     deduction = await db.scalar(select(EmployeeDeduction).where(EmployeeDeduction.id == deduction_id, EmployeeDeduction.tenant_id == tenant_id))
     if not deduction:

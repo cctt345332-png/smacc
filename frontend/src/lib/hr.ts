@@ -30,6 +30,9 @@ export const updateWithdrawal = (id: string, data: any) => api.patch(`/hr/withdr
 export const deleteWithdrawal = (id: string) => api.delete(`/hr/withdrawals/${id}`);
 export const getDeductions = (params?: any) => api.get("/hr/deductions", { params });
 export const createDeduction = (data: any) => api.post("/hr/deductions", data);
+export const updateDeduction = (id: string, data: any) => api.patch(`/hr/deductions/${id}`, data);
+export const deleteDeduction = (id: string) => api.delete(`/hr/deductions/${id}`);
+export const getDeductionReport = (month: number, year: number, employee_id?: string) => api.get("/hr/deductions/report", { params: { month, year, employee_id } });
 export const approveDeduction = (id: string) => api.post(`/hr/deductions/${id}/approve`);
 export const rejectDeduction = (id: string) => api.post(`/hr/deductions/${id}/reject`);
 export const getSalarySettlements = (month: number, year: number, employee_id?: string) => api.get("/hr/salary-settlements", { params: { month, year, employee_id } });

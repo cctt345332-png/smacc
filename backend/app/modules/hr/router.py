@@ -228,6 +228,21 @@ async def create_deduction(data: dict, user=Depends(require_role(["manager", "hr
     return await service.create_deduction(db, user["tenant_id"], user["user_id"], data)
 
 
+@router.patch("/deductions/{deduction_id}")
+async def update_deduction(deduction_id: str, data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.update_deduction(db, user["tenant_id"], deduction_id, data)
+
+
+@router.delete("/deductions/{deduction_id}")
+async def delete_deduction(deduction_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.delete_deduction(db, user["tenant_id"], deduction_id)
+
+
+@router.get("/deductions/report")
+async def deduction_report(month: int, year: int, employee_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_deduction_report(db, tenant_id, month, year, employee_id)
+
+
 @router.post("/deductions/{deduction_id}/approve")
 async def approve_deduction(deduction_id: str, user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db)):
     return await service.review_deduction(db, user["tenant_id"], deduction_id, user["user_id"], True)
