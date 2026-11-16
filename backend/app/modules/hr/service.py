@@ -656,14 +656,18 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
         row = existing.get(employee.id)
         net = Decimal(str(row.net_salary)) if row else calculated_net
         paid = Decimal(str(row.paid_amount or 0)) if row else Decimal("0")
-        obligations = withdrawal_total + deduction_total + loan_total
-        carryover = max(Decimal("0"), obligations - gross)
+        display_withdrawals = (Decimal(str(row.withdrawals_total or 0)) + withdrawal_total) if row else withdrawal_total
+        display_deductions = (Decimal(str(row.deductions_total or 0)) + deduction_total) if row else deduction_total
+        display_loans = Decimal(str(row.loan_installments_total or 0)) if row else loan_total
+        display_gross = Decimal(str(row.gross_salary or 0)) if row else gross
+        obligations = display_withdrawals + display_deductions + display_loans
+        carryover = max(Decimal("0"), obligations - display_gross)
         result.append({
             "employee": {"id": employee.id, "full_name_ar": employee.full_name_ar, "employee_number": employee.employee_number, "job_title_ar": employee.job_title_ar},
             "settlement": row,
-            "basic_salary": float(basic), "total_allowances": float(allowances), "gross_salary": float(gross),
-            "withdrawals_total": float(withdrawal_total), "deductions_total": float(deduction_total),
-            "loan_installments_total": float(loan_total), "net_salary": float(net), "paid_amount": float(paid),
+            "basic_salary": float(row.basic_salary if row else basic), "total_allowances": float(row.total_allowances if row else allowances), "gross_salary": float(display_gross),
+            "withdrawals_total": float(display_withdrawals), "deductions_total": float(display_deductions),
+            "loan_installments_total": float(display_loans), "net_salary": float(net), "paid_amount": float(paid),
             "remaining_amount": float(max(Decimal("0"), net - paid)),
             "carryover_amount": float(carryover),
             "withdrawals": withdrawals, "deductions": deductions,
