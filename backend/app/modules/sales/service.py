@@ -2322,7 +2322,10 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
         # إشعار الدائن يعيد كمية من الفاتورة، لذلك يخضع للكمية المتاحة.
         # إشعار المدين يضيف كمية/قيمة جديدة ولا يُعد مرتجعًا، فلا يتأثر
         # بإشعارات الدائن السابقة ولا يُقيد بكمية السطر الأصلي.
-        if data.note_type == "credit" and quantity + returned_qty.get(original_line.id, Decimal("0")) > Decimal(str(original_line.quantity)):
+        # الأصناف المتسلسلة تُقاس بالسيريالات الفعلية المحددة، لا بمجموع
+        # الكمية التاريخي؛ حتى لا يُرفض سيريال مختلف بسبب مرتجع سابق للسطر.
+        serial_return_requested = bool(line.serial_ids)
+        if data.note_type == "credit" and not serial_return_requested and quantity + returned_qty.get(original_line.id, Decimal("0")) > Decimal(str(original_line.quantity)):
             raise HTTPException(400, f"كمية المرتجع للصنف '{original_line.description_ar}' تتجاوز الكمية المتاحة للمرتجع")
         if line.inventory_item_id and line.inventory_item_id != original_line.inventory_item_id:
             raise HTTPException(400, "الصنف المرتجع لا يطابق سطر الفاتورة الأصلية")
