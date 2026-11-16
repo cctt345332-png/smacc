@@ -2718,7 +2718,7 @@ async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, ori
         rep = await db.get(SalesRep, original_invoice.rep_id)
         warehouse_id = rep.warehouse_id if rep else None
 
-    for _line, original_line, serial_ids, _taxable, _vat, _total_line, _return_condition in validated_lines:
+    for _line, original_line, serial_ids, _return_price, _return_vat_rate, _taxable, _vat, _total_line, _return_condition in validated_lines:
         if not original_line.inventory_item_id:
             continue
         item = await get_item(db, tenant_id, original_line.inventory_item_id)
