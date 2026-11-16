@@ -3,7 +3,7 @@ import { useEffect, useState, use } from "react";
 import { getEmployees, getSalarySettlementReport, createSalarySettlement } from "@/lib/hr";
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
-const money = (v: any) => Number(v || 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (v: any) => Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function SalarySettlementsPage(props: { params: Promise<{ locale: string }> }) {
   const { locale } = use(props.params); const ar = locale === "ar"; const now = new Date();

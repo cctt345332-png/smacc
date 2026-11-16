@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import { getEmployees, getWithdrawals, createWithdrawal, approveWithdrawal, rejectWithdrawal } from "@/lib/hr";
-const money = (v: any) => Number(v || 0).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (v: any) => Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export default function WithdrawalsPage(props: { params: Promise<{ locale: string }> }) {
   const { locale } = use(props.params); const now = new Date();
   const [employees, setEmployees] = useState<any[]>([]); const [rows, setRows] = useState<any[]>([]); const [filterEmployee, setFilterEmployee] = useState(""); const [filterMonth, setFilterMonth] = useState(now.getMonth() + 1); const [filterYear, setFilterYear] = useState(now.getFullYear());
