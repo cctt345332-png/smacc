@@ -654,13 +654,17 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
         _, withdrawals, deductions, advances, values = await build_salary_settlement(db, tenant_id, employee.id, month, year)
         basic, allowances, gross, withdrawal_total, deduction_total, loan_total, calculated_net = values
         row = existing.get(employee.id)
-        net = Decimal(str(row.net_salary)) if row else calculated_net
-        paid = Decimal(str(row.paid_amount or 0)) if row else Decimal("0")
+        cash_paid = Decimal(str(row.paid_amount or 0)) if row else Decimal("0")
         display_withdrawals = (Decimal(str(row.withdrawals_total or 0)) + withdrawal_total) if row else withdrawal_total
         display_deductions = (Decimal(str(row.deductions_total or 0)) + deduction_total) if row else deduction_total
         display_loans = Decimal(str(row.loan_installments_total or 0)) if row else loan_total
         display_gross = Decimal(str(row.gross_salary or 0)) if row else gross
         obligations = display_withdrawals + display_deductions + display_loans
+        # السحبية مبلغ استلمه الموظف مسبقًا، لذلك تظهر في «المدفوع».
+        # الصافي هو المستحق بعد السحبيات والخصومات، ولا نطرح السحبية مرة ثانية من المتبقي.
+        net = max(Decimal("0"), display_gross - obligations)
+        paid = display_withdrawals + cash_paid
+        remaining = max(Decimal("0"), net - cash_paid)
         carryover = max(Decimal("0"), obligations - display_gross)
         result.append({
             "employee": {"id": employee.id, "full_name_ar": employee.full_name_ar, "employee_number": employee.employee_number, "job_title_ar": employee.job_title_ar},
@@ -668,7 +672,7 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
             "basic_salary": float(row.basic_salary if row else basic), "total_allowances": float(row.total_allowances if row else allowances), "gross_salary": float(display_gross),
             "withdrawals_total": float(display_withdrawals), "deductions_total": float(display_deductions),
             "loan_installments_total": float(display_loans), "net_salary": float(net), "paid_amount": float(paid),
-            "remaining_amount": float(max(Decimal("0"), net - paid)),
+            "remaining_amount": float(remaining),
             "carryover_amount": float(carryover),
             "withdrawals": withdrawals, "deductions": deductions,
         })
@@ -684,7 +688,14 @@ async def record_salary_settlement_payment(db: AsyncSession, tenant_id: str, use
     amount = Decimal(str(data.get("amount", 0)))
     if amount <= 0:
         raise HTTPException(400, "مبلغ التسليم يجب أن يكون أكبر من صفر")
-    remaining = max(Decimal("0"), Decimal(str(settlement.net_salary or 0)) - Decimal(str(settlement.paid_amount or 0)))
+    calculated_net = max(
+        Decimal("0"), Decimal(str(settlement.gross_salary or 0))
+        - Decimal(str(settlement.withdrawals_total or 0))
+        - Decimal(str(settlement.deductions_total or 0))
+        - Decimal(str(settlement.loan_installments_total or 0))
+    )
+    settlement.net_salary = calculated_net
+    remaining = max(Decimal("0"), calculated_net - Decimal(str(settlement.paid_amount or 0)))
     if amount > remaining:
         raise HTTPException(400, f"مبلغ التسليم أكبر من المتبقي: {remaining}")
     payment = SalarySettlementPayment(
