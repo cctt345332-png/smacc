@@ -2,6 +2,7 @@
 HR Service — منطق الأعمال للموارد البشرية
 """
 import uuid
+import hashlib
 from datetime import datetime, date, timedelta, time
 from decimal import Decimal
 from typing import Optional
@@ -459,6 +460,47 @@ async def reject_advance(db: AsyncSession, tenant_id: str, advance_id: str, user
     await db.commit(); await db.refresh(advance); return advance
 
 
+async def update_advance(db: AsyncSession, tenant_id: str, advance_id: str, data: dict) -> EmployeeAdvance:
+    advance = await db.scalar(select(EmployeeAdvance).where(EmployeeAdvance.id == advance_id, EmployeeAdvance.tenant_id == tenant_id))
+    if not advance:
+        raise HTTPException(404, "السلفة غير موجودة")
+    if advance.paid_amount and Decimal(str(advance.paid_amount)) > 0:
+        raise HTTPException(409, "لا يمكن تعديل سلفة بدأ سدادها")
+    legacy_id = hashlib.md5(f"legacy-withdrawal:{advance.id}".encode()).hexdigest()
+    if await db.scalar(select(EmployeeWithdrawal.id).where(EmployeeWithdrawal.id == legacy_id)):
+        raise HTTPException(409, "هذه العملية مرحّلة كسحبية قديمة؛ عدّلها من شاشة سحبيات الراتب")
+    if "total_amount" in data:
+        advance.total_amount = Decimal(str(data["total_amount"]))
+    if "monthly_installment" in data:
+        advance.monthly_installment = Decimal(str(data["monthly_installment"]))
+    if advance.total_amount <= 0 or advance.monthly_installment <= 0 or advance.monthly_installment > advance.total_amount:
+        raise HTTPException(400, "قيمة السلفة والقسط غير صحيحة")
+    if "start_month" in data:
+        advance.start_month = int(data["start_month"])
+    if "start_year" in data:
+        advance.start_year = int(data["start_year"])
+    if advance.start_month < 1 or advance.start_month > 12:
+        raise HTTPException(400, "شهر بداية السداد غير صحيح")
+    if "reason" in data:
+        advance.reason = _optional_text(data.get("reason"))
+    await db.commit(); await db.refresh(advance)
+    return advance
+
+
+async def delete_advance(db: AsyncSession, tenant_id: str, advance_id: str):
+    advance = await db.scalar(select(EmployeeAdvance).where(EmployeeAdvance.id == advance_id, EmployeeAdvance.tenant_id == tenant_id))
+    if not advance:
+        raise HTTPException(404, "السلفة غير موجودة")
+    if advance.paid_amount and Decimal(str(advance.paid_amount)) > 0:
+        raise HTTPException(409, "لا يمكن حذف سلفة بدأ سدادها")
+    legacy_id = hashlib.md5(f"legacy-withdrawal:{advance.id}".encode()).hexdigest()
+    if await db.scalar(select(EmployeeWithdrawal.id).where(EmployeeWithdrawal.id == legacy_id)):
+        raise HTTPException(409, "هذه العملية مرحّلة كسحبية قديمة؛ لا تحذفها من شاشة السلف")
+    await db.delete(advance)
+    await db.commit()
+    return {"deleted": True, "id": advance_id}
+
+
 # ─── Direct monthly salary withdrawals and settlements ────────────────
 async def get_withdrawals(
     db: AsyncSession, tenant_id: str, employee_id: str | None = None,
@@ -512,6 +554,46 @@ async def review_withdrawal(db: AsyncSession, tenant_id: str, withdrawal_id: str
     withdrawal.approved_at = datetime.utcnow()
     await db.commit(); await db.refresh(withdrawal)
     return withdrawal
+
+
+async def update_withdrawal(db: AsyncSession, tenant_id: str, withdrawal_id: str, data: dict) -> EmployeeWithdrawal:
+    withdrawal = await db.scalar(select(EmployeeWithdrawal).where(
+        EmployeeWithdrawal.id == withdrawal_id, EmployeeWithdrawal.tenant_id == tenant_id
+    ))
+    if not withdrawal:
+        raise HTTPException(404, "السحبية غير موجودة")
+    if withdrawal.settlement_id or withdrawal.status == "settled":
+        raise HTTPException(409, "لا يمكن تعديل سحبية دخلت في تسوية محفوظة")
+    if "amount" in data:
+        amount = Decimal(str(data["amount"]))
+        if amount <= 0:
+            raise HTTPException(400, "مبلغ السحبية يجب أن يكون أكبر من صفر")
+        withdrawal.amount = amount
+    if "withdrawal_date" in data:
+        withdrawal.withdrawal_date = _parse_date(data.get("withdrawal_date"), "تاريخ السحب", withdrawal.withdrawal_date)
+    if "salary_month" in data:
+        withdrawal.salary_month = int(data["salary_month"])
+    if "salary_year" in data:
+        withdrawal.salary_year = int(data["salary_year"])
+    if withdrawal.salary_month < 1 or withdrawal.salary_month > 12 or withdrawal.salary_year < 2000:
+        raise HTTPException(400, "شهر أو سنة الخصم غير صحيحة")
+    if "reason" in data:
+        withdrawal.reason = _optional_text(data.get("reason"))
+    await db.commit(); await db.refresh(withdrawal)
+    return withdrawal
+
+
+async def delete_withdrawal(db: AsyncSession, tenant_id: str, withdrawal_id: str):
+    withdrawal = await db.scalar(select(EmployeeWithdrawal).where(
+        EmployeeWithdrawal.id == withdrawal_id, EmployeeWithdrawal.tenant_id == tenant_id
+    ))
+    if not withdrawal:
+        raise HTTPException(404, "السحبية غير موجودة")
+    if withdrawal.settlement_id or withdrawal.status == "settled":
+        raise HTTPException(409, "لا يمكن حذف سحبية دخلت في تسوية محفوظة")
+    await db.delete(withdrawal)
+    await db.commit()
+    return {"deleted": True, "id": withdrawal_id}
 
 
 def _settlement_values(employee: Employee, withdrawals, deductions, advances):

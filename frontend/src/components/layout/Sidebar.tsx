@@ -136,6 +136,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "سحبيات الراتب" : "Salary withdrawals",       href: `${base}/hr/withdrawals` },
           { label: ar ? "السلف المقسطة" : "Installment advances",      href: `${base}/hr/advances` },
           { label: ar ? "الخصومات والمخالفات" : "Deductions & violations", href: `${base}/hr/deductions` },
+          { label: ar ? "تقرير الموظفين الشهري" : "Monthly employee report", href: `${base}/hr/statements` },
         ],
       }] : []),
       ...(hasAssets ? [{

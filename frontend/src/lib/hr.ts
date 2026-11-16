@@ -20,10 +20,14 @@ export const getAdvances = (params?: any) => api.get("/hr/advances", { params })
 export const createAdvance = (data: any) => api.post("/hr/advances", data);
 export const approveAdvance = (id: string) => api.post(`/hr/advances/${id}/approve`);
 export const rejectAdvance = (id: string) => api.post(`/hr/advances/${id}/reject`);
+export const updateAdvance = (id: string, data: any) => api.patch(`/hr/advances/${id}`, data);
+export const deleteAdvance = (id: string) => api.delete(`/hr/advances/${id}`);
 export const getWithdrawals = (params?: any) => api.get("/hr/withdrawals", { params });
 export const createWithdrawal = (data: any) => api.post("/hr/withdrawals", data);
 export const approveWithdrawal = (id: string) => api.post(`/hr/withdrawals/${id}/approve`);
 export const rejectWithdrawal = (id: string) => api.post(`/hr/withdrawals/${id}/reject`);
+export const updateWithdrawal = (id: string, data: any) => api.patch(`/hr/withdrawals/${id}`, data);
+export const deleteWithdrawal = (id: string) => api.delete(`/hr/withdrawals/${id}`);
 export const getDeductions = (params?: any) => api.get("/hr/deductions", { params });
 export const createDeduction = (data: any) => api.post("/hr/deductions", data);
 export const approveDeduction = (id: string) => api.post(`/hr/deductions/${id}/approve`);

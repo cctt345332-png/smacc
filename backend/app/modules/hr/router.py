@@ -137,6 +137,16 @@ async def reject_advance(advance_id: str, user=Depends(require_role(["manager", 
     return await service.reject_advance(db, user["tenant_id"], advance_id, user["user_id"])
 
 
+@router.patch("/advances/{advance_id}")
+async def update_advance(advance_id: str, data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.update_advance(db, user["tenant_id"], advance_id, data)
+
+
+@router.delete("/advances/{advance_id}")
+async def delete_advance(advance_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.delete_advance(db, user["tenant_id"], advance_id)
+
+
 @router.get("/withdrawals")
 async def list_withdrawals(
     employee_id: Optional[str] = None, month: Optional[int] = None, year: Optional[int] = None,
@@ -158,6 +168,16 @@ async def approve_withdrawal(withdrawal_id: str, user=Depends(require_role(["man
 @router.post("/withdrawals/{withdrawal_id}/reject")
 async def reject_withdrawal(withdrawal_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
     return await service.review_withdrawal(db, user["tenant_id"], withdrawal_id, user["user_id"], False)
+
+
+@router.patch("/withdrawals/{withdrawal_id}")
+async def update_withdrawal(withdrawal_id: str, data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.update_withdrawal(db, user["tenant_id"], withdrawal_id, data)
+
+
+@router.delete("/withdrawals/{withdrawal_id}")
+async def delete_withdrawal(withdrawal_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.delete_withdrawal(db, user["tenant_id"], withdrawal_id)
 
 
 @router.get("/salary-settlements")
