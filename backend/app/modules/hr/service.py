@@ -656,6 +656,8 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
         row = existing.get(employee.id)
         net = Decimal(str(row.net_salary)) if row else calculated_net
         paid = Decimal(str(row.paid_amount or 0)) if row else Decimal("0")
+        obligations = withdrawal_total + deduction_total + loan_total
+        carryover = max(Decimal("0"), obligations - gross)
         result.append({
             "employee": {"id": employee.id, "full_name_ar": employee.full_name_ar, "employee_number": employee.employee_number, "job_title_ar": employee.job_title_ar},
             "settlement": row,
@@ -663,9 +665,36 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
             "withdrawals_total": float(withdrawal_total), "deductions_total": float(deduction_total),
             "loan_installments_total": float(loan_total), "net_salary": float(net), "paid_amount": float(paid),
             "remaining_amount": float(max(Decimal("0"), net - paid)),
+            "carryover_amount": float(carryover),
             "withdrawals": withdrawals, "deductions": deductions,
         })
     return {"month": month, "year": year, "rows": result}
+
+
+async def record_salary_settlement_payment(db: AsyncSession, tenant_id: str, user_id: str, settlement_id: str, data: dict):
+    settlement = await db.scalar(select(SalarySettlement).where(
+        SalarySettlement.id == settlement_id, SalarySettlement.tenant_id == tenant_id
+    ))
+    if not settlement:
+        raise HTTPException(404, "تسوية الراتب غير موجودة")
+    amount = Decimal(str(data.get("amount", 0)))
+    if amount <= 0:
+        raise HTTPException(400, "مبلغ التسليم يجب أن يكون أكبر من صفر")
+    remaining = max(Decimal("0"), Decimal(str(settlement.net_salary or 0)) - Decimal(str(settlement.paid_amount or 0)))
+    if amount > remaining:
+        raise HTTPException(400, f"مبلغ التسليم أكبر من المتبقي: {remaining}")
+    payment = SalarySettlementPayment(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, settlement_id=settlement.id,
+        amount=amount, payment_method=_optional_text(data.get("payment_method")) or "cash",
+        paid_by=user_id, paid_at=datetime.utcnow(),
+    )
+    db.add(payment)
+    settlement.paid_amount = Decimal(str(settlement.paid_amount or 0)) + amount
+    settlement.status = "paid" if settlement.paid_amount >= settlement.net_salary else "partially_paid"
+    settlement.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(settlement)
+    return {"payment": payment, "settlement": settlement}
 
 
 async def create_salary_settlement(db: AsyncSession, tenant_id: str, user_id: str, employee_id: str, month: int, year: int):

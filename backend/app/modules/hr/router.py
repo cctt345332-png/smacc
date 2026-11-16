@@ -210,6 +210,14 @@ async def create_salary_settlement(
     return await service.create_salary_settlement(db, user["tenant_id"], user["user_id"], employee_id, month, year)
 
 
+@router.post("/salary-settlements/{settlement_id}/payments", status_code=201)
+async def record_salary_settlement_payment(
+    settlement_id: str, data: dict,
+    user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db),
+):
+    return await service.record_salary_settlement_payment(db, user["tenant_id"], user["user_id"], settlement_id, data)
+
+
 @router.get("/deductions")
 async def list_deductions(status: Optional[str] = None, employee_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await service.get_deductions(db, tenant_id, status, employee_id)
