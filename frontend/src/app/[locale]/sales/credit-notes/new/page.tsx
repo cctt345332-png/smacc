@@ -15,6 +15,7 @@ const today = () => new Date().toISOString().split("T")[0];
 interface Line {
   picked: PickedItem;
   vat_rate: string;
+  prices_include_vat: boolean;
   original_invoice_line_id?: string;
   original_serial_ids?: string[];
   return_serial_ids?: string[];
@@ -25,13 +26,15 @@ interface Line {
 const parseSerialIds = (line: any): string[] => {
   try {
     const ids = JSON.parse(line.serial_ids_json || "[]");
-    return Array.from(new Set([line.serial_item_id, ...(Array.isArray(ids) ? ids : [])].filter(Boolean).map(String)));
+    const detailIds = Array.isArray(line.serial_details) ? line.serial_details.map((s: any) => s.id) : [];
+    return Array.from(new Set([line.serial_item_id, ...detailIds, ...(Array.isArray(ids) ? ids : [])].filter(Boolean).map(String)));
   } catch { return line.serial_item_id ? [String(line.serial_item_id)] : []; }
 };
 
 const emptyLine = (): Line => ({
   picked: { mode: "free", description_ar: "", unit_price: 0, quantity: 1 },
   vat_rate: "15",
+  prices_include_vat: true,
   manual_serials: "",
 });
 
@@ -39,8 +42,9 @@ function calcLine(l: Line) {
   const qty = l.picked.quantity || 0;
   const price = l.picked.unit_price || 0;
   const vat = parseFloat(l.vat_rate) || 0;
-  const taxable = qty * price;
-  const vatAmt = taxable * vat / 100;
+  const beforeVat = qty * price;
+  const taxable = l.prices_include_vat && vat > 0 ? beforeVat / (1 + vat / 100) : beforeVat;
+  const vatAmt = l.prices_include_vat ? beforeVat - taxable : taxable * vat / 100;
   return { taxable, vatAmt, total: taxable + vatAmt };
 }
 
@@ -92,7 +96,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                 inventory_item_id: line.inventory_item_id || undefined,
                 quantity: Number(line.quantity || 0), unit_price: Number(line.unit_price || 0),
               },
-              vat_rate: "0", manual_serials: serialValues.join("\n"),
+              vat_rate: "0", prices_include_vat: false, manual_serials: serialValues.join("\n"),
             } as Line;
           }));
           return;
@@ -109,6 +113,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
             original_invoice_line_id: l.id, original_serial_ids,
             serial_details: Array.isArray(l.serial_details) ? l.serial_details : [],
             return_serial_ids: selected,
+            prices_include_vat: false,
             picked: {
               mode: l.inventory_item_id ? (original_serial_ids.length ? "serial" : "item") : "free",
               description_ar: l.description_ar, unit_price: Number(l.unit_price),
@@ -141,6 +146,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
             original_serial_ids,
             serial_details: Array.isArray(l.serial_details) ? l.serial_details : [],
             return_serial_ids: [],
+            prices_include_vat: false,
             picked: {
               mode: l.inventory_item_id ? (original_serial_ids.length ? "serial" : "item") : "free",
               description_ar: l.description_ar,
@@ -198,7 +204,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         inventory_item_id: l.picked.inventory_item_id,
         quantity: l.picked.quantity || 0,
         unit_price: l.picked.unit_price || 0,
-        vat_rate: 0,
+        vat_rate: 0, prices_include_vat: false,
         serial_ids: Array.from(new Set((l.manual_serials || "").split(/[\n,\s]+/).map(s => s.trim()).filter(Boolean))),
         line_order: i,
         return_condition: form.return_condition,
@@ -230,6 +236,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
           unit_price: l.picked.unit_price || 0,
           discount_pct: 0,
           vat_rate: parseFloat(l.vat_rate) || 15,
+          prices_include_vat: l.prices_include_vat,
           inventory_item_id: l.picked.inventory_item_id || null,
           serial_item_id: l.picked.serial_item_id || null,
           serial_ids: (l.original_serial_ids || []).length ? l.return_serial_ids || [] : undefined,
@@ -371,6 +378,10 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 70 }} value={returnMode === "customer" ? "0" : line.vat_rate} min="0" max="100" disabled={returnMode === "customer"} onChange={e => setVat(i, e.target.value)} />
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, marginTop: 4, whiteSpace: "nowrap" }}>
+                        <input type="checkbox" checked={line.prices_include_vat} onChange={e => setLines(p => p.map((x, idx) => idx === i ? { ...x, prices_include_vat: e.target.checked } : x))} />
+                        {ar ? "شامل الضريبة" : "VAT inclusive"}
+                      </label>
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.taxable)}</td>
                     <td style={{ textAlign: "end", color: "var(--warning)", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.vatAmt)}</td>

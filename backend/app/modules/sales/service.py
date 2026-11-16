@@ -19,6 +19,7 @@ from app.models.inventory import (
     InventoryItem, ProductVariant, SerialItem, BatchItem, StockMovement, SerialStatus,
 )
 from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine
+from app.models.pos import POSTransaction, POSTransactionLine
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
     QuotationCreate, CreditNoteCreate, RefundRequestCreate
@@ -958,6 +959,28 @@ async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
             for serial_id in dict.fromkeys(line_ids)
             if serial_id in serial_details_by_id
         ]
+    # فواتير POS القديمة كانت تخصم السيريال دون نسخه داخل InvoiceLine.
+    # نسترجعه من معاملة POS حتى يظهر تلقائياً في شاشة المرتجع.
+    if (inv.notes or "").startswith("POS:") and inv.lines:
+        tx = await db.scalar(select(POSTransaction).where(POSTransaction.invoice_id == inv.id))
+        if tx:
+            tx_lines = (await db.execute(select(POSTransactionLine).where(
+                POSTransactionLine.transaction_id == tx.id
+            ).order_by(POSTransactionLine.id))).scalars().all()
+            for index, invoice_line in enumerate(inv.lines):
+                if invoice_line.serial_item_id or invoice_line.serial_ids_json or index >= len(tx_lines):
+                    continue
+                sid = tx_lines[index].serial_item_id
+                if sid:
+                    serial = await db.get(SerialItem, sid)
+                    if serial:
+                        invoice_line.__dict__["serial_item_id"] = sid
+                        invoice_line.__dict__["serial_details"] = [{
+                            "id": str(serial.id), "serial_number": serial.serial_number,
+                            "status": getattr(serial.status, "value", serial.status),
+                            "condition": serial.condition, "cost_price": float(serial.cost_price or 0),
+                        }]
+
     # نضيف الشعار من بيانات الشركة
     from sqlalchemy import select as sa_select
     from app.models.tenant import Tenant
@@ -2318,6 +2341,15 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
                     expected_ids.update(str(serial_id) for serial_id in json.loads(original_line.serial_ids_json or "[]"))
                 except (TypeError, ValueError):
                     raise HTTPException(400, "بيانات سيريالات الفاتورة الأصلية غير صالحة")
+                if not expected_ids and original.notes and original.notes.startswith("POS:"):
+                    tx = await db.scalar(select(POSTransaction).where(POSTransaction.invoice_id == original.id))
+                    if tx:
+                        tx_lines = (await db.execute(select(POSTransactionLine).where(
+                            POSTransactionLine.transaction_id == tx.id
+                        ).order_by(POSTransactionLine.id))).scalars().all()
+                        source_index = list(original.lines).index(original_line)
+                        if source_index < len(tx_lines) and tx_lines[source_index].serial_item_id:
+                            expected_ids.add(str(tx_lines[source_index].serial_item_id))
                 if not serial_ids:
                     raise HTTPException(400, f"حدد السيريال المرتجع للصنف '{original_line.description_ar}'")
                 if Decimal(len(serial_ids)) != quantity:
@@ -2332,17 +2364,22 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
             elif tracking_type in ("batch", "variant"):
                 raise HTTPException(400, "مرتجع التشغيلة أو المتغير يحتاج تحديد هويته التشغيلية قبل تمكينه")
 
-        # يستمد السعر والضريبة والوصف من الأصل؛ لا يسمح لواجهة العميل بتغيير الأساس المالي للمرتجع.
+        # سعر المرتجع يظل افتراضياً سعر الأصل، ويمكن للمستخدم تحديد السعر
+        # وإخبار النظام هل هو شامل الضريبة أم صافٍ.
+        return_price = Decimal(str(line.unit_price if line.unit_price is not None else original_line.unit_price))
+        return_vat_rate = Decimal(str(line.vat_rate if line.vat_rate is not None else original_line.vat_rate))
+        if line.prices_include_vat and return_vat_rate > 0:
+            return_price = return_price / (Decimal("1") + return_vat_rate / Decimal("100"))
         _sub, _disc, taxable, vat, total_line = _calc_line(
             quantity,
-            Decimal(str(original_line.unit_price)),
-            Decimal(str(original_line.discount_pct)),
-            Decimal(str(original_line.vat_rate)),
+            return_price,
+            Decimal(str(line.discount_pct or 0)),
+            return_vat_rate,
         )
         taxable_total += taxable
         total_vat += vat
         total += total_line
-        validated_lines.append((line, original_line, serial_ids, taxable, vat, total_line, return_condition))
+        validated_lines.append((line, original_line, serial_ids, return_price, return_vat_rate, taxable, vat, total_line, return_condition))
 
     cn_id = str(uuid.uuid4())
     issue_date = data.issue_date.replace(tzinfo=None)
@@ -2366,11 +2403,11 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
 
     try:
         db.add(cn)
-        for i, (line, original_line, serial_ids, taxable, vat, total_line, return_condition) in enumerate(validated_lines):
+        for i, (line, original_line, serial_ids, return_price, return_vat_rate, taxable, vat, total_line, return_condition) in enumerate(validated_lines):
             db.add(CreditNoteLine(
                 id=str(uuid.uuid4()), credit_note_id=cn_id, original_invoice_line_id=original_line.id,
                 line_order=i, description_ar=original_line.description_ar, quantity=Decimal(str(line.quantity)),
-                unit_price=Decimal(str(original_line.unit_price)), vat_rate=Decimal(str(original_line.vat_rate)),
+                unit_price=return_price, vat_rate=return_vat_rate,
                 subtotal=taxable, vat_amount=vat, total=total_line,
                 inventory_item_id=original_line.inventory_item_id, variant_id=original_line.variant_id,
                 serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
