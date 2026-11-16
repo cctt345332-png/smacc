@@ -491,11 +491,12 @@ async def delete_advance(db: AsyncSession, tenant_id: str, advance_id: str):
     advance = await db.scalar(select(EmployeeAdvance).where(EmployeeAdvance.id == advance_id, EmployeeAdvance.tenant_id == tenant_id))
     if not advance:
         raise HTTPException(404, "السلفة غير موجودة")
-    if advance.paid_amount and Decimal(str(advance.paid_amount)) > 0:
-        raise HTTPException(409, "لا يمكن حذف سلفة بدأ سدادها")
     legacy_id = hashlib.md5(f"legacy-withdrawal:{advance.id}".encode()).hexdigest()
-    if await db.scalar(select(EmployeeWithdrawal.id).where(EmployeeWithdrawal.id == legacy_id)):
-        raise HTTPException(409, "هذه العملية مرحّلة كسحبية قديمة؛ لا تحذفها من شاشة السلف")
+    legacy_withdrawal = await db.scalar(select(EmployeeWithdrawal).where(EmployeeWithdrawal.id == legacy_id))
+    if legacy_withdrawal:
+        if legacy_withdrawal.settlement_id or legacy_withdrawal.status == "settled":
+            raise HTTPException(409, "لا يمكن حذف سلفة مرتبطة بتسوية راتب محفوظة")
+        await db.delete(legacy_withdrawal)
     await db.delete(advance)
     await db.commit()
     return {"deleted": True, "id": advance_id}
