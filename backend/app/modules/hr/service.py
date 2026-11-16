@@ -643,6 +643,46 @@ async def get_salary_settlements(db: AsyncSession, tenant_id: str, month: int, y
     return (await db.execute(q.order_by(SalarySettlement.created_at.desc()))).scalars().all()
 
 
+async def _get_previous_salary_carryover(db: AsyncSession, tenant_id: str, employee: Employee, month: int, year: int, depth: int = 12) -> Decimal:
+    """حساب العجز المرحّل من الأشهر السابقة بدون إنشاء سجل جديد أو تعديل القديم."""
+    if depth <= 0:
+        return Decimal("0")
+    previous_month = month - 1 if month > 1 else 12
+    previous_year = year if month > 1 else year - 1
+    saved = await db.scalar(select(SalarySettlement).where(
+        SalarySettlement.tenant_id == tenant_id, SalarySettlement.employee_id == employee.id,
+        SalarySettlement.month == previous_month, SalarySettlement.year == previous_year,
+    ))
+    if saved:
+        gross = Decimal(str(saved.gross_salary or 0))
+        obligations = sum((Decimal(str(v or 0)) for v in (
+            saved.withdrawals_total, saved.deductions_total, saved.loan_installments_total,
+        )), Decimal("0"))
+    else:
+        previous_start = date(previous_year, previous_month, 1)
+        previous_end = date(year, month, 1) - timedelta(days=1)
+        withdrawals = (await db.execute(select(EmployeeWithdrawal).where(
+            EmployeeWithdrawal.tenant_id == tenant_id, EmployeeWithdrawal.employee_id == employee.id,
+            EmployeeWithdrawal.salary_month == previous_month, EmployeeWithdrawal.salary_year == previous_year,
+            EmployeeWithdrawal.status.in_(("approved", "settled")),
+        ))).scalars().all()
+        deductions = (await db.execute(select(EmployeeDeduction).where(
+            EmployeeDeduction.tenant_id == tenant_id, EmployeeDeduction.employee_id == employee.id,
+            EmployeeDeduction.status == "approved", EmployeeDeduction.deduction_date >= previous_start,
+            EmployeeDeduction.deduction_date <= previous_end,
+        ))).scalars().all()
+        advances = (await db.execute(select(EmployeeAdvance).where(
+            EmployeeAdvance.tenant_id == tenant_id, EmployeeAdvance.employee_id == employee.id,
+            EmployeeAdvance.status == "active",
+            ((EmployeeAdvance.start_year < previous_year) | ((EmployeeAdvance.start_year == previous_year) & (EmployeeAdvance.start_month <= previous_month))),
+            EmployeeAdvance.paid_amount < EmployeeAdvance.total_amount,
+        ))).scalars().all()
+        _, _, gross, withdrawal_total, deduction_total, loan_total, _ = _settlement_values(employee, withdrawals, deductions, advances)
+        obligations = withdrawal_total + deduction_total + loan_total
+    current_carry = max(Decimal("0"), obligations - gross)
+    return current_carry + await _get_previous_salary_carryover(db, tenant_id, employee, previous_month, previous_year, depth - 1)
+
+
 async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: int, year: int, employee_id: str | None = None):
     employees = await get_employees(db, tenant_id, status="active")
     if employee_id:
@@ -659,7 +699,8 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
         display_deductions = (Decimal(str(row.deductions_total or 0)) + deduction_total) if row else deduction_total
         display_loans = Decimal(str(row.loan_installments_total or 0)) if row else loan_total
         display_gross = Decimal(str(row.gross_salary or 0)) if row else gross
-        obligations = display_withdrawals + display_deductions + display_loans
+        carried_from_previous = await _get_previous_salary_carryover(db, tenant_id, employee, month, year)
+        obligations = display_withdrawals + display_deductions + display_loans + carried_from_previous
         # السحبية مبلغ استلمه الموظف مسبقًا، لذلك تظهر في «المدفوع».
         # الصافي هو المستحق بعد السحبيات والخصومات، ولا نطرح السحبية مرة ثانية من المتبقي.
         net = max(Decimal("0"), display_gross - obligations)
@@ -674,6 +715,7 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
             "loan_installments_total": float(display_loans), "net_salary": float(net), "paid_amount": float(paid),
             "remaining_amount": float(remaining),
             "carryover_amount": float(carryover),
+            "carried_from_previous": float(carried_from_previous),
             "withdrawals": withdrawals, "deductions": deductions,
         })
     return {"month": month, "year": year, "rows": result}
