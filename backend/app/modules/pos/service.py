@@ -1343,7 +1343,8 @@ async def refund_transaction(db: AsyncSession, tenant_id: str, user_id: str, tx_
     tx = await db.get(POSTransaction, tx_id)
     if not tx or tx.tenant_id != tenant_id:
         raise HTTPException(404, "المعاملة غير موجودة")
-    if tx.status != "completed":
+    already_refunded = tx.status == "refunded"
+    if tx.status not in ("completed", "refunded"):
         raise HTTPException(400, "لا يمكن استرداد هذه المعاملة")
 
     # منع إنشاء مرتجعين لنفس فاتورة POS.
@@ -1361,8 +1362,9 @@ async def refund_transaction(db: AsyncSession, tenant_id: str, user_id: str, tx_
         select(POSTransactionLine).where(POSTransactionLine.transaction_id == tx_id)
     )
     lines = lines_r.scalars().all()
+    inventory_lines = [] if already_refunded else lines
 
-    for line in lines:
+    for line in inventory_lines:
         if not line.inventory_item_id:
             continue
         from app.models.inventory import InventoryItem
@@ -1507,7 +1509,7 @@ async def refund_transaction(db: AsyncSession, tenant_id: str, user_id: str, tx_
     tx.status = "refunded"
 
     # تحديث إجماليات الجلسة
-    session = await db.get(POSSession, tx.session_id)
+    session = None if already_refunded else await db.get(POSSession, tx.session_id)
     if session:
         session.total_sales -= tx.total
         session.total_vat -= tx.vat_amount
