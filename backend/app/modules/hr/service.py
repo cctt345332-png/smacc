@@ -15,6 +15,7 @@ from app.models.hr import (
     Department, Employee, AttendanceRecord,
     LeaveRequest, PayrollRecord, EmployeeDeduction,
     HRSettings, EmployeeAdvance, EmployeeExpense, PayrollPayment,
+    EmployeeWithdrawal, SalarySettlement, SalarySettlementPayment,
     EmployeeStatus, LeaveStatus,
 )
 
@@ -456,6 +457,156 @@ async def reject_advance(db: AsyncSession, tenant_id: str, advance_id: str, user
     if advance.status != "pending": raise HTTPException(400, "السلفة ليست بانتظار الاعتماد")
     advance.status = "rejected"; advance.approved_by = user_id; advance.approved_at = datetime.utcnow()
     await db.commit(); await db.refresh(advance); return advance
+
+
+# ─── Direct monthly salary withdrawals and settlements ────────────────
+async def get_withdrawals(
+    db: AsyncSession, tenant_id: str, employee_id: str | None = None,
+    month: int | None = None, year: int | None = None, status: str | None = None,
+):
+    q = select(EmployeeWithdrawal).where(EmployeeWithdrawal.tenant_id == tenant_id).options(selectinload(EmployeeWithdrawal.employee))
+    if employee_id:
+        q = q.where(EmployeeWithdrawal.employee_id == employee_id)
+    if month:
+        q = q.where(EmployeeWithdrawal.salary_month == month)
+    if year:
+        q = q.where(EmployeeWithdrawal.salary_year == year)
+    if status:
+        q = q.where(EmployeeWithdrawal.status == status)
+    return (await db.execute(q.order_by(EmployeeWithdrawal.withdrawal_date.desc(), EmployeeWithdrawal.created_at.desc()))).scalars().all()
+
+
+async def create_withdrawal(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> EmployeeWithdrawal:
+    employee = await db.scalar(select(Employee).where(
+        Employee.id == data.get("employee_id"), Employee.tenant_id == tenant_id, Employee.is_active.is_(True)
+    ))
+    if not employee:
+        raise HTTPException(404, "الموظف غير موجود أو غير نشط")
+    amount = Decimal(str(data.get("amount", 0)))
+    salary_month = int(data.get("salary_month"))
+    salary_year = int(data.get("salary_year"))
+    if amount <= 0 or salary_month < 1 or salary_month > 12 or salary_year < 2000:
+        raise HTTPException(400, "بيانات السحبية أو شهر الخصم غير صحيحة")
+    withdrawal = EmployeeWithdrawal(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, employee_id=employee.id,
+        withdrawal_date=_parse_date(data.get("withdrawal_date"), "تاريخ السحب", date.today()),
+        salary_month=salary_month, salary_year=salary_year, amount=amount,
+        reason=_optional_text(data.get("reason")), status="pending", created_by=user_id,
+        created_at=datetime.utcnow(),
+    )
+    db.add(withdrawal)
+    await db.commit(); await db.refresh(withdrawal)
+    return withdrawal
+
+
+async def review_withdrawal(db: AsyncSession, tenant_id: str, withdrawal_id: str, user_id: str, approved: bool):
+    withdrawal = await db.scalar(select(EmployeeWithdrawal).where(
+        EmployeeWithdrawal.id == withdrawal_id, EmployeeWithdrawal.tenant_id == tenant_id
+    ))
+    if not withdrawal:
+        raise HTTPException(404, "السحبية غير موجودة")
+    if withdrawal.status != "pending":
+        raise HTTPException(400, "السحبية تمت مراجعتها مسبقًا")
+    withdrawal.status = "approved" if approved else "rejected"
+    withdrawal.approved_by = user_id
+    withdrawal.approved_at = datetime.utcnow()
+    await db.commit(); await db.refresh(withdrawal)
+    return withdrawal
+
+
+def _settlement_values(employee: Employee, withdrawals, deductions, advances):
+    basic = Decimal(str(employee.basic_salary or 0))
+    allowances = sum((Decimal(str(v or 0)) for v in (
+        employee.housing_allowance, employee.transport_allowance, employee.other_allowances,
+    )), Decimal("0"))
+    gross = basic + allowances
+    withdrawal_total = sum((Decimal(str(x.amount or 0)) for x in withdrawals), Decimal("0"))
+    deduction_total = sum((Decimal(str(x.amount or 0)) for x in deductions), Decimal("0"))
+    loan_total = sum((min(Decimal(str(a.monthly_installment or 0)), max(Decimal("0"), Decimal(str(a.total_amount or 0)) - Decimal(str(a.paid_amount or 0)))) for a in advances), Decimal("0"))
+    net = max(Decimal("0"), gross - withdrawal_total - deduction_total - loan_total)
+    return basic, allowances, gross, withdrawal_total, deduction_total, loan_total, net
+
+
+async def build_salary_settlement(db: AsyncSession, tenant_id: str, employee_id: str, month: int, year: int):
+    employee = await db.scalar(select(Employee).where(Employee.id == employee_id, Employee.tenant_id == tenant_id))
+    if not employee:
+        raise HTTPException(404, "الموظف غير موجود")
+    month_start = date(year, month, 1)
+    month_end = date(year + (month == 12), 1 if month == 12 else month + 1, 1) - timedelta(days=1)
+    withdrawals = (await db.execute(select(EmployeeWithdrawal).where(
+        EmployeeWithdrawal.tenant_id == tenant_id, EmployeeWithdrawal.employee_id == employee_id,
+        EmployeeWithdrawal.salary_month == month, EmployeeWithdrawal.salary_year == year,
+        EmployeeWithdrawal.status == "approved", EmployeeWithdrawal.settlement_id.is_(None),
+    ))).scalars().all()
+    deductions = (await db.execute(select(EmployeeDeduction).where(
+        EmployeeDeduction.tenant_id == tenant_id, EmployeeDeduction.employee_id == employee_id,
+        EmployeeDeduction.status == "approved", EmployeeDeduction.deduction_date >= month_start,
+        EmployeeDeduction.deduction_date <= month_end,
+    ))).scalars().all()
+    advances = (await db.execute(select(EmployeeAdvance).where(
+        EmployeeAdvance.tenant_id == tenant_id, EmployeeAdvance.employee_id == employee_id,
+        EmployeeAdvance.status == "active",
+        ((EmployeeAdvance.start_year < year) | ((EmployeeAdvance.start_year == year) & (EmployeeAdvance.start_month <= month))),
+        EmployeeAdvance.paid_amount < EmployeeAdvance.total_amount,
+    ))).scalars().all()
+    values = _settlement_values(employee, withdrawals, deductions, advances)
+    return employee, withdrawals, deductions, advances, values
+
+
+async def get_salary_settlements(db: AsyncSession, tenant_id: str, month: int, year: int, employee_id: str | None = None):
+    q = select(SalarySettlement).where(SalarySettlement.tenant_id == tenant_id, SalarySettlement.month == month, SalarySettlement.year == year).options(selectinload(SalarySettlement.employee))
+    if employee_id:
+        q = q.where(SalarySettlement.employee_id == employee_id)
+    return (await db.execute(q.order_by(SalarySettlement.created_at.desc()))).scalars().all()
+
+
+async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: int, year: int, employee_id: str | None = None):
+    employees = await get_employees(db, tenant_id, status="active")
+    if employee_id:
+        employees = [employee for employee in employees if employee.id == employee_id]
+    existing_rows = await get_salary_settlements(db, tenant_id, month, year, employee_id)
+    existing = {row.employee_id: row for row in existing_rows}
+    result = []
+    for employee in employees:
+        _, withdrawals, deductions, advances, values = await build_salary_settlement(db, tenant_id, employee.id, month, year)
+        basic, allowances, gross, withdrawal_total, deduction_total, loan_total, calculated_net = values
+        row = existing.get(employee.id)
+        net = Decimal(str(row.net_salary)) if row else calculated_net
+        paid = Decimal(str(row.paid_amount or 0)) if row else Decimal("0")
+        result.append({
+            "employee": {"id": employee.id, "full_name_ar": employee.full_name_ar, "employee_number": employee.employee_number, "job_title_ar": employee.job_title_ar},
+            "settlement": row,
+            "basic_salary": float(basic), "total_allowances": float(allowances), "gross_salary": float(gross),
+            "withdrawals_total": float(withdrawal_total), "deductions_total": float(deduction_total),
+            "loan_installments_total": float(loan_total), "net_salary": float(net), "paid_amount": float(paid),
+            "remaining_amount": float(max(Decimal("0"), net - paid)),
+            "withdrawals": withdrawals, "deductions": deductions,
+        })
+    return {"month": month, "year": year, "rows": result}
+
+
+async def create_salary_settlement(db: AsyncSession, tenant_id: str, user_id: str, employee_id: str, month: int, year: int):
+    existing = await db.scalar(select(SalarySettlement).where(
+        SalarySettlement.tenant_id == tenant_id, SalarySettlement.employee_id == employee_id,
+        SalarySettlement.month == month, SalarySettlement.year == year,
+    ))
+    if existing:
+        raise HTTPException(409, "تسوية هذا الموظف للشهر موجودة بالفعل")
+    employee, withdrawals, deductions, advances, values = await build_salary_settlement(db, tenant_id, employee_id, month, year)
+    basic, allowances, gross, withdrawal_total, deduction_total, loan_total, net = values
+    settlement = SalarySettlement(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, employee_id=employee_id, month=month, year=year,
+        basic_salary=basic, total_allowances=allowances, gross_salary=gross,
+        withdrawals_total=withdrawal_total, deductions_total=deduction_total,
+        loan_installments_total=loan_total, net_salary=net, paid_amount=Decimal("0"),
+        status="draft", created_by=user_id, created_at=datetime.utcnow(), updated_at=datetime.utcnow(),
+    )
+    db.add(settlement)
+    for withdrawal in withdrawals:
+        withdrawal.settlement_id = settlement.id
+        withdrawal.status = "settled"
+    await db.commit(); await db.refresh(settlement); await db.refresh(settlement, attribute_names=["employee"])
+    return settlement
 
 
 async def get_deductions(db: AsyncSession, tenant_id: str, status: str | None = None, employee_id: str | None = None):

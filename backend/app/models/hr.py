@@ -190,6 +190,67 @@ class EmployeeDeduction(Base):
     employee: Mapped["Employee"] = relationship("Employee")
 
 
+class EmployeeWithdrawal(Base):
+    """سحبية عادية من راتب شهر محدد؛ ليست سلفة مقسطة ولا خصمًا إداريًا."""
+    __tablename__ = "hr_employee_withdrawals"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    employee_id: Mapped[str] = mapped_column(String, ForeignKey("hr_employees.id"), index=True)
+    withdrawal_date: Mapped[date] = mapped_column(Date, index=True)
+    salary_month: Mapped[int] = mapped_column(Integer, index=True)
+    salary_year: Mapped[int] = mapped_column(Integer, index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    settlement_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    approved_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    employee: Mapped["Employee"] = relationship("Employee")
+
+
+class SalarySettlement(Base):
+    """تسوية شهرية مباشرة للموظف، بديلة عن إنشاء مسير جديد للمستقبل."""
+    __tablename__ = "hr_salary_settlements"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    employee_id: Mapped[str] = mapped_column(String, ForeignKey("hr_employees.id"), index=True)
+    month: Mapped[int] = mapped_column(Integer)
+    year: Mapped[int] = mapped_column(Integer)
+    basic_salary: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    total_allowances: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    gross_salary: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    withdrawals_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    deductions_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    loan_installments_total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    net_salary: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
+    journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    employee: Mapped["Employee"] = relationship("Employee")
+
+
+class SalarySettlementPayment(Base):
+    """دفعات تسوية الراتب الفعلية، ويسمح بالسداد الجزئي دون تكرار الراتب."""
+    __tablename__ = "hr_salary_settlement_payments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    settlement_id: Mapped[str] = mapped_column(String, ForeignKey("hr_salary_settlements.id"), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    payment_method: Mapped[str] = mapped_column(String(30), default="cash")
+    journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    paid_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
+    paid_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class EmployeeExpense(Base):
     __tablename__ = "hr_employee_expenses"
     id: Mapped[str] = mapped_column(String, primary_key=True)

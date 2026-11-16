@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 from datetime import date
@@ -135,6 +135,59 @@ async def approve_advance(advance_id: str, user=Depends(require_role(["manager",
 @router.post("/advances/{advance_id}/reject")
 async def reject_advance(advance_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
     return await service.reject_advance(db, user["tenant_id"], advance_id, user["user_id"])
+
+
+@router.get("/withdrawals")
+async def list_withdrawals(
+    employee_id: Optional[str] = None, month: Optional[int] = None, year: Optional[int] = None,
+    status: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db),
+):
+    return await service.get_withdrawals(db, tenant_id, employee_id, month, year, status)
+
+
+@router.post("/withdrawals", status_code=201)
+async def create_withdrawal(data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.create_withdrawal(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.post("/withdrawals/{withdrawal_id}/approve")
+async def approve_withdrawal(withdrawal_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.review_withdrawal(db, user["tenant_id"], withdrawal_id, user["user_id"], True)
+
+
+@router.post("/withdrawals/{withdrawal_id}/reject")
+async def reject_withdrawal(withdrawal_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await service.review_withdrawal(db, user["tenant_id"], withdrawal_id, user["user_id"], False)
+
+
+@router.get("/salary-settlements")
+async def list_salary_settlements(
+    month: int, year: int, employee_id: Optional[str] = None,
+    tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db),
+):
+    return await service.get_salary_settlements(db, tenant_id, month, year, employee_id)
+
+
+@router.get("/salary-settlements/report")
+async def salary_settlement_report(
+    month: int, year: int, employee_id: Optional[str] = None,
+    tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db),
+):
+    return await service.get_salary_settlement_report(db, tenant_id, month, year, employee_id)
+
+
+@router.post("/salary-settlements", status_code=201)
+async def create_salary_settlement(
+    data: dict, user=Depends(require_role(["manager", "hr", "accountant"])), db: AsyncSession = Depends(get_db),
+):
+    try:
+        employee_id = str(data.get("employee_id"))
+        month = int(data.get("month")); year = int(data.get("year"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(400, "بيانات الموظف والشهر والسنة مطلوبة") from exc
+    if month < 1 or month > 12 or year < 2000:
+        raise HTTPException(400, "الشهر أو السنة غير صحيحة")
+    return await service.create_salary_settlement(db, user["tenant_id"], user["user_id"], employee_id, month, year)
 
 
 @router.get("/deductions")
