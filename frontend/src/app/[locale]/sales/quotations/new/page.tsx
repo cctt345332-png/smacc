@@ -9,10 +9,10 @@ import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
 const today = () => new Date().toISOString().split("T")[0];
 
-interface Line { picked: PickedItem; discount_pct: string; vat_rate: string; }
+interface Line { picked: PickedItem; discount_pct: string; vat_rate: string; prices_include_vat: boolean; }
 const emptyLine = (): Line => ({
   picked: { mode: "free", description_ar: "", unit_price: 0, quantity: 1 },
-  discount_pct: "0", vat_rate: "15",
+  discount_pct: "0", vat_rate: "15", prices_include_vat: true,
 });
 
 function calcLine(l: Line) {
@@ -22,8 +22,8 @@ function calcLine(l: Line) {
   const vat = parseFloat(l.vat_rate) || 0;
   const gross = qty * price;
   const discAmt = gross * disc / 100;
-  const taxable = gross - discAmt;
-  const vatAmt = taxable * vat / 100;
+  const taxable = l.prices_include_vat && vat > 0 ? (gross - discAmt) / (1 + vat / 100) : gross - discAmt;
+  const vatAmt = l.prices_include_vat ? (gross - discAmt) - taxable : taxable * vat / 100;
   return { gross, discAmt, taxable, vatAmt, total: taxable + vatAmt };
 }
 
@@ -69,6 +69,7 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
           unit_price: l.picked.unit_price || 0,
           discount_pct: parseFloat(l.discount_pct) || 0,
           vat_rate: parseFloat(l.vat_rate) || 15,
+          prices_include_vat: l.prices_include_vat,
         })),
       });
       router.push(`/${locale}/sales/quotations`);
@@ -179,6 +180,10 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 70 }} value={line.vat_rate} min="0" max="100" onChange={e => setField(i, "vat_rate", e.target.value)} />
+                      <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, marginTop: 5, whiteSpace: "nowrap" }}>
+                        <input type="checkbox" checked={line.prices_include_vat} onChange={e => setLines(p => p.map((x, idx) => idx === i ? { ...x, prices_include_vat: e.target.checked } : x))} />
+                        {ar ? "شامل الضريبة" : "VAT inclusive"}
+                      </label>
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.taxable)}</td>
                     <td style={{ textAlign: "end", color: "var(--warning)", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.vatAmt)}</td>

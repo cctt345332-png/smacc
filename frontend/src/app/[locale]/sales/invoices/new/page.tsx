@@ -15,12 +15,14 @@ interface Line {
   picked: PickedItem;
   discount_pct: string;
   vat_rate: string;
+  prices_include_vat: boolean;
 }
 
 const emptyLine = (): Line => ({
   picked: { mode: "free", description_ar: "", unit_price: 0, quantity: 1 },
   discount_pct: "0",
   vat_rate: "15",
+  prices_include_vat: true,
 });
 
 function calcLine(line: Line) {
@@ -32,8 +34,8 @@ function calcLine(line: Line) {
   const discAmt = gross * (disc / 100);
   // سعر البيع من بطاقة الصنف شامل الضريبة؛ نفصل الضريبة بدل إضافتها فوق السعر.
   const totalIncludingVat = gross - discAmt;
-  const taxable = taxRate > 0 ? totalIncludingVat / (1 + taxRate / 100) : totalIncludingVat;
-  const tax = totalIncludingVat - taxable;
+  const taxable = line.prices_include_vat && taxRate > 0 ? totalIncludingVat / (1 + taxRate / 100) : totalIncludingVat;
+  const tax = line.prices_include_vat ? totalIncludingVat - taxable : taxable * taxRate / 100;
   return { gross, discAmt, taxable, tax, total: taxable + tax };
 }
 
@@ -132,6 +134,7 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
       unit_price: l.picked.unit_price || 0,
       discount_pct: parseFloat(l.discount_pct) || 0,
       vat_rate: parseFloat(l.vat_rate) || 15,
+      prices_include_vat: l.prices_include_vat,
       vat_category: "S",
       line_order: i,
       inventory_item_id: l.picked.inventory_item_id || null,
@@ -411,6 +414,10 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 70 }} value={line.vat_rate} min="0" max="100" onChange={e => setLine(i, "vat_rate", e.target.value)} />
+                      <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, whiteSpace: "nowrap" }}>
+                        <input type="checkbox" checked={line.prices_include_vat} onChange={e => setLines(p => p.map((x, idx) => idx === i ? { ...x, prices_include_vat: e.target.checked } : x))} />
+                        {ar ? "شامل الضريبة" : "VAT inclusive"}
+                      </label>
                     </td>
                     <td style={{ textAlign: "end", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.taxable)}</td>
                     <td style={{ textAlign: "end", color: "var(--warning)", fontWeight: 500, verticalAlign: "top", paddingTop: 12 }}>{fmt(c.tax)}</td>

@@ -691,6 +691,7 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         price = Decimal(str(line["unit_price"]))
         disc_pct = Decimal(str(line.get("discount_pct", 0)))
         vat_rate = Decimal(str(line.get("vat_rate", 15)))
+        prices_include_vat = bool(line.get("prices_include_vat", True))
 
         # أسعار البيع المخزنة والمستخدمة في POS شاملة الضريبة.
         gross = qty * price
@@ -698,9 +699,13 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         line_total = gross - disc_amt
         vat_amt = (
             (line_total * vat_rate / (Decimal("100") + vat_rate)).quantize(Decimal("0.01"))
+            if prices_include_vat and vat_rate > 0 else
+            (line_total * vat_rate / Decimal("100")).quantize(Decimal("0.01"))
             if vat_rate > 0 else Decimal("0")
         )
-        taxable = line_total - vat_amt
+        taxable = line_total - vat_amt if prices_include_vat else line_total
+        if not prices_include_vat:
+            line_total = taxable + vat_amt
 
         subtotal += gross
         discount_total += disc_amt
@@ -1194,6 +1199,7 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
     )
     lines = lines_r.scalars().all()
     for i, line in enumerate(lines):
+        import json as _json
         db.add(InvoiceLine(
             id=str(uuid.uuid4()),
             invoice_id=invoice_id,
@@ -1208,6 +1214,9 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
             subtotal=line.quantity * line.unit_price,
             total=line.total,
             inventory_item_id=line.inventory_item_id,
+            serial_item_id=line.serial_item_id,
+            serial_ids_json=_json.dumps([line.serial_item_id]) if line.serial_item_id else None,
+            variant_id=line.variant_id,
         ))
 
     return invoice_id

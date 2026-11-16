@@ -1012,13 +1012,10 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
 
     lines_data = []
     for i, line in enumerate(data.lines):
-        # الأصناف المسجلة تستخدم سعر البيع الموحد من بطاقة الصنف، لا سعراً
-        # مخصصاً مرسلاً من التطبيق أو من أي عميل API آخر. السعر في البطاقة
-        # شامل الضريبة، بينما unit_price المخزن في الفاتورة قبل الضريبة.
-        if line.inventory_item_id:
-            item = await db.get(InventoryItem, line.inventory_item_id)
-            if item and item.sale_price and item.sale_price > 0:
-                line.unit_price = item.sale_price / (Decimal("1") + line.vat_rate / Decimal("100"))
+        # السعر الذي يدخله المستخدم هو المعتمد؛ لا نستبدله بسعر بطاقة الصنف.
+        # نخزن السعر الصافي داخلياً عندما يختار المستخدم أن السعر شامل الضريبة.
+        if line.prices_include_vat and line.vat_rate > 0:
+            line.unit_price = line.unit_price / (Decimal("1") + line.vat_rate / Decimal("100"))
         sub, disc, taxable, vat, tot = _calc_line(line.quantity, line.unit_price, line.discount_pct, line.vat_rate)
         subtotal += sub
         total_discount += disc
@@ -2161,6 +2158,8 @@ async def create_quotation(db: AsyncSession, tenant_id: str, user_id: str, data:
 
     lines_data = []
     for line in data.lines:
+        if line.prices_include_vat and line.vat_rate > 0:
+            line.unit_price = line.unit_price / (Decimal("1") + line.vat_rate / Decimal("100"))
         sub, disc, taxable, vat, tot = _calc_line(line.quantity, line.unit_price, line.discount_pct, line.vat_rate)
         subtotal += sub
         total_vat += vat

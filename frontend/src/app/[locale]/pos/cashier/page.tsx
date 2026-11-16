@@ -24,7 +24,7 @@ const ACTIVITY_CFG: Record<string, { label: string; icon: any; color: string; bg
 interface CartLine {
   id: string; inventory_item_id: string; product_name_ar: string;
   barcode?: string; tracking_type: string; quantity: number;
-  wholesale_price: number; unit_price: number; discount_pct: number; vat_rate: number;
+  wholesale_price: number; unit_price: number; discount_pct: number; vat_rate: number; prices_include_vat: boolean;
   serial_item_id?: string; serial_number?: string;
   variant_id?: string; variant_label?: string;
   batch_id?: string; batch_label?: string;
@@ -37,10 +37,10 @@ interface Product {
 const calcLine = (l: CartLine) => {
   const gross = l.quantity * l.unit_price;
   const disc  = (gross * l.discount_pct) / 100;
-  // أسعار البيع في النظام شاملة الضريبة؛ لا نضيف 15% فوق السعر.
-  const total = gross - disc;
-  const vat   = l.vat_rate > 0 ? (total * l.vat_rate) / (100 + l.vat_rate) : 0;
-  const taxable = total - vat;
+  const beforeVat = gross - disc;
+  const vat = l.vat_rate > 0 ? (l.prices_include_vat ? beforeVat * l.vat_rate / (100 + l.vat_rate) : beforeVat * l.vat_rate / 100) : 0;
+  const taxable = l.prices_include_vat ? beforeVat - vat : beforeVat;
+  const total = l.prices_include_vat ? beforeVat : beforeVat + vat;
   return { gross, disc, taxable, vat, total };
 };
 const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -348,7 +348,7 @@ export default function POSCashierPage() {
       barcode: p.barcode, tracking_type: p.tracking_type,
       wholesale_price: p.sale_price,
       quantity: 1, unit_price: p.sale_price,
-      discount_pct: 0, vat_rate: p.vat_rate, ...extra,
+      discount_pct: 0, vat_rate: p.vat_rate, prices_include_vat: true, ...extra,
     }]);
     setSearch(""); setProducts(allProducts);
     searchRef.current?.focus();
@@ -384,7 +384,7 @@ export default function POSCashierPage() {
     try {
       const res = await createTransaction({
         session_id: session.id,
-        lines: cart.map((l) => ({
+          lines: cart.map((l) => ({
           inventory_item_id: l.inventory_item_id,
           product_name_ar: l.product_name_ar,
           barcode: l.barcode,
@@ -392,6 +392,7 @@ export default function POSCashierPage() {
           unit_price: l.unit_price,
           discount_pct: l.discount_pct,
           vat_rate: l.vat_rate,
+          prices_include_vat: l.prices_include_vat,
           serial_item_id: l.serial_item_id,
           variant_id: l.variant_id,
           batch_id: l.batch_id,
@@ -882,6 +883,10 @@ export default function POSCashierPage() {
                       />
                       <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{sar}</span>
                     </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4, fontSize: 10, color: "var(--text-secondary)" }}>
+                      <input type="checkbox" checked={line.prices_include_vat} onChange={(e) => setCart((c) => c.map((l) => l.id === line.id ? { ...l, prices_include_vat: e.target.checked } : l))} />
+                      {isAr ? "السعر شامل الضريبة" : "Price includes VAT"}
+                    </label>
                     {terminal?.allow_discount && (
                       <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
                         <Icon name="discount" size={11} color="var(--text-muted)" />

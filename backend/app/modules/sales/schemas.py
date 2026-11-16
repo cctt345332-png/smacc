@@ -117,6 +117,7 @@ class InvoiceLineCreate(BaseModel):
     unit_price: Decimal
     discount_pct: Decimal = Decimal("0")
     vat_rate: Decimal = Decimal("15")
+    prices_include_vat: bool = True
     vat_category: str = "S"
     line_order: int = 0
     # ربط المخزون (اختياري)
@@ -283,6 +284,7 @@ class QuotationLineCreate(BaseModel):
     unit_price: Decimal
     discount_pct: Decimal = Decimal("0")
     vat_rate: Decimal = Decimal("15")
+    prices_include_vat: bool = True
     line_order: int = 0
 
 
