@@ -128,7 +128,7 @@ async def get_transaction(tx_id: str, tenant_id=Depends(get_tenant_id), db: Asyn
 
 @router.post("/transactions/{tx_id}/refund")
 async def refund_transaction(tx_id: str, user=Depends(require_role(["manager","cashier"])), db: AsyncSession = Depends(get_db)):
-    return await service.refund_transaction(db, user["tenant_id"], tx_id)
+    return await service.refund_transaction(db, user["tenant_id"], user["user_id"], tx_id)
 
 
 # ─── POS Purchase (شراء من نقطة البيع) ──────────────────────────────

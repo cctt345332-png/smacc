@@ -65,7 +65,8 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
   const [customerId, setCustomerId] = useState("");
 
   useEffect(() => {
-    getInvoices({ status: "confirmed" }).then(({ data }) => setInvoices(data)).catch(() => {});
+    // فواتير POS تحفظ كمدفوعة ومبسطة، وليست confirmed فقط.
+    getInvoices().then(({ data }) => setInvoices(data)).catch(() => {});
     getCustomers().then(({ data }) => setCustomers(data)).catch(() => {});
   }, []);
 

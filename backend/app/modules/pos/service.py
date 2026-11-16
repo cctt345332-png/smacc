@@ -1339,12 +1339,22 @@ async def get_my_transactions(db: AsyncSession, tenant_id: str, user_id: str, li
 
 # ─── Refund Transaction ───────────────────────────────────────────────
 
-async def refund_transaction(db: AsyncSession, tenant_id: str, tx_id: str) -> dict:
+async def refund_transaction(db: AsyncSession, tenant_id: str, user_id: str, tx_id: str) -> dict:
     tx = await db.get(POSTransaction, tx_id)
     if not tx or tx.tenant_id != tenant_id:
         raise HTTPException(404, "المعاملة غير موجودة")
     if tx.status != "completed":
         raise HTTPException(400, "لا يمكن استرداد هذه المعاملة")
+
+    # منع إنشاء مرتجعين لنفس فاتورة POS.
+    from app.models.sales import CreditNote, CreditNoteLine, Invoice, InvoiceLine
+    existing_return = await db.scalar(select(CreditNote).where(
+        CreditNote.tenant_id == tenant_id,
+        CreditNote.original_invoice_id == tx.invoice_id,
+        CreditNote.reason == f"مرتجع نقطة البيع {tx.transaction_number}",
+    )) if tx.invoice_id else None
+    if existing_return:
+        raise HTTPException(409, "تم إنشاء مرتجع لهذه الفاتورة مسبقًا")
 
     # ── إرجاع المخزون ──────────────────────────────────────────────
     lines_r = await db.execute(
@@ -1432,6 +1442,68 @@ async def refund_transaction(db: AsyncSession, tenant_id: str, tx_id: str) -> di
                 reference_id=tx_id,
             ))
 
+    # إنشاء إشعار دائن ظاهر في «مرتجعات المبيعات» مرتبط بفاتورة POS الأصلية.
+    # هذا مستند عكسي فقط؛ لا ينشئ مبيعات جديدة ولا يضيف معاملة جديدة للجلسة.
+    invoice = await db.get(Invoice, tx.invoice_id) if tx.invoice_id else None
+    if invoice:
+        cn_id = str(uuid.uuid4())
+        cn = CreditNote(
+            id=cn_id, tenant_id=tenant_id,
+            credit_note_number=f"CN-{str((await db.execute(select(func.count(CreditNote.id)).where(CreditNote.tenant_id == tenant_id))).scalar() + 1).zfill(5)}",
+            uuid=str(uuid.uuid4()), note_type="credit", original_invoice_id=invoice.id,
+            customer_id=invoice.customer_id, issue_date=datetime.utcnow(),
+            reason=f"مرتجع نقطة البيع {tx.transaction_number}", subtotal=tx.total - tx.vat_amount,
+            vat_amount=tx.vat_amount, total=tx.total, created_by=user_id,
+        )
+        db.add(cn)
+        invoice_lines = (await db.execute(
+            select(InvoiceLine).where(InvoiceLine.invoice_id == invoice.id).order_by(InvoiceLine.line_order)
+        )).scalars().all()
+        for index, line in enumerate(lines):
+            subtotal = Decimal(str(line.total or 0)) - Decimal(str(line.vat_amount or 0))
+            db.add(CreditNoteLine(
+                id=str(uuid.uuid4()), credit_note_id=cn_id,
+                original_invoice_line_id=invoice_lines[index].id if index < len(invoice_lines) else None,
+                line_order=index, description_ar=line.product_name_ar, quantity=line.quantity,
+                unit_price=line.unit_price,
+                vat_rate=line.vat_rate, subtotal=subtotal, vat_amount=line.vat_amount,
+                total=line.total, inventory_item_id=line.inventory_item_id,
+                serial_ids_json=(__import__("json").dumps([line.serial_item_id]) if line.serial_item_id else None),
+                variant_id=line.variant_id, return_condition="resalable",
+            ))
+        await db.flush()
+
+        # عكس قيد البيع الأصلي مرة واحدة؛ لا ننشئ قيد مبيعات جديدًا للمرتجع.
+        if tx.journal_entry_id:
+            from app.models.accounting import JournalEntry, JournalEntryLine, JournalEntryStatus
+            original_entry = await db.get(JournalEntry, tx.journal_entry_id, with_for_update=True)
+            if original_entry and original_entry.status == JournalEntryStatus.POSTED:
+                original_entry.status = JournalEntryStatus.CANCELLED
+                original_lines = (await db.execute(select(JournalEntryLine).where(
+                    JournalEntryLine.entry_id == original_entry.id
+                ))).scalars().all()
+                reversal = JournalEntry(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id,
+                    entry_number=f"REV-{tx.transaction_number}", entry_date=datetime.utcnow(),
+                    fiscal_year_id=original_entry.fiscal_year_id,
+                    description_ar=f"عكس مرتجع نقطة البيع {tx.transaction_number}",
+                    description_en=f"POS refund reversal {tx.transaction_number}",
+                    status=JournalEntryStatus.POSTED, source="pos_refund",
+                    reference=tx.transaction_number, total_debit=original_entry.total_credit,
+                    total_credit=original_entry.total_debit, created_by=user_id,
+                    posted_by=user_id, posted_at=datetime.utcnow(),
+                )
+                db.add(reversal)
+                for journal_line in original_lines:
+                    db.add(JournalEntryLine(
+                        id=str(uuid.uuid4()), entry_id=reversal.id,
+                        account_id=journal_line.account_id, cost_center_id=journal_line.cost_center_id,
+                        description=f"عكس مرتجع {tx.transaction_number}",
+                        debit=journal_line.credit, credit=journal_line.debit,
+                        line_order=journal_line.line_order,
+                    ))
+                cn.journal_entry_id = reversal.id
+
     tx.status = "refunded"
 
     # تحديث إجماليات الجلسة
@@ -1449,9 +1521,15 @@ async def refund_transaction(db: AsyncSession, tenant_id: str, tx_id: str) -> di
             card_amt = tx.card_amount or Decimal("0")
             session.total_cash -= (tx.total - card_amt)
             session.total_card -= card_amt
+        elif pm == "tabby":
+            session.total_tabby -= tx.total
+        elif pm == "tamara":
+            session.total_tamara -= tx.total
+        elif pm == "bank_transfer":
+            session.total_bank_transfer -= tx.total
 
     await db.commit()
-    return {"message": "تم الاسترداد بنجاح وإرجاع المخزون", "transaction_id": tx_id, "status": "refunded"}
+    return {"message": "تم الاسترداد بنجاح وإنشاء إشعار دائن وإرجاع المخزون", "transaction_id": tx_id, "status": "refunded", "credit_note_id": cn.id if invoice else None}
 
 
 # ─── Get Transaction ──────────────────────────────────────────────────
