@@ -49,8 +49,10 @@ export const recordAttendance = (data: any) => api.post("/hr/attendance", data);
 export const getBiometricDevices = () => api.get("/hr/biometric/devices");
 export const createBiometricDevice = (data: any) => api.post("/hr/biometric/devices", data);
 export const updateBiometricDevice = (id: string, data: any) => api.patch(`/hr/biometric/devices/${id}`, data);
+export const deleteBiometricDevice = (id: string) => api.delete(`/hr/biometric/devices/${id}`);
 export const getBiometricLinks = (params?: any) => api.get("/hr/biometric/links", { params });
 export const saveBiometricLink = (data: any) => api.post("/hr/biometric/links", data);
+export const deleteBiometricLink = (id: string) => api.delete(`/hr/biometric/links/${id}`);
 export const processBiometricLogs = () => api.post("/hr/biometric/process");
 
 // ─── Leaves ──────────────────────────────────────────────────────────

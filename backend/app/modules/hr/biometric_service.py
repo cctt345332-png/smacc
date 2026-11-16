@@ -60,6 +60,18 @@ async def update_device(db: AsyncSession, tenant_id: str, device_id: str, data: 
     return _device_dict(device, key)
 
 
+async def delete_device(db: AsyncSession, tenant_id: str, device_id: str):
+    device = await db.scalar(select(BiometricDevice).where(
+        BiometricDevice.id == device_id, BiometricDevice.tenant_id == tenant_id
+    ))
+    if not device:
+        raise HTTPException(404, "جهاز البصمة غير موجود")
+    # حذف الجهاز وروابطه فقط؛ لا نحذف سجلات الحضور اليومية الموجودة.
+    await db.delete(device)
+    await db.commit()
+    return {"deleted": True, "id": device_id}
+
+
 async def list_links(db: AsyncSession, tenant_id: str, device_id: str | None = None):
     q = select(BiometricEmployeeLink, Employee).join(Employee, Employee.id == BiometricEmployeeLink.employee_id).where(BiometricEmployeeLink.tenant_id == tenant_id)
     if device_id: q = q.where(BiometricEmployeeLink.device_id == device_id)
@@ -80,6 +92,17 @@ async def save_link(db: AsyncSession, tenant_id: str, data: dict):
     link = BiometricEmployeeLink(id=str(uuid.uuid4()), tenant_id=tenant_id, device_id=device_id, employee_id=employee_id, device_user_id=device_user_id)
     db.add(link); await db.commit()
     return {"id": link.id, "message": "تم ربط الموظف بجهاز البصمة"}
+
+
+async def delete_link(db: AsyncSession, tenant_id: str, link_id: str):
+    link = await db.scalar(select(BiometricEmployeeLink).where(
+        BiometricEmployeeLink.id == link_id, BiometricEmployeeLink.tenant_id == tenant_id
+    ))
+    if not link:
+        raise HTTPException(404, "ربط الموظف غير موجود")
+    await db.delete(link)
+    await db.commit()
+    return {"deleted": True, "id": link_id}
 
 
 async def ingest_logs(db: AsyncSession, tenant_id: str, device_id: str, payload: list[dict], device_key: str | None = None):

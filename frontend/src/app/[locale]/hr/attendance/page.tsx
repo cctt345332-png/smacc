@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, use } from "react";
-import { getAttendance } from "@/lib/hr";
+import { getAttendance, processBiometricLogs } from "@/lib/hr";
 
 const IcCheck    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
 const IcX        = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
@@ -22,7 +22,7 @@ export default function AttendancePage(props: { params: Promise<{ locale: string
   } = params;
 
   const ar = locale === "ar";
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA");
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFrom, setDateFrom] = useState(today);
@@ -31,6 +31,7 @@ export default function AttendancePage(props: { params: Promise<{ locale: string
   const load = async () => {
     setLoading(true);
     try {
+      await processBiometricLogs();
       const { data } = await getAttendance({ date_from: dateFrom, date_to: dateTo });
       setRecords(data || []);
     } catch {}

@@ -91,6 +91,8 @@ async def adms_cdata_post(
         })
 
     await biometric_service.ingest_adms_logs(db, device, rows)
+    # تحويل السجلات إلى حضور يومي تلقائيًا بعد استقبالها.
+    await biometric_service.process_logs(db, device.tenant_id)
     return "OK"
 
 

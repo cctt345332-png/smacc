@@ -26,6 +26,11 @@ async def update_biometric_device(device_id: str, data: dict, user=Depends(requi
     return await biometric_service.update_device(db, user["tenant_id"], device_id, data)
 
 
+@router.delete("/biometric/devices/{device_id}")
+async def delete_biometric_device(device_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.delete_device(db, user["tenant_id"], device_id)
+
+
 @router.get("/biometric/links")
 async def list_biometric_links(device_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await biometric_service.list_links(db, tenant_id, device_id)
@@ -34,6 +39,11 @@ async def list_biometric_links(device_id: Optional[str] = None, tenant_id=Depend
 @router.post("/biometric/links", status_code=201)
 async def save_biometric_link(data: dict, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
     return await biometric_service.save_link(db, user["tenant_id"], data)
+
+
+@router.delete("/biometric/links/{link_id}")
+async def delete_biometric_link(link_id: str, user=Depends(require_role(["manager", "hr"])), db: AsyncSession = Depends(get_db)):
+    return await biometric_service.delete_link(db, user["tenant_id"], link_id)
 
 
 @router.post("/biometric/devices/{device_id}/logs")
