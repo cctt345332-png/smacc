@@ -2717,16 +2717,6 @@ async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, ori
     if original_invoice.rep_id:
         rep = await db.get(SalesRep, original_invoice.rep_id)
         warehouse_id = rep.warehouse_id if rep else None
-    pos_serial_ids: set[str] = set()
-    if (original_invoice.notes or "").startswith("POS:"):
-        tx = await db.scalar(select(POSTransaction).where(POSTransaction.invoice_id == original_invoice.id))
-        if tx:
-            tx_serials = await db.execute(select(POSTransactionLine.serial_item_id).where(
-                POSTransactionLine.transaction_id == tx.id,
-                POSTransactionLine.serial_item_id.isnot(None),
-            ))
-            pos_serial_ids = {str(value) for (value,) in tx_serials.all() if value}
-
     for _line, original_line, serial_ids, _return_price, _return_vat_rate, _taxable, _vat, _total_line, _return_condition in validated_lines:
         if not original_line.inventory_item_id:
             continue
@@ -2739,8 +2729,10 @@ async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, ori
                 raise HTTPException(400, "تعذر العثور على أحد السيريالات المحددة للمرتجع")
             for serial_id in serial_ids:
                 serial = serials[serial_id]
-                belongs_to_invoice = serial.sale_invoice_id == original_invoice.id or str(serial.id) in pos_serial_ids
-                if serial.product_id != original_line.inventory_item_id or not belongs_to_invoice:
+                # تم التحقق من تبعية السيريال للفاتورة في create_credit_note
+                # عبر InvoiceLine أو POSTransactionLine؛ لا نعيد اشتراط
+                # sale_invoice_id هنا لأن فواتير POS القديمة لا تحمله دائماً.
+                if serial.product_id != original_line.inventory_item_id:
                     raise HTTPException(400, "السيريال المحدد لا يخص الفاتورة أو الصنف المرتجع")
                 if getattr(serial.status, "value", serial.status) != "sold":
                     raise HTTPException(400, f"لا يمكن إرجاع السيريال بحالته الحالية: {serial.status}")
