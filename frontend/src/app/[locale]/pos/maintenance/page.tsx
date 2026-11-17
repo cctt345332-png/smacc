@@ -31,7 +31,20 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     } catch { setTickets([]); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); getItemsForPicker({ search: "" }).then(r => setItems(r.data || r.data?.items || [])).catch(() => {}); api.get("/auth/users").then(r => setMechanics((r.data || []).filter((u: any) => u.is_active !== false && ["technician", "maintenance", "manager", "admin"].includes(u.role))).catch(() => {}); }, []);
+  useEffect(() => {
+    load();
+    getItemsForPicker({ search: "" })
+      .then((r) => setItems(r.data || r.data?.items || []))
+      .catch(() => {});
+    api.get("/auth/users")
+      .then((r) => {
+        const users = r.data || [];
+        setMechanics(users.filter((u: any) =>
+          u.is_active !== false && ["technician", "maintenance", "manager", "admin"].includes(u.role)
+        ));
+      })
+      .catch(() => {});
+  }, []);
 
   const saveTicket = async () => {
     if (!form.terminal_id || !form.device_name.trim() || !form.reported_problem.trim()) return alert("اختر الجهاز واكتب اسم الجهاز ووصف العطل");
