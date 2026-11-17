@@ -181,6 +181,21 @@ async def get_part_serials(db: AsyncSession, tenant_id: str, ticket_id: str, pro
     return [{"id": row.id, "serial_number": row.serial_number, "cost_price": float(row.cost_price or 0)} for row in rows]
 
 
+async def get_terminal_part_serials(db: AsyncSession, tenant_id: str, terminal_id: str, product_id: str):
+    terminal = await db.get(POSTerminal, terminal_id)
+    if not terminal or terminal.tenant_id != tenant_id or not terminal.maintenance_warehouse_id:
+        raise HTTPException(400, "لا يوجد مستودع صيانة مربوط بالجهاز")
+    item = await db.get(InventoryItem, product_id)
+    if not item or item.tenant_id != tenant_id:
+        raise HTTPException(404, "الصنف غير موجود")
+    rows = (await db.execute(select(SerialItem).where(
+        SerialItem.product_id == item.id,
+        SerialItem.warehouse_id == terminal.maintenance_warehouse_id,
+        SerialItem.status == "in_stock",
+    ).order_by(SerialItem.created_at.desc()))).scalars().all()
+    return [{"id": row.id, "serial_number": row.serial_number, "cost_price": float(row.cost_price or 0)} for row in rows]
+
+
 async def issue_part(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: str, part_id: str):
     ticket = await _ticket(db, tenant_id, ticket_id)
     part = await db.scalar(select(POSMaintenancePart).where(POSMaintenancePart.id == part_id, POSMaintenancePart.ticket_id == ticket.id, POSMaintenancePart.tenant_id == tenant_id))

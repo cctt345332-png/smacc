@@ -17,6 +17,8 @@ export const updateMaintenanceTicket = (id: string, data: any) => api.patch(`/po
 export const addMaintenancePart = (id: string, data: any) => api.post(`/pos/maintenance/${id}/parts`, data);
 export const getMaintenanceSerials = (ticketId: string, productId: string) =>
   api.get(`/pos/maintenance/${ticketId}/serials/${productId}`);
+export const getTerminalMaintenanceSerials = (terminalId: string, productId: string) =>
+  api.get("/pos/maintenance/serials", { params: { terminal_id: terminalId, product_id: productId } });
 export const issueMaintenancePart = (ticketId: string, partId: string) =>
   api.post(`/pos/maintenance/${ticketId}/parts/${partId}/issue`);
 

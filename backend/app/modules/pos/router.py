@@ -83,6 +83,11 @@ async def get_pos_maintenance_serials(ticket_id: str, product_id: str, tenant_id
     return await maintenance_service.get_part_serials(db, tenant_id, ticket_id, product_id)
 
 
+@router.get("/maintenance/serials")
+async def get_terminal_maintenance_serials(terminal_id: str, product_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.get_terminal_part_serials(db, tenant_id, terminal_id, product_id)
+
+
 @router.post("/maintenance/{ticket_id}/parts/{part_id}/issue")
 async def issue_pos_maintenance_part(ticket_id: str, part_id: str, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
     return await maintenance_service.issue_part(db, user["tenant_id"], user["user_id"], ticket_id, part_id)
