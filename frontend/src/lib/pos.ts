@@ -9,6 +9,15 @@ export const createTerminal = (data: any)              => api.post("/pos/termina
 export const updateTerminal = (id: string, data: any)  => api.patch(`/pos/terminals/${id}`, data);
 export const deleteTerminal = (id: string)             => api.delete(`/pos/terminals/${id}`);
 
+// ─── صيانة نقاط البيع (معزولة عن الفواتير) ─────────────────────────
+export const getMaintenanceTickets = (params?: { status?: string; terminal_id?: string }) =>
+  api.get("/pos/maintenance", { params });
+export const createMaintenanceTicket = (data: any) => api.post("/pos/maintenance", data);
+export const updateMaintenanceTicket = (id: string, data: any) => api.patch(`/pos/maintenance/${id}`, data);
+export const addMaintenancePart = (id: string, data: any) => api.post(`/pos/maintenance/${id}/parts`, data);
+export const issueMaintenancePart = (ticketId: string, partId: string) =>
+  api.post(`/pos/maintenance/${ticketId}/parts/${partId}/issue`);
+
 // ─── Sessions ────────────────────────────────────────────────────────
 export const getSessions = (params?: { terminal_id?: string; limit?: number; status?: string }) =>
   api.get("/pos/sessions", { params });

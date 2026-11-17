@@ -169,6 +169,14 @@ export default function POSDashboardPage() {
             color: "#75617F",
             bg: "#F5F3FF",
           },
+          {
+            icon: "settings" as const,
+            label: isAr ? "الصيانة" : "Maintenance",
+            desc: isAr ? "تذاكر وقطع منفصلة عن المبيعات" : "Isolated tickets and parts",
+            href: `/${locale}/pos/maintenance`,
+            color: "#0F766E",
+            bg: "#ECFDF5",
+          },
         ].map((item) => (
           <div
             key={item.href}

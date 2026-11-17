@@ -11,6 +11,7 @@ from app.models.inventory import (
     MandatoryStocktakeConfig, MandatoryStocktakeRun, MandatoryStocktakeLine
 )
 from app.models.pos import POSTerminal, POSSession, POSTransaction, POSTransactionLine
+from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart
 from app.models.treasury import Voucher
 from app.models.assets import Asset, AssetCategory, DepreciationLine
 from app.models.hr import Department, Employee, AttendanceRecord, LeaveRequest, PayrollRecord, PayrollPayment, EmployeeExpense, EmployeeDeduction, EmployeeAdvance, EmployeeWithdrawal, SalarySettlement, SalarySettlementPayment

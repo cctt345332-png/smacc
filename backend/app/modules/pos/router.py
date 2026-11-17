@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.tenant import get_current_user, get_tenant_id, require_role
 from app.core.plan_limits import check_plan_limit
 from app.modules.pos import service
+from app.modules.pos import maintenance_service
 
 router = APIRouter(prefix="/pos", tags=["pos"])
 
@@ -47,6 +48,39 @@ async def update_terminal(terminal_id: str, data: dict, user=Depends(require_rol
 @router.delete("/terminals/{terminal_id}")
 async def delete_terminal(terminal_id: str, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
     return await service.delete_terminal(db, user["tenant_id"], terminal_id)
+
+
+# ─── صيانة نقاط البيع — مستقلة عن المبيعات والفواتير ───────────────
+
+@router.get("/maintenance")
+async def list_pos_maintenance(status: Optional[str] = None, terminal_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.list_tickets(db, tenant_id, status, terminal_id)
+
+
+@router.post("/maintenance", status_code=201)
+async def create_pos_maintenance(data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.create_ticket(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.get("/maintenance/{ticket_id}")
+async def get_pos_maintenance(ticket_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    ticket = await maintenance_service._ticket(db, tenant_id, ticket_id)
+    return await maintenance_service._out(db, tenant_id, ticket)
+
+
+@router.patch("/maintenance/{ticket_id}")
+async def update_pos_maintenance(ticket_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.update_ticket(db, user["tenant_id"], ticket_id, data)
+
+
+@router.post("/maintenance/{ticket_id}/parts", status_code=201)
+async def add_pos_maintenance_part(ticket_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.add_part(db, user["tenant_id"], ticket_id, data)
+
+
+@router.post("/maintenance/{ticket_id}/parts/{part_id}/issue")
+async def issue_pos_maintenance_part(ticket_id: str, part_id: str, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.issue_part(db, user["tenant_id"], user["user_id"], ticket_id, part_id)
 
 
 # ─── Sessions ────────────────────────────────────────────────────────
