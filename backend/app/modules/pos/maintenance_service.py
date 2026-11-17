@@ -82,6 +82,11 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
     warehouse = await db.get(Warehouse, warehouse_id)
     if not warehouse or warehouse.tenant_id != tenant_id or not warehouse.is_active:
         raise HTTPException(400, "مستودع الصيانة غير موجود أو غير فعال")
+    if data.get("assigned_to"):
+        from app.models.user import User
+        mechanic = await db.get(User, data["assigned_to"])
+        if not mechanic or mechanic.tenant_id != tenant_id or not mechanic.is_active:
+            raise HTTPException(400, "فني الصيانة غير موجود أو غير فعال")
     device_name = str(data.get("device_name") or "").strip()
     problem = str(data.get("reported_problem") or "").strip()
     if not device_name or not problem:
@@ -105,6 +110,11 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
 
 async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: dict):
     ticket = await _ticket(db, tenant_id, ticket_id)
+    if data.get("assigned_to"):
+        from app.models.user import User
+        mechanic = await db.get(User, data["assigned_to"])
+        if not mechanic or mechanic.tenant_id != tenant_id or not mechanic.is_active:
+            raise HTTPException(400, "فني الصيانة غير موجود أو غير فعال")
     allowed = {"status", "customer_name", "customer_phone", "device_name", "device_serial", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost", "paid_amount"}
     for key in allowed:
         if key in data:
@@ -145,6 +155,19 @@ async def add_part(db: AsyncSession, tenant_id: str, ticket_id: str, data: dict)
     return await _out(db, tenant_id, ticket)
 
 
+async def get_part_serials(db: AsyncSession, tenant_id: str, ticket_id: str, product_id: str):
+    ticket = await _ticket(db, tenant_id, ticket_id)
+    item = await db.get(InventoryItem, product_id)
+    if not item or item.tenant_id != tenant_id:
+        raise HTTPException(404, "الصنف غير موجود")
+    rows = (await db.execute(select(SerialItem).where(
+        SerialItem.product_id == item.id,
+        SerialItem.warehouse_id == ticket.maintenance_warehouse_id,
+        SerialItem.status == "in_stock",
+    ).order_by(SerialItem.created_at.desc()))).scalars().all()
+    return [{"id": row.id, "serial_number": row.serial_number, "cost_price": float(row.cost_price or 0)} for row in rows]
+
+
 async def issue_part(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: str, part_id: str):
     ticket = await _ticket(db, tenant_id, ticket_id)
     part = await db.scalar(select(POSMaintenancePart).where(POSMaintenancePart.id == part_id, POSMaintenancePart.ticket_id == ticket.id, POSMaintenancePart.tenant_id == tenant_id))
@@ -155,7 +178,25 @@ async def issue_part(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: 
     item = await db.get(InventoryItem, part.product_id)
     tracking = getattr(item.tracking_type, "value", item.tracking_type)
     if tracking == "serial":
-        raise HTTPException(400, "صرف القطع ذات السيريال سيُفعل في خطوة ربط السيريال بتذكرة الصيانة")
+        serial = await db.get(SerialItem, part.serial_item_id)
+        if not serial or serial.product_id != item.id or serial.warehouse_id != ticket.maintenance_warehouse_id or str(getattr(serial.status, "value", serial.status)) != "in_stock":
+            raise HTTPException(400, "السيريال غير متاح في مستودع الصيانة")
+        from app.models.inventory import StockMovement
+        serial.status = "damaged"
+        serial.warehouse_id = None
+        db.add(StockMovement(
+            id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=item.id,
+            warehouse_id=ticket.maintenance_warehouse_id, movement_type="damage", quantity=Decimal("-1"),
+            unit_cost=serial.cost_price, serial_item_id=serial.id,
+            reference_type="pos_maintenance", reference_id=ticket.id,
+            notes=f"صرف سيريال للصيانة {ticket.ticket_number}", created_by=user_id,
+        ))
+        part.status = "issued"
+        part.issued_by = user_id
+        part.issued_at = datetime.utcnow()
+        ticket.updated_at = datetime.utcnow()
+        await db.commit()
+        return await _out(db, tenant_id, ticket)
     stock = await db.scalar(select(InventoryStock).where(InventoryStock.item_id == item.id, InventoryStock.warehouse_id == ticket.maintenance_warehouse_id))
     if not stock or stock.quantity < part.quantity:
         raise HTTPException(400, f"الكمية المتاحة في مستودع الصيانة غير كافية للصنف {item.name_ar}")

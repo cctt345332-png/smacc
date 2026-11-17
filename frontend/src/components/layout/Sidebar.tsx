@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
-import { MAINTENANCE_UI_ENABLED } from "@/lib/featureFlags";
 
 // ── Icons ────────────────────────────────────────────────────────────
 const IC = {
@@ -51,7 +50,6 @@ const buildRepNav = (base: string, ar: boolean): { section: string; items: NavIt
           { label: ar ? "الفواتير" : "Invoices",          href: `${base}/sales/invoices` },
           { label: ar ? "فاتورة جديدة" : "New Invoice",   href: `${base}/sales/invoices/new` },
           { label: ar ? "سندات القبض" : "Receipts",       href: `${base}/sales/payments` },
-          ...(MAINTENANCE_UI_ENABLED ? [{ label: ar ? "طلبات الصيانة" : "Maintenance", href: `${base}/maintenance` }] : []),
         ],
       },
       {
@@ -166,12 +164,6 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "الجلسات" : "Sessions",         href: `${base}/pos/sessions` },
         ],
       }] : []),
-      ...(MAINTENANCE_UI_ENABLED ? [{
-        key: "maintenance", label: ar ? "الصيانة" : "Maintenance", icon: IC.assets,
-        children: [
-          { label: ar ? "طلبات الصيانة" : "Maintenance Requests", href: `${base}/maintenance` },
-        ],
-      }] : []),
       {
         key: "reps", label: ar ? "المناديب" : "Sales Reps", icon: IC.hr,
         children: [
@@ -200,7 +192,6 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
           { label: ar ? "تقرير ضريبة القيمة المضافة" : "VAT Report", href: `${base}/reports/accounting/vat` },
           { label: ar ? "── تقارير المبيعات ──" : "── Sales ──", href: "", divider: true },
           { label: ar ? "تقرير المبيعات" : "Sales Report", href: `${base}/reports/sales` },
-          ...(MAINTENANCE_UI_ENABLED ? [{ label: ar ? "تقرير الصيانة" : "Maintenance Report", href: `${base}/reports/maintenance` }] : []),
           { label: ar ? "عمر الديون" : "Aging Report", href: `${base}/reports/sales/aging` },
           { label: ar ? "كشف حساب العميل" : "Customer Statement", href: `${base}/reports/sales/statement` },
           { label: ar ? "── تقارير المشتريات ──" : "── Purchases ──", href: "", divider: true },
