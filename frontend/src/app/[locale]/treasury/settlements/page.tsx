@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { deleteSettlement, getSettlementReport, getSettlementSources, getSettlements, createSettlement, updateSettlement } from "@/lib/settlements";
+import { deleteSettlement, getSettlementBreakdown, getSettlementReport, getSettlementSources, getSettlements, createSettlement, updateSettlement } from "@/lib/settlements";
 import { getPayments } from "@/lib/sales";
 import { getExpenses } from "@/lib/expenses";
 
@@ -52,7 +52,7 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
         date_from: reportFrom || undefined,
         date_to: reportTo || undefined,
         source_id: reportSource || undefined,
-        source_type: reportSource ? "rep" : undefined,
+        source_type: reportSource ? (sources.find(x => `${x.source_type}:${x.source_id}` === reportSource)?.source_type || undefined) : undefined,
       });
       setReport(response.data || { rows: [], totals: {} });
     } finally {
@@ -68,8 +68,13 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
   useEffect(() => {
     let active = true;
     const loadDetail = async () => {
-      if (!current || current.source_type !== "rep") { setDetail(null); return; }
+      if (!current) { setDetail(null); return; }
       try {
+        if (current.source_type === "pos") {
+          const { data } = await getSettlementBreakdown({ source_type: "pos", source_id: current.source_id, date_from: dateFrom || undefined, date_to: dateTo || undefined });
+          if (active) setDetail({ pos: true, rows: data.rows || [], totals: data.totals || {} });
+          return;
+        }
         const params = {
           rep_id: current.source_id,
           ...(dateFrom ? { date_from: `${dateFrom}T00:00:00` } : {}),
@@ -130,7 +135,8 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><div className="form-group"><label className="form-label">{ar ? "من تاريخ" : "From date"}</label><input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div><div className="form-group"><label className="form-label">{ar ? "إلى تاريخ" : "To date"}</label><input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div></div>
         <div className="form-group"><label className="form-label">{ar ? "العهدة" : "Custody"}</label><select className="form-input form-select" value={selected} onChange={e => setSelected(e.target.value)}><option value="">{ar ? "اختر مندوباً أو جهازاً" : "Select a representative or POS"}</option>{sources.map(x => <option key={`${x.source_type}:${x.source_id}`} value={`${x.source_type}:${x.source_id}`}>{x.label} — {money(x.expected_amount)} SAR</option>)}</select></div>
         {current && <div style={{ background: "#F5F3FF", padding: 16, borderRadius: 8, margin: "12px 0" }}><div style={{ fontSize: 12, color: "#6B7280" }}>{ar ? "النقد المطلوب للفترة المحددة" : "Cash due for selected period"}</div><strong style={{ fontSize: 25, color: "#5A187E" }}>{money(current.expected_amount)} SAR</strong><div style={{ fontSize: 12, marginTop: 6 }}>{current.last_settled_at ? `${ar ? "آخر تسوية" : "Last settlement"}: ${new Date(current.last_settled_at).toLocaleString(ar ? "ar-SA" : "en-GB")}` : ar ? "لا توجد تسوية سابقة" : "No previous settlement"}</div></div>}
-        {detail && <div style={{ background: "#F8FAFC", padding: 16, borderRadius: 8, margin: "12px 0", border: "1px solid #E2E8F0" }}><strong>{ar ? "تفاصيل الفترة" : "Period details"}</strong><div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 10, fontSize: 13 }}><div>{ar ? "النقد المقبوض" : "Cash collected"}<br /><b>{money(detail.receipts.cash)} SAR</b></div><div>{ar ? "المصروف النقدي" : "Cash expenses"}<br /><b>{money(detail.cashExpenses)} SAR</b></div><div>{ar ? "المطلوب تسليمه" : "Cash to hand over"}<br /><b>{money(detail.cashDue)} SAR</b></div></div><div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)" }}>{ar ? `السندات: ${detail.payments} · المصروفات: ${detail.expensesCount}` : `Receipts: ${detail.payments} · Expenses: ${detail.expensesCount}`}</div></div>}
+        {detail?.pos && <div style={{ background: "#F8FAFC", padding: 16, borderRadius: 8, margin: "12px 0", border: "1px solid #E2E8F0" }}><strong>{ar ? "تفصيل تسوية جهاز نقاط البيع" : "POS settlement breakdown"}</strong><div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginTop: 10, fontSize: 13 }}><div>{ar ? "مبيعات نقدية" : "Cash sales"}<br /><b>{money(detail.totals.cash_sales)} SAR</b></div><div>{ar ? "رصيد افتتاحي" : "Opening cash"}<br /><b>{money(detail.totals.opening_cash)} SAR</b></div><div>{ar ? "مخرجات نقدية" : "Cash outflows"}<br /><b>{money(detail.totals.cash_outflows)} SAR</b></div><div>{ar ? "المتوقع" : "Expected"}<br /><b>{money(detail.totals.expected)} SAR</b></div></div><div className="table-wrapper" style={{ marginTop: 12 }}><table><thead><tr><th>الجلسة</th><th>الإغلاق</th><th>المبيعات النقدية</th><th>الافتتاحي</th><th>المخرجات</th><th>المتوقع</th></tr></thead><tbody>{detail.rows.map((x: any) => <tr key={x.session_id}><td>{String(x.session_id).slice(0, 8)}</td><td>{day(x.closed_at, ar)}</td><td>{money(x.cash_sales)}</td><td>{money(x.opening_cash)}</td><td>{money(x.cash_outflows)}</td><td style={{ fontWeight: 700 }}>{money(x.expected)}</td></tr>)}</tbody></table></div></div>}
+        {detail && !detail.pos && <div style={{ background: "#F8FAFC", padding: 16, borderRadius: 8, margin: "12px 0", border: "1px solid #E2E8F0" }}><strong>{ar ? "تفاصيل الفترة" : "Period details"}</strong><div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 10, fontSize: 13 }}><div>{ar ? "النقد المقبوض" : "Cash collected"}<br /><b>{money(detail.receipts.cash)} SAR</b></div><div>{ar ? "المصروف النقدي" : "Cash expenses"}<br /><b>{money(detail.cashExpenses)} SAR</b></div><div>{ar ? "المطلوب تسليمه" : "Cash to hand over"}<br /><b>{money(detail.cashDue)} SAR</b></div></div><div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)" }}>{ar ? `السندات: ${detail.payments} · المصروفات: ${detail.expensesCount}` : `Receipts: ${detail.payments} · Expenses: ${detail.expensesCount}`}</div></div>}
         <div className="form-group"><label className="form-label">{ar ? "المبلغ المستلم فعلياً" : "Actually received"}</label><input type="number" min="0" step="0.01" className="form-input" value={received} onChange={e => setReceived(e.target.value)} placeholder="0.00" /></div><div className="form-group"><label className="form-label">{ar ? "ملاحظات" : "Notes"}</label><textarea className="form-input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} /></div><button className="btn btn-primary" disabled={!current || saving} onClick={save}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ التسوية" : "Save settlement")}</button>
       </div>
       <div className="card" style={{ padding: 20 }}><h2 style={{ marginTop: 0 }}>{ar ? "الأرصدة الحالية" : "Current balances"}</h2>{loading ? <div className="empty-state">{ar ? "جاري التحميل..." : "Loading..."}</div> : <div className="table-wrapper"><table><thead><tr><th>{ar ? "العهدة" : "Custody"}</th><th>{ar ? "المتوقع" : "Expected"}</th><th>{ar ? "آخر تسوية" : "Last settlement"}</th></tr></thead><tbody>{sources.map(x => <tr key={`${x.source_type}:${x.source_id}`}><td>{x.label}</td><td style={{ fontWeight: 700 }}>{money(x.expected_amount)} SAR</td><td>{x.last_settled_at ? day(x.last_settled_at, ar) : (ar ? "لم تتم" : "Never")}</td></tr>)}</tbody></table></div>}</div>

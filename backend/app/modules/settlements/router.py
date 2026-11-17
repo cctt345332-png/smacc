@@ -68,7 +68,7 @@ async def _balance(db, tenant_id, source_type, source_id, last, date_from=None, 
         expenses = Decimal(str((await db.execute(expense_q)).scalar() or 0))
         return cash - expenses
 
-    q = select(func.coalesce(func.sum(POSSession.total_cash + POSSession.opening_cash), 0)).where(
+    q = select(POSSession).where(
         POSSession.tenant_id == tenant_id, POSSession.terminal_id == source_id,
         cast(POSSession.status, Text) == "closed",
     )
@@ -76,7 +76,10 @@ async def _balance(db, tenant_id, source_type, source_id, last, date_from=None, 
         q = q.where(POSSession.closed_at >= start)
     if end:
         q = q.where(POSSession.closed_at <= end)
-    sales = Decimal(str((await db.execute(q)).scalar() or 0))
+    sessions = (await db.execute(q.order_by(POSSession.closed_at.asc()))).scalars().all()
+    sales = sum((Decimal(str(s.total_cash or 0)) for s in sessions), Decimal("0"))
+    # رصيد الافتتاح عهدة تأسيسية وليس مبيعات. يُحتسب مرة واحدة فقط في أول تسوية.
+    opening = Decimal(str(sessions[0].opening_cash or 0)) if sessions and not last else Decimal("0")
     oq = select(func.coalesce(func.sum(POSCashOutflow.amount), 0)).where(
         POSCashOutflow.tenant_id == tenant_id, POSCashOutflow.terminal_id == source_id,
     )
@@ -84,7 +87,39 @@ async def _balance(db, tenant_id, source_type, source_id, last, date_from=None, 
         oq = oq.where(POSCashOutflow.created_at >= start)
     if end:
         oq = oq.where(POSCashOutflow.created_at <= end)
-    return sales - Decimal(str((await db.execute(oq)).scalar() or 0))
+    outflows = Decimal(str((await db.execute(oq)).scalar() or 0))
+    return sales + opening - outflows
+
+
+async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to=None):
+    since = last.settled_at if last else None
+    start, end = date_from or since, date_to
+    q = select(POSSession).where(
+        POSSession.tenant_id == tenant_id, POSSession.terminal_id == source_id,
+        cast(POSSession.status, Text) == "closed",
+    )
+    if start: q = q.where(POSSession.closed_at >= start)
+    if end: q = q.where(POSSession.closed_at <= end)
+    sessions = (await db.execute(q.order_by(POSSession.closed_at.asc()))).scalars().all()
+    result = []
+    for index, session in enumerate(sessions):
+        oq = select(func.coalesce(func.sum(POSCashOutflow.amount), 0)).where(
+            POSCashOutflow.tenant_id == tenant_id,
+            POSCashOutflow.terminal_id == source_id,
+            POSCashOutflow.session_id == session.id,
+        )
+        outflows = Decimal(str((await db.execute(oq)).scalar() or 0))
+        opening = Decimal(str(session.opening_cash or 0)) if index == 0 and not last else Decimal("0")
+        result.append({
+            "session_id": session.id,
+            "opened_at": session.opened_at.isoformat() if session.opened_at else None,
+            "closed_at": session.closed_at.isoformat() if session.closed_at else None,
+            "cash_sales": float(session.total_cash or 0),
+            "opening_cash": float(opening),
+            "cash_outflows": float(outflows),
+            "expected": float(Decimal(str(session.total_cash or 0)) + opening - outflows),
+        })
+    return result
 
 
 async def _sources(db, tenant_id, date_from=None, date_to=None):
@@ -175,6 +210,26 @@ async def settlement_report(date_from: str | None = None, date_to: str | None = 
         "difference": sum(x["difference"] for x in output),
         "count": len(output),
     }}
+
+
+@router.get("/source-breakdown")
+async def source_breakdown(source_type: str, source_id: str, date_from: str | None = None,
+                           date_to: str | None = None,
+                           user=Depends(require_role(MANAGER_ROLES)), db: AsyncSession = Depends(get_db)):
+    tenant_id = user["tenant_id"]
+    if source_type not in {"rep", "pos"}:
+        raise HTTPException(400, "نوع العهدة غير صحيح")
+    await _get_owned_source(db, tenant_id, source_type, source_id)
+    start, end = _parse_date(date_from), _parse_date(date_to, True)
+    last = await _last(db, tenant_id, source_type, source_id)
+    if source_type == "pos":
+        details = await _pos_breakdown(db, tenant_id, source_id, last, start, end)
+        return {"source_type": source_type, "source_id": source_id, "rows": details,
+                "totals": {"cash_sales": sum(x["cash_sales"] for x in details),
+                           "opening_cash": sum(x["opening_cash"] for x in details),
+                           "cash_outflows": sum(x["cash_outflows"] for x in details),
+                           "expected": sum(x["expected"] for x in details)}}
+    return {"source_type": source_type, "source_id": source_id, "rows": [], "totals": {}}
 
 
 async def _get_owned_source(db, tenant_id, source_type, source_id):
