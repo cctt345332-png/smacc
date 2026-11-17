@@ -141,6 +141,10 @@ class POSTerminal(Base):
     warehouse_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("warehouses.id"), nullable=True
     )
+    # مستودع مستقل للصيانة؛ لا يُستخدم في عمليات البيع أو جلسات POS.
+    maintenance_warehouse_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("warehouses.id"), nullable=True, index=True
+    )
 
     # المستخدم المخصص لهذا الجهاز (الكاشير)
     assigned_user_id: Mapped[str | None] = mapped_column(

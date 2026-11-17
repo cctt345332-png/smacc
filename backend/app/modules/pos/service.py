@@ -76,6 +76,7 @@ async def get_terminals(db: AsyncSession, tenant_id: str):
             "activity_color": cfg["color"],
             "allow_purchase": t.allow_purchase,
             "warehouse_id": t.warehouse_id,
+            "maintenance_warehouse_id": t.maintenance_warehouse_id,
             "cash_account_id": t.cash_account_id,
             "sales_account_id": t.sales_account_id,
             "vat_account_id": t.vat_account_id,
@@ -121,6 +122,7 @@ async def get_terminal_by_user(db: AsyncSession, tenant_id: str, user_id: str):
         "max_discount_pct": float(t.max_discount_pct),
         "print_receipt": t.print_receipt,
         "warehouse_id": t.warehouse_id,
+        "maintenance_warehouse_id": t.maintenance_warehouse_id,
         "assigned_user_id": t.assigned_user_id,
     }
 
@@ -189,6 +191,12 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
     bt = data.get("business_type", "general")
     cfg = ACTIVITY_CONFIG.get(bt, ACTIVITY_CONFIG["general"])
     allow_purchase = data.get("allow_purchase", bt in POS_PURCHASE_ACTIVITIES)
+    maintenance_warehouse_id = data.get("maintenance_warehouse_id") or None
+    if maintenance_warehouse_id:
+        from app.models.inventory import Warehouse
+        warehouse = await db.get(Warehouse, maintenance_warehouse_id)
+        if not warehouse or warehouse.tenant_id != tenant_id or not warehouse.is_active:
+            raise HTTPException(400, "مستودع الصيانة غير موجود أو غير فعال")
     terminal = POSTerminal(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,
@@ -196,6 +204,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         branch_name=data.get("branch_name"),
         business_type=bt,
         warehouse_id=data.get("warehouse_id"),
+        maintenance_warehouse_id=maintenance_warehouse_id,
         cash_account_id=data.get("cash_account_id"),
         sales_account_id=data.get("sales_account_id"),
         vat_account_id=data.get("vat_account_id"),
@@ -228,6 +237,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         "activity_color": cfg["color"],
         "allow_purchase": terminal.allow_purchase,
         "warehouse_id": terminal.warehouse_id,
+        "maintenance_warehouse_id": terminal.maintenance_warehouse_id,
         "cash_account_id": terminal.cash_account_id,
         "sales_account_id": terminal.sales_account_id,
         "vat_account_id": terminal.vat_account_id,
@@ -262,8 +272,13 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
             account = await db.get(Account, data[key])
             if not account or account.tenant_id != tenant_id or account.account_type != "asset" or not account.is_active or not account.is_posting:
                 raise HTTPException(400, f"حساب {label} يجب أن يكون حساب أصول تفصيليًا ونشطًا")
+    if "maintenance_warehouse_id" in data and data.get("maintenance_warehouse_id"):
+        from app.models.inventory import Warehouse
+        warehouse = await db.get(Warehouse, data["maintenance_warehouse_id"])
+        if not warehouse or warehouse.tenant_id != tenant_id or not warehouse.is_active:
+            raise HTTPException(400, "مستودع الصيانة غير موجود أو غير فعال")
     allowed = [
-        "name", "branch_name", "business_type", "warehouse_id",
+        "name", "branch_name", "business_type", "warehouse_id", "maintenance_warehouse_id",
         "cash_account_id", "sales_account_id", "vat_account_id",
         "bank_account_id", "card_settlement_account_id", "tabby_account_id", "tamara_account_id", "bank_transfer_account_id", "fiscal_year_id",
         "receipt_header", "receipt_footer", "print_receipt",
@@ -271,7 +286,9 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         "assigned_user_id",
     ]
     for k in allowed:
-        if k in data and data[k] is not None:
+        if k == "maintenance_warehouse_id" and k in data:
+            setattr(t, k, data[k] or None)
+        elif k in data and data[k] is not None:
             setattr(t, k, data[k])
     if data.get("close_pin"):
         from app.core.security import hash_password
@@ -295,6 +312,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         "activity_color": cfg["color"],
         "allow_purchase": t.allow_purchase,
         "warehouse_id": t.warehouse_id,
+        "maintenance_warehouse_id": t.maintenance_warehouse_id,
         "cash_account_id": t.cash_account_id,
         "sales_account_id": t.sales_account_id,
         "vat_account_id": t.vat_account_id,

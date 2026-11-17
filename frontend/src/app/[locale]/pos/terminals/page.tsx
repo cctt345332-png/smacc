@@ -45,7 +45,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
   const emptyForm = {
     name: "", branch_name: "",
     close_pin: "",
-    warehouse_id: "", cash_account_id: "", sales_account_id: "",
+    warehouse_id: "", maintenance_warehouse_id: "", cash_account_id: "", sales_account_id: "",
     vat_account_id: "", bank_account_id: "", card_settlement_account_id: "", tabby_account_id: "", tamara_account_id: "", bank_transfer_account_id: "", fiscal_year_id: "",
     receipt_header: "", receipt_footer: "",
     print_receipt: true, allow_discount: true,
@@ -102,6 +102,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
       vat_account_id:   vatAcc?.id   || "",
       fiscal_year_id:   defaultFY?.id || "",
       warehouse_id:     defaultWH?.id || "",
+      maintenance_warehouse_id: "",
       bank_account_id:  "",
       card_settlement_account_id: accounts.find((a: any) => a.code === "01121" || (a.account_type === "asset" && a.is_posting))?.id || "",
     });
@@ -113,6 +114,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
       name: t.name || "", branch_name: t.branch_name || "",
       close_pin: "",
       warehouse_id: t.warehouse_id || "",
+      maintenance_warehouse_id: t.maintenance_warehouse_id || "",
       cash_account_id: t.cash_account_id || "",
       sales_account_id: t.sales_account_id || "",
       vat_account_id: t.vat_account_id || "",
@@ -139,6 +141,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
         allow_purchase: allowPurchase,
         max_discount_pct: parseFloat(form.max_discount_pct) || 10,
         warehouse_id:     form.warehouse_id     || null,
+        maintenance_warehouse_id: form.maintenance_warehouse_id || null,
         cash_account_id:  form.cash_account_id  || null,
         sales_account_id: form.sales_account_id || null,
         vat_account_id:   form.vat_account_id   || null,
@@ -438,6 +441,14 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
                     <option value="">{ar ? "— اختر —" : "— Select —"}</option>
                     {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name_ar}</option>)}
                   </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">{ar ? "مستودع الصيانة" : "Maintenance Warehouse"}</label>
+                  <select className="form-input form-select" value={form.maintenance_warehouse_id} onChange={(e) => upd("maintenance_warehouse_id", e.target.value)}>
+                    <option value="">{ar ? "— لا يوجد / يحدد لاحقًا —" : "— None / set later —"}</option>
+                    {warehouses.map((w: any) => <option key={w.id} value={w.id}>{w.name_ar}{w.branch_name ? ` — ${w.branch_name}` : ""}</option>)}
+                  </select>
+                  <p className="form-hint">{ar ? "لعمليات الصيانة فقط، ولا يؤثر على مستودع المبيعات." : "For maintenance only; does not affect the sales warehouse."}</p>
                 </div>
                 <div className="form-group">
                   <label className="form-label">{ar ? "السنة المالية" : "Fiscal Year"}</label>
