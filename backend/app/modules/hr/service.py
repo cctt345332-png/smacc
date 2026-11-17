@@ -701,6 +701,13 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
                 SalarySettlementPayment.tenant_id == tenant_id,
                 SalarySettlementPayment.settlement_id == row.id,
             ).order_by(SalarySettlementPayment.paid_at.desc()))).scalars().all()
+        detail_withdrawals = (await db.execute(select(EmployeeWithdrawal).where(
+            EmployeeWithdrawal.tenant_id == tenant_id,
+            EmployeeWithdrawal.employee_id == employee.id,
+            EmployeeWithdrawal.salary_month == month,
+            EmployeeWithdrawal.salary_year == year,
+            EmployeeWithdrawal.status.in_(("approved", "settled")),
+        ).order_by(EmployeeWithdrawal.withdrawal_date.desc(), EmployeeWithdrawal.created_at.desc()))).scalars().all()
         display_withdrawals = (Decimal(str(row.withdrawals_total or 0)) + withdrawal_total) if row else withdrawal_total
         display_deductions = (Decimal(str(row.deductions_total or 0)) + deduction_total) if row else deduction_total
         display_loans = Decimal(str(row.loan_installments_total or 0)) if row else loan_total
@@ -722,7 +729,16 @@ async def get_salary_settlement_report(db: AsyncSession, tenant_id: str, month: 
             "remaining_amount": float(remaining),
             "carryover_amount": float(carryover),
             "carried_from_previous": float(carried_from_previous),
-            "withdrawals": withdrawals, "deductions": deductions,
+            "withdrawals": [{"id": w.id, "withdrawal_date": w.withdrawal_date.isoformat() if w.withdrawal_date else None,
+                             "salary_month": w.salary_month, "salary_year": w.salary_year,
+                             "amount": float(w.amount or 0), "reason": w.reason, "status": w.status}
+                            for w in detail_withdrawals],
+            "deductions": [{"id": d.id, "deduction_date": d.deduction_date.isoformat() if d.deduction_date else None,
+                            "amount": float(d.amount or 0), "reason": d.reason, "status": d.status}
+                           for d in deductions],
+            "loans": [{"id": a.id, "reason": a.reason, "total_amount": float(a.total_amount or 0),
+                       "monthly_installment": float(a.monthly_installment or 0),
+                       "paid_amount": float(a.paid_amount or 0)} for a in advances],
             "manual_paid_amount": float(cash_paid),
             "payments": [{"id": p.id, "amount": float(p.amount), "payment_method": p.payment_method,
                           "paid_at": p.paid_at.isoformat() if p.paid_at else None} for p in manual_payments],
