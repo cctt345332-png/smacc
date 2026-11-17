@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.pos import POSTerminal
+from app.models.pos import POSTerminal, POSSession
 from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem, Warehouse
 
@@ -48,7 +48,7 @@ async def _parts(db: AsyncSession, tenant_id: str, ticket_id: str) -> list[dict]
 async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -> dict:
     data = {
         "id": ticket.id, "ticket_number": ticket.ticket_number,
-        "terminal_id": ticket.terminal_id, "maintenance_warehouse_id": ticket.maintenance_warehouse_id,
+        "terminal_id": ticket.terminal_id, "session_id": ticket.session_id, "maintenance_warehouse_id": ticket.maintenance_warehouse_id,
         "status": ticket.status, "customer_name": ticket.customer_name,
         "customer_phone": ticket.customer_phone, "device_name": ticket.device_name,
         "device_serial": ticket.device_serial, "reported_problem": ticket.reported_problem,
@@ -62,12 +62,14 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
     return data
 
 
-async def list_tickets(db: AsyncSession, tenant_id: str, status: str | None = None, terminal_id: str | None = None):
+async def list_tickets(db: AsyncSession, tenant_id: str, status: str | None = None, terminal_id: str | None = None, session_id: str | None = None):
     q = select(POSMaintenanceTicket).where(POSMaintenanceTicket.tenant_id == tenant_id)
     if status:
         q = q.where(POSMaintenanceTicket.status == status)
     if terminal_id:
         q = q.where(POSMaintenanceTicket.terminal_id == terminal_id)
+    if session_id:
+        q = q.where(POSMaintenanceTicket.session_id == session_id)
     rows = (await db.execute(q.order_by(POSMaintenanceTicket.created_at.desc()).limit(300))).scalars().all()
     return [await _out(db, tenant_id, row) for row in rows]
 
@@ -76,6 +78,11 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
     terminal = await db.get(POSTerminal, data.get("terminal_id"))
     if not terminal or terminal.tenant_id != tenant_id or not terminal.is_active:
         raise HTTPException(404, "جهاز الكاشير غير موجود أو غير فعال")
+    session_id = data.get("session_id") or None
+    if session_id:
+        session = await db.get(POSSession, session_id)
+        if not session or session.tenant_id != tenant_id or session.terminal_id != terminal.id or session.status != "open":
+            raise HTTPException(400, "جلسة الكاشير غير موجودة أو مغلقة أو لا تخص هذا الجهاز")
     warehouse_id = data.get("maintenance_warehouse_id") or terminal.maintenance_warehouse_id
     if not warehouse_id:
         raise HTTPException(400, "اربط جهاز الكاشير بمستودع صيانة أولاً")
@@ -92,14 +99,20 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
     if not device_name or not problem:
         raise HTTPException(400, "اسم الجهاز ووصف العطل مطلوبان")
     now = datetime.utcnow()
+    estimated_cost = Decimal(str(data.get("estimated_cost") or 0))
+    approved_cost = Decimal(str(data.get("approved_cost") or 0))
+    paid_amount = Decimal(str(data.get("paid_amount") or 0))
+    if min(estimated_cost, approved_cost, paid_amount) < 0 or paid_amount > approved_cost:
+        raise HTTPException(400, "مبلغ التحصيل لا يمكن أن يتجاوز أجرة الصيانة المعتمدة")
     ticket = POSMaintenanceTicket(
         id=str(uuid.uuid4()), tenant_id=tenant_id, terminal_id=terminal.id,
+        session_id=session_id,
         maintenance_warehouse_id=warehouse.id, ticket_number=await _next_number(db, tenant_id),
         customer_name=(data.get("customer_name") or None), customer_phone=(data.get("customer_phone") or None),
         device_name=device_name, device_serial=(data.get("device_serial") or None),
         reported_problem=problem, diagnosis=(data.get("diagnosis") or None), notes=(data.get("notes") or None),
         assigned_to=data.get("assigned_to") or None,
-        estimated_cost=Decimal(str(data.get("estimated_cost") or 0)),
+        estimated_cost=estimated_cost, approved_cost=approved_cost, paid_amount=paid_amount,
         created_by=user_id, created_at=now, updated_at=now,
     )
     db.add(ticket)

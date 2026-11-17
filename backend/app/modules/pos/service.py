@@ -17,6 +17,7 @@ from app.models.pos import (
     POSTerminal, POSSession, POSTransaction, POSTransactionLine, POSCashOutflow,
     POS_PURCHASE_ACTIVITIES, ACTIVITY_CONFIG,
 )
+from app.models.pos_maintenance import POSMaintenanceTicket
 
 # قيم الحالة كـ strings مباشرة (متوافقة مع الـ DB)
 SESSION_OPEN   = "open"
@@ -471,7 +472,13 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
             POSCashOutflow.tenant_id == tenant_id,
         )
     ) or Decimal("0")
-    expected = session.opening_cash + session.total_cash - Decimal(str(outflows_total))
+    maintenance_paid = await db.scalar(
+        select(func.coalesce(func.sum(POSMaintenanceTicket.paid_amount), 0)).where(
+            POSMaintenanceTicket.session_id == session.id,
+            POSMaintenanceTicket.tenant_id == tenant_id,
+        )
+    ) or Decimal("0")
+    expected = session.opening_cash + session.total_cash + Decimal(str(maintenance_paid)) - Decimal(str(outflows_total))
     difference = closing_cash - expected
 
     session.closing_cash = closing_cash
@@ -499,6 +506,7 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
         "total_tamara": float(session.total_tamara),
         "total_bank_transfer": float(session.total_bank_transfer),
         "total_cash_outflows": float(outflows_total),
+        "total_maintenance_paid": float(maintenance_paid),
         "total_vat": float(session.total_vat),
         "transaction_count": session.transaction_count,
         "status": "closed",
@@ -535,6 +543,13 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
     )
     outflows = outflows_r.scalars().all()
     outflows_total = sum((Decimal(str(item.amount)) for item in outflows), Decimal("0"))
+    maintenance_rows = (await db.execute(
+        select(POSMaintenanceTicket).where(
+            POSMaintenanceTicket.session_id == session.id,
+            POSMaintenanceTicket.tenant_id == tenant_id,
+        ).order_by(POSMaintenanceTicket.created_at)
+    )).scalars().all()
+    maintenance_paid = sum((Decimal(str(row.paid_amount or 0)) for row in maintenance_rows), Decimal("0"))
 
     by_method: dict[str, float] = {}
     for tx in txs:
@@ -551,8 +566,8 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
             "closed_at": session.closed_at.isoformat() if session.closed_at else None,
             "opening_cash": float(session.opening_cash),
             "closing_cash": float(session.closing_cash or 0),
-            "expected_cash": float(session.expected_cash if session.expected_cash is not None else (session.opening_cash + session.total_cash - outflows_total)),
-            "difference": float((session.closing_cash or 0) - (session.expected_cash if session.expected_cash is not None else (session.opening_cash + session.total_cash - outflows_total))),
+            "expected_cash": float(session.expected_cash if session.expected_cash is not None else (session.opening_cash + session.total_cash + maintenance_paid - outflows_total)),
+            "difference": float((session.closing_cash or 0) - (session.expected_cash if session.expected_cash is not None else (session.opening_cash + session.total_cash + maintenance_paid - outflows_total))),
             "total_sales": float(session.total_sales),
             "total_cash": float(session.total_cash),
             "total_card": float(session.total_card),
@@ -562,6 +577,8 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
             "total_vat": float(session.total_vat),
             "transaction_count": session.transaction_count,
             "total_cash_outflows": float(outflows_total),
+            "total_maintenance_paid": float(maintenance_paid),
+            "maintenance_count": len(maintenance_rows),
         },
         "by_payment_method": by_method,
         "cash_outflows": [

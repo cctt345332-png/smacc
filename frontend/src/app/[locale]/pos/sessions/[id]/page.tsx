@@ -115,7 +115,8 @@ export default function SessionDetailPage() {
   const actCfg       = ACTIVITY_CFG[session.business_type] || ACTIVITY_CFG.general;
 
   const totalCashOutflows = Number(session.total_cash_outflows || cashOutflows.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0));
-  const expectedCash = Number(session.opening_cash) + Number(session.total_cash) - totalCashOutflows;
+  const maintenancePaid = Number(session.total_maintenance_paid || 0);
+  const expectedCash = Number(session.opening_cash) + Number(session.total_cash) + maintenancePaid - totalCashOutflows;
   const actualCash   = session.closing_cash != null ? Number(session.closing_cash) : null;
   const difference   = actualCash != null ? actualCash - expectedCash : null;
 
@@ -156,6 +157,7 @@ export default function SessionDetailPage() {
       <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
           { label: isAr ? "إجمالي المبيعات" : "Total Sales",    value: `${fmt(Number(session.total_sales))} ${sar}`,    icon: "revenue"  as const, color: "#6F4A84", bg: "#F4EFF7" },
+          { label: isAr ? "تحصيل الصيانة" : "Maintenance collected", value: `${fmt(maintenancePaid)} ${sar}`, icon: "settings" as const, color: "#0F766E", bg: "#ECFDF5" },
           { label: isAr ? "إجمالي النقد" : "Cash Sales",        value: `${fmt(Number(session.total_cash))} ${sar}`,     icon: "cash"     as const, color: "#5A187E", bg: "#EFF6FF" },
           { label: isAr ? "إجمالي البطاقة" : "Card Sales",      value: `${fmt(Number(session.total_card))} ${sar}`,     icon: "card"     as const, color: "#75617F", bg: "#F5F3FF" },
           { label: isAr ? "ضريبة القيمة المضافة" : "VAT",       value: `${fmt(Number(session.total_vat))} ${sar}`,      icon: "tax"      as const, color: "#D97706", bg: "#FFFBEB" },

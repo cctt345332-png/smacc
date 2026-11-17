@@ -53,8 +53,8 @@ async def delete_terminal(terminal_id: str, user=Depends(require_role(["manager"
 # ─── صيانة نقاط البيع — مستقلة عن المبيعات والفواتير ───────────────
 
 @router.get("/maintenance")
-async def list_pos_maintenance(status: Optional[str] = None, terminal_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
-    return await maintenance_service.list_tickets(db, tenant_id, status, terminal_id)
+async def list_pos_maintenance(status: Optional[str] = None, terminal_id: Optional[str] = None, session_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.list_tickets(db, tenant_id, status, terminal_id, session_id)
 
 
 @router.post("/maintenance", status_code=201)

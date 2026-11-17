@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, issueMaintenancePart, getMaintenanceSerials } from "@/lib/pos";
 import { getItemsForPicker } from "@/lib/inventory";
 import api from "@/lib/api";
@@ -12,6 +13,9 @@ const statusLabel: Record<string, string> = { open: "مفتوحة", inspecting: 
 export default function POSMaintenancePage(props: { params: Promise<{ locale: string }> }) {
   const { locale } = use(props.params);
   const ar = locale === "ar";
+  const searchParams = useSearchParams();
+  const terminalParam = searchParams.get("terminal_id") || "";
+  const sessionParam = searchParams.get("session_id") || "";
   const [terminals, setTerminals] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -20,22 +24,20 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
   const [selected, setSelected] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<any>({ terminal_id: "", assigned_to: "", customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", estimated_cost: "" });
+  const [form, setForm] = useState<any>({ terminal_id: terminalParam, session_id: sessionParam, assigned_to: "", customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", estimated_cost: "", approved_cost: "", paid_amount: "" });
   const [part, setPart] = useState<any>({ product_id: "", serial_item_id: "", quantity: "1", unit_price: "" });
 
   const load = async () => {
     try {
-      const [t, r] = await Promise.all([getTerminals(), getMaintenanceTickets()]);
+      const [t, r] = await Promise.all([getTerminals(), getMaintenanceTickets({ terminal_id: terminalParam || undefined, session_id: sessionParam || undefined })]);
       setTerminals(t.data || []); setTickets(r.data || []);
+      if (terminalParam) setForm((f: any) => ({ ...f, terminal_id: terminalParam, session_id: sessionParam }));
       if (selected) setSelected((r.data || []).find((x: any) => x.id === selected.id) || null);
     } catch { setTickets([]); }
     finally { setLoading(false); }
   };
   useEffect(() => {
     load();
-    getItemsForPicker({ search: "" })
-      .then((r) => setItems(r.data || r.data?.items || []))
-      .catch(() => {});
     api.get("/auth/users")
       .then((r) => {
         const users = r.data || [];
@@ -45,11 +47,18 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
       })
       .catch(() => {});
   }, []);
+  useEffect(() => {
+    const terminal = terminals.find((t: any) => t.id === form.terminal_id);
+    if (!terminal?.maintenance_warehouse_id) { setItems([]); return; }
+    getItemsForPicker({ search: "", warehouse_id: terminal.maintenance_warehouse_id })
+      .then((r) => setItems(r.data || r.data?.items || []))
+      .catch(() => setItems([]));
+  }, [terminals, form.terminal_id]);
 
   const saveTicket = async () => {
     if (!form.terminal_id || !form.device_name.trim() || !form.reported_problem.trim()) return alert("اختر الجهاز واكتب اسم الجهاز ووصف العطل");
     setSaving(true);
-    try { const r = await createMaintenanceTicket({ ...form, estimated_cost: Number(form.estimated_cost || 0) }); setSelected(r.data); setForm({ terminal_id: form.terminal_id, assigned_to: form.assigned_to, customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", estimated_cost: "" }); await load(); }
+      try { const r = await createMaintenanceTicket({ ...form, estimated_cost: Number(form.estimated_cost || 0), approved_cost: Number(form.approved_cost || 0), paid_amount: Number(form.paid_amount || 0) }); setSelected(r.data); setForm({ terminal_id: form.terminal_id, session_id: form.session_id, assigned_to: form.assigned_to, customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", estimated_cost: "", approved_cost: "", paid_amount: "" }); await load(); }
     catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ تذكرة الصيانة"); }
     finally { setSaving(false); }
   };
@@ -67,7 +76,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
 
   return <>
     <div className="page-header">
-      <div><div className="breadcrumb"><Link href={`/${locale}/pos`}>{ar ? "نقطة البيع" : "POS"}</Link><span className="breadcrumb-sep">/</span><span>{ar ? "الصيانة" : "Maintenance"}</span></div><h1 className="page-title">{ar ? "صيانة نقاط البيع" : "POS Maintenance"}</h1><p className="page-subtitle">{ar ? "تذاكر وقطع صيانة منفصلة عن فواتير المبيعات" : "Tickets and parts isolated from sales invoices"}</p></div>
+      <div><div className="breadcrumb"><Link href={`/${locale}/pos/cashier${terminalParam ? `?terminal=${terminalParam}${sessionParam ? `&session_id=${sessionParam}` : ""}` : ""}`}>{ar ? "الكاشير" : "Cashier"}</Link><span className="breadcrumb-sep">/</span><span>{ar ? "الصيانة" : "Maintenance"}</span></div><h1 className="page-title">{ar ? "صيانة داخل جلسة الكاشير" : "Maintenance in cashier session"}</h1><p className="page-subtitle">{ar ? "نفس الجهاز والجلسة — والأصناف من مستودع الصيانة المربوط" : "Same terminal and session — parts come from the assigned maintenance warehouse"}</p></div>
       <Link href={`/${locale}/pos/terminals`} className="btn btn-secondary"><Icon name="terminal" size={15} />{ar ? "إعداد الأجهزة" : "Terminals"}</Link>
     </div>
     <div className="grid-2" style={{ alignItems: "start" }}>
@@ -78,6 +87,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
         <div className="grid-2"><div className="form-group"><label className="form-label">اسم العميل</label><input className="form-input" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} /></div><div className="form-group"><label className="form-label">الجوال</label><input className="form-input" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} /></div></div>
         <div className="grid-2"><div className="form-group"><label className="form-label">اسم الجهاز <span className="required">*</span></label><input className="form-input" value={form.device_name} onChange={e => setForm({ ...form, device_name: e.target.value })} /></div><div className="form-group"><label className="form-label">السيريال / IMEI</label><input className="form-input" value={form.device_serial} onChange={e => setForm({ ...form, device_serial: e.target.value })} /></div></div>
         <div className="form-group"><label className="form-label">وصف العطل <span className="required">*</span></label><textarea className="form-input" rows={3} value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} /></div>
+        <div className="grid-2"><div className="form-group"><label className="form-label">أجرة الصيانة المعتمدة</label><input className="form-input" type="number" min="0" value={form.approved_cost} onChange={e => setForm({ ...form, approved_cost: e.target.value })} /></div><div className="form-group"><label className="form-label">المبلغ المحصل نقدًا</label><input className="form-input" type="number" min="0" value={form.paid_amount} onChange={e => setForm({ ...form, paid_amount: e.target.value })} /></div></div>
         <div className="form-group"><label className="form-label">التكلفة التقديرية</label><input className="form-input" type="number" min="0" value={form.estimated_cost} onChange={e => setForm({ ...form, estimated_cost: e.target.value })} /></div>
         <button className="btn btn-primary" onClick={saveTicket} disabled={saving}>{saving ? "جاري الحفظ..." : "حفظ التذكرة"}</button>
       </div>
