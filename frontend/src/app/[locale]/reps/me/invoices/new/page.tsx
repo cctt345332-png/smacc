@@ -181,6 +181,8 @@ export default function RepNewInvoicePage(props: { params: Promise<{ locale: str
           description_ar: l.picked.description_ar || l.picked.item_name || (ar ? "صنف" : "Item"),
           quantity: l.picked.quantity || 1,
           unit_price: priceExcl,
+          // السعر حُوّل إلى صافي قبل الإرسال؛ لا تفصل الخلفية الضريبة مرة أخرى.
+          prices_include_vat: false,
           discount_pct: parseFloat(l.discount_pct) || 0,
           vat_rate: taxRate,
           vat_category: "S",
