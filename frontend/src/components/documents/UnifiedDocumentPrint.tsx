@@ -34,6 +34,7 @@ export type UnifiedPrintDocument = {
   issue_date?: string;
   supply_date?: string;
   due_date?: string;
+  expiry_date?: string;
   status?: string;
   invoice_type?: string;
   uuid?: string;
@@ -203,7 +204,7 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
               <div className="udoc-docno">{document.number}</div>
               <div>{ar ? "تاريخ الإصدار: " : "Issue date: "}{dateFmt(document.issue_date)}</div>
               {document.supply_date && <div>{ar ? "تاريخ التوريد: " : "Supply date: "}{dateFmt(document.supply_date)}</div>}
-              {document.due_date && <div>{ar ? "تاريخ الاستحقاق: " : "Due date: "}{dateFmt(document.due_date)}</div>}
+              {document.expiry_date ? <div>{ar ? "تاريخ انتهاء العرض: " : "Quotation expiry date: "}{dateFmt(document.expiry_date)}</div> : document.due_date && <div>{ar ? "تاريخ الاستحقاق: " : "Due date: "}{dateFmt(document.due_date)}</div>}
               {document.status && <span className="udoc-status">{document.status}</span>}
             </div>
           </header>

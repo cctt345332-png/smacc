@@ -46,6 +46,8 @@ export const updatePayment = (id: string, data: any) => api.patch(`/sales/paymen
 export const getQuotations = () => api.get("/sales/quotations");
 export const getQuotation = (id: string) => api.get(`/sales/quotations/${id}`);
 export const createQuotation = (data: any) => api.post("/sales/quotations", data);
+export const updateQuotation = (id: string, data: any) => api.patch(`/sales/quotations/${id}`, data);
+export const deleteQuotation = (id: string) => api.delete(`/sales/quotations/${id}`);
 export const convertToInvoice = (id: string) => api.post(`/sales/quotations/${id}/convert-to-invoice`);
 
 // Credit Notes

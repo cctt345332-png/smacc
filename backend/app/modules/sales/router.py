@@ -317,6 +317,16 @@ async def convert_to_invoice(quotation_id: str, user=Depends(require_role(["mana
     return await service.convert_quotation_to_invoice(db, user["tenant_id"], user["user_id"], quotation_id)
 
 
+@router.patch("/quotations/{quotation_id}", response_model=QuotationOut)
+async def update_quotation(quotation_id: str, data: QuotationCreate, user=Depends(require_role(["manager", "accountant", "sales"])), db: AsyncSession = Depends(get_db)):
+    return await service.update_quotation(db, user["tenant_id"], user["user_id"], quotation_id, data)
+
+
+@router.delete("/quotations/{quotation_id}")
+async def delete_quotation(quotation_id: str, user=Depends(require_role(["manager", "accountant", "sales"])), db: AsyncSession = Depends(get_db)):
+    return await service.delete_quotation(db, user["tenant_id"], quotation_id)
+
+
 # ─── Credit Notes ────────────────────────────────────────────────────
 async def _assert_refund_credit_note_access(credit_note_id: str, user: dict, db: AsyncSession):
     """المندوب يستطيع طلب استرداد إشعار يخص فواتيره فقط."""

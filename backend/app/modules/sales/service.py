@@ -2210,6 +2210,7 @@ async def create_quotation(db: AsyncSession, tenant_id: str, user_id: str, data:
         quotation_number=await _next_quotation_number(db, tenant_id),
         customer_id=data.customer_id,
         warehouse_id=data.warehouse_id or None,
+        status="accepted",
         issue_date=issue_date, expiry_date=expiry_date,
         subject=data.subject, notes=data.notes, terms=data.terms,
         subtotal=subtotal, vat_amount=total_vat, total=total,
@@ -2269,6 +2270,38 @@ async def convert_quotation_to_invoice(db: AsyncSession, tenant_id: str, user_id
     quot.status = "accepted"
     invoice = await create_invoice(db, tenant_id, user_id, invoice_data)
     return invoice
+
+
+async def update_quotation(db: AsyncSession, tenant_id: str, user_id: str, quotation_id: str, data: QuotationCreate):
+    quot = (await db.execute(select(Quotation).where(
+        Quotation.id == quotation_id, Quotation.tenant_id == tenant_id
+    ))).scalar_one_or_none()
+    if not quot:
+        raise HTTPException(404, "Quotation not found")
+    linked = (await db.execute(select(func.count(Invoice.id)).where(
+        Invoice.tenant_id == tenant_id, Invoice.quotation_id == quotation_id
+    ))).scalar() or 0
+    if linked:
+        raise HTTPException(409, "لا يمكن تعديل عرض سعر تم تحويله إلى فاتورة")
+    await db.delete(quot)
+    await db.flush()
+    return await create_quotation(db, tenant_id, user_id, data)
+
+
+async def delete_quotation(db: AsyncSession, tenant_id: str, quotation_id: str):
+    quot = (await db.execute(select(Quotation).where(
+        Quotation.id == quotation_id, Quotation.tenant_id == tenant_id
+    ))).scalar_one_or_none()
+    if not quot:
+        raise HTTPException(404, "Quotation not found")
+    linked = (await db.execute(select(func.count(Invoice.id)).where(
+        Invoice.tenant_id == tenant_id, Invoice.quotation_id == quotation_id
+    ))).scalar() or 0
+    if linked:
+        raise HTTPException(409, "لا يمكن حذف عرض سعر تم تحويله إلى فاتورة")
+    await db.delete(quot)
+    await db.commit()
+    return {"success": True, "message": "تم حذف عرض السعر"}
 
 
 # ─── Credit Notes ────────────────────────────────────────────────────

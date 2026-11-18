@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getQuotations, convertToInvoice } from "@/lib/sales";
+import { getQuotations, convertToInvoice, deleteQuotation } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 
 const fmt = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2 });
@@ -44,6 +44,12 @@ export default function QuotationsPage(props: { params: Promise<{ locale: string
     } catch (e: any) {
       alert(e?.response?.data?.detail || "Error");
     } finally { setConverting(null); }
+  };
+
+  const handleDelete = async (id: string, quotationNumber: string) => {
+    if (!confirm(ar ? `حذف عرض السعر ${quotationNumber}؟` : `Delete quotation ${quotationNumber}?`)) return;
+    try { await deleteQuotation(id); await load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || (ar ? "تعذر حذف العرض" : "Could not delete quotation")); }
   };
 
   return (
@@ -142,6 +148,9 @@ export default function QuotationsPage(props: { params: Promise<{ locale: string
                           <Link href={`/${locale}/sales/quotations/${q.id}`} className="btn btn-ghost btn-sm" title={ar ? "عرض" : "View"}>
                             <Icon name="view" size={14} />
                           </Link>
+                          <Link href={`/${locale}/sales/quotations/new?edit=${q.id}`} className="btn btn-ghost btn-sm" title={ar ? "تعديل" : "Edit"}>
+                            <Icon name="edit" size={14} />
+                          </Link>
                           {(q.status === "draft" || q.status === "sent" || q.status === "accepted") && (
                             <button
                               className="btn btn-ghost btn-sm"
@@ -154,6 +163,9 @@ export default function QuotationsPage(props: { params: Promise<{ locale: string
                               <span style={{ fontSize: 11 }}>{ar ? "تحويل لفاتورة" : "Convert"}</span>
                             </button>
                           )}
+                          <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} onClick={() => handleDelete(q.id, q.quotation_number)} title={ar ? "حذف" : "Delete"}>
+                            <Icon name="trash" size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>

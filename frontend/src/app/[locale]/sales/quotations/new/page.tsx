@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getCustomers, createQuotation } from "@/lib/sales";
+import { getCustomers, createQuotation, getQuotation, updateQuotation } from "@/lib/sales";
 import { getWarehouses } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
@@ -40,10 +40,25 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
   const [customers, setCustomers] = useState<any[]>([]);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({ customer_id: "", warehouse_id: "", issue_date: today(), expiry_date: "", subject: "", notes: "", terms: "" });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
-  useEffect(() => { Promise.all([getCustomers(), getWarehouses()]).then(([c, w]) => { setCustomers(c.data); setWarehouses(w.data); }); }, []);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("edit");
+    setEditId(id);
+    Promise.all([getCustomers(), getWarehouses(), id ? getQuotation(id) : Promise.resolve(null)]).then(([c, w, qRes]) => {
+      setCustomers(c.data); setWarehouses(w.data);
+      const q = qRes?.data;
+      if (!q) return;
+      setForm({ customer_id: q.customer_id || "", warehouse_id: q.warehouse_id || "", issue_date: String(q.issue_date || "").slice(0, 10), expiry_date: q.expiry_date ? String(q.expiry_date).slice(0, 10) : "", subject: q.subject || "", notes: q.notes || "", terms: q.terms || "" });
+      setLines((q.lines || []).map((l: any) => {
+        let serialIds: string[] | undefined;
+        try { serialIds = l.serial_ids_json ? JSON.parse(l.serial_ids_json) : undefined; } catch { serialIds = undefined; }
+        return { picked: { mode: (serialIds?.length ? "serial" : (l.inventory_item_id ? "item" : "free")) as any, description_ar: l.description_ar || "", unit_price: Number(l.unit_price || 0), quantity: Number(l.quantity || 1), inventory_item_id: l.inventory_item_id || undefined, serial_ids: serialIds, variant_id: l.variant_id || undefined }, discount_pct: String(l.discount_pct || 0), vat_rate: String(l.vat_rate || 15), prices_include_vat: true };
+      }));
+    }).catch(() => {});
+  }, []);
 
   const setPicked = (i: number, picked: PickedItem) => setLines(p => p.map((l, idx) => idx === i ? { ...l, picked } : l));
   const setField = (i: number, k: "discount_pct" | "vat_rate", v: string) => setLines(p => p.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
@@ -60,7 +75,7 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
     if (lines.some(l => !l.picked.description_ar)) return alert(ar ? "أدخل وصف لكل الأسطر" : "Enter description for all lines");
     setSaving(true);
     try {
-      await createQuotation({
+      const payload = {
         ...form,
         expiry_date: form.expiry_date ? new Date(form.expiry_date).toISOString() : null,
         issue_date: new Date(form.issue_date).toISOString(),
@@ -76,7 +91,9 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
           serial_ids: l.picked.serial_ids || null,
           variant_id: l.picked.variant_id || null,
         })),
-      });
+      };
+      if (editId) await updateQuotation(editId, payload);
+      else await createQuotation(payload);
       router.push(`/${locale}/sales/quotations`);
     } catch (e: any) { alert(e?.response?.data?.detail || "Error"); }
     finally { setSaving(false); }
@@ -89,14 +106,14 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
           <div className="breadcrumb">
             <Link href={`/${locale}/sales/quotations`}>{ar ? "عروض الأسعار" : "Quotations"}</Link>
             <span className="breadcrumb-sep">/</span>
-            <span>{ar ? "عرض سعر جديد" : "New Quotation"}</span>
+          <span>{editId ? (ar ? "تعديل عرض السعر" : "Edit Quotation") : (ar ? "عرض سعر جديد" : "New Quotation")}</span>
           </div>
-          <h1 className="page-title">{ar ? "عرض سعر جديد" : "New Quotation"}</h1>
+          <h1 className="page-title">{editId ? (ar ? "تعديل عرض السعر" : "Edit Quotation") : (ar ? "عرض سعر جديد" : "New Quotation")}</h1>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Link href={`/${locale}/sales/quotations`} className="btn btn-secondary btn-sm">{ar ? "إلغاء" : "Cancel"}</Link>
           <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-            {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ" : "Save")}
+            {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editId ? (ar ? "حفظ التعديل" : "Save Changes") : (ar ? "حفظ العرض" : "Save Quotation"))}
           </button>
         </div>
       </div>
