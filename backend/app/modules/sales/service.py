@@ -2225,7 +2225,7 @@ async def create_quotation(db: AsyncSession, tenant_id: str, user_id: str, data:
             discount_pct=line.discount_pct, vat_rate=line.vat_rate,
             subtotal=sub, vat_amount=vat, total=tot,
             inventory_item_id=line.inventory_item_id,
-            serial_ids_json=_json.dumps(line.serial_ids) if line.serial_ids else None,
+            serial_ids_json=json.dumps(line.serial_ids) if line.serial_ids else None,
             variant_id=line.variant_id,
         ))
 
@@ -2424,6 +2424,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
     cn = CreditNote(
         id=cn_id, tenant_id=tenant_id, credit_note_number=await _next_credit_note_number(db, tenant_id),
         uuid=str(uuid.uuid4()), note_type=data.note_type, original_invoice_id=data.original_invoice_id, customer_id=original.customer_id,
+        status=data.status,
         issue_date=issue_date, reason=data.reason, subtotal=taxable_total, vat_amount=total_vat, total=total,
         qr_code=_generate_qr_tlv(tenant.name if tenant else "", vat_settings.vat_number if vat_settings else "", issue_date.isoformat(), total, total_vat), created_by=user_id,
     )
@@ -2440,12 +2441,12 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
                 serial_ids_json=json.dumps(serial_ids) if serial_ids else None,
                 return_condition=return_condition, warehouse_id=return_warehouse_id,
             ))
-        if data.note_type == "credit":
+        if data.status != "draft" and data.note_type == "credit":
             await _return_credit_note_inventory(db, tenant_id, user_id, cn, original, validated_lines)
         record_audit(db, tenant_id, user_id, "create", "credit_note", cn.id,
                      credit_note_number=cn.credit_note_number, original_invoice_id=original.id,
                      total=cn.total, line_count=len(validated_lines))
-        if data.note_type == "credit" and original.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
+        if data.status != "draft" and data.note_type == "credit" and original.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
             await _create_credit_note_journal(db, tenant_id, user_id, cn, original)
         await db.commit()
     except Exception:
@@ -2453,7 +2454,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
         raise
     await db.refresh(cn)
     onboarding_vat = await db.scalar(select(VATSetting).where(VATSetting.tenant_id == tenant_id))
-    if onboarding_vat and onboarding_vat.zatca_compliance_token_encrypted and not onboarding_vat.zatca_production_token_encrypted:
+    if cn.status != "draft" and onboarding_vat and onboarding_vat.zatca_compliance_token_encrypted and not onboarding_vat.zatca_production_token_encrypted:
         from app.modules import zatca_service
         try:
             await zatca_service.submit_credit_note(db, tenant_id, user_id, cn.id, simulation=True)
@@ -2608,6 +2609,16 @@ async def update_credit_note(db: AsyncSession, tenant_id: str, user_id: str, cre
     return await create_credit_note(db, tenant_id, user_id, data)
 
 
+async def delete_credit_note_draft(db: AsyncSession, tenant_id: str, credit_note_id: str):
+    """حذف مسودة مرتجع فقط؛ المرتجع المرحّل لا يُحذف حفاظًا على الأثر المالي."""
+    cn = await get_credit_note(db, tenant_id, credit_note_id)
+    if cn.status != "draft":
+        raise HTTPException(409, "لا يمكن حذف مرتجع مرحّل؛ احفظه كمسودة قبل الاعتماد")
+    await db.delete(cn)
+    await db.commit()
+    return {"success": True, "message": "تم حذف مسودة المرتجع"}
+
+
 async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
     """مرتجع عميل مستقل عن الفاتورة بنفس أسطر المرتجع العادي."""
     if not data.customer_id:
@@ -2705,6 +2716,7 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
     cn = CreditNote(
         id=str(uuid.uuid4()), tenant_id=tenant_id, credit_note_number=await _next_credit_note_number(db, tenant_id),
         uuid=str(uuid.uuid4()), original_invoice_id=None, customer_id=customer.id,
+        status=data.status,
         issue_date=data.issue_date.replace(tzinfo=None), reason=data.reason,
         subtotal=subtotal, vat_amount=vat_amount, total=total, created_by=user_id,
     )
@@ -2719,19 +2731,22 @@ async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, u
             return_condition=return_condition, warehouse_id=warehouse_id,
         ))
         for serial in serials:
-            serial.status = SerialStatus.IN_STOCK
-            serial.warehouse_id = warehouse_id
-            db.add(StockMovement(
-                id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
-                warehouse_id=warehouse_id, movement_type="return_in", quantity=Decimal("1"),
-                unit_cost=serial.cost_price, serial_item_id=serial.id,
-                reference_type="credit_note", reference_id=cn.id, created_by=user_id,
-            ))
-        if not serials:
+            if data.status != "draft":
+                serial.status = SerialStatus.IN_STOCK
+                serial.warehouse_id = warehouse_id
+            if data.status != "draft":
+                db.add(StockMovement(
+                    id=str(uuid.uuid4()), tenant_id=tenant_id, product_id=serial.product_id,
+                    warehouse_id=warehouse_id, movement_type="return_in", quantity=Decimal("1"),
+                    unit_cost=serial.cost_price, serial_item_id=serial.id,
+                    reference_type="credit_note", reference_id=cn.id, created_by=user_id,
+                ))
+        if data.status != "draft" and not serials:
             await add_stock(db, tenant_id, item.id, qty, item.cost_price, warehouse_id=warehouse_id,
                             reference_type="credit_note", reference_id=cn.id, user_id=user_id,
                             auto_commit=False, movement_type="return_in")
-    await _create_credit_note_journal(db, tenant_id, user_id, cn, None)
+    if data.status != "draft":
+        await _create_credit_note_journal(db, tenant_id, user_id, cn, None)
     await db.commit()
     return cn
 async def _return_credit_note_inventory(db, tenant_id, user_id, credit_note, original_invoice, validated_lines):

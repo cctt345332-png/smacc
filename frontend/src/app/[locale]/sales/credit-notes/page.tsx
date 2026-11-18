@@ -38,6 +38,16 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
 
   useEffect(() => { load(); }, []);
 
+  const deleteDraft = async (id: string) => {
+    if (!window.confirm(ar ? "هل تريد حذف مسودة المرتجع؟" : "Delete this return draft?")) return;
+    try {
+      await api.delete(`/sales/credit-notes/${id}`);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر حذف المرتجع" : "Could not delete return"));
+    }
+  };
+
   return (
     <>
       <div className="page-header">
@@ -80,6 +90,7 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                   <th>{ar ? "الفاتورة الأصلية" : "Original Invoice"}</th>
                   <th>{ar ? "التاريخ" : "Date"}</th>
                   <th>{ar ? "السبب" : "Reason"}</th>
+                  <th>{ar ? "الحالة" : "Status"}</th>
                   <th style={{ textAlign: "end" }}>{ar ? "الإجمالي" : "Total"}</th>
                   <th>{ar ? "الإجراءات" : "Actions"}</th>
                 </tr>
@@ -104,6 +115,7 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(cn.issue_date).toLocaleDateString("en-SA")}</td>
                     <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{cn.reason}</td>
+                    <td><span className="badge" style={{ color: cn.status === "draft" ? "#92400E" : "#166534" }}>{cn.status === "draft" ? (ar ? "مسودة" : "Draft") : (ar ? "مرحل" : "Posted")}</span></td>
                     <td style={{ textAlign: "end", fontWeight: 700, color: "#DC2626" }}>{fmt(cn.total)} SAR</td>
                     <td>
                       <div style={{ display: "flex", gap: 4 }}>
@@ -117,6 +129,9 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                           onClick={() => window.open(`/${locale}/sales/credit-notes/${cn.id}`, "_blank")}>
                           <Icon name="print" size={14} />
                         </button>
+                        {cn.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "حذف المسودة" : "Delete draft"} onClick={() => deleteDraft(cn.id)} style={{ color: "var(--danger)" }}>
+                          <Icon name="trash" size={14} />
+                        </button>}
                       </div>
                     </td>
                   </tr>

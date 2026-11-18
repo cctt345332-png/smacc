@@ -194,7 +194,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     return { taxable: acc.taxable + c.taxable, vat: acc.vat + c.vatAmt, total: acc.total + c.total };
   }, { taxable: 0, vat: 0, total: 0 });
 
-  const handleSave = async () => {
+  const handleSave = async (asDraft = false) => {
     if (!form.reason) return alert(ar ? "أدخل سبب الإشعار" : "Enter reason");
     if (returnMode === "customer") {
       if (!customerId) return alert(ar ? "اختر العميل" : "Select customer");
@@ -212,7 +212,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
       if (customerLines.some(l => !l.serial_ids.length && lines.find(x => x.picked.inventory_item_id === l.inventory_item_id)?.picked.mode === "serial")) return alert(ar ? "أدخل سيريالات كل مادة متسلسلة" : "Enter serials for every serial-tracked item");
       setSaving(true);
       try {
-        const payload = { customer_id: customerId, issue_date: new Date(form.issue_date).toISOString(), reason: form.reason, lines: customerLines };
+        const payload = { customer_id: customerId, issue_date: new Date(form.issue_date).toISOString(), reason: form.reason, status: asDraft ? "draft" : "posted", lines: customerLines };
         if (editId) await updateCreditNote(editId, payload);
         else await createCreditNote(payload);
         router.push(`/${locale}/sales/credit-notes`);
@@ -227,6 +227,7 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
     try {
       const payload = {
         ...form,
+        status: asDraft ? "draft" : "posted",
         issue_date: new Date(form.issue_date).toISOString(),
         lines: lines.map((l, i) => ({
           original_invoice_line_id: l.original_invoice_line_id,
@@ -263,7 +264,10 @@ export default function NewCreditNotePage(props: { params: Promise<{ locale: str
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Link href={`/${locale}/sales/credit-notes`} className="btn btn-secondary btn-sm">{ar ? "إلغاء" : "Cancel"}</Link>
-          <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+          {!editId && <button className="btn btn-secondary btn-sm" onClick={() => handleSave(true)} disabled={saving}>
+            {ar ? "حفظ كمسودة" : "Save Draft"}
+          </button>}
+          <button className="btn btn-primary btn-sm" onClick={() => handleSave(false)} disabled={saving}>
             {saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editId ? (ar ? "حفظ التعديل" : "Save Changes") : (ar ? "حفظ المرتجع" : "Save Return"))}
           </button>
         </div>

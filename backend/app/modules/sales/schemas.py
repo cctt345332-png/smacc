@@ -337,6 +337,7 @@ class CreditNoteCreate(BaseModel):
     issue_date: datetime
     reason: str
     lines: List[CreditNoteLineCreate]
+    status: Literal["draft", "posted"] = "posted"
 
 
 class RefundRequestCreate(BaseModel):
