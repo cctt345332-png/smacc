@@ -4,7 +4,6 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
-import AIWidget from "@/components/ai/AIWidget";
 import { getCompany } from "@/lib/settings";
 
 export default function AppLayout({ children, locale }: { children: React.ReactNode; locale: string }) {
@@ -136,7 +135,6 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
         <main className="page-content animate-fade">
           {children}
         </main>
-        <AIWidget locale={locale} />
       </div>
     </div>
   );
