@@ -136,6 +136,7 @@ class Quotation(Base):
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
     quotation_number: Mapped[str] = mapped_column(String(50), index=True)
     customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"))
+    warehouse_id: Mapped[str | None] = mapped_column(String, ForeignKey("warehouses.id"), nullable=True)
     status: Mapped[QuotationStatus] = mapped_column(SAEnum(QuotationStatus), default=QuotationStatus.DRAFT)
     issue_date: Mapped[datetime] = mapped_column(DateTime)
     expiry_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -168,6 +169,9 @@ class QuotationLine(Base):
     subtotal: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     vat_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
     total: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
+    inventory_item_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    serial_ids_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    variant_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     quotation: Mapped["Quotation"] = relationship("Quotation", back_populates="lines")
 
@@ -189,6 +193,7 @@ class Invoice(Base):
 
     # العميل
     customer_id: Mapped[str] = mapped_column(String, ForeignKey("customers.id"))
+    warehouse_id: Mapped[str | None] = mapped_column(String, ForeignKey("warehouses.id"), nullable=True)
 
     # التواريخ — متطلب زاتكا
     issue_date: Mapped[datetime] = mapped_column(DateTime)        # تاريخ الإصدار

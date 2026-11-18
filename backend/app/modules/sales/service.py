@@ -16,7 +16,7 @@ from app.models.sales import (
 from app.models.reps import SalesRep
 from app.models.user import User
 from app.models.inventory import (
-    InventoryItem, ProductVariant, SerialItem, BatchItem, StockMovement, SerialStatus,
+    InventoryItem, InventoryStock, ProductVariant, SerialItem, BatchItem, StockMovement, SerialStatus,
 )
 from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine
 from app.models.pos import POSTransaction, POSTransactionLine
@@ -108,8 +108,8 @@ async def _reserve_invoice_serials(
 
     الحجز لا يخصم الكمية ولا ينشئ حركة بيع؛ الاعتماد وحده ينقلها إلى SOLD.
     """
-    warehouse_id = None
-    if invoice.rep_id:
+    warehouse_id = invoice.warehouse_id
+    if invoice.rep_id and not warehouse_id:
         rep = await db.scalar(select(SalesRep).where(
             SalesRep.id == invoice.rep_id, SalesRep.tenant_id == tenant_id
         ))
@@ -1095,6 +1095,7 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
         uuid=invoice_uuid,
         invoice_type=invoice_type,
         customer_id=data.customer_id,
+        warehouse_id=data.warehouse_id,
         issue_date=issue_date,
         supply_date=supply_date,
         due_date=due_date,
@@ -1301,12 +1302,12 @@ async def _deduct_inventory_for_invoice(
 ):
     """خصم المخزون عند تأكيد فاتورة المبيعات"""
     from app.modules.inventory.service import sell_serial, deduct_stock, deduct_batch_fefo
-    from app.models.inventory import InventoryItem
+    from app.models.inventory import InventoryItem, InventoryStock
     import json
 
-    # تحديد المستودع — إن كان مندوباً يُخصم من مستودعه
-    warehouse_id = None
-    if invoice.rep_id:
+    # أولوية المستودع المحفوظ في الفاتورة، ثم مستودع المندوب للسجلات القديمة.
+    warehouse_id = invoice.warehouse_id
+    if invoice.rep_id and not warehouse_id:
         from app.models.reps import SalesRep
         rep_r = await db.execute(select(SalesRep).where(SalesRep.id == invoice.rep_id))
         rep = rep_r.scalar_one_or_none()
@@ -1363,6 +1364,7 @@ async def _deduct_inventory_for_invoice(
                         db=db, tenant_id=tenant_id,
                         product_id=line.inventory_item_id,
                         quantity=line.quantity,
+                        warehouse_id=warehouse_id,
                         reference_type="invoice",
                         reference_id=invoice.id,
                         user_id=user_id,
@@ -1386,11 +1388,25 @@ async def _deduct_inventory_for_invoice(
                     ))
             else:
                 try:
+                    # عند اختيار «كل المستودعات» نحدد مستودعًا فعليًا يملك الكمية.
+                    effective_warehouse_id = warehouse_id
+                    if not effective_warehouse_id:
+                        stock_r = await db.execute(
+                            select(InventoryStock).where(
+                                InventoryStock.tenant_id == tenant_id,
+                                InventoryStock.item_id == line.inventory_item_id,
+                                InventoryStock.quantity >= line.quantity,
+                            ).order_by(InventoryStock.updated_at.asc()).limit(1)
+                        )
+                        stock = stock_r.scalar_one_or_none()
+                        if not stock:
+                            raise HTTPException(400, "لا توجد كمية كافية لهذا الصنف في أي مستودع")
+                        effective_warehouse_id = stock.warehouse_id
                     await deduct_stock(
                         db=db, tenant_id=tenant_id,
                         product_id=line.inventory_item_id,
                         quantity=line.quantity,
-                        warehouse_id=warehouse_id,
+                        warehouse_id=effective_warehouse_id,
                         reference_type="invoice",
                         reference_id=invoice.id,
                         user_id=user_id,
@@ -2193,6 +2209,7 @@ async def create_quotation(db: AsyncSession, tenant_id: str, user_id: str, data:
         id=quot_id, tenant_id=tenant_id,
         quotation_number=await _next_quotation_number(db, tenant_id),
         customer_id=data.customer_id,
+        warehouse_id=data.warehouse_id,
         issue_date=issue_date, expiry_date=expiry_date,
         subject=data.subject, notes=data.notes, terms=data.terms,
         subtotal=subtotal, vat_amount=total_vat, total=total,
@@ -2207,6 +2224,9 @@ async def create_quotation(db: AsyncSession, tenant_id: str, user_id: str, data:
             quantity=line.quantity, unit_price=line.unit_price,
             discount_pct=line.discount_pct, vat_rate=line.vat_rate,
             subtotal=sub, vat_amount=vat, total=tot,
+            inventory_item_id=line.inventory_item_id,
+            serial_ids_json=_json.dumps(line.serial_ids) if line.serial_ids else None,
+            variant_id=line.variant_id,
         ))
 
     await db.commit()
@@ -2227,6 +2247,7 @@ async def convert_quotation_to_invoice(db: AsyncSession, tenant_id: str, user_id
     from app.modules.sales.schemas import InvoiceCreate, InvoiceLineCreate
     invoice_data = InvoiceCreate(
         customer_id=quot.customer_id,
+        warehouse_id=quot.warehouse_id,
         issue_date=datetime.utcnow(),
         supply_date=datetime.utcnow(),
         quotation_id=quotation_id,
@@ -2239,6 +2260,9 @@ async def convert_quotation_to_invoice(db: AsyncSession, tenant_id: str, user_id
             unit_price=l.unit_price,
             discount_pct=l.discount_pct,
             vat_rate=l.vat_rate,
+            inventory_item_id=l.inventory_item_id,
+            serial_ids=json.loads(l.serial_ids_json) if l.serial_ids_json else None,
+            variant_id=l.variant_id,
         ) for l in lines],
     )
 

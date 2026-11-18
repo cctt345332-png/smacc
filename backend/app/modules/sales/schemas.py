@@ -155,6 +155,7 @@ class InvoiceLineOut(BaseModel):
 # ─── Invoice ─────────────────────────────────────────────────────────
 class InvoiceCreate(BaseModel):
     customer_id: str
+    warehouse_id: Optional[str] = None
     invoice_type: InvoiceType = InvoiceType.STANDARD
     issue_date: datetime
     supply_date: datetime
@@ -286,10 +287,14 @@ class QuotationLineCreate(BaseModel):
     vat_rate: Decimal = Decimal("15")
     prices_include_vat: bool = True
     line_order: int = 0
+    inventory_item_id: Optional[str] = None
+    serial_ids: Optional[list[str]] = None
+    variant_id: Optional[str] = None
 
 
 class QuotationCreate(BaseModel):
     customer_id: str
+    warehouse_id: Optional[str] = None
     issue_date: datetime
     expiry_date: Optional[datetime] = None
     subject: Optional[str] = None

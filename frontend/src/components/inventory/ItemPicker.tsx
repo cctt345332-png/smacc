@@ -92,25 +92,25 @@ export default function ItemPicker({ locale, value, onChange, purchaseMode = fal
     if (query.length < 1) { setResults([]); setShowDrop(false); return; }
     const t = setTimeout(async () => {
       try {
-        const { data } = await getItemsForPicker({ search: query });
+        const { data } = await getItemsForPicker({ search: query, ...(warehouseId ? { warehouse_id: warehouseId } : {}) });
         setResults(data);
         calcDropPos();
         setShowDrop(true);
       } catch { setResults([]); }
     }, 250);
     return () => clearTimeout(t);
-  }, [query, calcDropPos]);
+  }, [query, warehouseId, calcDropPos]);
 
   // جلب السيريالات عند اختيار صنف serial
   useEffect(() => {
     if (value.mode === "serial" && value.inventory_item_id) {
       setLoadingSerials(true);
-      getAvailableSerials(value.inventory_item_id)
+      getAvailableSerials(value.inventory_item_id, warehouseId)
         .then(({ data }) => setSerials(data))
         .catch(() => setSerials([]))
         .finally(() => setLoadingSerials(false));
     }
-  }, [value.inventory_item_id, value.mode]);
+  }, [value.inventory_item_id, value.mode, warehouseId]);
 
   // إغلاق dropdown عند الضغط خارجه أو عند الـ scroll
   useEffect(() => {

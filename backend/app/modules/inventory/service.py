@@ -2684,6 +2684,7 @@ async def add_batch(
 async def deduct_batch_fefo(
     db: AsyncSession, tenant_id: str, product_id: str,
     quantity: Decimal,
+    warehouse_id: str | None = None,
     reference_type: str | None = None,
     reference_id: str | None = None,
     user_id: str | None = None,
@@ -2698,12 +2699,13 @@ async def deduct_batch_fefo(
         raise HTTPException(400, f"الكمية المتاحة {item.quantity_on_hand} أقل من المطلوب {quantity}")
 
     # جلب التشغيلات مرتبة بتاريخ الانتهاء (الأقرب أولاً)
-    r = await db.execute(
-        select(BatchItem).where(
+    batch_query = select(BatchItem).where(
             BatchItem.product_id == product_id,
             BatchItem.quantity > 0,
-        ).order_by(BatchItem.expiry_date.asc().nullslast())
-    )
+        )
+    if warehouse_id:
+        batch_query = batch_query.where(BatchItem.warehouse_id == warehouse_id)
+    r = await db.execute(batch_query.order_by(BatchItem.expiry_date.asc().nullslast()))
     batches = r.scalars().all()
 
     remaining = quantity
@@ -2733,6 +2735,9 @@ async def deduct_batch_fefo(
             reference_id=reference_id,
             created_by=user_id,
         ))
+
+    if remaining > 0:
+        raise HTTPException(400, "الكمية المتاحة في مستودع البيع أقل من المطلوب")
 
     item.quantity_on_hand -= quantity
     if auto_commit:

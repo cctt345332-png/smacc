@@ -131,8 +131,10 @@ export const createMandatoryStocktakeTest = () => api.post("/inventory/mandatory
 export const cancelMandatoryStocktakeTest = (runId: string) => api.delete(`/inventory/mandatory-stocktake/test/${runId}`);
 
 // Available serials for invoice picker
-export const getAvailableSerials = (productId: string) =>
-  api.get(`/inventory/items/${productId}/available-serials`);
+export const getAvailableSerials = (productId: string, warehouseId?: string) =>
+  api.get(`/inventory/items/${productId}/available-serials`, {
+    params: warehouseId ? { warehouse_id: warehouseId } : {},
+  });
 
 // Items for invoice picker (with stock info) — dedicated endpoint
 export const getItemsForPicker = (params?: { search?: string; warehouse_id?: string }) =>

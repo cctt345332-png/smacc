@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getCustomers, createInvoice, confirmInvoice } from "@/lib/sales";
 import { getFiscalYears } from "@/lib/accounting";
+import { getWarehouses } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import ItemPicker, { PickedItem, LineMode } from "@/components/inventory/ItemPicker";
@@ -51,10 +52,12 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
 
   const [customers, setCustomers] = useState<any[]>([]);
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
     customer_id: "",
+    warehouse_id: "",
     invoice_type: "standard",
     payment_type: "cash",
     credit_days: "30",
@@ -87,10 +90,11 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
   useEffect(() => {
-    Promise.all([getCustomers(), getFiscalYears()])
-      .then(([cRes, fyRes]) => {
+    Promise.all([getCustomers(), getFiscalYears(), getWarehouses()])
+      .then(([cRes, fyRes, whRes]) => {
         setCustomers(cRes.data);
         setFiscalYears(fyRes.data);
+        setWarehouses(whRes.data);
         if (fyRes.data.length > 0) {
           const active = fyRes.data.find((fy: any) => fy.status === "open") || fyRes.data[0];
           setForm(f => ({ ...f, fiscal_year_id: active.id }));
@@ -222,6 +226,14 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
                 onChange={value => setForm(f => ({ ...f, customer_id: value }))}
                 placeholder={ar ? "اكتب رقم العميل أو اسمه للبحث..." : "Search customer number or name..."}
                 options={customers.map(c => ({ value: c.id, label: `${c.customer_number ? `${c.customer_number} — ` : ""}${c.name_ar}${c.name_en ? ` / ${c.name_en}` : ""}`, searchText: `${c.customer_number || ""} ${c.name_ar || ""} ${c.name_en || ""}` }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{ar ? "مستودع البيع" : "Sales Warehouse"}</label>
+              <select className="form-input form-select" value={form.warehouse_id} onChange={e => setForm(f => ({ ...f, warehouse_id: e.target.value }))}>
+                <option value="">{ar ? "كل المستودعات (يُختار المصدر تلقائياً)" : "All warehouses (auto-select source)"}</option>
+                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name_ar || w.name}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4 }}>{ar ? "يُستخدم هذا المستودع عند تأكيد الفاتورة وخصم المخزون." : "Used when confirming the invoice and deducting stock."}</div>
             </div>
             <div className="form-group">
               <label className="form-label">{ar ? "نوع الفاتورة" : "Invoice Type"}</label>
@@ -388,6 +400,7 @@ export default function NewInvoicePage(props: { params: Promise<{ locale: string
                         value={line.picked}
                         onChange={picked => setPicked(i, picked)}
                         purchaseMode={false}
+                        warehouseId={form.warehouse_id || undefined}
                       />
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>

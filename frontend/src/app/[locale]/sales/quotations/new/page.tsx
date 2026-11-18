@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { getCustomers, createQuotation } from "@/lib/sales";
+import { getWarehouses } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 import ItemPicker, { PickedItem } from "@/components/inventory/ItemPicker";
 
@@ -37,11 +38,12 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
   const ar = locale === "ar";
   const router = useRouter();
   const [customers, setCustomers] = useState<any[]>([]);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ customer_id: "", issue_date: today(), expiry_date: "", subject: "", notes: "", terms: "" });
+  const [form, setForm] = useState({ customer_id: "", warehouse_id: "", issue_date: today(), expiry_date: "", subject: "", notes: "", terms: "" });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
 
-  useEffect(() => { getCustomers().then(({ data }) => setCustomers(data)); }, []);
+  useEffect(() => { Promise.all([getCustomers(), getWarehouses()]).then(([c, w]) => { setCustomers(c.data); setWarehouses(w.data); }); }, []);
 
   const setPicked = (i: number, picked: PickedItem) => setLines(p => p.map((l, idx) => idx === i ? { ...l, picked } : l));
   const setField = (i: number, k: "discount_pct" | "vat_rate", v: string) => setLines(p => p.map((l, idx) => idx === i ? { ...l, [k]: v } : l));
@@ -70,6 +72,9 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
           discount_pct: parseFloat(l.discount_pct) || 0,
           vat_rate: parseFloat(l.vat_rate) || 15,
           prices_include_vat: l.prices_include_vat,
+          inventory_item_id: l.picked.inventory_item_id || null,
+          serial_ids: l.picked.serial_ids || null,
+          variant_id: l.picked.variant_id || null,
         })),
       });
       router.push(`/${locale}/sales/quotations`);
@@ -106,6 +111,14 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
                 <option value="">{ar ? "— اختر —" : "— Select —"}</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
               </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">{ar ? "مستودع العرض" : "Quotation Warehouse"}</label>
+              <select className="form-input form-select" value={form.warehouse_id} onChange={e => setForm(f => ({ ...f, warehouse_id: e.target.value }))}>
+                <option value="">{ar ? "كل المستودعات" : "All warehouses"}</option>
+                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name_ar || w.name}</option>)}
+              </select>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4 }}>{ar ? "يمكنك تحديد السيريالات من كل المستودعات عند تركه على الكل." : "Serials can be selected from all warehouses when left on all."}</div>
             </div>
             <div className="form-group">
               <label className="form-label">{ar ? "الموضوع" : "Subject"}</label>
@@ -164,7 +177,7 @@ export default function NewQuotationPage(props: { params: Promise<{ locale: stri
                 return (
                   <tr key={i}>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
-                      <ItemPicker locale={locale} value={line.picked} onChange={p => setPicked(i, p)} purchaseMode={false} />
+                      <ItemPicker locale={locale} value={line.picked} onChange={p => setPicked(i, p)} purchaseMode={false} warehouseId={form.warehouse_id || undefined} />
                     </td>
                     <td style={{ verticalAlign: "top", paddingTop: 8 }}>
                       <input type="number" className="form-input" style={{ width: 70 }} value={line.picked.quantity} min="0"

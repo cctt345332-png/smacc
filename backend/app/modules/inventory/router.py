@@ -477,10 +477,11 @@ async def bulk_delete_serials(data: dict, user=Depends(require_role(["manager"])
 @router.get("/items/{product_id}/available-serials")
 async def available_serials_for_invoice(
     product_id: str,
+    warehouse_id: Optional[str] = None,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """جلب السيريالات المتاحة — المندوب يرى مستودعه فقط، المدير يرى المستودع الرئيسي فقط"""
+    """جلب السيريالات المتاحة — الإدارة تحدد مستودعًا أو تتركه لكل المستودعات."""
     from sqlalchemy import select as sa_select
     from app.models.inventory import SerialItem
 
@@ -495,26 +496,12 @@ async def available_serials_for_invoice(
         rep = rep_r.scalar_one_or_none()
         if rep:
             warehouse_filter = rep.warehouse_id
-    else:
-        # المدير/المحاسب → يستثني مستودعات المناديب (يجلب من المستودع الرئيسي فقط)
-        from app.models.reps import SalesRep
+    elif warehouse_id:
         from app.models.inventory import Warehouse
-        rep_wh_r = await db.execute(
-            sa_select(SalesRep.warehouse_id).where(SalesRep.tenant_id == tenant_id)
-        )
-        rep_wh_ids = [row[0] for row in rep_wh_r.all()]
-
-        # جلب المستودع الرئيسي
-        main_wh_r = await db.execute(
-            sa_select(Warehouse).where(
-                Warehouse.tenant_id == tenant_id,
-                Warehouse.is_default == True,
-            )
-        )
-        main_wh = main_wh_r.scalar_one_or_none()
-        if main_wh:
-            warehouse_filter = main_wh.id
-
+        warehouse = await db.scalar(sa_select(Warehouse).where(Warehouse.id == warehouse_id, Warehouse.tenant_id == tenant_id))
+        if not warehouse:
+            raise HTTPException(404, "المستودع غير موجود")
+        warehouse_filter = warehouse_id
     q = sa_select(SerialItem).where(
         SerialItem.product_id == product_id,
         SerialItem.status == "in_stock",
