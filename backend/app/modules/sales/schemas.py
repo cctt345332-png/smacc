@@ -207,6 +207,9 @@ class InvoiceOut(BaseModel):
     rep_name: Optional[str] = None
     rep_code: Optional[str] = None
     rep_zone: Optional[str] = None
+    source: Optional[str] = None
+    terminal_id: Optional[str] = None
+    terminal_name: Optional[str] = None
     # workflow المناديب
     invoice_payment_method: Optional[InvoicePaymentMethod] = None
     credit_days: Optional[int] = None

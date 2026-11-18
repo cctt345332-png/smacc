@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete, case, or_
+from sqlalchemy import select, func, delete, case, or_, exists
 from fastapi import HTTPException
 
 from app.models.sales import (
@@ -19,7 +19,7 @@ from app.models.inventory import (
     InventoryItem, InventoryStock, ProductVariant, SerialItem, BatchItem, StockMovement, SerialStatus,
 )
 from app.models.accounting import Account, AccountType, AccountNature, JournalEntry, JournalEntryLine
-from app.models.pos import POSTransaction, POSTransactionLine
+from app.models.pos import POSTransaction, POSTransactionLine, POSSession, POSTerminal
 from app.modules.sales.schemas import (
     CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate,
     QuotationCreate, CreditNoteCreate, RefundRequestCreate
@@ -859,6 +859,7 @@ async def get_unified_aging(
 # ─── Invoices ────────────────────────────────────────────────────────
 async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = None,
                         customer_id: str | None = None, rep_id: str | None = None,
+                        source: str | None = None, terminal_id: str | None = None,
                         include_unconfirmed: bool = False):
     """قائمة الفواتير المالية.
 
@@ -884,6 +885,17 @@ async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = No
         q = q.where(Invoice.customer_id == customer_id)
     if rep_id:
         q = q.where(Invoice.rep_id == rep_id)
+    if source == "pos":
+        q = q.where(Invoice.notes.like("POS:%"))
+    elif source == "representatives":
+        q = q.where(Invoice.rep_id.is_not(None), or_(Invoice.notes.is_(None), ~Invoice.notes.like("POS:%")))
+    elif source == "admin":
+        q = q.where(Invoice.rep_id.is_(None), or_(Invoice.notes.is_(None), ~Invoice.notes.like("POS:%")))
+    if terminal_id:
+        q = q.where(exists(select(1).select_from(POSTransaction)
+            .join(POSSession, POSSession.id == POSTransaction.session_id)
+            .where(POSTransaction.invoice_id == Invoice.id,
+                   POSSession.terminal_id == terminal_id)))
     q = q.order_by(Invoice.issue_date.desc())
     r = await db.execute(q)
     invoices = list(r.scalars().all())
@@ -907,6 +919,20 @@ async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = No
             rep_data = rep_directory.get(invoice.rep_id)
             if rep_data:
                 invoice.rep_name, invoice.rep_code, invoice.rep_zone = rep_data
+    pos_invoice_ids = [invoice.id for invoice in invoices if (invoice.notes or "").startswith("POS:")]
+    if pos_invoice_ids:
+        terminal_rows = await db.execute(
+            select(POSTransaction.invoice_id, POSTerminal.id, POSTerminal.name)
+            .join(POSSession, POSSession.id == POSTransaction.session_id)
+            .join(POSTerminal, POSTerminal.id == POSSession.terminal_id)
+            .where(POSTransaction.invoice_id.in_(pos_invoice_ids))
+        )
+        terminal_by_invoice = {row[0]: (row[1], row[2]) for row in terminal_rows.all()}
+        for invoice in invoices:
+            if invoice.id in terminal_by_invoice:
+                invoice.terminal_id, invoice.terminal_name = terminal_by_invoice[invoice.id]
+    for invoice in invoices:
+        invoice.source = "pos" if (invoice.notes or "").startswith("POS:") else ("representatives" if invoice.rep_id else "admin")
     return invoices
 
 

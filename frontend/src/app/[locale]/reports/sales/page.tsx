@@ -3,6 +3,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { getInvoices, getUnifiedAging } from "@/lib/sales";
 import { getReps } from "@/lib/reps";
+import { getTerminals } from "@/lib/pos";
 import SearchableSelect from "@/components/ui/SearchableSelect";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 import {
@@ -25,7 +26,10 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
   const [toDate, setToDate] = useState(now.toISOString().split("T")[0]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [reps, setReps] = useState<any[]>([]);
+  const [terminals, setTerminals] = useState<any[]>([]);
   const [repId, setRepId] = useState("");
+  const [source, setSource] = useState("all");
+  const [terminalId, setTerminalId] = useState("");
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -33,6 +37,9 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
     getReps()
       .then((response) => setReps(Array.isArray(response.data) ? response.data : []))
       .catch(() => setReps([]));
+    getTerminals()
+      .then((response) => setTerminals(Array.isArray(response.data) ? response.data : []))
+      .catch(() => setTerminals([]));
   }, []);
 
   const load = async () => {
@@ -42,12 +49,15 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
         throw new Error(ar ? "نطاق التاريخ غير صحيح" : "Invalid date range");
       }
       const [inv, aging] = await Promise.all([
-        getInvoices(),
+        getInvoices({
+          ...(source !== "all" ? { source } : {}),
+          ...(source === "pos" && terminalId ? { terminal_id: terminalId } : {}),
+        }),
         getUnifiedAging({
           as_of: `${toDate}T23:59:59`,
           from_date: `${fromDate}T00:00:00`,
           to_date: `${toDate}T23:59:59`,
-          ...(repId ? { rep_id: repId } : {}),
+          ...(repId && source !== "pos" ? { rep_id: repId } : {}),
           include_settled: true,
         } as any),
       ]);
@@ -58,7 +68,9 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
         const to = new Date(`${toDate}T23:59:59.999`).getTime();
         return d >= from
           && d <= to
-          && (!repId || i.rep_id === repId)
+          && (!repId || source === "pos" || i.rep_id === repId)
+          && (source === "all" || i.source === source)
+          && (!terminalId || i.terminal_id === terminalId)
           && isFinancialInvoiceStatus(i.status);
       });
       setInvoices(filtered.map((invoice: any) => ({
@@ -74,6 +86,11 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
     value: rep.id,
     label: rep.full_name || rep.rep_name || rep.rep_code || rep.id,
     searchText: `${rep.rep_code || ""} ${rep.full_name || ""} ${rep.rep_name || ""}`,
+  }));
+  const terminalOptions = terminals.map((terminal: any) => ({
+    value: terminal.id,
+    label: terminal.name || terminal.code || terminal.id,
+    searchText: `${terminal.name || ""} ${terminal.code || ""} ${terminal.branch_name || ""}`,
   }));
 
   const totalVAT = invoices.reduce((s, i) => s + Number(i.vat_amount || 0), 0);
@@ -112,6 +129,25 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
             <input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} />
           </div>
           <div className="form-group" style={{ margin: 0, minWidth: 280 }}>
+            <label className="form-label">{ar ? "مصدر البيع" : "Sales source"}</label>
+            <select className="form-input" value={source} onChange={e => { setSource(e.target.value); setTerminalId(""); if (e.target.value === "pos") setRepId(""); }}>
+              <option value="all">{ar ? "كل المبيعات" : "All sales"}</option>
+              <option value="representatives">{ar ? "مبيعات المناديب" : "Representative sales"}</option>
+              <option value="pos">{ar ? "مبيعات نقاط البيع" : "POS sales"}</option>
+              <option value="admin">{ar ? "مبيعات الإدارة" : "Admin sales"}</option>
+            </select>
+          </div>
+          {source === "pos" && <div className="form-group" style={{ margin: 0, minWidth: 280 }}>
+            <label className="form-label">{ar ? "نقطة البيع" : "POS terminal"}</label>
+            <SearchableSelect
+              locale={locale}
+              value={terminalId}
+              onChange={setTerminalId}
+              placeholder={ar ? "كل نقاط البيع" : "All POS terminals"}
+              options={[{ value: "", label: ar ? "كل نقاط البيع" : "All POS terminals" }, ...terminalOptions]}
+            />
+          </div>}
+          {source !== "pos" && <div className="form-group" style={{ margin: 0, minWidth: 280 }}>
             <label className="form-label">{ar ? "المندوب" : "Representative"}</label>
             <SearchableSelect
               locale={locale}
@@ -120,7 +156,7 @@ export default function SalesReportPage(props: { params: Promise<{ locale: strin
               placeholder={ar ? "ابحث عن المندوب..." : "Search representative..."}
               options={[{ value: "", label: ar ? "كل المناديب" : "All representatives" }, ...repOptions]}
             />
-          </div>
+          </div>}
           <button className="btn btn-primary" onClick={load} disabled={loading}>
             {loading ? (ar ? "جاري..." : "Loading...") : (ar ? "عرض التقرير" : "Show Report")}
           </button>

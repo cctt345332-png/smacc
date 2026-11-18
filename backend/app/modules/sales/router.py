@@ -131,6 +131,8 @@ async def delete_customer(customer_id: str, user=Depends(get_current_user), db: 
 async def list_invoices(
     status: Optional[str] = None,
     customer_id: Optional[str] = None,
+    source: Optional[str] = None,
+    terminal_id: Optional[str] = None,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -147,6 +149,8 @@ async def list_invoices(
         status,
         customer_id,
         rep_id,
+        source=source,
+        terminal_id=terminal_id,
         include_unconfirmed=include_unconfirmed,
     )
 
