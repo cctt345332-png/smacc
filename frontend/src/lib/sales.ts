@@ -24,6 +24,14 @@ export const getUnifiedAging = (params: {
   account_id?: string;
   include_settled?: boolean;
 }) => api.get("/sales/aging", { params });
+export const getOpeningBalanceAging = (params: {
+  as_of: string;
+  from_date?: string;
+  to_date?: string;
+  rep_id?: string;
+  customer_id?: string;
+  account_id?: string;
+}) => api.get("/sales/aging/opening-balances", { params });
 export const getPendingInvoices = (repId?: string) => api.get("/sales/invoices-pending", { params: repId ? { rep_id: repId } : {} });
 export const submitInvoice = (id: string) => api.post(`/sales/invoices/${id}/submit`);
 export const approveInvoice = (id: string) => api.post(`/sales/invoices/${id}/approve`);

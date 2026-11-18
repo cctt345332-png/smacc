@@ -856,6 +856,145 @@ async def get_unified_aging(
     return sorted(result, key=lambda row: (row["overdue_days"], row["outstanding"]), reverse=True)
 
 
+async def get_opening_balance_aging(
+    db: AsyncSession,
+    tenant_id: str,
+    as_of: datetime,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    rep_id: str | None = None,
+    customer_id: str | None = None,
+    account_id: str | None = None,
+) -> list[dict]:
+    """أعمار أرصدة العملاء الافتتاحية فقط، دون إدخال فواتير المبيعات.
+
+    يستخدم نفس مهلة 21 يومًا والتوزيع الزمني للسداد المستخدم في تقرير الفواتير،
+    لكن كل عميل يظهر كسطر رصيد افتتاحي مستقل وتاريخ العمر هو تاريخ قيد الرصيد.
+    """
+    as_of = as_of.replace(tzinfo=None)
+    start = (from_date or datetime(1970, 1, 1)).replace(tzinfo=None)
+    end = min((to_date or as_of).replace(tzinfo=None), as_of)
+
+    account_scope = None
+    if account_id:
+        account_rows = await db.execute(select(Account.id, Account.parent_id).where(Account.tenant_id == tenant_id))
+        children: dict[str | None, list[str]] = {}
+        for child_id, parent_id in account_rows.all():
+            children.setdefault(parent_id, []).append(child_id)
+        account_scope = {account_id}
+        pending = [account_id]
+        while pending:
+            parent = pending.pop()
+            for child in children.get(parent, []):
+                if child not in account_scope:
+                    account_scope.add(child)
+                    pending.append(child)
+
+    customer_query = (
+        select(Customer, Account)
+        .join(Account, Account.id == Customer.ar_account_id)
+        .where(Customer.tenant_id == tenant_id, Account.tenant_id == tenant_id)
+    )
+    if customer_id:
+        customer_query = customer_query.where(Customer.id == customer_id)
+    if rep_id:
+        customer_query = customer_query.where(Customer.rep_id == rep_id)
+    if account_scope is not None:
+        customer_query = customer_query.where(Customer.ar_account_id.in_(account_scope))
+    customer_rows = (await db.execute(customer_query)).all()
+    if not customer_rows:
+        return []
+
+    customer_ids = {customer.id for customer, _ in customer_rows}
+    from app.models.accounting import JournalEntryStatus
+    opening_values = {customer.id: Decimal(str(account.opening_balance or 0)) for customer, account in customer_rows}
+    opening_dates = {customer.id: account.created_at for customer, account in customer_rows}
+    entry_rows = await db.execute(
+        select(Customer.id, JournalEntry.entry_date, JournalEntryLine.debit, JournalEntryLine.credit)
+        .join(Account, Account.id == Customer.ar_account_id)
+        .join(JournalEntryLine, JournalEntryLine.account_id == Account.id)
+        .join(JournalEntry, JournalEntry.id == JournalEntryLine.entry_id)
+        .where(
+            Customer.tenant_id == tenant_id,
+            Customer.id.in_(customer_ids),
+            JournalEntry.tenant_id == tenant_id,
+            JournalEntry.status == JournalEntryStatus.POSTED,
+            JournalEntry.source == "customer_opening_balance",
+            JournalEntry.entry_date <= as_of,
+        )
+        .order_by(JournalEntry.entry_date.asc(), JournalEntry.entry_number.asc())
+    )
+    for cid, entry_date, debit, credit in entry_rows.all():
+        opening_values[cid] += Decimal(str(debit or 0)) - Decimal(str(credit or 0))
+        if entry_date and (opening_dates[cid] is None or entry_date < opening_dates[cid]):
+            opening_dates[cid] = entry_date
+
+    opening_values = {cid: max(Decimal("0"), value) for cid, value in opening_values.items()}
+    payment_rows = await db.execute(
+        select(Payment).where(
+            Payment.tenant_id == tenant_id,
+            Payment.payment_date <= as_of,
+            Payment.customer_id.in_(customer_ids),
+        ).order_by(Payment.payment_date.asc(), Payment.payment_number.asc())
+    )
+    credit_rows = await db.execute(
+        select(CreditNote).where(
+            CreditNote.tenant_id == tenant_id,
+            CreditNote.issue_date <= as_of,
+            CreditNote.customer_id.in_(customer_ids),
+        ).order_by(CreditNote.issue_date.asc(), CreditNote.credit_note_number.asc())
+    )
+    events = []
+    for payment in payment_rows.scalars().all():
+        if payment.amount and payment.amount > 0:
+            events.append((payment.payment_date, payment.payment_number, payment.customer_id, Decimal(str(payment.amount))))
+    for credit_note in credit_rows.scalars().all():
+        if credit_note.total and credit_note.total > 0:
+            events.append((credit_note.issue_date, credit_note.credit_note_number, credit_note.customer_id, Decimal(str(credit_note.total))))
+    events.sort(key=lambda item: (item[0], item[1] or ""))
+    paid_values = {cid: Decimal("0") for cid in customer_ids}
+    for _date, _reference, cid, amount in events:
+        applied = min(opening_values.get(cid, Decimal("0")), amount)
+        opening_values[cid] -= applied
+        paid_values[cid] += applied
+
+    rep_ids = {customer.rep_id for customer, _ in customer_rows if customer.rep_id}
+    rep_directory = {}
+    if rep_ids:
+        rep_rows = await db.execute(select(SalesRep, User).join(User, User.id == SalesRep.user_id).where(SalesRep.id.in_(rep_ids)))
+        rep_directory = {rep.id: {"name": user.full_name or rep.rep_code, "code": rep.rep_code} for rep, user in rep_rows.all()}
+
+    result = []
+    for customer, _account in customer_rows:
+        opening_date = opening_dates.get(customer.id) or as_of
+        if opening_date > as_of or opening_date < start or opening_date > end:
+            continue
+        total = opening_values[customer.id] + paid_values[customer.id]
+        outstanding = opening_values[customer.id]
+        if outstanding <= Decimal("0.01"):
+            continue
+        age_days = max((as_of.date() - opening_date.date()).days, 0)
+        overdue_days = max(age_days - 21, 0)
+        result.append({
+            "opening_balance_id": f"opening-{customer.id}",
+            "invoice_id": f"opening-{customer.id}",
+            "invoice_number": "OPENING",
+            "customer_id": customer.id,
+            "customer_name": customer.name_ar or customer.name_en or customer.customer_number,
+            "rep_id": customer.rep_id,
+            "rep_name": rep_directory.get(customer.rep_id, {}).get("name", "—"),
+            "rep_code": rep_directory.get(customer.rep_id, {}).get("code", "—"),
+            "issue_date": opening_date.date().isoformat(),
+            "invoice_total": float(total),
+            "paid_amount": float(paid_values[customer.id]),
+            "outstanding": float(outstanding),
+            "age_days": age_days,
+            "overdue_days": overdue_days,
+            "bucket": "متأخر" if overdue_days > 0 else "ضمن المهلة",
+        })
+    return sorted(result, key=lambda row: (row["overdue_days"], row["outstanding"]), reverse=True)
+
+
 # ─── Invoices ────────────────────────────────────────────────────────
 async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = None,
                         customer_id: str | None = None, rep_id: str | None = None,
