@@ -227,6 +227,7 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
     invoices = inv_r.scalars().all()
     pay_r = await db.execute(select(Payment).where(
         Payment.tenant_id == tenant_id, Payment.customer_id == customer_id,
+        Payment.status != "cancelled",
         Payment.payment_date <= to_date,
     ).order_by(Payment.payment_date, Payment.payment_number))
     payments = pay_r.scalars().all()

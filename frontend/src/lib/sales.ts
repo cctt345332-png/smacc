@@ -41,6 +41,7 @@ export const getPayments = (params?: string | { invoice_id?: string; rep_id?: st
 export const createPayment = (data: any) => api.post("/sales/payments", data);
 export const getPayment = (id: string) => api.get(`/sales/payments/${id}`);
 export const updatePayment = (id: string, data: any) => api.patch(`/sales/payments/${id}`, data);
+export const cancelPayment = (id: string) => api.post(`/sales/payments/${id}/cancel`);
 
 // Quotations
 export const getQuotations = () => api.get("/sales/quotations");

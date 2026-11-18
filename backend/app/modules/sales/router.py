@@ -285,6 +285,11 @@ async def update_payment(
     return await service.update_payment(db, user["tenant_id"], user["user_id"], payment_id, data)
 
 
+@router.post("/payments/{payment_id}/cancel")
+async def cancel_payment(payment_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.cancel_payment(db, user["tenant_id"], user["user_id"], payment_id)
+
+
 # ─── Quotations ──────────────────────────────────────────────────────
 @router.get("/quotations", response_model=list[QuotationOut])
 async def list_quotations(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):

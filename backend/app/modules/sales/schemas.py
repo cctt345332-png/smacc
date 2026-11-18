@@ -259,6 +259,7 @@ class PaymentOut(BaseModel):
     id: str
     payment_number: str
     payment_type: str = "receipt"
+    status: str = "posted"
     invoice_id: Optional[str] = None
     customer_id: str
     customer_name_ar: Optional[str] = None

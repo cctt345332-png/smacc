@@ -1879,6 +1879,81 @@ async def update_payment(
     return await get_payment(db, tenant_id, payment_id)
 
 
+async def cancel_payment(db: AsyncSession, tenant_id: str, user_id: str, payment_id: str):
+    """إلغاء سند قبض مرحّل مع عكس القيد وإرجاع رصيد الفاتورة."""
+    from app.models.accounting import JournalEntryStatus
+    from app.models.treasury import Voucher, VoucherStatus
+
+    payment = await db.scalar(select(Payment).where(
+        Payment.id == payment_id, Payment.tenant_id == tenant_id,
+    ))
+    if not payment:
+        raise HTTPException(404, "سند القبض غير موجود")
+    if payment.status == "cancelled":
+        raise HTTPException(409, "السند ملغى بالفعل")
+
+    invoice = None
+    if payment.invoice_id:
+        invoice = await db.scalar(select(Invoice).where(
+            Invoice.id == payment.invoice_id, Invoice.tenant_id == tenant_id,
+        ))
+
+    if invoice and payment.payment_type == "receipt":
+        invoice.paid_amount = max(
+            Decimal("0"),
+            Decimal(str(invoice.paid_amount or 0)) - Decimal(str(payment.amount or 0)),
+        )
+        if invoice.paid_amount <= Decimal("0.01"):
+            invoice.paid_amount = Decimal("0")
+            invoice.status = InvoiceStatus.CONFIRMED
+        elif invoice.paid_amount < Decimal(str(invoice.total or 0)):
+            invoice.status = InvoiceStatus.PARTIAL
+
+    if payment.journal_entry_id:
+        entry = await db.scalar(select(JournalEntry).where(
+            JournalEntry.id == payment.journal_entry_id,
+            JournalEntry.tenant_id == tenant_id,
+        ))
+        if entry and entry.status == JournalEntryStatus.POSTED:
+            entry.status = JournalEntryStatus.CANCELLED
+            rows = (await db.execute(select(JournalEntryLine).where(
+                JournalEntryLine.entry_id == entry.id
+            ).order_by(JournalEntryLine.line_order.asc()))).scalars().all()
+            reversal = JournalEntry(
+                id=str(uuid.uuid4()), tenant_id=tenant_id,
+                entry_number=await _next_sales_reversal_number(db, tenant_id),
+                entry_date=datetime.utcnow(), fiscal_year_id=entry.fiscal_year_id,
+                description_ar=f"عكس سند قبض: {payment.payment_number}",
+                description_en=f"Reversal of payment receipt: {payment.payment_number}",
+                status=JournalEntryStatus.POSTED, source="reversal",
+                reference=payment.payment_number, total_debit=entry.total_credit,
+                total_credit=entry.total_debit, created_by=user_id,
+                posted_by=user_id, posted_at=datetime.utcnow(),
+            )
+            db.add(reversal)
+            for row in rows:
+                db.add(JournalEntryLine(
+                    id=str(uuid.uuid4()), entry_id=reversal.id,
+                    account_id=row.account_id, cost_center_id=row.cost_center_id,
+                    description=f"عكس: {row.description or ''}",
+                    debit=row.credit, credit=row.debit, line_order=row.line_order,
+                ))
+
+    voucher = await db.scalar(select(Voucher).where(
+        Voucher.tenant_id == tenant_id,
+        Voucher.reference == payment.payment_number,
+        Voucher.status != VoucherStatus.CANCELLED,
+    ))
+    if voucher:
+        voucher.status = VoucherStatus.CANCELLED
+
+    payment.status = "cancelled"
+    record_audit(db, tenant_id, user_id, "cancel", "payment", payment.id,
+                 payment_number=payment.payment_number, amount=payment.amount)
+    await db.commit()
+    return {"success": True, "message": "تم إلغاء سند القبض وعكس أثره المحاسبي", "payment_id": payment.id}
+
+
 async def _get_open_fiscal_year_id(db: AsyncSession, tenant_id: str, payment_date: datetime) -> str | None:
     from app.models.accounting import FiscalYear, FiscalYearStatus
     result = await db.execute(

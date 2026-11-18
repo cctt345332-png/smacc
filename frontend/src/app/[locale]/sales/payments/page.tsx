@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { getPayments, createPayment, getInvoices, getCustomers, getCustomerStatement } from "@/lib/sales";
+import { getPayments, createPayment, getInvoices, getCustomers, getCustomerStatement, cancelPayment } from "@/lib/sales";
 import { getReps } from "@/lib/reps";
 import { Icon } from "@/components/ui/Icons";
 import SearchableSelect from "@/components/ui/SearchableSelect";
@@ -70,6 +70,18 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleCancel = async (payment: any) => {
+    if (!window.confirm(ar
+      ? `سيتم إلغاء السند ${payment.payment_number} وعكس أثره على الفاتورة والقيد. هل أنت متأكد؟`
+      : `Cancel receipt ${payment.payment_number} and reverse its invoice and journal effects?`)) return;
+    try {
+      await cancelPayment(payment.id);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر إلغاء السند" : "Could not cancel receipt"));
+    }
+  };
 
   const openModal = () => {
     loadInvoices();
@@ -301,9 +313,10 @@ export default function PaymentsPage(props: { params: Promise<{ locale: string }
                         <button className="btn btn-secondary btn-sm" onClick={() => window.open(`/${locale}/sales/payments/${p.id}/print`, "_blank")} style={{ padding: "5px 8px", fontSize: 11 }}>
                           {ar ? "طباعة" : "Print"}
                         </button>
-                        <Link href={`/${locale}/sales/payments/${p.id}/edit`} className="btn btn-primary btn-sm" style={{ textDecoration: "none", padding: "5px 8px", fontSize: 11 }}>
+                        {p.status !== "cancelled" && <Link href={`/${locale}/sales/payments/${p.id}/edit`} className="btn btn-primary btn-sm" style={{ textDecoration: "none", padding: "5px 8px", fontSize: 11 }}>
                           {ar ? "تعديل" : "Edit"}
-                        </Link>
+                        </Link>}
+                        {p.status === "cancelled" ? <span className="badge badge-danger">{ar ? "ملغى" : "Cancelled"}</span> : <button className="btn btn-secondary btn-sm" onClick={() => handleCancel(p)} style={{ padding: "5px 8px", fontSize: 11, color: "#B91C1C" }}>{ar ? "إلغاء" : "Cancel"}</button>}
                       </div>
                     </td>
                   </tr>
