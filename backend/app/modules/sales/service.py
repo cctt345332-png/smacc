@@ -2652,6 +2652,33 @@ async def delete_credit_note_draft(db: AsyncSession, tenant_id: str, credit_note
     return {"success": True, "message": "تم حذف مسودة المرتجع"}
 
 
+async def cancel_credit_note(db: AsyncSession, tenant_id: str, user_id: str, credit_note_id: str):
+    """إلغاء مرتجع مرحّل بالترحيل العكسي، دون حذف السجل أو تزوير كشف العميل."""
+    cn = await get_credit_note(db, tenant_id, credit_note_id)
+    status = str(cn.status or "posted").lower()
+    if status == "cancelled":
+        raise HTTPException(409, "المرتجع ملغى بالفعل")
+    if status == "draft":
+        raise HTTPException(409, "استخدم حذف المسودة بدل إلغاء مرتجع غير مرحّل")
+    refund_count = (await db.execute(select(func.count(RefundRequest.id)).where(
+        RefundRequest.tenant_id == tenant_id,
+        RefundRequest.credit_note_id == cn.id,
+        RefundRequest.status.in_([RefundRequestStatus.REQUESTED, RefundRequestStatus.APPROVED]),
+    ))).scalar() or 0
+    if refund_count:
+        raise HTTPException(409, "لا يمكن إلغاء مرتجع مرتبط بطلب استرداد مفتوح أو معتمد")
+    try:
+        await _reverse_credit_note_effects(db, tenant_id, user_id, cn)
+        cn.status = "cancelled"
+        record_audit(db, tenant_id, user_id, "cancel", "credit_note", cn.id,
+                     credit_note_number=cn.credit_note_number, total=cn.total)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    return {"success": True, "message": "تم إلغاء المرتجع وعكس أثره المالي والمخزني"}
+
+
 async def create_customer_serial_credit_note(db: AsyncSession, tenant_id: str, user_id: str, data: CreditNoteCreate):
     """مرتجع عميل مستقل عن الفاتورة بنفس أسطر المرتجع العادي."""
     if not data.customer_id:

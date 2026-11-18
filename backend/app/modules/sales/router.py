@@ -384,6 +384,11 @@ async def delete_credit_note(cn_id: str, user=Depends(require_role(["manager", "
     return await service.delete_credit_note_draft(db, user["tenant_id"], cn_id)
 
 
+@router.post("/credit-notes/{cn_id}/cancel")
+async def cancel_credit_note(cn_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.cancel_credit_note(db, user["tenant_id"], user["user_id"], cn_id)
+
+
 @router.get("/credit-notes")
 async def list_credit_notes(tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select

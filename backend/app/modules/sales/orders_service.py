@@ -232,6 +232,8 @@ async def get_customer_statement(db: AsyncSession, tenant_id: str, customer_id: 
     payments = pay_r.scalars().all()
     credit_r = await db.execute(select(CreditNote).where(
         CreditNote.tenant_id == tenant_id, CreditNote.customer_id == customer_id,
+        # المسودة والمرتجع الملغى لا يمثلان حركة مالية على حساب العميل.
+        CreditNote.status.notin_(["draft", "cancelled"]),
         CreditNote.issue_date <= to_date,
     ).order_by(CreditNote.issue_date, CreditNote.credit_note_number))
     credit_notes = credit_r.scalars().all()

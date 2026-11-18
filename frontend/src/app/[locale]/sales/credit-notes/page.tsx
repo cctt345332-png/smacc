@@ -48,6 +48,18 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
     }
   };
 
+  const cancelPosted = async (id: string, number: string) => {
+    if (!window.confirm(ar
+      ? `سيتم إلغاء المرتجع ${number} وعكس أثره المالي والمخزني. هل أنت متأكد؟`
+      : `Cancel return ${number} and reverse its financial and inventory effects?`)) return;
+    try {
+      await api.post(`/sales/credit-notes/${id}/cancel`);
+      await load();
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || (ar ? "تعذر إلغاء المرتجع" : "Could not cancel return"));
+    }
+  };
+
   return (
     <>
       <div className="page-header">
@@ -115,7 +127,7 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                     </td>
                     <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{new Date(cn.issue_date).toLocaleDateString("en-SA")}</td>
                     <td style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{cn.reason}</td>
-                    <td><span className="badge" style={{ color: cn.status === "draft" ? "#92400E" : "#166534" }}>{cn.status === "draft" ? (ar ? "مسودة" : "Draft") : (ar ? "مرحل" : "Posted")}</span></td>
+                    <td><span className="badge" style={{ color: cn.status === "draft" ? "#92400E" : cn.status === "cancelled" ? "#991B1B" : "#166534" }}>{cn.status === "draft" ? (ar ? "مسودة" : "Draft") : cn.status === "cancelled" ? (ar ? "ملغى" : "Cancelled") : (ar ? "مرحل" : "Posted")}</span></td>
                     <td style={{ textAlign: "end", fontWeight: 700, color: "#DC2626" }}>{fmt(cn.total)} SAR</td>
                     <td>
                       <div style={{ display: "flex", gap: 4 }}>
@@ -129,6 +141,9 @@ export default function CreditNotesPage(props: { params: Promise<{ locale: strin
                           onClick={() => window.open(`/${locale}/sales/credit-notes/${cn.id}`, "_blank")}>
                           <Icon name="print" size={14} />
                         </button>
+                        {cn.status !== "draft" && cn.status !== "cancelled" && <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "إلغاء المرتجع وعكس أثره" : "Cancel and reverse return"} onClick={() => cancelPosted(cn.id, cn.credit_note_number)} style={{ color: "var(--danger)" }}>
+                          <Icon name="close" size={14} />
+                        </button>}
                         {cn.status === "draft" && <button className="btn btn-ghost btn-sm btn-icon" title={ar ? "حذف المسودة" : "Delete draft"} onClick={() => deleteDraft(cn.id)} style={{ color: "var(--danger)" }}>
                           <Icon name="trash" size={14} />
                         </button>}
