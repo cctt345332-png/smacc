@@ -1095,7 +1095,7 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
         uuid=invoice_uuid,
         invoice_type=invoice_type,
         customer_id=data.customer_id,
-        warehouse_id=data.warehouse_id,
+        warehouse_id=data.warehouse_id or None,
         issue_date=issue_date,
         supply_date=supply_date,
         due_date=due_date,
@@ -2209,7 +2209,7 @@ async def create_quotation(db: AsyncSession, tenant_id: str, user_id: str, data:
         id=quot_id, tenant_id=tenant_id,
         quotation_number=await _next_quotation_number(db, tenant_id),
         customer_id=data.customer_id,
-        warehouse_id=data.warehouse_id,
+        warehouse_id=data.warehouse_id or None,
         issue_date=issue_date, expiry_date=expiry_date,
         subject=data.subject, notes=data.notes, terms=data.terms,
         subtotal=subtotal, vat_amount=total_vat, total=total,
@@ -2224,9 +2224,9 @@ async def create_quotation(db: AsyncSession, tenant_id: str, user_id: str, data:
             quantity=line.quantity, unit_price=line.unit_price,
             discount_pct=line.discount_pct, vat_rate=line.vat_rate,
             subtotal=sub, vat_amount=vat, total=tot,
-            inventory_item_id=line.inventory_item_id,
+            inventory_item_id=line.inventory_item_id or None,
             serial_ids_json=json.dumps(line.serial_ids) if line.serial_ids else None,
-            variant_id=line.variant_id,
+            variant_id=line.variant_id or None,
         ))
 
     await db.commit()
