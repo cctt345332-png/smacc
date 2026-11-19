@@ -2,8 +2,9 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, issueMaintenancePart, recordMaintenancePayment, getTerminalMaintenanceSerials } from "@/lib/pos";
+import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, issueMaintenancePart, recordMaintenancePayment, getTerminalMaintenanceSerials, updateMaintenanceTicket, addMaintenanceService, issueMaintenanceInvoice } from "@/lib/pos";
 import { getItemsForPicker } from "@/lib/inventory";
+import { getCustomers } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 
 const money = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -19,21 +20,25 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
   const [terminal, setTerminal] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
   const [catalogItems, setCatalogItems] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [serials, setSerials] = useState<any[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", approved_cost: "", paid_amount: "" });
+  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  const [inspection, setInspection] = useState({ diagnosis: "", service_name: "", service_amount: "" });
+  const [form, setForm] = useState({ customer_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", approved_cost: "", paid_amount: "" });
 
   const load = async () => {
     try {
-      const [tr, tk, catalog] = await Promise.all([getTerminals(), getMaintenanceTickets({ terminal_id: terminalId || undefined, session_id: sessionId || undefined }), getItemsForPicker({})]);
+      const [tr, tk, catalog, customerList] = await Promise.all([getTerminals(), getMaintenanceTickets({ terminal_id: terminalId || undefined, session_id: sessionId || undefined }), getItemsForPicker({}), getCustomers()]);
       const found = (tr.data || []).find((x: any) => x.id === terminalId);
       setTerminal(found || null);
       setTickets(tk.data || []);
       setCatalogItems(catalog.data || []);
+      setCustomers(customerList.data || []);
       if (found?.maintenance_warehouse_id) {
         const r = await getItemsForPicker({ warehouse_id: found.maintenance_warehouse_id });
         setItems(r.data || []);
@@ -67,23 +72,49 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     if (!terminalId || !sessionId) return alert("افتح جلسة الكاشير أولًا ثم ادخل إلى الصيانة");
     const deviceProduct = catalogItems.find((item) => item.id === form.product_id);
     if (!deviceProduct || !form.reported_problem.trim()) return alert("اختر موديل الجهاز من الكتالوج واكتب وصف العطل");
-    const paid = Number(form.paid_amount || 0);
-    if (paid > totalDue) return alert("المبلغ المحصل أكبر من إجمالي العملية");
     setSaving(true);
     try {
-      const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, customer_name: form.customer_name, customer_phone: form.customer_phone, device_name: deviceProduct.name_ar, device_serial: form.device_serial, reported_problem: form.reported_problem, approved_cost: totalDue, paid_amount: 0 });
-      let ticket = r.data;
-      for (const line of cart) {
-        const added = await addMaintenancePart(ticket.id, { product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price, serial_item_id: line.serial_item_id });
-        const part = (added.data?.parts || []).find((p: any) => p.product_id === line.product_id && p.serial_item_id === line.serial_item_id && p.status !== "issued");
-        if (part) await issueMaintenancePart(ticket.id, part.id);
-      }
-      if (paid > 0) await recordMaintenancePayment(ticket.id, { session_id: sessionId, amount: paid, payment_method: "cash" });
-      alert("تم حفظ عملية الصيانة وصرف القطع من مستودع الصيانة");
-      setCart([]); setForm({ customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", approved_cost: "", paid_amount: "" });
+      const customer = customers.find((item) => item.id === form.customer_id);
+      if (!customer) return alert("اختر العميل قبل رفع التذكرة");
+      const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, customer_id: form.customer_id, customer_name: customer.name_ar, customer_phone: customer.phone || form.customer_phone, device_name: deviceProduct.name_ar, device_serial: form.device_serial, reported_problem: form.reported_problem, approved_cost: 0, paid_amount: 0 });
+      alert("تم تسجيل تذكرة الصيانة. انتقل الآن إلى مرحلة الفحص.");
+      setSelectedTicket(r.data); setCart([]); setForm({ customer_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", approved_cost: "", paid_amount: "" });
       await load();
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ عملية الصيانة"); }
     finally { setSaving(false); }
+  };
+
+  const saveInspection = async () => {
+    if (!selectedTicket) return;
+    if (!inspection.diagnosis.trim()) return alert("اكتب تقرير الفحص والمشكلة المكتشفة أولاً");
+    if (inspection.service_name.trim() && Number(inspection.service_amount) <= 0) return alert("أدخل سعر الخدمة بشكل صحيح");
+    setSaving(true);
+    try {
+      await updateMaintenanceTicket(selectedTicket.id, { diagnosis: inspection.diagnosis, status: "ready" });
+      for (const line of cart) await addMaintenancePart(selectedTicket.id, { product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price, serial_item_id: line.serial_item_id });
+      if (inspection.service_name.trim()) await addMaintenanceService(selectedTicket.id, { service_name: inspection.service_name.trim(), amount: Number(inspection.service_amount) });
+      const refreshed = (await getMaintenanceTickets({ terminal_id: terminalId, session_id: sessionId })).data.find((x: any) => x.id === selectedTicket.id);
+      setSelectedTicket(refreshed || selectedTicket); setCart([]); setInspection({ ...inspection, service_name: "", service_amount: "" });
+      alert("تم حفظ تقرير الفحص والتكلفة والقطع المقترحة. راجعها ثم اعتمد الإصلاح."); await load();
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ تقرير الفحص"); } finally { setSaving(false); }
+  };
+
+  const approveRepair = async () => {
+    if (!selectedTicket) return;
+    if (!selectedTicket.diagnosis) return alert("احفظ تقرير الفحص أولاً");
+    setSaving(true);
+    try {
+      const current = (await getMaintenanceTickets({ terminal_id: terminalId, session_id: sessionId })).data.find((x: any) => x.id === selectedTicket.id);
+      for (const part of (current?.parts || [])) if (part.status !== "issued") await issueMaintenancePart(selectedTicket.id, part.id);
+      const refreshed = (await getMaintenanceTickets({ terminal_id: terminalId, session_id: sessionId })).data.find((x: any) => x.id === selectedTicket.id);
+      setSelectedTicket(refreshed || current); await load(); alert("تم اعتماد الإصلاح وصرف القطع المغيّرة من مستودع الصيانة.");
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر اعتماد الإصلاح وصرف القطع"); } finally { setSaving(false); }
+  };
+
+  const issueInvoiceForTicket = async () => {
+    if (!selectedTicket) return;
+    if (!selectedTicket.customer_id) return alert("اربط التذكرة بعميل قبل إصدار الفاتورة من الإدارة");
+    try { const result = await issueMaintenanceInvoice(selectedTicket.id); alert(`تم إصدار الفاتورة ${result.data?.invoice_number || ""}`); await load(); } catch (e: any) { alert(e?.response?.data?.detail || "تعذر إصدار الفاتورة"); }
   };
 
   return <div dir={ar ? "rtl" : "ltr"} style={{ padding: 20 }}>
@@ -97,14 +128,22 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
         {!terminal?.maintenance_warehouse_id ? <div className="empty-state">اربط مستودع الصيانة بالجهاز أولًا</div> : loading ? <div className="empty-state">جاري تحميل المخزون...</div> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 10 }}>{items.map(item => <button key={item.id} onClick={() => addProduct(item)} className="card" style={{ padding: 12, textAlign: "right", cursor: "pointer", background: "#fff", border: "1px solid var(--border)" }}><div style={{ fontWeight: 700 }}>{item.name_ar}</div><div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>المتاح: {money(item.quantity_on_hand)}</div><div style={{ color: "var(--primary)", fontWeight: 700, marginTop: 5 }}>{money(item.sale_price)} ر.س</div></button>)}</div>}
       </div>
       <div className="card" style={{ padding: 18 }}>
-        <div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title">عملية صيانة جديدة</h3><span className="badge badge-success">جلسة مشتركة</span></div>
-        <div className="grid-2"><input className="form-input" placeholder="اسم العميل" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value })} /><input className="form-input" placeholder="الجوال" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} /></div>
-        <div className="grid-2" style={{ marginTop: 10 }}><select className="form-input form-select" value={form.product_id} onChange={e => setForm({ ...form, product_id: e.target.value })}><option value="">اختر موديل الجهاز من الكتالوج *</option>{catalogItems.map(item => <option key={item.id} value={item.id}>{item.name_ar}{item.sku ? ` — ${item.sku}` : ""}</option>)}</select><input className="form-input" placeholder="سيريال جهاز العميل / IMEI (يدوي)" value={form.device_serial} onChange={e => setForm({ ...form, device_serial: e.target.value })} /></div>
-        <textarea className="form-input" rows={3} style={{ marginTop: 10 }} placeholder="وصف العطل *" value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} />
-        <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}><strong>سلة القطع</strong>{cart.length === 0 ? <div className="empty-state" style={{ padding: 16 }}>اضغط على قطعة لإضافتها</div> : cart.map((line, i) => <div key={`${line.product_id}-${line.serial_item_id || i}`} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}><span>{line.name_ar} {line.serial_number ? `— ${line.serial_number}` : `× ${line.quantity}`}</span><b>{money(line.quantity * line.unit_price)} ر.س</b></div>)}</div>
-        <div className="grid-2" style={{ marginTop: 12 }}><input className="form-input" type="number" placeholder="أجرة الصيانة" value={form.approved_cost} onChange={e => setForm({ ...form, approved_cost: e.target.value })} /><input className="form-input" type="number" placeholder="المبلغ المحصل" value={form.paid_amount} onChange={e => setForm({ ...form, paid_amount: e.target.value })} /></div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14, fontWeight: 700 }}><span>إجمالي العملية</span><span style={{ color: "var(--primary)" }}>{money(totalDue)} ر.س</span></div>
-        <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={save} disabled={saving}>{saving ? "جاري الحفظ..." : "حفظ عملية الصيانة"}</button>
+        <div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title">{selectedTicket ? "المرحلة التالية: الفحص والإصلاح" : "المرحلة 1: رفع تذكرة صيانة"}</h3><span className="badge badge-success">جلسة مشتركة</span></div>
+        {!selectedTicket ? <>
+          <div className="grid-2"><select className="form-input form-select" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">اختر العميل *</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name_ar} — {customer.customer_number}</option>)}</select><input className="form-input" placeholder="الجوال" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} /></div>
+          <div className="grid-2" style={{ marginTop: 10 }}><select className="form-input form-select" value={form.product_id} onChange={e => setForm({ ...form, product_id: e.target.value })}><option value="">اختر موديل الجهاز من الكتالوج *</option>{catalogItems.map(item => <option key={item.id} value={item.id}>{item.name_ar}{item.sku ? ` — ${item.sku}` : ""}</option>)}</select><input className="form-input" placeholder="سيريال جهاز العميل / IMEI (يدوي)" value={form.device_serial} onChange={e => setForm({ ...form, device_serial: e.target.value })} /></div>
+          <textarea className="form-input" rows={3} style={{ marginTop: 10 }} placeholder="وصف العطل *" value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} />
+          <div className="card" style={{ marginTop: 12, padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>المرحلة 1 — تسجيل الطلب</b><div className="form-hint">لا يوجد سعر أو تحصيل في هذه المرحلة. بعد الحفظ يبدأ الفحص.</div></div>
+          <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={save} disabled={saving}>{saving ? "جاري التسجيل..." : "رفع تذكرة الصيانة"}</button>
+        </> : <>
+          <div className="card" style={{ padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>{selectedTicket.ticket_number} — {selectedTicket.device_name}</b><div className="form-hint">العميل: {selectedTicket.customer_name || "—"} | الحالة: {selectedTicket.status}</div></div>
+          <textarea className="form-input" rows={4} style={{ marginTop: 12 }} placeholder="المرحلة 2: تقرير الفحص والتشخيص *" value={inspection.diagnosis} onChange={e => setInspection({ ...inspection, diagnosis: e.target.value })} />
+          <div className="grid-2" style={{ marginTop: 10 }}><input className="form-input" placeholder="اسم الخدمة / الإصلاح" value={inspection.service_name} onChange={e => setInspection({ ...inspection, service_name: e.target.value })} /><input className="form-input" type="number" min="0" placeholder="سعر الخدمة بعد الفحص" value={inspection.service_amount} onChange={e => setInspection({ ...inspection, service_amount: e.target.value })} /></div>
+          <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}><strong>المرحلة 3: القطع المغيّرة إن وجدت</strong>{cart.length === 0 ? <div className="empty-state" style={{ padding: 16 }}>اختر القطع من القائمة لتضاف كتخطيط، ولن تُصرف قبل الاعتماد.</div> : cart.map((line, i) => <div key={`${line.product_id}-${line.serial_item_id || i}`} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}><span>{line.name_ar} {line.serial_number ? `— ${line.serial_number}` : `× ${line.quantity}`}</span><b>{money(line.quantity * line.unit_price)} ر.س</b></div>)}</div>
+          <button className="btn btn-secondary" style={{ width: "100%", marginTop: 14 }} onClick={saveInspection} disabled={saving}>حفظ تقرير الفحص والقطع والسعر</button>
+          <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} onClick={approveRepair} disabled={saving || !selectedTicket.diagnosis}>اعتماد الإصلاح وصرف القطع</button>
+          <button className="btn btn-success" style={{ width: "100%", marginTop: 8 }} onClick={issueInvoiceForTicket} disabled={saving || !selectedTicket.diagnosis}>إصدار الفاتورة بعد الاعتماد</button>
+        </>}
       </div>
     </div>
     {selectedProduct && <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="card" style={{ padding: 20, width: 420 }}><h3 className="card-title">اختر السيريال — {selectedProduct.name_ar}</h3>{serials.length ? serials.map(s => <button key={s.id} className="btn btn-secondary" style={{ width: "100%", marginTop: 8, justifyContent: "space-between" }} onClick={() => addLine(s)}><span>{s.serial_number}</span><span>{money(s.cost_price)} ر.س</span></button>) : <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => addLine()}>إضافة الصنف</button>}<button className="btn btn-ghost" style={{ width: "100%", marginTop: 10 }} onClick={() => { setSelectedProduct(null); setSerials([]); }}>إلغاء</button></div></div>}
