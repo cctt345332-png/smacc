@@ -17,7 +17,7 @@ from app.models.pos import (
     POSTerminal, POSSession, POSTransaction, POSTransactionLine, POSCashOutflow,
     POS_PURCHASE_ACTIVITIES, ACTIVITY_CONFIG,
 )
-from app.models.pos_maintenance import POSMaintenanceTicket
+from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart
 
 # قيم الحالة كـ strings مباشرة (متوافقة مع الـ DB)
 SESSION_OPEN   = "open"
@@ -478,6 +478,24 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
             POSMaintenanceTicket.tenant_id == tenant_id,
         )
     ) or Decimal("0")
+    maintenance_parts_total = await db.scalar(
+        select(func.coalesce(func.sum(POSMaintenancePart.quantity * POSMaintenancePart.unit_price), 0))
+        .join(POSMaintenanceTicket, POSMaintenanceTicket.id == POSMaintenancePart.ticket_id)
+        .where(
+            POSMaintenanceTicket.session_id == session.id,
+            POSMaintenanceTicket.tenant_id == tenant_id,
+        )
+    ) or Decimal("0")
+    maintenance_total_approved = await db.scalar(
+        select(func.coalesce(func.sum(POSMaintenanceTicket.approved_cost), 0)).where(
+            POSMaintenanceTicket.session_id == session.id,
+            POSMaintenanceTicket.tenant_id == tenant_id,
+        )
+    ) or Decimal("0")
+    maintenance_fees = max(
+        Decimal("0"),
+        Decimal(str(maintenance_total_approved)) - Decimal(str(maintenance_parts_total)),
+    )
     expected = session.opening_cash + session.total_cash + Decimal(str(maintenance_paid)) - Decimal(str(outflows_total))
     difference = closing_cash - expected
 
@@ -507,6 +525,8 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
         "total_bank_transfer": float(session.total_bank_transfer),
         "total_cash_outflows": float(outflows_total),
         "total_maintenance_paid": float(maintenance_paid),
+        "total_maintenance_parts": float(maintenance_parts_total),
+        "total_maintenance_fees": float(maintenance_fees),
         "total_vat": float(session.total_vat),
         "transaction_count": session.transaction_count,
         "status": "closed",
@@ -550,6 +570,19 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
         ).order_by(POSMaintenanceTicket.created_at)
     )).scalars().all()
     maintenance_paid = sum((Decimal(str(row.paid_amount or 0)) for row in maintenance_rows), Decimal("0"))
+    maintenance_parts_total = await db.scalar(
+        select(func.coalesce(func.sum(POSMaintenancePart.quantity * POSMaintenancePart.unit_price), 0))
+        .join(POSMaintenanceTicket, POSMaintenanceTicket.id == POSMaintenancePart.ticket_id)
+        .where(
+            POSMaintenanceTicket.session_id == session.id,
+            POSMaintenanceTicket.tenant_id == tenant_id,
+        )
+    ) or Decimal("0")
+    maintenance_fees = max(
+        Decimal("0"),
+        sum((Decimal(str(row.approved_cost or 0)) for row in maintenance_rows), Decimal("0"))
+        - Decimal(str(maintenance_parts_total)),
+    )
 
     by_method: dict[str, float] = {}
     for tx in txs:
@@ -578,6 +611,8 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
             "transaction_count": session.transaction_count,
             "total_cash_outflows": float(outflows_total),
             "total_maintenance_paid": float(maintenance_paid),
+            "total_maintenance_parts": float(maintenance_parts_total),
+            "total_maintenance_fees": float(maintenance_fees),
             "maintenance_count": len(maintenance_rows),
         },
         "by_payment_method": by_method,
@@ -591,6 +626,20 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
                 "created_at": item.created_at.isoformat(),
             }
             for item in outflows
+        ],
+        "maintenance": [
+            {
+                "id": row.id,
+                "ticket_number": row.ticket_number,
+                "customer_name": row.customer_name,
+                "device_name": row.device_name,
+                "status": row.status,
+                "approved_cost": float(row.approved_cost or 0),
+                "paid_amount": float(row.paid_amount or 0),
+                "outstanding": float(max(Decimal("0"), Decimal(str(row.approved_cost or 0)) - Decimal(str(row.paid_amount or 0)))),
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in maintenance_rows
         ],
         "transactions": [
             {

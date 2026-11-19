@@ -74,6 +74,83 @@ async def list_tickets(db: AsyncSession, tenant_id: str, status: str | None = No
     return [await _out(db, tenant_id, row) for row in rows]
 
 
+async def management_report(
+    db: AsyncSession,
+    tenant_id: str,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    status: str | None = None,
+    terminal_id: str | None = None,
+):
+    """تقرير إداري مستقل للصيانة: الأجهزة، العهدة، القطع، والتحصيل."""
+    q = select(POSMaintenanceTicket).where(POSMaintenanceTicket.tenant_id == tenant_id)
+    try:
+        if from_date:
+            start = datetime.fromisoformat(from_date.replace("Z", "+00:00")).replace(tzinfo=None)
+            q = q.where(POSMaintenanceTicket.created_at >= start)
+        if to_date:
+            end = datetime.fromisoformat(to_date.replace("Z", "+00:00")).replace(tzinfo=None)
+            q = q.where(POSMaintenanceTicket.created_at <= end)
+    except ValueError:
+        raise HTTPException(400, "صيغة التاريخ غير صحيحة")
+    if status:
+        q = q.where(POSMaintenanceTicket.status == status)
+    if terminal_id:
+        q = q.where(POSMaintenanceTicket.terminal_id == terminal_id)
+
+    rows = (await db.execute(q.order_by(POSMaintenanceTicket.created_at.desc()).limit(1000))).scalars().all()
+    tickets = []
+    terminal_totals: dict[str, dict] = {}
+    approved_total = paid_total = parts_total = Decimal("0")
+    issued_parts = 0
+    terminal_cache: dict[str, POSTerminal | None] = {}
+    for ticket in rows:
+        details = await _out(db, tenant_id, ticket)
+        ticket_parts = Decimal(str(details["parts_total"]))
+        approved = Decimal(str(ticket.approved_cost or 0))
+        paid = Decimal(str(ticket.paid_amount or 0))
+        fees = max(Decimal("0"), approved - ticket_parts)
+        outstanding = max(Decimal("0"), approved - paid)
+        issued = sum(1 for part in details["parts"] if part["status"] == "issued")
+        issued_parts += issued
+        approved_total += approved
+        paid_total += paid
+        parts_total += ticket_parts
+        if ticket.terminal_id not in terminal_cache:
+            terminal_cache[ticket.terminal_id] = await db.get(POSTerminal, ticket.terminal_id)
+        terminal = terminal_cache[ticket.terminal_id]
+        group = terminal_totals.setdefault(ticket.terminal_id, {
+            "terminal_id": ticket.terminal_id,
+            "terminal_name": terminal.name if terminal else ticket.terminal_id,
+            "ticket_count": 0, "approved_total": Decimal("0"), "paid_total": Decimal("0"),
+            "outstanding": Decimal("0"), "parts_total": Decimal("0"), "fees_total": Decimal("0"),
+        })
+        group["ticket_count"] += 1
+        group["approved_total"] += approved
+        group["paid_total"] += paid
+        group["outstanding"] += outstanding
+        group["parts_total"] += ticket_parts
+        group["fees_total"] += fees
+        tickets.append({**details, "parts_total": float(ticket_parts), "fees_total": float(fees), "outstanding": float(outstanding), "issued_parts": issued})
+
+    def clean(group: dict) -> dict:
+        return {key: (float(value) if isinstance(value, Decimal) else value) for key, value in group.items()}
+
+    return {
+        "summary": {
+            "ticket_count": len(rows),
+            "approved_total": float(approved_total),
+            "paid_total": float(paid_total),
+            "outstanding_total": float(max(Decimal("0"), approved_total - paid_total)),
+            "parts_total": float(parts_total),
+            "fees_total": float(max(Decimal("0"), approved_total - parts_total)),
+            "issued_parts": issued_parts,
+        },
+        "by_terminal": [clean(group) for group in terminal_totals.values()],
+        "tickets": tickets,
+    }
+
+
 async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: dict):
     terminal = await db.get(POSTerminal, data.get("terminal_id"))
     if not terminal or terminal.tenant_id != tenant_id or not terminal.is_active:

@@ -12,6 +12,8 @@ export const deleteTerminal = (id: string)             => api.delete(`/pos/termi
 // ─── صيانة نقاط البيع (معزولة عن الفواتير) ─────────────────────────
 export const getMaintenanceTickets = (params?: { status?: string; terminal_id?: string; session_id?: string }) =>
   api.get("/pos/maintenance", { params });
+export const getMaintenanceManagementReport = (params?: { from_date?: string; to_date?: string; status?: string; terminal_id?: string }) =>
+  api.get("/pos/maintenance/management-report", { params });
 export const createMaintenanceTicket = (data: any) => api.post("/pos/maintenance", data);
 export const updateMaintenanceTicket = (id: string, data: any) => api.patch(`/pos/maintenance/${id}`, data);
 export const addMaintenancePart = (id: string, data: any) => api.post(`/pos/maintenance/${id}/parts`, data);

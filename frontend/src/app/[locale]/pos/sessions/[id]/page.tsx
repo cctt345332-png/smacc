@@ -110,12 +110,15 @@ export default function SessionDetailPage() {
   const session      = report.session;
   const transactions = report.transactions || [];
   const cashOutflows = report.cash_outflows || [];
+  const maintenance = report.maintenance || [];
   const byMethod     = report.by_payment_method || {};
   const isOpen       = session.status === "open";
   const actCfg       = ACTIVITY_CFG[session.business_type] || ACTIVITY_CFG.general;
 
   const totalCashOutflows = Number(session.total_cash_outflows || cashOutflows.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0));
   const maintenancePaid = Number(session.total_maintenance_paid || 0);
+  const maintenanceParts = Number(session.total_maintenance_parts || 0);
+  const maintenanceFees = Number(session.total_maintenance_fees || 0);
   const expectedCash = Number(session.opening_cash) + Number(session.total_cash) + maintenancePaid - totalCashOutflows;
   const actualCash   = session.closing_cash != null ? Number(session.closing_cash) : null;
   const difference   = actualCash != null ? actualCash - expectedCash : null;
@@ -143,7 +146,7 @@ export default function SessionDetailPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <StructuredReportPrintButton locale={locale} title={isAr ? "تقرير جلسة نقطة البيع" : "POS Session Report"} subtitle={`${session.session_number || session.id}`} period={`${fmtDate(session.opened_at)} — ${session.closed_at ? fmtDate(session.closed_at) : (isAr ? "مفتوحة" : "Open")}`} orientation="landscape" reportCode={`PSS-${String(session.session_number || session.id).slice(-8)}`} metrics={[{ label: isAr ? "رصيد الافتتاح" : "Opening cash", value: `${fmt(Number(session.opening_cash || 0))} ${sar}`, tone: "neutral" }, { label: isAr ? "إجمالي المبيعات" : "Sales total", value: `${fmt(Number(session.total_sales || 0))} ${sar}`, tone: "green" }, { label: isAr ? "النقد المتوقع" : "Expected cash", value: `${fmt(expectedCash)} ${sar}`, tone: "blue" }, { label: isAr ? "فرق الإغلاق" : "Closing variance", value: difference == null ? "—" : `${fmt(difference)} ${sar}`, tone: difference === 0 ? "green" : "amber" }]} tables={[{ title: isAr ? "طرق الدفع" : "Payment methods", headers: [isAr ? "الطريقة" : "Method", isAr ? "المبلغ" : "Amount"], rows: Object.entries(byMethod).map(([method, amount]) => [PAYMENT_LABELS[method] || method, `${fmt(Number(amount || 0))} ${sar}`]) }, { title: isAr ? "المعاملات" : "Transactions", headers: [isAr ? "الوقت" : "Time", isAr ? "الرقم" : "Number", isAr ? "الدفع" : "Payment", isAr ? "الإجمالي" : "Total"], rows: transactions.map((txn: any) => [fmtDate(txn.created_at || txn.transaction_date), String(txn.transaction_number || txn.id || "—"), PAYMENT_LABELS[txn.payment_method] || txn.payment_method || "—", `${fmt(Number(txn.total || txn.total_amount || 0))} ${sar}`]) }]} />
+          <StructuredReportPrintButton locale={locale} title={isAr ? "تقرير جلسة نقطة البيع" : "POS Session Report"} subtitle={`${session.session_number || session.id}`} period={`${fmtDate(session.opened_at)} — ${session.closed_at ? fmtDate(session.closed_at) : (isAr ? "مفتوحة" : "Open")}`} orientation="landscape" reportCode={`PSS-${String(session.session_number || session.id).slice(-8)}`} metrics={[{ label: isAr ? "رصيد الافتتاح" : "Opening cash", value: `${fmt(Number(session.opening_cash || 0))} ${sar}`, tone: "neutral" }, { label: isAr ? "إجمالي المبيعات" : "Sales total", value: `${fmt(Number(session.total_sales || 0))} ${sar}`, tone: "green" }, { label: isAr ? "تحصيل الصيانة" : "Maintenance collected", value: `${fmt(maintenancePaid)} ${sar}`, tone: "green" }, { label: isAr ? "النقد المتوقع" : "Expected cash", value: `${fmt(expectedCash)} ${sar}`, tone: "blue" }, { label: isAr ? "فرق الإغلاق" : "Closing variance", value: difference == null ? "—" : `${fmt(difference)} ${sar}`, tone: difference === 0 ? "green" : "amber" }]} tables={[{ title: isAr ? "طرق الدفع" : "Payment methods", headers: [isAr ? "الطريقة" : "Method", isAr ? "المبلغ" : "Amount"], rows: Object.entries(byMethod).map(([method, amount]) => [PAYMENT_LABELS[method] || method, `${fmt(Number(amount || 0))} ${sar}`]) }, { title: isAr ? "عمليات الصيانة" : "Maintenance", headers: [isAr ? "التذكرة" : "Ticket", isAr ? "الجهاز" : "Device", isAr ? "المعتمد" : "Approved", isAr ? "المحصّل" : "Collected"], rows: maintenance.map((row: any) => [row.ticket_number, row.device_name, `${fmt(Number(row.approved_cost || 0))} ${sar}`, `${fmt(Number(row.paid_amount || 0))} ${sar}`]) }, { title: isAr ? "المعاملات" : "Transactions", headers: [isAr ? "الوقت" : "Time", isAr ? "الرقم" : "Number", isAr ? "الدفع" : "Payment", isAr ? "الإجمالي" : "Total"], rows: transactions.map((txn: any) => [fmtDate(txn.created_at || txn.transaction_date), String(txn.transaction_number || txn.id || "—"), PAYMENT_LABELS[txn.payment_method] || txn.payment_method || "—", `${fmt(Number(txn.total || txn.total_amount || 0))} ${sar}`]) }]} />
           {isOpen && (
             <button className="btn btn-primary" onClick={() => { setClosingCash(String(expectedCash.toFixed(2))); setClosePin(""); setShowCloseModal(true); }}>
               <Icon name="lock" size={15} />
@@ -158,6 +161,8 @@ export default function SessionDetailPage() {
         {[
           { label: isAr ? "إجمالي المبيعات" : "Total Sales",    value: `${fmt(Number(session.total_sales))} ${sar}`,    icon: "revenue"  as const, color: "#6F4A84", bg: "#F4EFF7" },
           { label: isAr ? "تحصيل الصيانة" : "Maintenance collected", value: `${fmt(maintenancePaid)} ${sar}`, icon: "settings" as const, color: "#0F766E", bg: "#ECFDF5" },
+          { label: isAr ? "قطع الصيانة" : "Maintenance parts", value: `${fmt(maintenanceParts)} ${sar}`, icon: "settings" as const, color: "#0369A1", bg: "#EFF6FF" },
+          { label: isAr ? "أجرة الصيانة" : "Maintenance fees", value: `${fmt(maintenanceFees)} ${sar}`, icon: "settings" as const, color: "#7C3AED", bg: "#F5F3FF" },
           { label: isAr ? "إجمالي النقد" : "Cash Sales",        value: `${fmt(Number(session.total_cash))} ${sar}`,     icon: "cash"     as const, color: "#5A187E", bg: "#EFF6FF" },
           { label: isAr ? "إجمالي البطاقة" : "Card Sales",      value: `${fmt(Number(session.total_card))} ${sar}`,     icon: "card"     as const, color: "#75617F", bg: "#F5F3FF" },
           { label: isAr ? "ضريبة القيمة المضافة" : "VAT",       value: `${fmt(Number(session.total_vat))} ${sar}`,      icon: "tax"      as const, color: "#D97706", bg: "#FFFBEB" },
@@ -223,6 +228,7 @@ export default function SessionDetailPage() {
             {[
               { label: isAr ? "رصيد الافتتاح" : "Opening Cash",  value: fmt(Number(session.opening_cash)),  color: "" },
               { label: isAr ? "مبيعات نقدية" : "Cash Sales",     value: `+ ${fmt(Number(session.total_cash))}`, color: "#6F4A84" },
+              { label: isAr ? "تحصيل الصيانة" : "Maintenance Collected", value: `+ ${fmt(maintenancePaid)}`, color: "#0F766E" },
               { label: isAr ? "مخرجات من الدرج" : "Cash Outflows", value: `− ${fmt(totalCashOutflows)}`, color: "#DC2626" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
@@ -340,6 +346,23 @@ export default function SessionDetailPage() {
                   </tr>
                 ))}
               </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Maintenance ─────────────────────────────────────────────── */}
+      <div className="card" style={{ marginTop: 24 }}>
+        <div className="card-header">
+          <h3 className="card-title"><Icon name="settings" size={16} />{isAr ? "عمليات الصيانة في الجلسة" : "Maintenance operations in session"}</h3>
+          <span className="badge badge-info">{maintenance.length}</span>
+        </div>
+        {maintenance.length === 0 ? (
+          <div style={{ padding: 20, color: "var(--text-muted)", fontSize: 13 }}>{isAr ? "لا توجد عمليات صيانة" : "No maintenance operations"}</div>
+        ) : (
+          <div className="table-wrapper" style={{ border: "none" }}>
+            <table><thead><tr><th>{isAr ? "التذكرة" : "Ticket"}</th><th>{isAr ? "العميل" : "Customer"}</th><th>{isAr ? "الجهاز" : "Device"}</th><th>{isAr ? "الإجمالي" : "Approved"}</th><th>{isAr ? "المحصّل" : "Collected"}</th><th>{isAr ? "المتبقي" : "Outstanding"}</th><th>{isAr ? "الحالة" : "Status"}</th></tr></thead>
+              <tbody>{maintenance.map((item: any) => <tr key={item.id}><td style={{ fontWeight: 700, color: "var(--primary)" }}>{item.ticket_number}</td><td>{item.customer_name || "—"}</td><td>{item.device_name}</td><td>{fmt(Number(item.approved_cost || 0))} {sar}</td><td style={{ color: "#0F766E", fontWeight: 700 }}>{fmt(Number(item.paid_amount || 0))} {sar}</td><td style={{ color: Number(item.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{fmt(Number(item.outstanding || 0))} {sar}</td><td><span className="badge badge-gray">{item.status}</span></td></tr>)}</tbody>
             </table>
           </div>
         )}

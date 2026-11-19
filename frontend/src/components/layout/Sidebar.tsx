@@ -163,6 +163,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
         children: [
           { label: ar ? "لوحة الإدارة" : "Dashboard",  href: `${base}/pos` },
           { label: ar ? "الجلسات" : "Sessions",         href: `${base}/pos/sessions` },
+          { label: ar ? "إدارة الصيانة" : "Maintenance Management", href: `${base}/pos/maintenance-management` },
         ],
       }] : []),
       {

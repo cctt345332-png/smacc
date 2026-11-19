@@ -62,6 +62,26 @@ async def create_pos_maintenance(data: dict, user=Depends(require_role(["manager
     return await maintenance_service.create_ticket(db, user["tenant_id"], user["user_id"], data)
 
 
+@router.get("/maintenance/management-report")
+async def pos_maintenance_management_report(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    status: Optional[str] = None,
+    terminal_id: Optional[str] = None,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await maintenance_service.management_report(
+        db, user["tenant_id"], from_date, to_date, status, terminal_id
+    )
+
+
+@router.get("/maintenance/serials")
+async def get_terminal_maintenance_serials(terminal_id: str, product_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    """السيريالات المتاحة للصيانة في مستودع الجهاز؛ يجب أن يسبق مسار التذكرة العام."""
+    return await maintenance_service.get_terminal_part_serials(db, tenant_id, terminal_id, product_id)
+
+
 @router.get("/maintenance/{ticket_id}")
 async def get_pos_maintenance(ticket_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     ticket = await maintenance_service._ticket(db, tenant_id, ticket_id)
@@ -81,11 +101,6 @@ async def add_pos_maintenance_part(ticket_id: str, data: dict, user=Depends(requ
 @router.get("/maintenance/{ticket_id}/serials/{product_id}")
 async def get_pos_maintenance_serials(ticket_id: str, product_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await maintenance_service.get_part_serials(db, tenant_id, ticket_id, product_id)
-
-
-@router.get("/maintenance/serials")
-async def get_terminal_maintenance_serials(terminal_id: str, product_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
-    return await maintenance_service.get_terminal_part_serials(db, tenant_id, terminal_id, product_id)
 
 
 @router.post("/maintenance/{ticket_id}/parts/{part_id}/issue")
