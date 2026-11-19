@@ -72,7 +72,7 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
       try {
         if (current.source_type === "pos") {
           const { data } = await getSettlementBreakdown({ source_type: "pos", source_id: current.source_id, date_from: dateFrom || undefined, date_to: dateTo || undefined });
-          if (active) setDetail({ pos: true, rows: data.rows || [], totals: data.totals || {} });
+          if (active) setDetail({ pos: true, ...data, rows: data.rows || [], totals: data.totals || {} });
           return;
         }
         const { data } = await getSettlementBreakdown({ source_type: "rep", source_id: current.source_id, date_from: dateFrom || undefined, date_to: dateTo || undefined });
