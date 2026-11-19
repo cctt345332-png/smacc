@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { createMaintenanceTicket, getMaintenanceManagementReport, getTerminals, issueMaintenanceInvoice, updateMaintenanceTicket } from "@/lib/pos";
+import { createMaintenanceTicket, deleteMaintenanceTicket, getMaintenanceManagementReport, getTerminals, issueMaintenanceInvoice, updateMaintenanceTicket } from "@/lib/pos";
 import { getCustomers, createCustomer } from "@/lib/sales";
 import { getItemsForPicker } from "@/lib/inventory";
 import { getReps } from "@/lib/reps";
@@ -31,6 +31,7 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
   const [data, setData] = useState<any>({ summary: {}, by_terminal: [], tickets: [] });
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [editingTicket, setEditingTicket] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ terminal_id: "", customer_id: "", rep_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", service_name: "", service_amount: "", notes: "" });
 
@@ -74,6 +75,11 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
         customerName = customer?.name_ar || customerName;
         customerPhone = customer?.phone || customerPhone;
       }
+      if (editingTicket) {
+        await updateMaintenanceTicket(editingTicket.id, { terminal_id: form.terminal_id, customer_id: customerId || null, customer_name: customerName, customer_phone: customerPhone, rep_id: form.rep_id || null, device_name: product.name_ar, device_serial: form.device_serial || null, reported_problem: form.reported_problem, notes: form.notes });
+        alert(ar ? "تم تعديل طلب الصيانة" : "Maintenance request updated");
+        setEditingTicket(null); setShowAdd(false); await load(); return;
+      }
       const createdTicket = await createMaintenanceTicket({ terminal_id: form.terminal_id, customer_id: customerId, rep_id: form.rep_id || null, customer_name: customerName, customer_phone: customerPhone, device_name: product.name_ar, device_serial: form.device_serial || null, reported_problem: form.reported_problem, notes: form.notes, estimated_cost: 0, approved_cost: 0, paid_amount: 0 });
       alert(ar ? "تمت إضافة الجهاز للصيانة" : "Device added to maintenance");
       setForm({ terminal_id: "", customer_id: "", rep_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", service_name: "", service_amount: "", notes: "" });
@@ -94,6 +100,18 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
     } catch (error: any) {
       alert(error?.response?.data?.detail || (ar ? "تعذر تغيير حالة التذكرة" : "Could not change ticket status"));
     }
+  };
+
+  const editTicket = (ticket: any) => {
+    const product = catalog.find((item) => item.name_ar === ticket.device_name);
+    setEditingTicket(ticket); setNewCustomer(false);
+    setForm({ terminal_id: ticket.terminal_id || "", customer_id: ticket.customer_id || "", rep_id: ticket.rep_id || "", customer_name: ticket.customer_name || "", customer_phone: ticket.customer_phone || "", product_id: product?.id || "", device_serial: ticket.device_serial || "", reported_problem: ticket.reported_problem || "", service_name: "", service_amount: "", notes: ticket.notes || "" });
+    setShowAdd(true);
+  };
+
+  const removeTicket = async (ticket: any) => {
+    if (!confirm(ar ? `حذف طلب الصيانة ${ticket.ticket_number}؟ لا يمكن التراجع عن الحذف.` : `Delete maintenance request ${ticket.ticket_number}? This cannot be undone.`)) return;
+    try { await deleteMaintenanceTicket(ticket.id); await load(); } catch (error: any) { alert(error?.response?.data?.detail || (ar ? "لا يمكن حذف الطلب" : "Could not delete request")); }
   };
 
   const issueInvoice = async (ticket: any) => {
@@ -150,7 +168,7 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
 
       {showAdd && <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <div className="card" style={{ width: "min(680px, 100%)", padding: 22 }}>
-          <div className="card-header" style={{ padding: 0, marginBottom: 16 }}><h3 className="card-title"><Icon name="settings" size={17} />{ar ? "إضافة جهاز للصيانة" : "Add maintenance device"}</h3><button className="btn btn-ghost btn-sm" onClick={() => setShowAdd(false)}>×</button></div>
+          <div className="card-header" style={{ padding: 0, marginBottom: 16 }}><h3 className="card-title"><Icon name="settings" size={17} />{editingTicket ? (ar ? "تعديل طلب الصيانة" : "Edit maintenance request") : (ar ? "إضافة جهاز للصيانة" : "Add maintenance device")}</h3><button className="btn btn-ghost btn-sm" onClick={() => { setShowAdd(false); setEditingTicket(null); }}>×</button></div>
           <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "0 0 14px" }}>{ar ? "سيتم تسجيل الجهاز كتذكرة صيانة بدون تحصيل نقدي. التحصيل وصرف القطع يتمان من شاشة تشغيل الصيانة المرتبطة بجلسة الكاشير." : "The device is registered without collection. Collection and parts issue are completed from the maintenance counter linked to a cashier session."}</p>
           <div className="grid-2">
             <label className="form-group"><span className="form-label">{ar ? "جهاز الكاشير *" : "Terminal *"}</span><select className="form-input form-select" value={form.terminal_id} onChange={(e) => setForm({ ...form, terminal_id: e.target.value })}><option value="">{ar ? "اختر الجهاز" : "Select terminal"}</option>{terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name}</option>)}</select></label>
@@ -164,7 +182,7 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
           <div className="grid-2" style={{ marginTop: 10 }}><label className="form-group"><span className="form-label">{ar ? "سيريال جهاز العميل" : "Customer device serial"}</span><input className="form-input" value={form.device_serial} onChange={(e) => setForm({ ...form, device_serial: e.target.value })} placeholder={ar ? "يُكتب يدويًا حتى لو غير موجود بالمخزون" : "Enter manually; it may not exist in inventory"} /><span className="form-hint">{ar ? "هذا سيريال جهاز العميل، وليس سيريال قطعة من مستودع الصيانة" : "Customer device serial, not a stock part serial"}</span></label><label className="form-group"><span className="form-label">{ar ? "وصف المشكلة *" : "Problem *"}</span><textarea className="form-input" rows={2} value={form.reported_problem} onChange={(e) => setForm({ ...form, reported_problem: e.target.value })} placeholder={ar ? "اكتب العطل بالتفصيل" : "Describe the problem"} /></label></div>
           <div className="card" style={{ marginTop: 10, padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><strong style={{ fontSize: 13 }}>{ar ? "المرحلة الأولى: استقبال وفحص أولي" : "Stage 1: intake and initial inspection"}</strong><p className="form-hint" style={{ margin: "5px 0 0" }}>{ar ? "لن يتم تسجيل أي مبلغ الآن. بعد الفحص ستضاف نتيجة التشخيص والقطع المطلوبة والأجرة من تفاصيل التذكرة." : "No amount is recorded now. After inspection, diagnosis, required parts, and service fees are added from the ticket details."}</p></div>
           <label className="form-group" style={{ marginTop: 10 }}><span className="form-label">{ar ? "ملاحظات" : "Notes"}</span><textarea className="form-input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button className="btn btn-secondary" onClick={() => setShowAdd(false)}>{ar ? "إلغاء" : "Cancel"}</button><button className="btn btn-primary" onClick={addDevice} disabled={saving}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الجهاز" : "Save device")}</button></div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button className="btn btn-secondary" onClick={() => { setShowAdd(false); setEditingTicket(null); }}>{ar ? "إلغاء" : "Cancel"}</button><button className="btn btn-primary" onClick={addDevice} disabled={saving}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (editingTicket ? (ar ? "حفظ التعديل" : "Save changes") : (ar ? "حفظ الجهاز" : "Save device"))}</button></div>
         </div>
       </div>}
 
@@ -183,7 +201,7 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
         </div>
       </div>}
 
-      {view === "tickets" && <div className="card"><div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{ar ? "تفاصيل تذاكر الصيانة" : "Maintenance tickets"}</h3><span className="badge badge-gray">{tickets.length}</span></div>{tickets.length === 0 ? <div className="empty-state">{loading ? (ar ? "جاري تحميل التذاكر..." : "Loading tickets...") : (ar ? "لا توجد تذاكر ضمن الفلاتر" : "No tickets for selected filters")}</div> : <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "التذكرة" : "Ticket"}</th><th>{ar ? "الجهاز" : "Device"}</th><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "القطع" : "Parts"}</th><th>{ar ? "الأجرة" : "Fees"}</th><th>{ar ? "المحصّل" : "Collected"}</th><th>{ar ? "المتبقي" : "Outstanding"}</th><th>{ar ? "فاتورة" : "Invoice"}</th><th>{ar ? "التاريخ" : "Date"}</th></tr></thead><tbody>{tickets.map((row: any) => <tr key={row.id}><td style={{ fontWeight: 700, color: "var(--primary)" }}>{row.ticket_number}</td><td><div>{row.device_name}</div><div style={{ fontSize: 11, color: "var(--primary)", marginTop: 3 }}>{ar ? "الفرع:" : "Branch:"} {row.branch_name || row.terminal_name || "—"}</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "المندوب:" : "Rep:"} {row.rep_name || "—"}</div>{row.device_serial ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.device_serial}</div> : null}</td><td>{row.customer_name || "—"}</td><td><select className="form-input form-select" style={{ minWidth: 125, padding: "5px 8px", fontSize: 12 }} value={row.status} onChange={(e) => changeStatus(row, e.target.value)} disabled={row.status === "cancelled"}><option value="open">{statusLabel("open")}</option><option value="in_progress">{statusLabel("in_progress")}</option><option value="ready">{statusLabel("ready")}</option><option value="completed">{statusLabel("completed")}</option><option value="cancelled">{statusLabel("cancelled")}</option></select></td><td>{money(row.parts_total)} SAR</td><td>{money(row.fees_total)} SAR</td><td style={{ color: "#059669", fontWeight: 700 }}>{money(row.paid_amount)} SAR</td><td style={{ color: Number(row.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{money(row.outstanding)} SAR</td><td>{row.invoice_id ? <span className="badge badge-success">{ar ? "صادرة" : "Issued"}</span> : <button className="btn btn-primary btn-sm" onClick={() => issueInvoice(row)} disabled={row.status === "cancelled"}>{ar ? "إصدار" : "Issue"}</button>}</td><td style={{ fontSize: 12, color: "var(--text-muted)" }}>{new Date(row.created_at).toLocaleDateString(ar ? "ar-SA" : "en-GB")}</td></tr>)}</tbody></table></div>}</div>}
+      {view === "tickets" && <div className="card"><div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{ar ? "تفاصيل تذاكر الصيانة" : "Maintenance tickets"}</h3><span className="badge badge-gray">{tickets.length}</span></div>{tickets.length === 0 ? <div className="empty-state">{loading ? (ar ? "جاري تحميل التذاكر..." : "Loading tickets...") : (ar ? "لا توجد تذاكر ضمن الفلاتر" : "No tickets for selected filters")}</div> : <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "التذكرة" : "Ticket"}</th><th>{ar ? "الجهاز" : "Device"}</th><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "القطع" : "Parts"}</th><th>{ar ? "الأجرة" : "Fees"}</th><th>{ar ? "المحصّل" : "Collected"}</th><th>{ar ? "المتبقي" : "Outstanding"}</th><th>{ar ? "فاتورة" : "Invoice"}</th><th>{ar ? "إجراءات" : "Actions"}</th><th>{ar ? "التاريخ" : "Date"}</th></tr></thead><tbody>{tickets.map((row: any) => <tr key={row.id}><td style={{ fontWeight: 700, color: "var(--primary)" }}>{row.ticket_number}</td><td><div>{row.device_name}</div><div style={{ fontSize: 11, color: "var(--primary)", marginTop: 3 }}>{ar ? "الفرع:" : "Branch:"} {row.branch_name || row.terminal_name || "—"}</div><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{ar ? "المندوب:" : "Rep:"} {row.rep_name || "—"}</div>{row.device_serial ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.device_serial}</div> : null}</td><td>{row.customer_name || "—"}</td><td><select className="form-input form-select" style={{ minWidth: 125, padding: "5px 8px", fontSize: 12 }} value={row.status} onChange={(e) => changeStatus(row, e.target.value)} disabled={row.status === "cancelled"}><option value="open">{statusLabel("open")}</option><option value="in_progress">{statusLabel("in_progress")}</option><option value="ready">{statusLabel("ready")}</option><option value="completed">{statusLabel("completed")}</option><option value="cancelled">{statusLabel("cancelled")}</option></select></td><td>{money(row.parts_total)} SAR</td><td>{money(row.fees_total)} SAR</td><td style={{ color: "#059669", fontWeight: 700 }}>{money(row.paid_amount)} SAR</td><td style={{ color: Number(row.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{money(row.outstanding)} SAR</td><td>{row.invoice_id ? <span className="badge badge-success">{ar ? "صادرة" : "Issued"}</span> : <button className="btn btn-primary btn-sm" onClick={() => issueInvoice(row)} disabled={row.status === "cancelled"}>{ar ? "إصدار" : "Issue"}</button>}</td><td><div style={{ display: "flex", gap: 5 }}><button className="btn btn-secondary btn-sm" onClick={() => editTicket(row)} disabled={row.status === "completed" || row.status === "cancelled"}>{ar ? "تعديل" : "Edit"}</button><button className="btn btn-danger btn-sm" onClick={() => removeTicket(row)}>{ar ? "حذف" : "Delete"}</button></div></td><td style={{ fontSize: 12, color: "var(--text-muted)" }}>{new Date(row.created_at).toLocaleDateString(ar ? "ar-SA" : "en-GB")}</td></tr>)}</tbody></table></div>}</div>}
     </div>
   );
 }

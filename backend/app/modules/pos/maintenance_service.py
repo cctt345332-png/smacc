@@ -272,6 +272,12 @@ async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: 
         rep = await db.get(SalesRep, data["rep_id"])
         if not rep or rep.tenant_id != tenant_id or not rep.is_active:
             raise HTTPException(400, "المندوب غير موجود أو غير فعال")
+    if data.get("terminal_id"):
+        terminal = await db.get(POSTerminal, data["terminal_id"])
+        if not terminal or terminal.tenant_id != tenant_id or not terminal.is_active or not terminal.maintenance_warehouse_id:
+            raise HTTPException(400, "جهاز الكاشير غير صالح أو لا يوجد له مستودع صيانة")
+        ticket.terminal_id = terminal.id
+        ticket.maintenance_warehouse_id = terminal.maintenance_warehouse_id
     allowed = {"status", "customer_id", "rep_id", "customer_name", "customer_phone", "device_name", "device_serial", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost"}
     for key in allowed:
         if key in data:
@@ -283,6 +289,21 @@ async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: 
     await db.commit()
     await db.refresh(ticket)
     return await _out(db, tenant_id, ticket)
+
+
+async def delete_ticket(db: AsyncSession, tenant_id: str, ticket_id: str):
+    ticket = await _ticket(db, tenant_id, ticket_id)
+    if ticket.invoice_id:
+        raise HTTPException(400, "لا يمكن حذف تذكرة لها فاتورة؛ ألغِ الفاتورة بإجراء إداري")
+    payments = await db.scalar(select(func.count(POSMaintenancePayment.id)).where(POSMaintenancePayment.ticket_id == ticket.id))
+    issued_parts = await db.scalar(select(func.count(POSMaintenancePart.id)).where(
+        POSMaintenancePart.ticket_id == ticket.id, POSMaintenancePart.status == "issued"
+    ))
+    if payments or issued_parts:
+        raise HTTPException(400, "لا يمكن حذف تذكرة عليها تحصيل أو قطع مصروفة؛ استخدم الإلغاء الإداري")
+    await db.delete(ticket)
+    await db.commit()
+    return {"deleted": True, "id": ticket_id}
 
 
 async def add_part(db: AsyncSession, tenant_id: str, ticket_id: str, data: dict):

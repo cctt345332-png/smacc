@@ -93,6 +93,11 @@ async def update_pos_maintenance(ticket_id: str, data: dict, user=Depends(requir
     return await maintenance_service.update_ticket(db, user["tenant_id"], ticket_id, data)
 
 
+@router.delete("/maintenance/{ticket_id}")
+async def delete_pos_maintenance(ticket_id: str, user=Depends(require_role(["manager"])), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.delete_ticket(db, user["tenant_id"], ticket_id)
+
+
 @router.post("/maintenance/{ticket_id}/parts", status_code=201)
 async def add_pos_maintenance_part(ticket_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
     return await maintenance_service.add_part(db, user["tenant_id"], ticket_id, data)
