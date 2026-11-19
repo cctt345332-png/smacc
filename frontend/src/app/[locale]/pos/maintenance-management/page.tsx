@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { getMaintenanceManagementReport, getTerminals } from "@/lib/pos";
+import { createMaintenanceTicket, getMaintenanceManagementReport, getTerminals } from "@/lib/pos";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 import { Icon } from "@/components/ui/Icons";
 
@@ -20,6 +20,9 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
   const [terminals, setTerminals] = useState<any[]>([]);
   const [data, setData] = useState<any>({ summary: {}, by_terminal: [], tickets: [] });
   const [loading, setLoading] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ terminal_id: "", customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", notes: "" });
 
   const load = async () => {
     setLoading(true);
@@ -35,6 +38,25 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
       setData({ summary: {}, by_terminal: [], tickets: [] });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addDevice = async () => {
+    if (!form.terminal_id || !form.device_name.trim() || !form.reported_problem.trim()) {
+      alert(ar ? "اختر جهاز الكاشير واكتب اسم الجهاز ووصف العطل" : "Select a terminal and enter the device name and problem");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createMaintenanceTicket({ ...form, estimated_cost: 0, approved_cost: 0, paid_amount: 0 });
+      alert(ar ? "تمت إضافة الجهاز للصيانة" : "Device added to maintenance");
+      setForm({ terminal_id: "", customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", notes: "" });
+      setShowAdd(false);
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.detail || (ar ? "تعذر إضافة الجهاز" : "Could not add device"));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -59,6 +81,7 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <StructuredReportPrintButton locale={locale} title={ar ? "تقرير إدارة صيانة نقاط البيع" : "POS Maintenance Management Report"} subtitle={ar ? "العهدة والتحصيل والقطع المصروفة" : "Custody, collections, and issued parts"} period={`${fromDate} — ${toDate}`} orientation="landscape" reportCode={`MNT-${today.replaceAll("-", "")}`} metrics={[{ label: ar ? "التذاكر" : "Tickets", value: String(summary.ticket_count || 0), tone: "blue" }, { label: ar ? "التحصيل" : "Collected", value: `${money(summary.paid_total)} SAR`, tone: "green" }, { label: ar ? "المتبقي" : "Outstanding", value: `${money(summary.outstanding_total)} SAR`, tone: "amber" }, { label: ar ? "قيمة القطع" : "Parts value", value: `${money(summary.parts_total)} SAR`, tone: "blue" }]} tables={[{ title: ar ? "تفاصيل الصيانة" : "Maintenance details", headers: [ar ? "التذكرة" : "Ticket", ar ? "الجهاز" : "Device", ar ? "العميل" : "Customer", ar ? "الحالة" : "Status", ar ? "القطع" : "Parts", ar ? "الأجرة" : "Fees", ar ? "المحصّل" : "Collected", ar ? "المتبقي" : "Outstanding"], rows: printRows }]} />
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}><Icon name="plus" size={15} />{ar ? "إضافة جهاز صيانة" : "Add maintenance device"}</button>
           <Link href={`/${locale}/pos/maintenance`} className="btn btn-secondary"><Icon name="settings" size={15} />{ar ? "تشغيل الصيانة" : "Maintenance Counter"}</Link>
         </div>
       </div>
@@ -72,6 +95,21 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
           <button className="btn btn-primary" onClick={load} disabled={loading}>{loading ? (ar ? "جاري التحميل..." : "Loading...") : (ar ? "عرض التقرير" : "Show report")}</button>
         </div>
       </div>
+
+      {showAdd && <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div className="card" style={{ width: "min(680px, 100%)", padding: 22 }}>
+          <div className="card-header" style={{ padding: 0, marginBottom: 16 }}><h3 className="card-title"><Icon name="settings" size={17} />{ar ? "إضافة جهاز للصيانة" : "Add maintenance device"}</h3><button className="btn btn-ghost btn-sm" onClick={() => setShowAdd(false)}>×</button></div>
+          <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "0 0 14px" }}>{ar ? "سيتم تسجيل الجهاز كتذكرة صيانة بدون تحصيل نقدي. التحصيل وصرف القطع يتمان من شاشة تشغيل الصيانة المرتبطة بجلسة الكاشير." : "The device is registered without collection. Collection and parts issue are completed from the maintenance counter linked to a cashier session."}</p>
+          <div className="grid-2">
+            <label className="form-group"><span className="form-label">{ar ? "جهاز الكاشير *" : "Terminal *"}</span><select className="form-input form-select" value={form.terminal_id} onChange={(e) => setForm({ ...form, terminal_id: e.target.value })}><option value="">{ar ? "اختر الجهاز" : "Select terminal"}</option>{terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name}</option>)}</select></label>
+            <label className="form-group"><span className="form-label">{ar ? "اسم الجهاز *" : "Device name *"}</span><input className="form-input" value={form.device_name} onChange={(e) => setForm({ ...form, device_name: e.target.value })} placeholder={ar ? "مثال: آيفون 15" : "e.g. iPhone 15"} /></label>
+          </div>
+          <div className="grid-2" style={{ marginTop: 10 }}><label className="form-group"><span className="form-label">{ar ? "اسم العميل" : "Customer name"}</span><input className="form-input" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "الجوال" : "Phone"}</span><input className="form-input" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} /></label></div>
+          <div className="grid-2" style={{ marginTop: 10 }}><label className="form-group"><span className="form-label">{ar ? "السيريال / IMEI" : "Serial / IMEI"}</span><input className="form-input" value={form.device_serial} onChange={(e) => setForm({ ...form, device_serial: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "وصف العطل *" : "Problem *"}</span><input className="form-input" value={form.reported_problem} onChange={(e) => setForm({ ...form, reported_problem: e.target.value })} /></label></div>
+          <label className="form-group" style={{ marginTop: 10 }}><span className="form-label">{ar ? "ملاحظات" : "Notes"}</span><textarea className="form-input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button className="btn btn-secondary" onClick={() => setShowAdd(false)}>{ar ? "إلغاء" : "Cancel"}</button><button className="btn btn-primary" onClick={addDevice} disabled={saving}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الجهاز" : "Save device")}</button></div>
+        </div>
+      </div>}
 
       <div className="grid-4" style={{ marginBottom: 20 }}>
         {[{ label: ar ? "عدد التذاكر" : "Tickets", value: summary.ticket_count || 0, color: "#2563EB" }, { label: ar ? "إجمالي المعتمد" : "Approved total", value: `${money(summary.approved_total)} SAR`, color: "#7C3AED" }, { label: ar ? "المحصّل" : "Collected", value: `${money(summary.paid_total)} SAR`, color: "#059669" }, { label: ar ? "العهدة المتبقية" : "Outstanding custody", value: `${money(summary.outstanding_total)} SAR`, color: "#D97706" }].map((item) => <div className="stat-card" key={item.label}><div className="stat-value" style={{ color: item.color }}>{item.value}</div><div className="stat-label">{item.label}</div></div>)}
