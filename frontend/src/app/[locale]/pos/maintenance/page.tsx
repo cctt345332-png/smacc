@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, issueMaintenancePart, getTerminalMaintenanceSerials } from "@/lib/pos";
+import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, issueMaintenancePart, recordMaintenancePayment, getTerminalMaintenanceSerials } from "@/lib/pos";
 import { getItemsForPicker } from "@/lib/inventory";
 import { Icon } from "@/components/ui/Icons";
 
@@ -68,13 +68,14 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     if (paid > totalDue) return alert("المبلغ المحصل أكبر من إجمالي العملية");
     setSaving(true);
     try {
-      const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, ...form, approved_cost: totalDue, paid_amount: paid });
+      const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, ...form, approved_cost: totalDue, paid_amount: 0 });
       let ticket = r.data;
       for (const line of cart) {
         const added = await addMaintenancePart(ticket.id, { product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price, serial_item_id: line.serial_item_id });
         const part = (added.data?.parts || []).find((p: any) => p.product_id === line.product_id && p.serial_item_id === line.serial_item_id && p.status !== "issued");
         if (part) await issueMaintenancePart(ticket.id, part.id);
       }
+      if (paid > 0) await recordMaintenancePayment(ticket.id, { session_id: sessionId, amount: paid, payment_method: "cash" });
       alert("تم حفظ عملية الصيانة وصرف القطع من مستودع الصيانة");
       setCart([]); setForm({ customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", approved_cost: "", paid_amount: "" });
       await load();

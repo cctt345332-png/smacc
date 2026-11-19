@@ -53,3 +53,22 @@ class POSMaintenancePart(Base):
     issued_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)
     issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class POSMaintenancePayment(Base):
+    """دفعة صيانة مستقلة تمنع تكرار التحصيل وتربط النقد بجلسة POS."""
+    __tablename__ = "pos_maintenance_payments"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    ticket_id: Mapped[str] = mapped_column(String, ForeignKey("pos_maintenance_tickets.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(String, ForeignKey("pos_sessions.id"), index=True)
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    payment_method: Mapped[str] = mapped_column(String(30), default="cash")
+    journal_entry_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    received_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("ix_pos_maintenance_payments_ticket_created", "ticket_id", "created_at"),
+    )

@@ -17,6 +17,7 @@ export const getMaintenanceManagementReport = (params?: { from_date?: string; to
 export const createMaintenanceTicket = (data: any) => api.post("/pos/maintenance", data);
 export const updateMaintenanceTicket = (id: string, data: any) => api.patch(`/pos/maintenance/${id}`, data);
 export const addMaintenancePart = (id: string, data: any) => api.post(`/pos/maintenance/${id}/parts`, data);
+export const recordMaintenancePayment = (id: string, data: any) => api.post(`/pos/maintenance/${id}/payments`, data);
 export const getMaintenanceSerials = (ticketId: string, productId: string) =>
   api.get(`/pos/maintenance/${ticketId}/serials/${productId}`);
 export const getTerminalMaintenanceSerials = (terminalId: string, productId: string) =>

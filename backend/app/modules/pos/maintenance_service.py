@@ -8,7 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.pos import POSTerminal, POSSession
-from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart
+from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart, POSMaintenancePayment
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem, Warehouse
 
 MAINTENANCE_STATUSES = {"open", "in_progress", "ready", "completed", "cancelled"}
@@ -47,6 +47,19 @@ async def _parts(db: AsyncSession, tenant_id: str, ticket_id: str) -> list[dict]
     } for part, item in rows]
 
 
+async def _payments(db: AsyncSession, tenant_id: str, ticket_id: str) -> list[dict]:
+    rows = (await db.execute(
+        select(POSMaintenancePayment)
+        .where(POSMaintenancePayment.tenant_id == tenant_id, POSMaintenancePayment.ticket_id == ticket_id)
+        .order_by(POSMaintenancePayment.created_at)
+    )).scalars().all()
+    return [{
+        "id": row.id, "session_id": row.session_id, "amount": float(row.amount),
+        "payment_method": row.payment_method, "journal_entry_id": row.journal_entry_id,
+        "received_by": row.received_by, "created_at": row.created_at.isoformat(),
+    } for row in rows]
+
+
 async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -> dict:
     data = {
         "id": ticket.id, "ticket_number": ticket.ticket_number,
@@ -61,6 +74,7 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
     }
     data["parts"] = await _parts(db, tenant_id, ticket.id)
     data["parts_total"] = round(sum(p["total"] for p in data["parts"]), 2)
+    data["payments"] = await _payments(db, tenant_id, ticket.id)
     return data
 
 
@@ -183,6 +197,8 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
     paid_amount = Decimal(str(data.get("paid_amount") or 0))
     if min(estimated_cost, approved_cost, paid_amount) < 0 or paid_amount > approved_cost:
         raise HTTPException(400, "مبلغ التحصيل لا يمكن أن يتجاوز أجرة الصيانة المعتمدة")
+    if paid_amount > 0 and not session_id:
+        raise HTTPException(400, "لا يمكن تسجيل تحصيل بدون جلسة كاشير مفتوحة")
     ticket = POSMaintenanceTicket(
         id=str(uuid.uuid4()), tenant_id=tenant_id, terminal_id=terminal.id,
         session_id=session_id,
@@ -211,7 +227,7 @@ async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: 
         mechanic = await db.get(User, data["assigned_to"])
         if not mechanic or mechanic.tenant_id != tenant_id or not mechanic.is_active:
             raise HTTPException(400, "فني الصيانة غير موجود أو غير فعال")
-    allowed = {"status", "customer_name", "customer_phone", "device_name", "device_serial", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost", "paid_amount"}
+    allowed = {"status", "customer_name", "customer_phone", "device_name", "device_serial", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost"}
     for key in allowed:
         if key in data:
             setattr(ticket, key, Decimal(str(data[key] or 0)) if key in {"estimated_cost", "approved_cost", "paid_amount"} else (data[key] or None if key not in {"status", "device_name", "reported_problem"} else data[key]))
@@ -326,5 +342,38 @@ async def issue_part(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: 
     if ticket.status == "open":
         ticket.status = "in_progress"
     ticket.updated_at = datetime.utcnow()
+    await db.commit()
+    return await _out(db, tenant_id, ticket)
+
+
+async def record_payment(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: str, data: dict):
+    ticket = await _ticket(db, tenant_id, ticket_id)
+    if ticket.status == "cancelled":
+        raise HTTPException(400, "لا يمكن تحصيل تذكرة ملغاة")
+    amount = Decimal(str(data.get("amount") or 0))
+    if amount <= 0:
+        raise HTTPException(400, "مبلغ الدفعة يجب أن يكون أكبر من صفر")
+    outstanding = Decimal(str(ticket.approved_cost or 0)) - Decimal(str(ticket.paid_amount or 0))
+    if amount > outstanding:
+        raise HTTPException(400, "مبلغ الدفعة أكبر من المتبقي على التذكرة")
+    session_id = data.get("session_id") or ticket.session_id
+    if not session_id:
+        raise HTTPException(400, "اختر جلسة كاشير مفتوحة للتحصيل")
+    session = await db.get(POSSession, session_id)
+    if not session or session.tenant_id != tenant_id or session.status != "open" or session.terminal_id != ticket.terminal_id:
+        raise HTTPException(400, "جلسة الكاشير غير صالحة أو لا تخص جهاز التذكرة")
+    method = str(data.get("payment_method") or "cash")
+    if method != "cash":
+        raise HTTPException(400, "تحصيل الصيانة النقدي فقط في هذه المرحلة")
+    db.add(POSMaintenancePayment(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, ticket_id=ticket.id,
+        session_id=session.id, amount=amount, payment_method=method,
+        received_by=user_id, created_at=datetime.utcnow(),
+    ))
+    ticket.paid_amount = Decimal(str(ticket.paid_amount or 0)) + amount
+    ticket.session_id = session.id
+    ticket.updated_at = datetime.utcnow()
+    if ticket.approved_cost and ticket.paid_amount >= ticket.approved_cost:
+        ticket.status = "completed"
     await db.commit()
     return await _out(db, tenant_id, ticket)
