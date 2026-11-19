@@ -672,7 +672,10 @@ class _InvoiceCreateScreenState extends State<InvoiceCreateScreen> {
             return <String, dynamic>{
               'description_ar': line.itemName,
               'quantity': q,
-              'unit_price': p / (1 + t / 100),
+              // سعر بطاقة الصنف شامل الضريبة؛ ترسله الخلفية كما هو
+              // وتفصل الضريبة مرة واحدة عند بناء القيد والفاتورة.
+              'unit_price': p,
+              'prices_include_vat': true,
               'discount_pct': d,
               'vat_rate': t,
               'vat_category': 'S',

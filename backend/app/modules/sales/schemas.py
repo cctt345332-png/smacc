@@ -137,6 +137,7 @@ class InvoiceLineOut(BaseModel):
     quantity: Decimal
     unit: Optional[str]
     unit_price: Decimal
+    unit_price_including_vat: Optional[Decimal] = None
     discount_pct: Decimal
     discount_amount: Decimal
     vat_rate: Decimal

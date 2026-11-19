@@ -125,6 +125,8 @@ export interface InvoicePrintDoc {
     description_en?: string;
     quantity: number;
     unit_price: number;
+    unit_price_including_vat?: number;
+    vat_rate?: number;
     discount_pct?: number;
     subtotal: number;
     vat_amount: number;
@@ -399,7 +401,7 @@ export default function InvoicePrint({ doc, company, party, locale, type }: Prop
                 <th style={{ width: 30 }}>#</th>
                 <th>{ar ? "الوصف" : "Description"}</th>
                 <th style={{ textAlign: "end", width: 60 }}>{ar ? "الكمية" : "Qty"}</th>
-                <th style={{ textAlign: "end", width: 90 }}>{ar ? "سعر الوحدة" : "Unit Price"}</th>
+                <th style={{ textAlign: "end", width: 90 }}>{ar ? "سعر البيع شامل الضريبة" : "Sale Price incl. VAT"}</th>
                 <th style={{ textAlign: "end", width: 70 }}>{ar ? "الخصم" : "Disc."}</th>
                 <th style={{ textAlign: "end", width: 100 }}>{ar ? "قبل الضريبة" : "Taxable"}</th>
                 <th style={{ textAlign: "end", width: 90 }}>{ar ? "ضريبة 15%" : "VAT 15%"}</th>
@@ -417,7 +419,7 @@ export default function InvoicePrint({ doc, company, party, locale, type }: Prop
                     )}
                   </td>
                   <td style={{ textAlign: "end" }}>{fmt(line.quantity)}</td>
-                  <td style={{ textAlign: "end" }}>{fmt(line.unit_price)}</td>
+                  <td style={{ textAlign: "end" }}>{fmt(line.unit_price_including_vat ?? (Number(line.unit_price || 0) * (1 + Number(line.vat_rate || 0) / 100)))}</td>
                   <td style={{ textAlign: "end", color: "#DC2626" }}>
                     {Number(line.discount_pct) > 0 ? `${line.discount_pct}%` : "—"}
                   </td>

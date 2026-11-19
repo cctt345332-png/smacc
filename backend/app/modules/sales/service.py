@@ -1072,6 +1072,13 @@ async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = No
                 invoice.terminal_id, invoice.terminal_name = terminal_by_invoice[invoice.id]
     for invoice in invoices:
         invoice.source = "pos" if (invoice.notes or "").startswith("POS:") else ("representatives" if invoice.rep_id else "admin")
+        for line in invoice.lines or []:
+            # unit_price محفوظ قبل الضريبة للمحاسبة؛ هذا الحقل للعرض كسعر البيع
+            # الذي يراه المستخدم في بطاقة الصنف والفاتورة.
+            line.__dict__["unit_price_including_vat"] = (
+                Decimal(str(line.unit_price or 0))
+                * (Decimal("1") + Decimal(str(line.vat_rate or 0)) / Decimal("100"))
+            ).quantize(Decimal("0.01"))
     return invoices
 
 
@@ -1110,6 +1117,10 @@ async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
             for serial in serial_result.scalars().all()
         }
     for line in inv.lines or []:
+        line.__dict__["unit_price_including_vat"] = (
+            Decimal(str(line.unit_price or 0))
+            * (Decimal("1") + Decimal(str(line.vat_rate or 0)) / Decimal("100"))
+        ).quantize(Decimal("0.01"))
         line_ids: list[str] = []
         if line.serial_item_id:
             line_ids.append(str(line.serial_item_id))
@@ -1198,10 +1209,25 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
     supply_date = data.supply_date.replace(tzinfo=None)
     due_date = data.due_date.replace(tzinfo=None) if data.due_date else None
 
+    # نحدد المندوب قبل الحساب حتى تتوافق الفاتورة مع النسخ القديمة من التطبيق.
+    rep_id = getattr(data, "rep_id", None)
+    if not rep_id:
+        from app.models.reps import SalesRep
+        rep_r = await db.execute(select(SalesRep).where(SalesRep.user_id == user_id))
+        rep = rep_r.scalar_one_or_none()
+        if rep:
+            rep_id = rep.id
+
     lines_data = []
     for i, line in enumerate(data.lines):
-        # السعر الذي يدخله المستخدم هو المعتمد؛ لا نستبدله بسعر بطاقة الصنف.
-        # نخزن السعر الصافي داخلياً عندما يختار المستخدم أن السعر شامل الضريبة.
+        # سعر المندوب الموحد هو سعر بطاقة الصنف الشامل للضريبة، حتى لو أرسلت
+        # نسخة قديمة من التطبيق السعر بعد خصم الضريبة.
+        if rep_id and line.inventory_item_id:
+            item = await db.get(InventoryItem, line.inventory_item_id)
+            if item and item.sale_price and item.sale_price > 0:
+                line.unit_price = item.sale_price
+                line.prices_include_vat = True
+        # نخزن السعر الصافي داخلياً عندما يكون السعر المدخل شاملاً للضريبة.
         if line.prices_include_vat and line.vat_rate > 0:
             line.unit_price = line.unit_price / (Decimal("1") + line.vat_rate / Decimal("100"))
         sub, disc, taxable, vat, tot = _calc_line(line.quantity, line.unit_price, line.discount_pct, line.vat_rate)
@@ -1240,15 +1266,6 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
         customer.address_postal or "",
     ]
     buyer_address = "، ".join(p for p in buyer_address_parts if p)
-
-    # ربط المندوب إن كان المستخدم مندوباً
-    rep_id = getattr(data, "rep_id", None)
-    if not rep_id:
-        from app.models.reps import SalesRep
-        rep_r = await db.execute(select(SalesRep).where(SalesRep.user_id == user_id))
-        rep = rep_r.scalar_one_or_none()
-        if rep:
-            rep_id = rep.id
 
     # فواتير المناديب B2B ضريبية كاملة دائمًا؛ المبسطة مخصصة لـPOS فقط.
     invoice_type = InvoiceType.STANDARD if rep_id else data.invoice_type
@@ -3690,11 +3707,15 @@ async def update_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice
             for i, raw in enumerate(rows):
                 quantity = Decimal(str(raw.get("quantity", 1))); unit_price = Decimal(str(raw.get("unit_price", 0)))
                 discount_pct = Decimal(str(raw.get("discount_pct", 0))); vat_rate = Decimal(str(raw.get("vat_rate", 15)))
+                prices_include_vat = raw.get("prices_include_vat", True)
                 inventory_item_id = raw.get("inventory_item_id")
                 if inventory_item_id:
                     item = await db.get(InventoryItem, inventory_item_id)
-                    if item and item.tracking_type == "serial" and item.sale_price and item.sale_price > 0:
-                        unit_price = item.sale_price / (Decimal("1") + vat_rate / Decimal("100"))
+                    if item and invoice.rep_id and item.sale_price and item.sale_price > 0:
+                        unit_price = item.sale_price
+                        prices_include_vat = True
+                if prices_include_vat and vat_rate > 0:
+                    unit_price = unit_price / (Decimal("1") + vat_rate / Decimal("100"))
                 sub, disc, taxable, vat, tot = _calc_line(quantity, unit_price, discount_pct, vat_rate)
                 subtotal += sub; total_discount += disc; total_vat += vat; total += tot
                 serial_ids = raw.get("serial_ids") or None

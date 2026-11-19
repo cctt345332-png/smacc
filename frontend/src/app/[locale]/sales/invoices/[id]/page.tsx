@@ -468,7 +468,7 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
                 <th>#</th>
                 <th>{ar ? "الوصف" : "Description"}</th>
                 <th style={{ textAlign: "end" }}>{ar ? "الكمية" : "Qty"}</th>
-                <th style={{ textAlign: "end" }}>{ar ? "سعر الوحدة" : "Unit Price"}</th>
+                <th style={{ textAlign: "end" }}>{ar ? "سعر البيع شامل الضريبة" : "Sale Price incl. VAT"}</th>
                 <th style={{ textAlign: "end" }}>{ar ? "الخصم" : "Disc."}</th>
                 <th style={{ textAlign: "end" }}>{ar ? "قبل الضريبة" : "Taxable"}</th>
                 <th style={{ textAlign: "end" }}>{ar ? "ضريبة 15%" : "VAT 15%"}</th>
@@ -484,7 +484,7 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
                     {line.description_en && <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{line.description_en}</div>}
                   </td>
                   <td style={{ textAlign: "end" }}>{fmt(line.quantity)}</td>
-                  <td style={{ textAlign: "end" }}>{fmt(line.unit_price)}</td>
+                  <td style={{ textAlign: "end" }}>{fmt(line.unit_price_including_vat ?? (Number(line.unit_price || 0) * (1 + Number(line.vat_rate || 0) / 100)))}</td>
                   <td style={{ textAlign: "end", color: "var(--danger)" }}>
                     {Number(line.discount_pct) > 0 ? `${line.discount_pct}%` : "—"}
                   </td>
