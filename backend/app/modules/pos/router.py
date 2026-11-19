@@ -114,7 +114,7 @@ async def add_pos_maintenance_service(ticket_id: str, data: dict, user=Depends(r
 
 
 @router.post("/maintenance/{ticket_id}/invoice", status_code=201)
-async def issue_pos_maintenance_invoice(ticket_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+async def issue_pos_maintenance_invoice(ticket_id: str, user=Depends(require_role(["manager", "accountant", "cashier"])), db: AsyncSession = Depends(get_db)):
     return await maintenance_service.issue_invoice(db, user["tenant_id"], user["user_id"], ticket_id)
 
 
