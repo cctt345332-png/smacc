@@ -75,6 +75,7 @@ async def _services(db: AsyncSession, tenant_id: str, ticket_id: str) -> list[di
 async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -> dict:
     terminal = await db.get(POSTerminal, ticket.terminal_id)
     rep = await db.get(SalesRep, ticket.rep_id) if ticket.rep_id else None
+    customer = await db.get(Customer, ticket.customer_id) if ticket.customer_id else None
     rep_name = None
     if rep:
         from app.models.user import User
@@ -85,7 +86,8 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
         "terminal_id": ticket.terminal_id, "session_id": ticket.session_id, "maintenance_warehouse_id": ticket.maintenance_warehouse_id,
         "terminal_name": terminal.name if terminal else None,
         "branch_name": terminal.branch_name if terminal else None,
-        "customer_id": ticket.customer_id, "rep_id": ticket.rep_id, "invoice_id": ticket.invoice_id,
+        "customer_id": ticket.customer_id, "customer_number": customer.customer_number if customer else None,
+        "rep_id": ticket.rep_id, "invoice_id": ticket.invoice_id,
         "rep_name": rep_name,
         "status": ticket.status, "customer_name": ticket.customer_name,
         "customer_phone": ticket.customer_phone, "device_name": ticket.device_name,
