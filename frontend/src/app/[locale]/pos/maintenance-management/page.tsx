@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { addMaintenanceService, createMaintenanceTicket, getMaintenanceManagementReport, getTerminals, issueMaintenanceInvoice, updateMaintenanceTicket } from "@/lib/pos";
 import { getCustomers, createCustomer } from "@/lib/sales";
@@ -16,6 +17,8 @@ const monthStart = `${today.slice(0, 8)}01`;
 export default function MaintenanceManagementPage(props: { params: Promise<{ locale: string }> }) {
   const { locale } = use(props.params);
   const ar = locale === "ar";
+  const searchParams = useSearchParams();
+  const view = searchParams.get("view") === "report" ? "report" : "tickets";
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(today);
   const [status, setStatus] = useState("");
@@ -140,6 +143,8 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
         </div>
       </div>
 
+      <div className="card" style={{ padding: 8, marginBottom: 18, display: "flex", gap: 8, flexWrap: "wrap" }}><Link href={`/${locale}/pos/maintenance-management?view=tickets`} className={`btn ${view === "tickets" ? "btn-primary" : "btn-secondary"}`}><Icon name="receipt" size={15} />{ar ? "طلبات وتذاكر الصيانة" : "Requests & Tickets"}</Link><Link href={`/${locale}/pos/maintenance-management?view=report`} className={`btn ${view === "report" ? "btn-primary" : "btn-secondary"}`}><Icon name="chart" size={15} />{ar ? "التقرير والعهدة" : "Report & Custody"}</Link><Link href={`/${locale}/maintenance/warehouses`} className="btn btn-secondary"><Icon name="inventory" size={15} />{ar ? "مستودعات الصيانة" : "Maintenance Warehouses"}</Link></div>
+
       <div className="card" style={{ padding: 16, marginBottom: 20 }}>
         <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
           <label className="form-group" style={{ margin: 0 }}><span className="form-label">{ar ? "من تاريخ" : "From"}</span><input className="form-input" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
@@ -170,11 +175,11 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
         </div>
       </div>}
 
-      <div className="grid-4" style={{ marginBottom: 20 }}>
+      {view === "report" && <div className="grid-4" style={{ marginBottom: 20 }}>
         {[{ label: ar ? "عدد التذاكر" : "Tickets", value: summary.ticket_count || 0, color: "#2563EB" }, { label: ar ? "إجمالي المعتمد" : "Approved total", value: `${money(summary.approved_total)} SAR`, color: "#7C3AED" }, { label: ar ? "المحصّل" : "Collected", value: `${money(summary.paid_total)} SAR`, color: "#059669" }, { label: ar ? "العهدة المتبقية" : "Outstanding custody", value: `${money(summary.outstanding_total)} SAR`, color: "#D97706" }].map((item) => <div className="stat-card" key={item.label}><div className="stat-value" style={{ color: item.color }}>{item.value}</div><div className="stat-label">{item.label}</div></div>)}
-      </div>
+      </div>}
 
-      <div className="grid-2" style={{ alignItems: "start", marginBottom: 24 }}>
+      {view === "report" && <div className="grid-2" style={{ alignItems: "start", marginBottom: 24 }}>
         <div className="card">
           <div className="card-header"><h3 className="card-title"><Icon name="pos" size={16} />{ar ? "عهدة الأجهزة" : "Terminal custody"}</h3><span className="badge badge-info">{byTerminal.length}</span></div>
           <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "الجهاز" : "Terminal"}</th><th>{ar ? "التذاكر" : "Tickets"}</th><th>{ar ? "القطع" : "Parts"}</th><th>{ar ? "المحصّل" : "Collected"}</th><th>{ar ? "المتبقي" : "Outstanding"}</th></tr></thead><tbody>{byTerminal.map((row: any) => <tr key={row.terminal_id}><td style={{ fontWeight: 700 }}>{row.terminal_name}</td><td>{row.ticket_count}</td><td>{money(row.parts_total)} SAR</td><td style={{ color: "#059669", fontWeight: 700 }}>{money(row.paid_total)} SAR</td><td style={{ color: Number(row.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{money(row.outstanding)} SAR</td></tr>)}</tbody></table></div>
@@ -183,9 +188,9 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
           <div className="card-header"><h3 className="card-title"><Icon name="settings" size={16} />{ar ? "رقابة القطع والتحصيل" : "Parts and collection control"}</h3></div>
           <div style={{ padding: 18, display: "grid", gap: 12 }}><div style={{ display: "flex", justifyContent: "space-between" }}><span>{ar ? "قيمة القطع المصروفة" : "Issued parts value"}</span><b>{money(summary.parts_total)} SAR</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>{ar ? "أجور الصيانة" : "Maintenance fees"}</span><b>{money(summary.fees_total)} SAR</b></div><div style={{ display: "flex", justifyContent: "space-between" }}><span>{ar ? "عدد القطع المصروفة" : "Issued parts count"}</span><b>{summary.issued_parts || 0}</b></div><div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", justifyContent: "space-between", fontWeight: 700 }}><span>{ar ? "إجمالي المطلوب" : "Total approved"}</span><b style={{ color: "var(--primary)" }}>{money(summary.approved_total)} SAR</b></div></div>
         </div>
-      </div>
+      </div>}
 
-      <div className="card"><div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{ar ? "تفاصيل تذاكر الصيانة" : "Maintenance tickets"}</h3><span className="badge badge-gray">{tickets.length}</span></div>{tickets.length === 0 ? <div className="empty-state">{loading ? (ar ? "جاري تحميل التقرير..." : "Loading report...") : (ar ? "لا توجد نتائج ضمن الفلاتر" : "No results for selected filters")}</div> : <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "التذكرة" : "Ticket"}</th><th>{ar ? "الجهاز" : "Device"}</th><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "القطع" : "Parts"}</th><th>{ar ? "الأجرة" : "Fees"}</th><th>{ar ? "المحصّل" : "Collected"}</th><th>{ar ? "المتبقي" : "Outstanding"}</th><th>{ar ? "فاتورة" : "Invoice"}</th><th>{ar ? "التاريخ" : "Date"}</th></tr></thead><tbody>{tickets.map((row: any) => <tr key={row.id}><td style={{ fontWeight: 700, color: "var(--primary)" }}>{row.ticket_number}</td><td>{row.device_name}{row.device_serial ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.device_serial}</div> : null}</td><td>{row.customer_name || "—"}</td><td><select className="form-input form-select" style={{ minWidth: 125, padding: "5px 8px", fontSize: 12 }} value={row.status} onChange={(e) => changeStatus(row, e.target.value)} disabled={row.status === "cancelled"}><option value="open">{statusLabel("open")}</option><option value="in_progress">{statusLabel("in_progress")}</option><option value="ready">{statusLabel("ready")}</option><option value="completed">{statusLabel("completed")}</option><option value="cancelled">{statusLabel("cancelled")}</option></select></td><td>{money(row.parts_total)} SAR</td><td>{money(row.fees_total)} SAR</td><td style={{ color: "#059669", fontWeight: 700 }}>{money(row.paid_amount)} SAR</td><td style={{ color: Number(row.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{money(row.outstanding)} SAR</td><td>{row.invoice_id ? <span className="badge badge-success">{ar ? "صادرة" : "Issued"}</span> : <button className="btn btn-primary btn-sm" onClick={() => issueInvoice(row)} disabled={row.status === "cancelled"}>{ar ? "إصدار" : "Issue"}</button>}</td><td style={{ fontSize: 12, color: "var(--text-muted)" }}>{new Date(row.created_at).toLocaleDateString(ar ? "ar-SA" : "en-GB")}</td></tr>)}</tbody></table></div>}</div>
+      {view === "tickets" && <div className="card"><div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{ar ? "تفاصيل تذاكر الصيانة" : "Maintenance tickets"}</h3><span className="badge badge-gray">{tickets.length}</span></div>{tickets.length === 0 ? <div className="empty-state">{loading ? (ar ? "جاري تحميل التذاكر..." : "Loading tickets...") : (ar ? "لا توجد تذاكر ضمن الفلاتر" : "No tickets for selected filters")}</div> : <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "التذكرة" : "Ticket"}</th><th>{ar ? "الجهاز" : "Device"}</th><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "القطع" : "Parts"}</th><th>{ar ? "الأجرة" : "Fees"}</th><th>{ar ? "المحصّل" : "Collected"}</th><th>{ar ? "المتبقي" : "Outstanding"}</th><th>{ar ? "فاتورة" : "Invoice"}</th><th>{ar ? "التاريخ" : "Date"}</th></tr></thead><tbody>{tickets.map((row: any) => <tr key={row.id}><td style={{ fontWeight: 700, color: "var(--primary)" }}>{row.ticket_number}</td><td>{row.device_name}{row.device_serial ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.device_serial}</div> : null}</td><td>{row.customer_name || "—"}</td><td><select className="form-input form-select" style={{ minWidth: 125, padding: "5px 8px", fontSize: 12 }} value={row.status} onChange={(e) => changeStatus(row, e.target.value)} disabled={row.status === "cancelled"}><option value="open">{statusLabel("open")}</option><option value="in_progress">{statusLabel("in_progress")}</option><option value="ready">{statusLabel("ready")}</option><option value="completed">{statusLabel("completed")}</option><option value="cancelled">{statusLabel("cancelled")}</option></select></td><td>{money(row.parts_total)} SAR</td><td>{money(row.fees_total)} SAR</td><td style={{ color: "#059669", fontWeight: 700 }}>{money(row.paid_amount)} SAR</td><td style={{ color: Number(row.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{money(row.outstanding)} SAR</td><td>{row.invoice_id ? <span className="badge badge-success">{ar ? "صادرة" : "Issued"}</span> : <button className="btn btn-primary btn-sm" onClick={() => issueInvoice(row)} disabled={row.status === "cancelled"}>{ar ? "إصدار" : "Issue"}</button>}</td><td style={{ fontSize: 12, color: "var(--text-muted)" }}>{new Date(row.created_at).toLocaleDateString(ar ? "ar-SA" : "en-GB")}</td></tr>)}</tbody></table></div>}</div>}
     </div>
   );
 }
