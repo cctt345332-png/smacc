@@ -11,6 +11,7 @@ from app.models.pos import POSTerminal, POSSession
 from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart, POSMaintenancePayment
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem, Warehouse
 from app.models.sales import Customer
+from app.models.reps import SalesRep
 
 MAINTENANCE_STATUSES = {"open", "in_progress", "ready", "completed", "cancelled"}
 
@@ -65,7 +66,7 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
     data = {
         "id": ticket.id, "ticket_number": ticket.ticket_number,
         "terminal_id": ticket.terminal_id, "session_id": ticket.session_id, "maintenance_warehouse_id": ticket.maintenance_warehouse_id,
-        "customer_id": ticket.customer_id,
+        "customer_id": ticket.customer_id, "rep_id": ticket.rep_id,
         "status": ticket.status, "customer_name": ticket.customer_name,
         "customer_phone": ticket.customer_phone, "device_name": ticket.device_name,
         "device_serial": ticket.device_serial, "reported_problem": ticket.reported_problem,
@@ -198,6 +199,11 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
         customer = await db.get(Customer, customer_id)
         if not customer or customer.tenant_id != tenant_id or not customer.is_active:
             raise HTTPException(400, "العميل غير موجود أو غير فعال")
+    rep_id = data.get("rep_id") or None
+    if rep_id:
+        rep = await db.get(SalesRep, rep_id)
+        if not rep or rep.tenant_id != tenant_id or not rep.is_active:
+            raise HTTPException(400, "المندوب غير موجود أو غير فعال")
     now = datetime.utcnow()
     estimated_cost = Decimal(str(data.get("estimated_cost") or 0))
     approved_cost = Decimal(str(data.get("approved_cost") or 0))
@@ -211,6 +217,7 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
         session_id=session_id,
         maintenance_warehouse_id=warehouse.id, ticket_number=await _next_number(db, tenant_id),
         customer_id=customer_id,
+        rep_id=rep_id,
         customer_name=(data.get("customer_name") or None), customer_phone=(data.get("customer_phone") or None),
         device_name=device_name, device_serial=(data.get("device_serial") or None),
         reported_problem=problem, diagnosis=(data.get("diagnosis") or None), notes=(data.get("notes") or None),
@@ -239,7 +246,11 @@ async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: 
         customer = await db.get(Customer, data["customer_id"])
         if not customer or customer.tenant_id != tenant_id or not customer.is_active:
             raise HTTPException(400, "العميل غير موجود أو غير فعال")
-    allowed = {"status", "customer_id", "customer_name", "customer_phone", "device_name", "device_serial", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost"}
+    if data.get("rep_id"):
+        rep = await db.get(SalesRep, data["rep_id"])
+        if not rep or rep.tenant_id != tenant_id or not rep.is_active:
+            raise HTTPException(400, "المندوب غير موجود أو غير فعال")
+    allowed = {"status", "customer_id", "rep_id", "customer_name", "customer_phone", "device_name", "device_serial", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost"}
     for key in allowed:
         if key in data:
             setattr(ticket, key, Decimal(str(data[key] or 0)) if key in {"estimated_cost", "approved_cost", "paid_amount"} else (data[key] or None if key not in {"status", "device_name", "reported_problem"} else data[key]))

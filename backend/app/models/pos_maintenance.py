@@ -17,6 +17,7 @@ class POSMaintenanceTicket(Base):
     session_id: Mapped[str | None] = mapped_column(String, ForeignKey("pos_sessions.id"), nullable=True, index=True)
     maintenance_warehouse_id: Mapped[str] = mapped_column(String, ForeignKey("warehouses.id"), index=True)
     customer_id: Mapped[str | None] = mapped_column(String, ForeignKey("customers.id"), nullable=True, index=True)
+    rep_id: Mapped[str | None] = mapped_column(String, ForeignKey("sales_reps.id"), nullable=True, index=True)
     ticket_number: Mapped[str] = mapped_column(String(50), index=True)
     status: Mapped[str] = mapped_column(String(30), default="open", index=True)
     customer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
