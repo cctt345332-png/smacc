@@ -102,6 +102,7 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
     data["payments"] = await _payments(db, tenant_id, ticket.id)
     data["services"] = await _services(db, tenant_id, ticket.id)
     data["services_total"] = round(sum(line["amount"] for line in data["services"]), 2)
+    data["approved_cost"] = max(float(ticket.approved_cost or 0), data["parts_total"] + data["services_total"])
     return data
 
 
@@ -150,7 +151,7 @@ async def management_report(
     for ticket in rows:
         details = await _out(db, tenant_id, ticket)
         ticket_parts = Decimal(str(details["parts_total"]))
-        approved = Decimal(str(ticket.approved_cost or 0))
+        approved = max(Decimal(str(ticket.approved_cost or 0)), Decimal(str(details["parts_total"])) + Decimal(str(details["services_total"])))
         paid = Decimal(str(ticket.paid_amount or 0))
         fees = max(Decimal("0"), approved - ticket_parts)
         outstanding = max(Decimal("0"), approved - paid)
@@ -333,6 +334,7 @@ async def add_part(db: AsyncSession, tenant_id: str, ticket_id: str, data: dict)
         quantity=quantity, unit_price=price, serial_item_id=serial_id,
     )
     db.add(part)
+    ticket.approved_cost = Decimal(str(ticket.approved_cost or 0)) + (quantity * price)
     ticket.updated_at = datetime.utcnow()
     await db.commit()
     return await _out(db, tenant_id, ticket)
@@ -421,7 +423,10 @@ async def record_payment(db: AsyncSession, tenant_id: str, user_id: str, ticket_
     amount = Decimal(str(data.get("amount") or 0))
     if amount <= 0:
         raise HTTPException(400, "مبلغ الدفعة يجب أن يكون أكبر من صفر")
-    outstanding = Decimal(str(ticket.approved_cost or 0)) - Decimal(str(ticket.paid_amount or 0))
+    parts = await _parts(db, tenant_id, ticket.id)
+    services = await _services(db, tenant_id, ticket.id)
+    effective_total = max(Decimal(str(ticket.approved_cost or 0)), sum((Decimal(str(part["total"])) for part in parts), Decimal("0")) + sum((Decimal(str(line["amount"])) for line in services), Decimal("0")))
+    outstanding = effective_total - Decimal(str(ticket.paid_amount or 0))
     if amount > outstanding:
         raise HTTPException(400, "مبلغ الدفعة أكبر من المتبقي على التذكرة")
     session_id = data.get("session_id") or ticket.session_id
