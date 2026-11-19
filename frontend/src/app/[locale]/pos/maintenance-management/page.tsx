@@ -2,7 +2,9 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { createMaintenanceTicket, getMaintenanceManagementReport, getTerminals, updateMaintenanceTicket } from "@/lib/pos";
+import { createMaintenanceTicket, getMaintenanceManagementReport, getTerminals, getTerminalMaintenanceSerials, updateMaintenanceTicket } from "@/lib/pos";
+import { getCustomers, createCustomer } from "@/lib/sales";
+import { getItemsForPicker } from "@/lib/inventory";
 import StructuredReportPrintButton from "@/components/documents/StructuredReportPrintButton";
 import { Icon } from "@/components/ui/Icons";
 
@@ -18,11 +20,15 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
   const [status, setStatus] = useState("");
   const [terminalId, setTerminalId] = useState("");
   const [terminals, setTerminals] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [catalog, setCatalog] = useState<any[]>([]);
+  const [serials, setSerials] = useState<any[]>([]);
+  const [newCustomer, setNewCustomer] = useState(false);
   const [data, setData] = useState<any>({ summary: {}, by_terminal: [], tickets: [] });
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ terminal_id: "", customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", notes: "" });
+  const [form, setForm] = useState({ terminal_id: "", customer_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", notes: "" });
 
   const load = async () => {
     setLoading(true);
@@ -42,15 +48,36 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
   };
 
   const addDevice = async () => {
-    if (!form.terminal_id || !form.device_name.trim() || !form.reported_problem.trim()) {
-      alert(ar ? "اختر جهاز الكاشير واكتب اسم الجهاز ووصف العطل" : "Select a terminal and enter the device name and problem");
+    const product = catalog.find((item) => item.id === form.product_id);
+    if (!form.terminal_id || !product || !form.reported_problem.trim()) {
+      alert(ar ? "اختر جهاز الكاشير والصنف من الكتالوج واكتب وصف العطل" : "Select a terminal, catalog product, and enter the problem");
+      return;
+    }
+    if (product.tracking_type === "serial" && !form.device_serial) {
+      alert(ar ? "اختر سيريال الجهاز من السيريالات المتاحة" : "Select the device serial from available serials");
       return;
     }
     setSaving(true);
     try {
-      await createMaintenanceTicket({ ...form, estimated_cost: 0, approved_cost: 0, paid_amount: 0 });
+      let customerId = form.customer_id || "";
+      let customerName = form.customer_name.trim();
+      let customerPhone = form.customer_phone.trim();
+      if (newCustomer) {
+        if (!customerName) throw new Error(ar ? "اكتب اسم العميل الجديد" : "Enter the new customer name");
+        const created = await createCustomer({ customer_type: "individual", name_ar: customerName, phone: customerPhone || undefined });
+        customerId = created.data.id;
+        setCustomers((old) => [created.data, ...old]);
+      } else if (!customerId) {
+        throw new Error(ar ? "اختر عميلًا أو فعّل تسجيل عميل جديد" : "Select a customer or enable new customer");
+      } else {
+        const customer = customers.find((row) => row.id === customerId);
+        customerName = customer?.name_ar || customerName;
+        customerPhone = customer?.phone || customerPhone;
+      }
+      await createMaintenanceTicket({ terminal_id: form.terminal_id, customer_id: customerId, customer_name: customerName, customer_phone: customerPhone, device_name: product.name_ar, device_serial: form.device_serial || null, reported_problem: form.reported_problem, notes: form.notes, estimated_cost: 0, approved_cost: 0, paid_amount: 0 });
       alert(ar ? "تمت إضافة الجهاز للصيانة" : "Device added to maintenance");
-      setForm({ terminal_id: "", customer_name: "", customer_phone: "", device_name: "", device_serial: "", reported_problem: "", notes: "" });
+      setForm({ terminal_id: "", customer_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", notes: "" });
+      setSerials([]); setNewCustomer(false);
       setShowAdd(false);
       await load();
     } catch (error: any) {
@@ -71,6 +98,8 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
 
   useEffect(() => {
     getTerminals().then((result) => setTerminals(result.data || [])).catch(() => setTerminals([]));
+    getCustomers().then((result) => setCustomers(result.data || [])).catch(() => setCustomers([]));
+    getItemsForPicker({}).then((result) => setCatalog(result.data || [])).catch(() => setCatalog([]));
     load();
   }, []);
 
@@ -110,11 +139,14 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
           <div className="card-header" style={{ padding: 0, marginBottom: 16 }}><h3 className="card-title"><Icon name="settings" size={17} />{ar ? "إضافة جهاز للصيانة" : "Add maintenance device"}</h3><button className="btn btn-ghost btn-sm" onClick={() => setShowAdd(false)}>×</button></div>
           <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "0 0 14px" }}>{ar ? "سيتم تسجيل الجهاز كتذكرة صيانة بدون تحصيل نقدي. التحصيل وصرف القطع يتمان من شاشة تشغيل الصيانة المرتبطة بجلسة الكاشير." : "The device is registered without collection. Collection and parts issue are completed from the maintenance counter linked to a cashier session."}</p>
           <div className="grid-2">
-            <label className="form-group"><span className="form-label">{ar ? "جهاز الكاشير *" : "Terminal *"}</span><select className="form-input form-select" value={form.terminal_id} onChange={(e) => setForm({ ...form, terminal_id: e.target.value })}><option value="">{ar ? "اختر الجهاز" : "Select terminal"}</option>{terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name}</option>)}</select></label>
-            <label className="form-group"><span className="form-label">{ar ? "اسم الجهاز *" : "Device name *"}</span><input className="form-input" value={form.device_name} onChange={(e) => setForm({ ...form, device_name: e.target.value })} placeholder={ar ? "مثال: آيفون 15" : "e.g. iPhone 15"} /></label>
+            <label className="form-group"><span className="form-label">{ar ? "جهاز الكاشير *" : "Terminal *"}</span><select className="form-input form-select" value={form.terminal_id} onChange={(e) => { setForm({ ...form, terminal_id: e.target.value, device_serial: "" }); setSerials([]); }}><option value="">{ar ? "اختر الجهاز" : "Select terminal"}</option>{terminals.map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name}</option>)}</select></label>
+            <label className="form-group"><span className="form-label">{ar ? "الصنف من الكتالوج *" : "Catalog product *"}</span><select className="form-input form-select" value={form.product_id} onChange={async (e) => { const productId = e.target.value; const product = catalog.find((item) => item.id === productId); setForm({ ...form, product_id: productId, device_serial: "" }); setSerials([]); if (product?.tracking_type === "serial" && form.terminal_id) { try { const result = await getTerminalMaintenanceSerials(form.terminal_id, productId); setSerials(result.data || []); } catch { setSerials([]); } } }}><option value="">{ar ? "اختر الصنف" : "Select product"}</option>{catalog.map((item) => <option key={item.id} value={item.id}>{item.name_ar}{item.sku ? ` — ${item.sku}` : ""}</option>)}</select></label>
           </div>
-          <div className="grid-2" style={{ marginTop: 10 }}><label className="form-group"><span className="form-label">{ar ? "اسم العميل" : "Customer name"}</span><input className="form-input" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "الجوال" : "Phone"}</span><input className="form-input" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} /></label></div>
-          <div className="grid-2" style={{ marginTop: 10 }}><label className="form-group"><span className="form-label">{ar ? "السيريال / IMEI" : "Serial / IMEI"}</span><input className="form-input" value={form.device_serial} onChange={(e) => setForm({ ...form, device_serial: e.target.value })} /></label><label className="form-group"><span className="form-label">{ar ? "وصف العطل *" : "Problem *"}</span><input className="form-input" value={form.reported_problem} onChange={(e) => setForm({ ...form, reported_problem: e.target.value })} /></label></div>
+          <div className="grid-2" style={{ marginTop: 10 }}>
+            <label className="form-group"><span className="form-label">{ar ? "العميل *" : "Customer *"}</span>{newCustomer ? <input className="form-input" placeholder={ar ? "اسم العميل الجديد" : "New customer name"} value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value, customer_id: "" })} /> : <select className="form-input form-select" value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })}><option value="">{ar ? "اختر العميل" : "Select customer"}</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name_ar} — {customer.customer_number}</option>)}</select>}<button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 5 }} onClick={() => { setNewCustomer(!newCustomer); setForm({ ...form, customer_id: "", customer_name: "", customer_phone: "" }); }}>{newCustomer ? (ar ? "اختيار عميل موجود" : "Choose existing customer") : (ar ? "العميل غير موجود؟ تسجيل جديد" : "Customer not found? Register new")}</button></label>
+            <label className="form-group"><span className="form-label">{ar ? "الجوال" : "Phone"}</span><input className="form-input" value={form.customer_phone} onChange={(e) => setForm({ ...form, customer_phone: e.target.value })} /></label>
+          </div>
+          <div className="grid-2" style={{ marginTop: 10 }}><label className="form-group"><span className="form-label">{ar ? "سيريال الجهاز" : "Device serial"}</span>{catalog.find((item) => item.id === form.product_id)?.tracking_type === "serial" ? <select className="form-input form-select" value={form.device_serial} onChange={(e) => setForm({ ...form, device_serial: e.target.value })}><option value="">{ar ? "اختر السيريال" : "Select serial"}</option>{serials.map((serial) => <option key={serial.id} value={serial.serial_number}>{serial.serial_number}</option>)}</select> : <span className="form-hint">{ar ? "هذا الصنف غير متتبع بالسيريال" : "This product is not serial-tracked"}</span>}</label><label className="form-group"><span className="form-label">{ar ? "وصف المشكلة *" : "Problem *"}</span><textarea className="form-input" rows={2} value={form.reported_problem} onChange={(e) => setForm({ ...form, reported_problem: e.target.value })} placeholder={ar ? "اكتب العطل بالتفصيل" : "Describe the problem"} /></label></div>
           <label className="form-group" style={{ marginTop: 10 }}><span className="form-label">{ar ? "ملاحظات" : "Notes"}</span><textarea className="form-input" rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></label>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button className="btn btn-secondary" onClick={() => setShowAdd(false)}>{ar ? "إلغاء" : "Cancel"}</button><button className="btn btn-primary" onClick={addDevice} disabled={saving}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الجهاز" : "Save device")}</button></div>
         </div>
