@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import cast, func, select, Text
+from sqlalchemy import cast, func, or_, select, Text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -130,7 +130,10 @@ async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to
         } for outflow in outflow_rows)
         payment_rows = (await db.execute(select(Payment, Invoice, POSTransaction).join(
             Invoice, Invoice.id == Payment.invoice_id
-        ).join(POSTransaction, POSTransaction.invoice_id == Invoice.id).where(
+        ).join(POSTransaction, or_(
+            POSTransaction.invoice_id == Invoice.id,
+            POSTransaction.transaction_number == Payment.reference,
+        )).where(
             Payment.tenant_id == tenant_id, Payment.payment_type == "receipt",
             Payment.payment_method == "cash", Payment.status != "cancelled",
             Invoice.tenant_id == tenant_id, POSTransaction.session_id == session.id,
