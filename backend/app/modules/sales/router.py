@@ -10,6 +10,7 @@ from app.core.plan_limits import check_plan_limit
 from app.core.stocktake_guard import mandatory_stocktake_guard
 from app.modules.sales import service
 from app.modules.sales import orders_service
+from app.modules.sales import reconciliation_service
 from app.modules.reps import service as reps_service
 from app.modules.accounting.schemas import AccountOut
 from app.modules.sales.schemas import (
@@ -557,6 +558,47 @@ async def customer_statement(
     db: AsyncSession = Depends(get_db),
 ):
     return await orders_service.get_customer_statement(db, user["tenant_id"], customer_id, from_date, to_date, account_id)
+
+
+# ─── Customer balance reconciliations ─────────────────────────────────
+@router.get("/balance-reconciliations")
+async def list_balance_reconciliations(
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
+    customer_id: str | None = Query(None),
+    rep_id: str | None = Query(None),
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await reconciliation_service.list_reconciliations(db, user["tenant_id"], from_date, to_date, customer_id, rep_id)
+
+
+@router.post("/balance-reconciliations", status_code=201)
+async def create_balance_reconciliation(
+    data: dict,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await reconciliation_service.create_reconciliation(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.patch("/balance-reconciliations/{reconciliation_id}")
+async def update_balance_reconciliation(
+    reconciliation_id: str,
+    data: dict,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await reconciliation_service.update_reconciliation(db, user["tenant_id"], reconciliation_id, data)
+
+
+@router.delete("/balance-reconciliations/{reconciliation_id}")
+async def delete_balance_reconciliation(
+    reconciliation_id: str,
+    user=Depends(require_role(["manager", "accountant"])),
+    db: AsyncSession = Depends(get_db),
+):
+    return await reconciliation_service.delete_reconciliation(db, user["tenant_id"], reconciliation_id)
 
 
 # ─── Invoice PDF (HTML قابل للطباعة) ─────────────────────────────────

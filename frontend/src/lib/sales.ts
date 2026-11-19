@@ -79,6 +79,12 @@ export const convertOrderToInvoice = (id: string) => api.post(`/sales/orders/${i
 export const getCustomerStatement = (customerId: string, fromDate: string, toDate: string, accountId?: string) =>
   api.get(`/sales/customers/${customerId}/statement`, { params: { from_date: fromDate, to_date: toDate, ...(accountId ? { account_id: accountId } : {}) } });
 
+// مطابقة أرصدة العملاء — تحفظ نسخة من الكشف دون تعديل الفواتير أو السندات
+export const getBalanceReconciliations = (params?: any) => api.get("/sales/balance-reconciliations", { params });
+export const createBalanceReconciliation = (data: any) => api.post("/sales/balance-reconciliations", data);
+export const updateBalanceReconciliation = (id: string, data: any) => api.patch(`/sales/balance-reconciliations/${id}`, data);
+export const deleteBalanceReconciliation = (id: string) => api.delete(`/sales/balance-reconciliations/${id}`);
+
 // Sales debit notes
 export const getSalesDebitNotes = () => api.get("/sales/debit-notes");
 export const createSalesDebitNote = (data: any) => api.post("/sales/debit-notes", data);

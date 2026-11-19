@@ -24,3 +24,4 @@ from app.models.maintenance import MaintenanceRequest, MaintenanceStatusLog
 from app.models.vehicle_maintenance import RepVehicle, VehicleMaintenanceRecord
 from app.models.expenses import RepExpense, RepExpenseAttachment
 from app.models.audit import AuditLog
+from app.models.customer_reconciliation import CustomerBalanceReconciliation
