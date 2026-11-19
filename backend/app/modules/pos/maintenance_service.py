@@ -11,6 +11,8 @@ from app.models.pos import POSTerminal, POSSession
 from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem, Warehouse
 
+MAINTENANCE_STATUSES = {"open", "in_progress", "ready", "completed", "cancelled"}
+
 
 async def _ticket(db: AsyncSession, tenant_id: str, ticket_id: str) -> POSMaintenanceTicket:
     row = await db.scalar(select(POSMaintenanceTicket).where(
@@ -200,6 +202,10 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
 
 async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: dict):
     ticket = await _ticket(db, tenant_id, ticket_id)
+    if ticket.status in {"completed", "cancelled"} and any(key != "status" for key in data):
+        raise HTTPException(400, "لا يمكن تعديل تذكرة مكتملة أو ملغاة؛ أنشئ إجراء تصحيح إداري مستقل")
+    if "status" in data and data["status"] not in MAINTENANCE_STATUSES:
+        raise HTTPException(400, "حالة الصيانة غير صحيحة")
     if data.get("assigned_to"):
         from app.models.user import User
         mechanic = await db.get(User, data["assigned_to"])
@@ -209,6 +215,9 @@ async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: 
     for key in allowed:
         if key in data:
             setattr(ticket, key, Decimal(str(data[key] or 0)) if key in {"estimated_cost", "approved_cost", "paid_amount"} else (data[key] or None if key not in {"status", "device_name", "reported_problem"} else data[key]))
+    if ticket.approved_cost is not None and ticket.paid_amount is not None:
+        if min(Decimal(str(ticket.approved_cost)), Decimal(str(ticket.paid_amount))) < 0 or Decimal(str(ticket.paid_amount)) > Decimal(str(ticket.approved_cost)):
+            raise HTTPException(400, "المبلغ المحصل لا يمكن أن يتجاوز المبلغ المعتمد")
     ticket.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(ticket)
@@ -275,6 +284,8 @@ async def get_terminal_part_serials(db: AsyncSession, tenant_id: str, terminal_i
 
 async def issue_part(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: str, part_id: str):
     ticket = await _ticket(db, tenant_id, ticket_id)
+    if ticket.status in {"completed", "cancelled"}:
+        raise HTTPException(400, "لا يمكن صرف قطعة لتذكرة مكتملة أو ملغاة")
     part = await db.scalar(select(POSMaintenancePart).where(POSMaintenancePart.id == part_id, POSMaintenancePart.ticket_id == ticket.id, POSMaintenancePart.tenant_id == tenant_id))
     if not part:
         raise HTTPException(404, "قطعة الصيانة غير موجودة")
@@ -299,6 +310,8 @@ async def issue_part(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: 
         part.status = "issued"
         part.issued_by = user_id
         part.issued_at = datetime.utcnow()
+        if ticket.status == "open":
+            ticket.status = "in_progress"
         ticket.updated_at = datetime.utcnow()
         await db.commit()
         return await _out(db, tenant_id, ticket)
@@ -310,6 +323,8 @@ async def issue_part(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: 
     part.status = "issued"
     part.issued_by = user_id
     part.issued_at = datetime.utcnow()
+    if ticket.status == "open":
+        ticket.status = "in_progress"
     ticket.updated_at = datetime.utcnow()
     await db.commit()
     return await _out(db, tenant_id, ticket)
