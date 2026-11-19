@@ -74,3 +74,16 @@ class POSMaintenancePayment(Base):
     __table_args__ = (
         Index("ix_pos_maintenance_payments_ticket_created", "ticket_id", "created_at"),
     )
+
+
+class POSMaintenanceServiceLine(Base):
+    """خدمة عمل على التذكرة مثل الفحص أو تغيير الشاشة، منفصلة عن قطع المخزون."""
+    __tablename__ = "pos_maintenance_service_lines"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    ticket_id: Mapped[str] = mapped_column(String, ForeignKey("pos_maintenance_tickets.id", ondelete="CASCADE"), index=True)
+    service_name: Mapped[str] = mapped_column(String(300))
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

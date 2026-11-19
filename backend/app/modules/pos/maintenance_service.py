@@ -8,7 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.pos import POSTerminal, POSSession
-from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart, POSMaintenancePayment
+from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart, POSMaintenancePayment, POSMaintenanceServiceLine
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem, Warehouse
 from app.models.sales import Customer
 from app.models.reps import SalesRep
@@ -62,6 +62,14 @@ async def _payments(db: AsyncSession, tenant_id: str, ticket_id: str) -> list[di
     } for row in rows]
 
 
+async def _services(db: AsyncSession, tenant_id: str, ticket_id: str) -> list[dict]:
+    rows = (await db.execute(select(POSMaintenanceServiceLine).where(
+        POSMaintenanceServiceLine.tenant_id == tenant_id,
+        POSMaintenanceServiceLine.ticket_id == ticket_id,
+    ).order_by(POSMaintenanceServiceLine.created_at))).scalars().all()
+    return [{"id": row.id, "service_name": row.service_name, "amount": float(row.amount), "created_by": row.created_by, "created_at": row.created_at.isoformat()} for row in rows]
+
+
 async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -> dict:
     data = {
         "id": ticket.id, "ticket_number": ticket.ticket_number,
@@ -78,6 +86,8 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
     data["parts"] = await _parts(db, tenant_id, ticket.id)
     data["parts_total"] = round(sum(p["total"] for p in data["parts"]), 2)
     data["payments"] = await _payments(db, tenant_id, ticket.id)
+    data["services"] = await _services(db, tenant_id, ticket.id)
+    data["services_total"] = round(sum(line["amount"] for line in data["services"]), 2)
     return data
 
 
@@ -398,5 +408,23 @@ async def record_payment(db: AsyncSession, tenant_id: str, user_id: str, ticket_
     ticket.updated_at = datetime.utcnow()
     if ticket.approved_cost and ticket.paid_amount >= ticket.approved_cost:
         ticket.status = "completed"
+    await db.commit()
+    return await _out(db, tenant_id, ticket)
+
+
+async def add_service(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: str, data: dict):
+    ticket = await _ticket(db, tenant_id, ticket_id)
+    if ticket.status in {"completed", "cancelled"}:
+        raise HTTPException(400, "لا يمكن إضافة خدمة لتذكرة مكتملة أو ملغاة")
+    name = str(data.get("service_name") or "").strip()
+    amount = Decimal(str(data.get("amount") or 0))
+    if not name or amount <= 0:
+        raise HTTPException(400, "اسم الخدمة والسعر مطلوبان ويجب أن يكون السعر أكبر من صفر")
+    db.add(POSMaintenanceServiceLine(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, ticket_id=ticket.id,
+        service_name=name, amount=amount, created_by=user_id, created_at=datetime.utcnow(),
+    ))
+    ticket.approved_cost = Decimal(str(ticket.approved_cost or 0)) + amount
+    ticket.updated_at = datetime.utcnow()
     await db.commit()
     return await _out(db, tenant_id, ticket)
