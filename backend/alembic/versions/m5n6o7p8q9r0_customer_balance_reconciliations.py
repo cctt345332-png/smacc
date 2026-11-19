@@ -1,12 +1,12 @@
 """customer balance reconciliations
 
-Revision ID: m5n6o7p8q9r0
+Revision ID: n7p8q9r0s1t2
 Revises: l3m4n5o6p7q8
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "m5n6o7p8q9r0"
+revision = "n7p8q9r0s1t2"
 down_revision = "l3m4n5o6p7q8"
 branch_labels = None
 depends_on = None
