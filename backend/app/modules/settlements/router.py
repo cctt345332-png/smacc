@@ -103,6 +103,7 @@ async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to
     sessions = (await db.execute(q.order_by(POSSession.closed_at.asc()))).scalars().all()
     result = []
     source_transactions = []
+    source_outflows = []
     for index, session in enumerate(sessions):
         oq = select(func.coalesce(func.sum(POSCashOutflow.amount), 0)).where(
             POSCashOutflow.tenant_id == tenant_id,
@@ -120,36 +121,30 @@ async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to
             "cash_outflows": float(outflows),
             "expected": float(Decimal(str(session.total_cash or 0)) + opening - outflows),
         })
-        tx_rows = (await db.execute(select(POSTransaction).where(
-            POSTransaction.tenant_id == tenant_id,
-            POSTransaction.session_id == session.id,
+        outflow_rows = (await db.execute(select(POSCashOutflow).where(
+            POSCashOutflow.tenant_id == tenant_id, POSCashOutflow.session_id == session.id,
+        ).order_by(POSCashOutflow.created_at.asc()))).scalars().all()
+        source_outflows.extend({
+            "outflow_id": outflow.id, "date": outflow.created_at.isoformat() if outflow.created_at else None,
+            "description": outflow.description or outflow.outflow_type, "amount": float(outflow.amount or 0),
+        } for outflow in outflow_rows)
+        payment_rows = (await db.execute(select(Payment, Invoice, POSTransaction).join(
+            Invoice, Invoice.id == Payment.invoice_id
+        ).join(POSTransaction, POSTransaction.invoice_id == Invoice.id).where(
+            Payment.tenant_id == tenant_id, Payment.payment_type == "receipt",
+            Payment.payment_method == "cash", Payment.status != "cancelled",
+            Invoice.tenant_id == tenant_id, POSTransaction.session_id == session.id,
             POSTransaction.status != "refunded",
-        ).order_by(POSTransaction.created_at.asc()))).scalars().all()
-        for tx in tx_rows:
-            method = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
-            if method == "cash":
-                cash_amount = Decimal(str(tx.total or 0))
-            elif method == "split":
-                cash_amount = max(Decimal("0"), Decimal(str(tx.total or 0)) - Decimal(str(tx.card_amount or 0)))
-            else:
-                cash_amount = Decimal("0")
-            if cash_amount <= 0:
-                continue
-            invoice_number = None
-            if tx.invoice_id:
-                invoice_number = await db.scalar(select(Invoice.invoice_number).where(
-                    Invoice.id == tx.invoice_id, Invoice.tenant_id == tenant_id
-                ))
+        ).order_by(Payment.payment_date.asc(), Payment.payment_number.asc()))).all()
+        for payment, invoice, tx in payment_rows:
             source_transactions.append({
-                "transaction_id": tx.id,
+                "transaction_id": tx.id, "payment_id": payment.id,
                 "transaction_number": tx.transaction_number,
-                "invoice_id": tx.invoice_id,
-                "invoice_number": invoice_number,
-                "date": tx.created_at.isoformat() if tx.created_at else None,
-                "payment_method": method,
-                "amount": float(cash_amount),
+                "invoice_id": invoice.id, "invoice_number": invoice.invoice_number,
+                "date": payment.payment_date.isoformat() if payment.payment_date else None,
+                "payment_method": "cash", "amount": float(payment.amount or 0),
             })
-    return {"sessions": result, "transactions": source_transactions}
+    return {"sessions": result, "transactions": source_transactions, "outflows": source_outflows}
 
 
 async def _rep_breakdown(db, tenant_id, source_id, last, date_from=None, date_to=None):
@@ -302,6 +297,7 @@ async def source_breakdown(source_type: str, source_id: str, date_from: str | No
         sessions = details["sessions"]
         return {"source_type": source_type, "source_id": source_id, "rows": sessions,
                 "transactions": details["transactions"], "invoices": details["transactions"],
+                "receipts": details["transactions"], "expenses": details["outflows"],
                 "totals": {"cash_sales": sum(x["cash_sales"] for x in sessions),
                            "opening_cash": sum(x["opening_cash"] for x in sessions),
                            "cash_outflows": sum(x["cash_outflows"] for x in sessions),

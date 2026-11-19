@@ -19,6 +19,7 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
   const [received, setReceived] = useState("");
   const [notes, setNotes] = useState("");
   const [detail, setDetail] = useState<any>(null);
+  const [detailTab, setDetailTab] = useState<"invoices" | "receipts" | "expenses">("invoices");
   const [editRow, setEditRow] = useState<any>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -67,6 +68,7 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
     let active = true;
     const loadDetail = async () => {
       if (!current) { setDetail(null); return; }
+      setDetailTab("invoices");
       try {
         if (current.source_type === "pos") {
           const { data } = await getSettlementBreakdown({ source_type: "pos", source_id: current.source_id, date_from: dateFrom || undefined, date_to: dateTo || undefined });
@@ -127,15 +129,18 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
       <div className="card" style={{ padding: 20, minHeight: 240 }}>
         <h2 style={{ marginTop: 0 }}>{ar ? "مصادر النقد بالتفصيل" : "Detailed cash sources"}</h2>
         {!current && <div style={{ color: "var(--text-muted)", padding: "32px 0", textAlign: "center" }}>{ar ? "اختر العهدة لعرض الفواتير والسندات" : "Select a custody to view invoices and receipts"}</div>}
-        {detail?.pos && <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, fontSize: 13, marginBottom: 12 }}><div>{ar ? "مبيعات نقدية" : "Cash sales"}<br /><b>{money(detail.totals.cash_sales)} SAR</b></div><div>{ar ? "الافتتاحي" : "Opening"}<br /><b>{money(detail.totals.opening_cash)} SAR</b></div><div>{ar ? "المخرجات" : "Outflows"}<br /><b>{money(detail.totals.cash_outflows)} SAR</b></div><div>{ar ? "المتوقع" : "Expected"}<br /><b>{money(detail.totals.expected)} SAR</b></div></div>
-          <h3>{ar ? "فواتير النقد لنقطة البيع" : "POS cash invoices"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم الفاتورة" : "Invoice"}</th><th>{ar ? "رقم العملية" : "Transaction"}</th><th>{ar ? "طريقة الدفع" : "Method"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.transactions || []).map((x: any) => <tr key={x.transaction_id}><td>{day(x.date, ar)}</td><td>{x.invoice_number || "—"}</td><td>{x.transaction_number}</td><td>{x.payment_method === "split" ? (ar ? "مختلط" : "Split") : (ar ? "نقدي" : "Cash")}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
-        </>}
-        {detail && !detail.pos && <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, fontSize: 13, marginBottom: 12 }}><div>{ar ? "الفواتير" : "Invoices"}<br /><b>{money(detail.totals.invoices)} SAR</b></div><div>{ar ? "السندات النقدية" : "Cash receipts"}<br /><b>{money(detail.totals.receipts)} SAR</b></div><div>{ar ? "المصروفات" : "Expenses"}<br /><b>{money(detail.totals.expenses)} SAR</b></div></div>
-          <h3>{ar ? "فواتير المندوب" : "Representative invoices"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم الفاتورة" : "Invoice"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.invoices || []).map((x: any) => <tr key={x.invoice_id}><td>{day(x.date, ar)}</td><td>{x.invoice_number}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
-          <h3>{ar ? "سندات القبض النقدية" : "Cash receipt vouchers"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم السند" : "Voucher"}</th><th>{ar ? "الفاتورة المرتبطة" : "Invoice"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.receipts || []).map((x: any) => <tr key={x.payment_id}><td>{day(x.date, ar)}</td><td>{x.payment_number}</td><td>{x.invoice_number || "—"}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
-          <h3>{ar ? "المصروفات المعتمدة" : "Approved expenses"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "البيان" : "Description"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.expenses || []).map((x: any) => <tr key={x.expense_id}><td>{day(x.date, ar)}</td><td>{x.description || "—"}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
+        {detail && <>
+          <div style={{ display: "grid", gridTemplateColumns: detail.pos ? "repeat(4,1fr)" : "repeat(3,1fr)", gap: 8, fontSize: 13, marginBottom: 12 }}>
+            {detail.pos ? <><div>{ar ? "مبيعات نقدية" : "Cash sales"}<br /><b>{money(detail.totals.cash_sales)} SAR</b></div><div>{ar ? "الافتتاحي" : "Opening"}<br /><b>{money(detail.totals.opening_cash)} SAR</b></div><div>{ar ? "المخرجات" : "Outflows"}<br /><b>{money(detail.totals.cash_outflows)} SAR</b></div><div>{ar ? "المتوقع" : "Expected"}<br /><b>{money(detail.totals.expected)} SAR</b></div></> : <><div>{ar ? "الفواتير" : "Invoices"}<br /><b>{money(detail.totals.invoices)} SAR</b></div><div>{ar ? "السندات النقدية" : "Cash receipts"}<br /><b>{money(detail.totals.receipts)} SAR</b></div><div>{ar ? "المصروفات" : "Expenses"}<br /><b>{money(detail.totals.expenses)} SAR</b></div></>}
+          </div>
+          <div style={{ display: "flex", gap: 6, borderBottom: "1px solid #E2E8F0", marginBottom: 10 }}>
+            {([["invoices", ar ? "الفواتير" : "Invoices"], ["receipts", ar ? "السندات" : "Receipts"], ["expenses", ar ? "المصروفات" : "Expenses"]] as const).map(([key, label]) => <button key={key} type="button" className={detailTab === key ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"} onClick={() => setDetailTab(key)}>{label}</button>)}
+          </div>
+          <div className="table-wrapper" style={{ maxHeight: 300, overflowY: "auto" }}>
+            {detailTab === "invoices" && <table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم الفاتورة" : "Invoice"}</th><th>{detail.pos && (ar ? "رقم العملية" : "Transaction")}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.invoices || []).map((x: any) => <tr key={x.invoice_id || x.transaction_id}><td>{day(x.date, ar)}</td><td>{x.invoice_number || "—"}</td><td>{detail.pos ? x.transaction_number : ""}</td><td>{money(x.amount)}</td></tr>)}</tbody><tfoot><tr><th colSpan={3}>{ar ? "إجمالي الفواتير" : "Total invoices"}</th><th>{money(detail.totals.invoices || (detail.totals.transaction_cash || 0))} SAR</th></tr></tfoot></table>}
+            {detailTab === "receipts" && <table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم السند" : "Voucher"}</th><th>{ar ? "الفاتورة المرتبطة" : "Invoice"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.receipts || []).map((x: any) => <tr key={x.payment_id || x.transaction_id}><td>{day(x.date, ar)}</td><td>{x.payment_number || x.transaction_number || "—"}</td><td>{x.invoice_number || "—"}</td><td>{money(x.amount)}</td></tr>)}</tbody><tfoot><tr><th colSpan={3}>{ar ? "إجمالي السندات" : "Total receipts"}</th><th>{money(detail.totals.receipts || detail.totals.transaction_cash)} SAR</th></tr></tfoot></table>}
+            {detailTab === "expenses" && <table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "البيان" : "Description"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.expenses || []).map((x: any) => <tr key={x.expense_id || x.outflow_id}><td>{day(x.date, ar)}</td><td>{x.description || "—"}</td><td>{money(x.amount)}</td></tr>)}</tbody><tfoot><tr><th colSpan={2}>{ar ? "إجمالي المصروفات" : "Total expenses"}</th><th>{money(detail.totals.expenses || detail.totals.cash_outflows)} SAR</th></tr></tfoot></table>}
+          </div>
         </>}
       </div>
     </div>
