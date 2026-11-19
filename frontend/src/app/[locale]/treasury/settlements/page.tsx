@@ -3,8 +3,6 @@
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { deleteSettlement, getSettlementBreakdown, getSettlementReport, getSettlementSources, getSettlements, createSettlement, updateSettlement } from "@/lib/settlements";
-import { getPayments } from "@/lib/sales";
-import { getExpenses } from "@/lib/expenses";
 
 const money = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const day = (value: any, ar: boolean) => value ? new Date(value).toLocaleDateString(ar ? "ar-SA" : "en-GB") : "—";
@@ -75,19 +73,8 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
           if (active) setDetail({ pos: true, rows: data.rows || [], totals: data.totals || {} });
           return;
         }
-        const params = {
-          rep_id: current.source_id,
-          ...(dateFrom ? { date_from: `${dateFrom}T00:00:00` } : {}),
-          ...(dateTo ? { date_to: `${dateTo}T23:59:59` } : {}),
-        };
-        const [{ data: paymentData }, { data: expenseData }] = await Promise.all([getPayments(params), getExpenses(params)]);
-        const payments = (Array.isArray(paymentData) ? paymentData : []).filter((x: any) => x.payment_type !== "discount");
-        const approved = (Array.isArray(expenseData) ? expenseData : []).filter((x: any) => x.status === "approved");
-        const receipts: Record<string, number> = { cash: 0, bank_transfer: 0, cheque: 0, credit_card: 0, mada: 0, stc_pay: 0 };
-        payments.forEach((x: any) => { const key = typeof x.payment_method === "string" ? x.payment_method : x.payment_method?.value; if (key in receipts) receipts[key] += Number(x.amount || 0); });
-        let cashExpenses = 0;
-        approved.forEach((x: any) => { if (["cash", "rep_advance"].includes(x.payment_method)) cashExpenses += Number(x.amount || 0); });
-        if (active) setDetail({ receipts, cashExpenses, cashDue: receipts.cash - cashExpenses, payments: payments.length, expensesCount: approved.length });
+        const { data } = await getSettlementBreakdown({ source_type: "rep", source_id: current.source_id, date_from: dateFrom || undefined, date_to: dateTo || undefined });
+        if (active) setDetail({ pos: false, ...data });
       } catch { if (active) setDetail(null); }
     };
     loadDetail();
@@ -135,9 +122,21 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><div className="form-group"><label className="form-label">{ar ? "من تاريخ" : "From date"}</label><input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div><div className="form-group"><label className="form-label">{ar ? "إلى تاريخ" : "To date"}</label><input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div></div>
         <div className="form-group"><label className="form-label">{ar ? "العهدة" : "Custody"}</label><select className="form-input form-select" value={selected} onChange={e => setSelected(e.target.value)}><option value="">{ar ? "اختر مندوباً أو جهازاً" : "Select a representative or POS"}</option>{sources.map(x => <option key={`${x.source_type}:${x.source_id}`} value={`${x.source_type}:${x.source_id}`}>{x.label} — {money(x.expected_amount)} SAR</option>)}</select></div>
         {current && <div style={{ background: "#F5F3FF", padding: 16, borderRadius: 8, margin: "12px 0" }}><div style={{ fontSize: 12, color: "#6B7280" }}>{ar ? "النقد المطلوب للفترة المحددة" : "Cash due for selected period"}</div><strong style={{ fontSize: 25, color: "#5A187E" }}>{money(current.expected_amount)} SAR</strong><div style={{ fontSize: 12, marginTop: 6 }}>{current.last_settled_at ? `${ar ? "آخر تسوية" : "Last settlement"}: ${new Date(current.last_settled_at).toLocaleString(ar ? "ar-SA" : "en-GB")}` : ar ? "لا توجد تسوية سابقة" : "No previous settlement"}</div></div>}
-        {detail?.pos && <div style={{ background: "#F8FAFC", padding: 16, borderRadius: 8, margin: "12px 0", border: "1px solid #E2E8F0" }}><strong>{ar ? "تفصيل تسوية جهاز نقاط البيع" : "POS settlement breakdown"}</strong><div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginTop: 10, fontSize: 13 }}><div>{ar ? "مبيعات نقدية" : "Cash sales"}<br /><b>{money(detail.totals.cash_sales)} SAR</b></div><div>{ar ? "رصيد افتتاحي" : "Opening cash"}<br /><b>{money(detail.totals.opening_cash)} SAR</b></div><div>{ar ? "مخرجات نقدية" : "Cash outflows"}<br /><b>{money(detail.totals.cash_outflows)} SAR</b></div><div>{ar ? "المتوقع" : "Expected"}<br /><b>{money(detail.totals.expected)} SAR</b></div></div><div className="table-wrapper" style={{ marginTop: 12 }}><table><thead><tr><th>الجلسة</th><th>الإغلاق</th><th>المبيعات النقدية</th><th>الافتتاحي</th><th>المخرجات</th><th>المتوقع</th></tr></thead><tbody>{detail.rows.map((x: any) => <tr key={x.session_id}><td>{String(x.session_id).slice(0, 8)}</td><td>{day(x.closed_at, ar)}</td><td>{money(x.cash_sales)}</td><td>{money(x.opening_cash)}</td><td>{money(x.cash_outflows)}</td><td style={{ fontWeight: 700 }}>{money(x.expected)}</td></tr>)}</tbody></table></div></div>}
-        {detail && !detail.pos && <div style={{ background: "#F8FAFC", padding: 16, borderRadius: 8, margin: "12px 0", border: "1px solid #E2E8F0" }}><strong>{ar ? "تفاصيل الفترة" : "Period details"}</strong><div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 10, fontSize: 13 }}><div>{ar ? "النقد المقبوض" : "Cash collected"}<br /><b>{money(detail.receipts.cash)} SAR</b></div><div>{ar ? "المصروف النقدي" : "Cash expenses"}<br /><b>{money(detail.cashExpenses)} SAR</b></div><div>{ar ? "المطلوب تسليمه" : "Cash to hand over"}<br /><b>{money(detail.cashDue)} SAR</b></div></div><div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)" }}>{ar ? `السندات: ${detail.payments} · المصروفات: ${detail.expensesCount}` : `Receipts: ${detail.payments} · Expenses: ${detail.expensesCount}`}</div></div>}
         <div className="form-group"><label className="form-label">{ar ? "المبلغ المستلم فعلياً" : "Actually received"}</label><input type="number" min="0" step="0.01" className="form-input" value={received} onChange={e => setReceived(e.target.value)} placeholder="0.00" /></div><div className="form-group"><label className="form-label">{ar ? "ملاحظات" : "Notes"}</label><textarea className="form-input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} /></div><button className="btn btn-primary" disabled={!current || saving} onClick={save}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ التسوية" : "Save settlement")}</button>
+      </div>
+      <div className="card" style={{ padding: 20, minHeight: 240 }}>
+        <h2 style={{ marginTop: 0 }}>{ar ? "مصادر النقد بالتفصيل" : "Detailed cash sources"}</h2>
+        {!current && <div style={{ color: "var(--text-muted)", padding: "32px 0", textAlign: "center" }}>{ar ? "اختر العهدة لعرض الفواتير والسندات" : "Select a custody to view invoices and receipts"}</div>}
+        {detail?.pos && <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, fontSize: 13, marginBottom: 12 }}><div>{ar ? "مبيعات نقدية" : "Cash sales"}<br /><b>{money(detail.totals.cash_sales)} SAR</b></div><div>{ar ? "الافتتاحي" : "Opening"}<br /><b>{money(detail.totals.opening_cash)} SAR</b></div><div>{ar ? "المخرجات" : "Outflows"}<br /><b>{money(detail.totals.cash_outflows)} SAR</b></div><div>{ar ? "المتوقع" : "Expected"}<br /><b>{money(detail.totals.expected)} SAR</b></div></div>
+          <h3>{ar ? "فواتير النقد لنقطة البيع" : "POS cash invoices"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم الفاتورة" : "Invoice"}</th><th>{ar ? "رقم العملية" : "Transaction"}</th><th>{ar ? "طريقة الدفع" : "Method"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.transactions || []).map((x: any) => <tr key={x.transaction_id}><td>{day(x.date, ar)}</td><td>{x.invoice_number || "—"}</td><td>{x.transaction_number}</td><td>{x.payment_method === "split" ? (ar ? "مختلط" : "Split") : (ar ? "نقدي" : "Cash")}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
+        </>}
+        {detail && !detail.pos && <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, fontSize: 13, marginBottom: 12 }}><div>{ar ? "الفواتير" : "Invoices"}<br /><b>{money(detail.totals.invoices)} SAR</b></div><div>{ar ? "السندات النقدية" : "Cash receipts"}<br /><b>{money(detail.totals.receipts)} SAR</b></div><div>{ar ? "المصروفات" : "Expenses"}<br /><b>{money(detail.totals.expenses)} SAR</b></div></div>
+          <h3>{ar ? "فواتير المندوب" : "Representative invoices"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم الفاتورة" : "Invoice"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.invoices || []).map((x: any) => <tr key={x.invoice_id}><td>{day(x.date, ar)}</td><td>{x.invoice_number}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
+          <h3>{ar ? "سندات القبض النقدية" : "Cash receipt vouchers"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "رقم السند" : "Voucher"}</th><th>{ar ? "الفاتورة المرتبطة" : "Invoice"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.receipts || []).map((x: any) => <tr key={x.payment_id}><td>{day(x.date, ar)}</td><td>{x.payment_number}</td><td>{x.invoice_number || "—"}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
+          <h3>{ar ? "المصروفات المعتمدة" : "Approved expenses"}</h3><div className="table-wrapper"><table><thead><tr><th>{ar ? "التاريخ" : "Date"}</th><th>{ar ? "البيان" : "Description"}</th><th>{ar ? "المبلغ" : "Amount"}</th></tr></thead><tbody>{(detail.expenses || []).map((x: any) => <tr key={x.expense_id}><td>{day(x.date, ar)}</td><td>{x.description || "—"}</td><td>{money(x.amount)}</td></tr>)}</tbody></table></div>
+        </>}
       </div>
     </div>
 
