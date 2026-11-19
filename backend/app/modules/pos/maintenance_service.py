@@ -12,6 +12,8 @@ from app.models.pos_maintenance import POSMaintenanceTicket, POSMaintenancePart,
 from app.models.inventory import InventoryItem, InventoryStock, SerialItem, Warehouse
 from app.models.sales import Customer
 from app.models.reps import SalesRep
+from app.models.sales import InvoicePaymentMethod, InvoiceType
+from app.modules.sales.schemas import InvoiceCreate, InvoiceLineCreate
 
 MAINTENANCE_STATUSES = {"open", "in_progress", "ready", "completed", "cancelled"}
 
@@ -74,7 +76,7 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
     data = {
         "id": ticket.id, "ticket_number": ticket.ticket_number,
         "terminal_id": ticket.terminal_id, "session_id": ticket.session_id, "maintenance_warehouse_id": ticket.maintenance_warehouse_id,
-        "customer_id": ticket.customer_id, "rep_id": ticket.rep_id,
+        "customer_id": ticket.customer_id, "rep_id": ticket.rep_id, "invoice_id": ticket.invoice_id,
         "status": ticket.status, "customer_name": ticket.customer_name,
         "customer_phone": ticket.customer_phone, "device_name": ticket.device_name,
         "device_serial": ticket.device_serial, "reported_problem": ticket.reported_problem,
@@ -428,3 +430,48 @@ async def add_service(db: AsyncSession, tenant_id: str, user_id: str, ticket_id:
     ticket.updated_at = datetime.utcnow()
     await db.commit()
     return await _out(db, tenant_id, ticket)
+
+
+async def issue_invoice(db: AsyncSession, tenant_id: str, user_id: str, ticket_id: str):
+    ticket = await _ticket(db, tenant_id, ticket_id)
+    if ticket.invoice_id:
+        raise HTTPException(400, "تم إصدار فاتورة لهذه التذكرة مسبقًا")
+    if not ticket.customer_id:
+        raise HTTPException(400, "اربط التذكرة بعميل قبل إصدار الفاتورة")
+    services = await _services(db, tenant_id, ticket.id)
+    parts = await _parts(db, tenant_id, ticket.id)
+    lines = [InvoiceLineCreate(
+        description_ar=line["service_name"], description_en=line["service_name"],
+        quantity=Decimal("1"), unit_price=Decimal(str(line["amount"])),
+        vat_rate=Decimal("15"), prices_include_vat=True, line_order=index,
+    ) for index, line in enumerate(services)]
+    lines.extend(InvoiceLineCreate(
+        description_ar=f"قطعة صيانة: {line['product_name']}", description_en=f"Maintenance part: {line['product_name']}",
+        quantity=Decimal(str(line["quantity"])), unit_price=Decimal(str(line["unit_price"])),
+        vat_rate=Decimal("15"), prices_include_vat=True, line_order=len(lines) + index,
+    ) for index, line in enumerate(parts))
+    if not lines:
+        raise HTTPException(400, "أضف خدمة أو قطعة قبل إصدار الفاتورة")
+    from app.modules.sales.service import create_invoice, confirm_invoice
+    now = datetime.utcnow()
+    invoice = await create_invoice(db, tenant_id, user_id, InvoiceCreate(
+        customer_id=ticket.customer_id, invoice_type=InvoiceType.STANDARD,
+        issue_date=now, supply_date=now, invoice_payment_method=InvoicePaymentMethod.CREDIT,
+        notes=f"فاتورة صيانة — {ticket.ticket_number}", lines=lines,
+    ))
+    invoice = await confirm_invoice(db, tenant_id, user_id, invoice.id)
+    ticket.invoice_id = invoice.id
+    ticket.status = "completed"
+    ticket.updated_at = datetime.utcnow()
+    await db.commit()
+    rep = await db.get(SalesRep, ticket.rep_id) if ticket.rep_id else None
+    if rep and rep.user_id:
+        from app.modules.notifications.service import notify_users_event
+        await notify_users_event(
+            db, tenant_id, user_id, [rep.user_id],
+            "تم إصدار فاتورة صيانة", "Maintenance invoice issued",
+            f"تمت صيانة جهاز {ticket.device_name} وإصدار الفاتورة {invoice.invoice_number} بمبلغ {invoice.total} ريال.",
+            f"Device {ticket.device_name} was serviced. Invoice {invoice.invoice_number} total: {invoice.total} SAR.",
+            ticket.id, "pos_maintenance_invoice",
+        )
+    return {**(await _out(db, tenant_id, ticket)), "invoice_number": invoice.invoice_number, "invoice_total": float(invoice.total)}

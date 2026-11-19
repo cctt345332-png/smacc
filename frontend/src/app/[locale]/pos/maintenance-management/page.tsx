@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { addMaintenanceService, createMaintenanceTicket, getMaintenanceManagementReport, getTerminals, updateMaintenanceTicket } from "@/lib/pos";
+import { addMaintenanceService, createMaintenanceTicket, getMaintenanceManagementReport, getTerminals, issueMaintenanceInvoice, updateMaintenanceTicket } from "@/lib/pos";
 import { getCustomers, createCustomer } from "@/lib/sales";
 import { getItemsForPicker } from "@/lib/inventory";
 import { getReps } from "@/lib/reps";
@@ -100,6 +100,17 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
     }
   };
 
+  const issueInvoice = async (ticket: any) => {
+    if (!confirm(ar ? "إصدار فاتورة لهذه التذكرة وإشعار المندوب إن وجد؟" : "Issue an invoice for this ticket and notify its representative if assigned?")) return;
+    try {
+      const result = await issueMaintenanceInvoice(ticket.id);
+      alert(ar ? `تم إصدار الفاتورة ${result.data?.invoice_number || ""}` : `Invoice ${result.data?.invoice_number || ""} issued`);
+      await load();
+    } catch (error: any) {
+      alert(error?.response?.data?.detail || (ar ? "تعذر إصدار الفاتورة" : "Could not issue invoice"));
+    }
+  };
+
   useEffect(() => {
     getTerminals().then((result) => setTerminals(result.data || [])).catch(() => setTerminals([]));
     getCustomers().then((result) => setCustomers(result.data || [])).catch(() => setCustomers([]));
@@ -174,7 +185,7 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
         </div>
       </div>
 
-      <div className="card"><div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{ar ? "تفاصيل تذاكر الصيانة" : "Maintenance tickets"}</h3><span className="badge badge-gray">{tickets.length}</span></div>{tickets.length === 0 ? <div className="empty-state">{loading ? (ar ? "جاري تحميل التقرير..." : "Loading report...") : (ar ? "لا توجد نتائج ضمن الفلاتر" : "No results for selected filters")}</div> : <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "التذكرة" : "Ticket"}</th><th>{ar ? "الجهاز" : "Device"}</th><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "القطع" : "Parts"}</th><th>{ar ? "الأجرة" : "Fees"}</th><th>{ar ? "المحصّل" : "Collected"}</th><th>{ar ? "المتبقي" : "Outstanding"}</th><th>{ar ? "التاريخ" : "Date"}</th></tr></thead><tbody>{tickets.map((row: any) => <tr key={row.id}><td style={{ fontWeight: 700, color: "var(--primary)" }}>{row.ticket_number}</td><td>{row.device_name}{row.device_serial ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.device_serial}</div> : null}</td><td>{row.customer_name || "—"}</td><td><select className="form-input form-select" style={{ minWidth: 125, padding: "5px 8px", fontSize: 12 }} value={row.status} onChange={(e) => changeStatus(row, e.target.value)} disabled={row.status === "cancelled"}><option value="open">{statusLabel("open")}</option><option value="in_progress">{statusLabel("in_progress")}</option><option value="ready">{statusLabel("ready")}</option><option value="completed">{statusLabel("completed")}</option><option value="cancelled">{statusLabel("cancelled")}</option></select></td><td>{money(row.parts_total)} SAR</td><td>{money(row.fees_total)} SAR</td><td style={{ color: "#059669", fontWeight: 700 }}>{money(row.paid_amount)} SAR</td><td style={{ color: Number(row.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{money(row.outstanding)} SAR</td><td style={{ fontSize: 12, color: "var(--text-muted)" }}>{new Date(row.created_at).toLocaleDateString(ar ? "ar-SA" : "en-GB")}</td></tr>)}</tbody></table></div>}</div>
+      <div className="card"><div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{ar ? "تفاصيل تذاكر الصيانة" : "Maintenance tickets"}</h3><span className="badge badge-gray">{tickets.length}</span></div>{tickets.length === 0 ? <div className="empty-state">{loading ? (ar ? "جاري تحميل التقرير..." : "Loading report...") : (ar ? "لا توجد نتائج ضمن الفلاتر" : "No results for selected filters")}</div> : <div className="table-wrapper" style={{ border: "none" }}><table><thead><tr><th>{ar ? "التذكرة" : "Ticket"}</th><th>{ar ? "الجهاز" : "Device"}</th><th>{ar ? "العميل" : "Customer"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "القطع" : "Parts"}</th><th>{ar ? "الأجرة" : "Fees"}</th><th>{ar ? "المحصّل" : "Collected"}</th><th>{ar ? "المتبقي" : "Outstanding"}</th><th>{ar ? "فاتورة" : "Invoice"}</th><th>{ar ? "التاريخ" : "Date"}</th></tr></thead><tbody>{tickets.map((row: any) => <tr key={row.id}><td style={{ fontWeight: 700, color: "var(--primary)" }}>{row.ticket_number}</td><td>{row.device_name}{row.device_serial ? <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{row.device_serial}</div> : null}</td><td>{row.customer_name || "—"}</td><td><select className="form-input form-select" style={{ minWidth: 125, padding: "5px 8px", fontSize: 12 }} value={row.status} onChange={(e) => changeStatus(row, e.target.value)} disabled={row.status === "cancelled"}><option value="open">{statusLabel("open")}</option><option value="in_progress">{statusLabel("in_progress")}</option><option value="ready">{statusLabel("ready")}</option><option value="completed">{statusLabel("completed")}</option><option value="cancelled">{statusLabel("cancelled")}</option></select></td><td>{money(row.parts_total)} SAR</td><td>{money(row.fees_total)} SAR</td><td style={{ color: "#059669", fontWeight: 700 }}>{money(row.paid_amount)} SAR</td><td style={{ color: Number(row.outstanding || 0) > 0 ? "#D97706" : "var(--text-muted)" }}>{money(row.outstanding)} SAR</td><td>{row.invoice_id ? <span className="badge badge-success">{ar ? "صادرة" : "Issued"}</span> : <button className="btn btn-primary btn-sm" onClick={() => issueInvoice(row)} disabled={row.status === "cancelled"}>{ar ? "إصدار" : "Issue"}</button>}</td><td style={{ fontSize: 12, color: "var(--text-muted)" }}>{new Date(row.created_at).toLocaleDateString(ar ? "ar-SA" : "en-GB")}</td></tr>)}</tbody></table></div>}</div>
     </div>
   );
 }

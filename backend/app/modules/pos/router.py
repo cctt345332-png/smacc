@@ -108,6 +108,11 @@ async def add_pos_maintenance_service(ticket_id: str, data: dict, user=Depends(r
     return await maintenance_service.add_service(db, user["tenant_id"], user["user_id"], ticket_id, data)
 
 
+@router.post("/maintenance/{ticket_id}/invoice", status_code=201)
+async def issue_pos_maintenance_invoice(ticket_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await maintenance_service.issue_invoice(db, user["tenant_id"], user["user_id"], ticket_id)
+
+
 @router.get("/maintenance/{ticket_id}/serials/{product_id}")
 async def get_pos_maintenance_serials(ticket_id: str, product_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
     return await maintenance_service.get_part_serials(db, tenant_id, ticket_id, product_id)
