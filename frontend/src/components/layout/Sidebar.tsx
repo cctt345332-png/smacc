@@ -163,9 +163,17 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
         children: [
           { label: ar ? "لوحة الإدارة" : "Dashboard",  href: `${base}/pos` },
           { label: ar ? "الجلسات" : "Sessions",         href: `${base}/pos/sessions` },
-          { label: ar ? "إدارة الصيانة" : "Maintenance Management", href: `${base}/pos/maintenance-management` },
         ],
       }] : []),
+      {
+        key: "maintenance", label: ar ? "إدارة الصيانة" : "Maintenance", icon: IC.settings,
+        children: [
+          { label: ar ? "لوحة الصيانة" : "Maintenance Dashboard", href: `${base}/maintenance` },
+          { label: ar ? "طلبات وتذاكر الصيانة" : "Requests & Tickets", href: `${base}/pos/maintenance-management` },
+          { label: ar ? "مستودعات الصيانة" : "Maintenance Warehouses", href: `${base}/maintenance/warehouses` },
+          { label: ar ? "تقارير الصيانة" : "Maintenance Reports", href: `${base}/pos/maintenance-management` },
+        ],
+      },
       {
         key: "reps", label: ar ? "المناديب" : "Sales Reps", icon: IC.hr,
         children: [
