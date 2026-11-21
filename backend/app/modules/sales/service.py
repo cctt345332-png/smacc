@@ -1072,6 +1072,8 @@ async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = No
                 invoice.terminal_id, invoice.terminal_name = terminal_by_invoice[invoice.id]
     for invoice in invoices:
         invoice.source = "pos" if (invoice.notes or "").startswith("POS:") else ("representatives" if invoice.rep_id else "admin")
+        pos_net_subtotal = Decimal("0")
+        pos_is_legacy = (invoice.notes or "").startswith("POS:")
         for line in invoice.lines or []:
             # unit_price محفوظ قبل الضريبة للمحاسبة؛ هذا الحقل للعرض كسعر البيع
             # الذي يراه المستخدم في بطاقة الصنف والفاتورة.
@@ -1085,6 +1087,14 @@ async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = No
             line.__dict__["unit_price_including_vat"] = (
                 stored if is_legacy_pos_gross else stored * (Decimal("1") + rate / Decimal("100"))
             ).quantize(Decimal("0.01"))
+            if pos_is_legacy:
+                line_net_unit = (stored / (Decimal("1") + rate / Decimal("100"))) if is_legacy_pos_gross and rate > 0 else stored
+                line_net = (Decimal(str(line.quantity or 0)) * line_net_unit).quantize(Decimal("0.01"))
+                line.__dict__["subtotal"] = line_net
+                pos_net_subtotal += line_net
+        if pos_is_legacy and invoice.lines:
+            invoice.__dict__["subtotal"] = pos_net_subtotal
+            invoice.__dict__["taxable_amount"] = (pos_net_subtotal - Decimal(str(invoice.discount_amount or 0))).quantize(Decimal("0.01"))
     return invoices
 
 
@@ -1122,6 +1132,8 @@ async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
             }
             for serial in serial_result.scalars().all()
         }
+    pos_net_subtotal = Decimal("0")
+    pos_is_legacy = (inv.notes or "").startswith("POS:")
     for line in inv.lines or []:
         rate = Decimal(str(line.vat_rate or 0))
         stored = Decimal(str(line.unit_price or 0))
@@ -1133,6 +1145,11 @@ async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
         line.__dict__["unit_price_including_vat"] = (
             stored if is_legacy_pos_gross else stored * (Decimal("1") + rate / Decimal("100"))
         ).quantize(Decimal("0.01"))
+        if pos_is_legacy:
+            line_net_unit = (stored / (Decimal("1") + rate / Decimal("100"))) if is_legacy_pos_gross and rate > 0 else stored
+            line_net = (Decimal(str(line.quantity or 0)) * line_net_unit).quantize(Decimal("0.01"))
+            line.__dict__["subtotal"] = line_net
+            pos_net_subtotal += line_net
         line_ids: list[str] = []
         if line.serial_item_id:
             line_ids.append(str(line.serial_item_id))
@@ -1147,6 +1164,9 @@ async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
             for serial_id in dict.fromkeys(line_ids)
             if serial_id in serial_details_by_id
         ]
+    if pos_is_legacy and inv.lines:
+        inv.__dict__["subtotal"] = pos_net_subtotal
+        inv.__dict__["taxable_amount"] = (pos_net_subtotal - Decimal(str(inv.discount_amount or 0))).quantize(Decimal("0.01"))
     # فواتير POS القديمة كانت تخصم السيريال دون نسخه داخل InvoiceLine.
     # نسترجعه من معاملة POS حتى يظهر تلقائياً في شاشة المرتجع.
     if (inv.notes or "").startswith("POS:") and inv.lines:
