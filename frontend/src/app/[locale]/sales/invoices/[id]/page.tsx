@@ -237,6 +237,10 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
   const remaining = Number(invoice.total || 0) - Number(invoice.paid_amount || 0);
   const invoicePaymentMethod = invoice.invoice_payment_method || "";
   const invoicePaymentLabel = INVOICE_PAYMENT_LABELS[invoicePaymentMethod] || invoicePaymentMethod;
+  const replacementCustomer = replacementCustomers.find(c => c.id === replacementCustomerId);
+  const replacementCustomerComplete = Boolean(
+    replacementCustomer?.name_ar && replacementCustomer?.vat_number && replacementCustomer?.address_city
+  );
   const zatcaStatus = invoice.zatca_status || "not_sent";
   const zatcaResponse = zatcaResponseView(invoice.zatca_response);
   const zatcaStatusMap: Record<string, { label: string; color: string }> = {
@@ -606,9 +610,14 @@ export default function InvoiceDetailPage(props: { params: Promise<{ locale: str
                 <option value="">{ar ? "اختر العميل" : "Select customer"}</option>
                 {replacementCustomers.map(c => <option key={c.id} value={c.id}>{c.name_ar}{c.vat_number ? ` — ${c.vat_number}` : ""}</option>)}
               </select>
+              {replacementCustomerId && !replacementCustomerComplete && (
+                <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "#FFF7ED", color: "#9A3412", fontSize: 12, lineHeight: 1.6 }}>
+                  {ar ? "بيانات العميل غير مكتملة. يلزم الاسم والرقم الضريبي والمدينة قبل إصدار الفاتورة الكاملة." : "Customer data is incomplete. Name, VAT number, and city are required before creating the standard invoice."}
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
                 <button className="btn btn-secondary" onClick={() => setShowReplacementModal(false)}>{ar ? "إلغاء" : "Cancel"}</button>
-                <button className="btn btn-primary" onClick={handleReplacement} disabled={acting || !replacementCustomerId}>{ar ? "إنشاء الاستبدال" : "Create replacement"}</button>
+                <button className="btn btn-primary" onClick={handleReplacement} disabled={acting || !replacementCustomerId || !replacementCustomerComplete}>{ar ? "إنشاء الاستبدال" : "Create replacement"}</button>
               </div>
             </div>
           </div>

@@ -1388,7 +1388,7 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
 
 
 async def replace_simplified_pos_invoice(db: AsyncSession, tenant_id: str, user_id: str, invoice_id: str, customer_id: str):
-    """إنشاء إشعار دائن وفاتورة كاملة بديلة دون إعادة خصم المخزون."""
+    """تحويل POS المبسط إلى كامل دون تكرار البيع أو المخزون أو الدفعات."""
     original = await get_invoice(db, tenant_id, invoice_id)
     if getattr(original.invoice_type, "value", original.invoice_type) != "simplified" or not (original.notes or "").startswith("POS:"):
         raise HTTPException(400, "الاستبدال متاح لفواتير نقاط البيع المبسطة فقط")
@@ -1401,7 +1401,16 @@ async def replace_simplified_pos_invoice(db: AsyncSession, tenant_id: str, user_
     ))
     if existing:
         raise HTTPException(409, "تم إنشاء مستند استبدال لهذه الفاتورة مسبقًا")
+    existing_replacement = await db.scalar(select(Invoice).where(
+        Invoice.tenant_id == tenant_id,
+        Invoice.notes == f"استبدال فاتورة POS: {original.invoice_number}",
+        Invoice.invoice_type == InvoiceType.STANDARD,
+    ))
+    if existing_replacement:
+        raise HTTPException(409, "تم تحويل هذه الفاتورة مسبقًا")
     customer = await get_customer(db, tenant_id, customer_id)
+    if not customer.name_ar or not customer.vat_number or not customer.address_city:
+        raise HTTPException(400, "بيانات العميل غير مكتملة: الاسم والرقم الضريبي والمدينة مطلوبة للفواتير الكاملة")
     from app.models.tenant import Tenant
     from app.modules.accounting.service import get_vat_settings
     tenant = await db.get(Tenant, tenant_id)
@@ -1410,7 +1419,7 @@ async def replace_simplified_pos_invoice(db: AsyncSession, tenant_id: str, user_
     cn = CreditNote(
         id=str(uuid.uuid4()), tenant_id=tenant_id,
         credit_note_number=await _next_credit_note_number(db, tenant_id), uuid=str(uuid.uuid4()),
-        note_type="credit", original_invoice_id=original.id, customer_id=original.customer_id,
+        note_type="credit", original_invoice_id=original.id, customer_id=customer.id,
         issue_date=issue_date, reason=f"استبدال فاتورة POS {original.invoice_number} بطلب العميل",
         subtotal=original.taxable_amount, vat_amount=original.vat_amount, total=original.total,
         qr_code=_generate_qr_tlv(tenant.name if tenant else "", vat_settings.vat_number if vat_settings else "", issue_date.isoformat(), original.total, original.vat_amount),
@@ -1421,6 +1430,7 @@ async def replace_simplified_pos_invoice(db: AsyncSession, tenant_id: str, user_
     replacement = Invoice(
         id=new_id, tenant_id=tenant_id, invoice_number=await _next_invoice_number(db, tenant_id), uuid=str(uuid.uuid4()),
         invoice_type=InvoiceType.STANDARD, status=InvoiceStatus.CONFIRMED, customer_id=customer.id,
+        warehouse_id=original.warehouse_id, fiscal_year_id=original.fiscal_year_id,
         issue_date=issue_date, supply_date=issue_date, due_date=original.due_date,
         seller_name_ar=original.seller_name_ar, seller_vat_number=original.seller_vat_number,
         seller_cr_number=original.seller_cr_number, seller_address=original.seller_address,
@@ -1436,6 +1446,8 @@ async def replace_simplified_pos_invoice(db: AsyncSession, tenant_id: str, user_
     )
     if replacement.paid_amount >= replacement.total:
         replacement.status = InvoiceStatus.PAID
+    elif replacement.paid_amount > 0:
+        replacement.status = InvoiceStatus.PARTIAL
     db.add(replacement)
     for line in original.lines:
         db.add(CreditNoteLine(
@@ -1455,8 +1467,25 @@ async def replace_simplified_pos_invoice(db: AsyncSession, tenant_id: str, user_
             serial_ids_json=line.serial_ids_json, variant_id=line.variant_id,
         ))
     await db.flush()
+    # نعكس قيد POS الأصلي فقط؛ لا نعكس المخزون لأن البيع نفسه مستمر.
+    # ثم ننشئ قيد الفاتورة الكاملة على حساب العميل.
+    await _reverse_invoice_journal(db, tenant_id, user_id, original)
+    original.status = InvoiceStatus.CANCELLED
+    original.notes = f"POS:{original.notes.split('POS:', 1)[-1]}|CONVERTED_TO:{replacement.invoice_number}"
+    payments = (await db.execute(select(Payment).where(
+        Payment.tenant_id == tenant_id,
+        Payment.invoice_id == original.id,
+        Payment.status != "cancelled",
+    ))).scalars().all()
+    for payment in payments:
+        payment.invoice_id = replacement.id
+        payment.customer_id = customer.id
+        if not payment.journal_entry_id and replacement.fiscal_year_id:
+            payment.journal_entry_id = await _create_payment_journal(
+                db, tenant_id, user_id, payment, customer, replacement,
+                replacement.fiscal_year_id, payment.bank_account_id,
+            )
     if original.fiscal_year_id and await is_operational_auto_posting_enabled(db, tenant_id):
-        await _create_credit_note_journal(db, tenant_id, user_id, cn, original)
         replacement.journal_entry_id = await _create_invoice_journal(db, tenant_id, user_id, replacement)
     record_audit(db, tenant_id, user_id, "replace", "invoice", original.id,
                  original_invoice=original.invoice_number, replacement_invoice=replacement.invoice_number, credit_note=cn.credit_note_number)
