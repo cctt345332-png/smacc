@@ -194,6 +194,8 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
       {
         key: "reports", label: ar ? "التقارير" : "Reports", icon: IC.reports,
         children: [
+          { label: ar ? "── التقرير اليومي ──" : "── Daily Report ──", href: "", divider: true },
+          { label: ar ? "الملخص اليومي الشامل" : "Comprehensive Daily Summary", href: `${base}/reports/daily` },
           { label: ar ? "── تقارير المحاسبة ──" : "── Accounting ──", href: "", divider: true },
           { label: ar ? "ميزان المراجعة" : "Trial Balance", href: `${base}/reports/accounting/trial-balance` },
           { label: ar ? "الميزانية العمومية" : "Balance Sheet", href: `${base}/reports/accounting/balance-sheet` },
@@ -347,9 +349,9 @@ export default function Sidebar({ locale, collapsed, mobileOpen, onToggle }: {
                         if (child.divider) {
                           return (
                             <div key={ci} style={{
-                              fontSize: 10, fontWeight: 700, color: "#334155",
-                              padding: "8px 16px 2px", textTransform: "uppercase",
-                              letterSpacing: "0.06em", marginTop: 4,
+                              fontSize: 12, fontWeight: 800, color: "#FFFFFF",
+                              padding: "10px 16px 5px", textTransform: "uppercase",
+                              letterSpacing: "0.04em", marginTop: 5,
                             }}>
                               {child.label}
                             </div>
