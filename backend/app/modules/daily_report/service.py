@@ -113,6 +113,29 @@ async def build_daily_report(
         payment_q = payment_q.where(Payment.rep_id == rep_id)
     payments = (await db.execute(payment_q)).scalars().all()
 
+    # دفعات POS تُسجّل أيضًا في جدول سندات القبض عند إنشاء فاتورة POS.
+    # نميّزها عن تحصيل المناديب حتى لا تختلط في ملخص التحصيل.
+    payment_invoice_ids = {row.invoice_id for row in payments if row.invoice_id}
+    pos_invoice_ids: set[str] = set()
+    if payment_invoice_ids:
+        pos_invoice_rows = (await db.execute(
+            select(Invoice.id).where(
+                Invoice.tenant_id == tenant_id,
+                Invoice.id.in_(payment_invoice_ids),
+                Invoice.notes.ilike("POS:%"),
+            )
+        )).all()
+        pos_invoice_ids = {row[0] for row in pos_invoice_rows}
+    pos_payment_rows = [row for row in payments if row.invoice_id in pos_invoice_ids]
+    rep_payment_rows = [
+        row for row in payments
+        if row.invoice_id not in pos_invoice_ids and row.rep_id
+    ]
+    other_customer_payment_rows = [
+        row for row in payments
+        if row.invoice_id not in pos_invoice_ids and not row.rep_id
+    ]
+
     bill_q = select(Bill).where(
         Bill.tenant_id == tenant_id,
         Bill.status.notin_(("draft", "cancelled")),
@@ -190,19 +213,31 @@ async def build_daily_report(
     sales_total = sum((_money(row.total) for row in invoices), 0.0) + float(pos_totals.get("sales", 0) or 0)
     sales_vat = sum((_money(row.vat_amount) for row in invoices), 0.0) + float(pos_totals.get("total_vat", 0) or 0)
     purchase_total = sum((_money(row.total) for row in bills), 0.0)
-    customer_collected = sum((_money(row.amount) for row in payments), 0.0)
+    rep_collected = sum((_money(row.amount) for row in rep_payment_rows), 0.0)
+    pos_collected = sum(
+        float(pos_totals.get(key, 0) or 0)
+        for key in ("cash", "mada", "credit_card", "stc_pay", "tabby", "tamara", "split_cash", "split_card", "bank_transfer", "other_payment")
+    )
+    other_customer_collected = sum((_money(row.amount) for row in other_customer_payment_rows), 0.0)
+    customer_collected = rep_collected + other_customer_collected
     supplier_paid = sum((_money(row.amount) for row in bill_payments), 0.0)
     maintenance_collected = sum((_money(row.amount) for row in maintenance_payments), 0.0)
     rep_expense_total = sum((_money(row.amount) for row in rep_expenses), 0.0)
     cash_outflow_total = sum((_money(row.amount) for row in outflows), 0.0)
     voucher_receipts = sum((_money(row.amount) for row in vouchers if _enum(row.voucher_type) == "receipt"), 0.0)
     voucher_payments = sum((_money(row.amount) for row in vouchers if _enum(row.voucher_type) in {"payment", "expense"}), 0.0)
-    gross_profit = float(pos_totals.get("gross_profit", 0) or 0) + (sales_total - float(line_cost))
+    # sales_total يحتوي على مبيعات الفواتير العادية وPOS معًا، بينما gross_profit
+    # الخاص بـPOS محسوب أصلًا من (مبيعات POS - تكلفتها). لا نضيف مبيعات POS مرة
+    # ثانية، وإلا ظهر ربح أعلى من مبيعات اليوم كما كان يحدث في التقرير.
+    normal_sales_total = sales_total - float(pos_totals.get("sales", 0) or 0)
+    gross_profit = float(pos_totals.get("gross_profit", 0) or 0) + (normal_sales_total - float(line_cost))
     operating_expenses = rep_expense_total + cash_outflow_total + voucher_payments
     net_profit = gross_profit - operating_expenses
 
     by_method: dict[str, float] = {}
-    for row in payments:
+    # دفعات POS محسوبة من إجماليات العمليات أدناه؛ لا نعيد إضافتها من جدول
+    # Payment حتى لا يتضاعف إجمالي طرق التحصيل.
+    for row in [*rep_payment_rows, *other_customer_payment_rows]:
         method = _enum(row.payment_method)
         by_method[method] = by_method.get(method, 0.0) + _money(row.amount)
     for row in maintenance_payments:
@@ -224,6 +259,9 @@ async def build_daily_report(
             "purchases": purchase_total,
             "purchase_bills": len(bills),
             "customer_collected": customer_collected,
+            "rep_collected": rep_collected,
+            "pos_collected": pos_collected,
+            "other_customer_collected": other_customer_collected,
             "supplier_paid": supplier_paid,
             "maintenance_collected": maintenance_collected,
             "expenses": operating_expenses,
@@ -245,7 +283,13 @@ async def build_daily_report(
         "details": {
             "invoices": [{"number": row.invoice_number, "date": row.issue_date.isoformat(), "total": _money(row.total)} for row in invoices],
             "bills": [{"number": row.bill_number, "date": row.bill_date.isoformat(), "total": _money(row.total)} for row in bills],
-            "payments": [{"number": row.payment_number, "date": row.payment_date.isoformat(), "amount": _money(row.amount), "method": _enum(row.payment_method)} for row in payments],
+            "payments": [{
+                "number": row.payment_number,
+                "date": row.payment_date.isoformat(),
+                "amount": _money(row.amount),
+                "method": _enum(row.payment_method),
+                "source": "pos" if row in pos_payment_rows else ("rep" if row in rep_payment_rows else "customer"),
+            } for row in payments],
             "bill_payments": [{"number": row.payment_number, "date": row.payment_date.isoformat(), "amount": _money(row.amount), "method": str(row.payment_method or "")} for row in bill_payments],
             "settlements": [{"source_type": row.source_type, "source_id": row.source_id, "expected": _money(row.expected_amount), "received": _money(row.received_amount), "difference": _money(row.difference)} for row in settlements],
         },

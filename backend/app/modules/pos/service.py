@@ -1835,7 +1835,10 @@ async def get_terminal_performance_report(
     except ValueError:
         raise HTTPException(400, "صيغة التاريخ غير صحيحة")
 
-    terminals_q = select(POSTerminal).where(POSTerminal.tenant_id == tenant_id)
+    terminals_q = select(POSTerminal).where(
+        POSTerminal.tenant_id == tenant_id,
+        POSTerminal.is_active == True,
+    )
     if terminal_id:
         terminals_q = terminals_q.where(POSTerminal.id == terminal_id)
     terminals = (await db.execute(terminals_q.order_by(POSTerminal.name))).scalars().all()
@@ -1908,11 +1911,16 @@ async def get_terminal_performance_report(
         row["transactions"] += 1
         row["sales"] += tx.total or Decimal("0")
         method = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
+        tx_total = Decimal(str(tx.total or 0))
+        cash_paid = min(Decimal(str(tx.cash_tendered or 0)), tx_total)
+        card_paid = min(Decimal(str(tx.card_amount or 0)), max(Decimal("0"), tx_total - cash_paid))
         if method == "split":
-            row["split_cash"] += tx.cash_tendered or Decimal("0")
-            row["split_card"] += tx.card_amount or Decimal("0")
+            row["split_cash"] += cash_paid
+            row["split_card"] += card_paid
         elif method in ("cash", "mada", "credit_card", "stc_pay", "tabby", "tamara", "bank_transfer"):
-            row[method] += tx.total or Decimal("0")
+            # البيع قد يكون آجلًا/جزئيًا؛ التحصيل لا يساوي إجمالي الفاتورة.
+            paid = cash_paid if method == "cash" else card_paid
+            row[method] += paid
         else:
             row.setdefault("other_payment", Decimal("0"))
             row["other_payment"] += tx.total or Decimal("0")
@@ -1947,7 +1955,9 @@ async def get_terminal_performance_report(
     for tid in (await db.execute(sessions_q)).scalars().all():
         if tid in rows: rows[tid]["sessions"] += 1
 
-    values = list(rows.values())
+    # لا تعرض التقرير كل الأجهزة النشطة في الحساب؛ اعرض فقط الأجهزة التي
+    # لديها جلسة أو عملية أو مخرج نقدي ضمن الفترة المحددة.
+    values = [row for row in rows.values() if row["sessions"] or row["transactions"] or row["expenses"]]
     payment_keys = ("cash", "mada", "credit_card", "stc_pay", "tabby", "tamara", "split_cash", "split_card", "bank_transfer", "other_payment")
     totals = {key: sum((r[key] for r in values), 0) for key in ("sessions", "transactions", "sales", "cost", "gross_profit", "expenses", "net_profit", *payment_keys)}
     totals["payments"] = {key: totals[key] for key in payment_keys}
