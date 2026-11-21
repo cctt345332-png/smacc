@@ -817,14 +817,19 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
 
     if payment_method not in {"cash", "mada", "tabby", "tamara", "bank_transfer", "split"}:
         raise HTTPException(400, "طريقة الدفع يجب أن تكون نقدي أو شبكة أو تابي أو تمارا أو تحويل بنكي أو مقسّم")
-    if payment_method == "cash" and cash_tendered < grand_total:
-        raise HTTPException(400, "المبلغ النقدي أقل من إجمالي الفاتورة")
+    has_customer = bool(data.get("customer_id"))
+    if payment_method == "cash" and cash_tendered < grand_total and not has_customer:
+        raise HTTPException(400, "المبلغ النقدي أقل من إجمالي الفاتورة — اختر عميلاً للدفعة الجزئية")
+    if payment_method == "cash" and cash_tendered <= 0:
+        raise HTTPException(400, "أدخل مبلغ التحصيل")
     if payment_method in {"mada", "tabby", "tamara", "bank_transfer"}:
+        if card_amount <= 0 or card_amount > grand_total + Decimal("0.01") or (card_amount < grand_total and not has_customer):
+            raise HTTPException(400, "أدخل دفعة صحيحة — الدفعة الجزئية تتطلب اختيار عميل")
         cash_tendered = Decimal("0")
-        card_amount = grand_total
     if payment_method == "split":
-        if cash_tendered < 0 or card_amount < 0 or abs(cash_tendered + card_amount - grand_total) > Decimal("0.01"):
-            raise HTTPException(400, "يجب أن يساوي مجموع النقد والشبكة إجمالي الفاتورة")
+        paid = cash_tendered + card_amount
+        if cash_tendered < 0 or card_amount < 0 or paid <= 0 or paid > grand_total + Decimal("0.01") or (paid < grand_total and not has_customer):
+            raise HTTPException(400, "يجب أن يساوي الدفع الإجمالي، أو اختر عميلاً للدفعة الجزئية")
 
     change_amount = max(Decimal("0"), cash_tendered - grand_total) if payment_method == "cash" else Decimal("0")
 
@@ -962,7 +967,7 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
 async def _create_pos_journal(db: AsyncSession, tenant_id: str, user_id: str, tx, terminal, vat_settings, invoice_id: str | None) -> str:
     """قيد POS: النقد للصندوق، والشبكة لحساب التسوية، لا للبنك مباشرة."""
     from app.models.accounting import Account, JournalEntry, JournalEntryLine, JournalEntryStatus
-    from app.models.sales import Invoice
+    from app.models.sales import Invoice, Customer
     from app.modules.accounting.service import _next_entry_number, get_operational_account
 
     cash_account = await db.get(Account, terminal.cash_account_id) if terminal.cash_account_id else None
@@ -977,22 +982,25 @@ async def _create_pos_journal(db: AsyncSession, tenant_id: str, user_id: str, tx
     if not cash_account or not sales_account or (tx.vat_amount > 0 and not vat_account):
         raise HTTPException(409, "إعداد الحسابات المحاسبية لنقطة البيع غير مكتمل")
 
-    card_amount = Decimal(str(tx.card_amount or 0)) if tx.payment_method == "split" else (tx.total if tx.payment_method in ("mada", "credit_card", "stc_pay", "tabby", "tamara", "bank_transfer") else Decimal("0"))
-    cash_amount = tx.total - card_amount
+    method = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
+    card_amount = Decimal(str(tx.card_amount or 0)) if method in ("split", "mada", "credit_card", "stc_pay", "tabby", "tamara", "bank_transfer") else Decimal("0")
+    cash_amount = min(Decimal(str(tx.cash_tendered or 0)), tx.total) if method in ("cash", "split") else Decimal("0")
+    paid_amount = min(tx.total, cash_amount + card_amount)
+    receivable_amount = max(Decimal("0"), tx.total - paid_amount)
     settlement_account = None
     if card_amount > 0:
         account_id = terminal.card_settlement_account_id
-        if tx.payment_method == "tabby":
+        if method == "tabby":
             account_id = terminal.tabby_account_id
-        elif tx.payment_method == "tamara":
+        elif method == "tamara":
             account_id = terminal.tamara_account_id
-        elif tx.payment_method == "bank_transfer":
+        elif method == "bank_transfer":
             account_id = terminal.bank_transfer_account_id
         settlement_account = await db.get(Account, account_id) if account_id else None
-        if not settlement_account and tx.payment_method not in ("tabby", "tamara", "bank_transfer"):
+        if not settlement_account and method not in ("tabby", "tamara", "bank_transfer"):
             settlement_account = await get_operational_account(db, tenant_id, "default_card")
         if not settlement_account:
-            label = "تابي" if tx.payment_method == "tabby" else "تمارا" if tx.payment_method == "tamara" else "التحويل البنكي" if tx.payment_method == "bank_transfer" else "الشبكة/مدى"
+            label = "تابي" if method == "tabby" else "تمارا" if method == "tamara" else "التحويل البنكي" if method == "bank_transfer" else "الشبكة/مدى"
             raise HTTPException(409, f"يجب تحديد حساب تسوية {label} من شجرة الحسابات")
 
     entry = JournalEntry(
@@ -1013,6 +1021,13 @@ async def _create_pos_journal(db: AsyncSession, tenant_id: str, user_id: str, tx
     if card_amount > 0:
         db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=settlement_account.id,
             description=f"تسوية شبكة {tx.transaction_number}", debit=card_amount, credit=0, line_order=order)); order += 1
+    if receivable_amount > 0 and invoice_id:
+        invoice = await db.get(Invoice, invoice_id)
+        customer = await db.get(Customer, invoice.customer_id) if invoice else None
+        if not customer or not customer.ar_account_id:
+            raise HTTPException(409, "لا يوجد حساب عميل لإثبات المبلغ المتبقي")
+        db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=customer.ar_account_id,
+            description=f"متبقي على العميل {tx.transaction_number}", debit=receivable_amount, credit=0, line_order=order)); order += 1
     taxable = tx.total - tx.vat_amount
     db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry.id, account_id=sales_account.id,
         description=f"مبيعات {tx.transaction_number}", debit=0, credit=taxable, line_order=order)); order += 1
@@ -1201,6 +1216,13 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         select(POSTransactionLine).where(POSTransactionLine.transaction_id == tx.id)
     )
     lines = lines_r.scalars().all()
+    payment_method = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
+    if payment_method == "cash":
+        paid_amount = min(Decimal(str(tx.cash_tendered or 0)), Decimal(str(tx.total or 0)))
+    elif payment_method == "split":
+        paid_amount = min(Decimal(str(tx.card_amount or 0)) + Decimal(str(tx.cash_tendered or 0)), Decimal(str(tx.total or 0)))
+    else:
+        paid_amount = min(Decimal(str(tx.card_amount or 0)), Decimal(str(tx.total or 0)))
     invoice_subtotal = Decimal("0")
     invoice_discount = Decimal("0")
     for line in lines:
@@ -1238,7 +1260,7 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         total=tx.total,
         currency_code="SAR",
         qr_code=tx.qr_code,
-        paid_amount=tx.total,
+        paid_amount=paid_amount,
         notes=f"POS:{tx.transaction_number}|PAYMENT:{tx.payment_method}",
         status=InvoiceStatus.CONFIRMED,
         created_by=user_id,
@@ -1249,8 +1271,8 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
     # وتقارير المتبقي. لا ننشئ قيدًا هنا لأن قيد POS يُنشأ في create_transaction
     # عبر _create_pos_journal، ومنعًا لتكرار القيد المحاسبي.
     payment_parts: list[tuple[Decimal, PaymentMethod]] = []
-    if tx.payment_method == "split":
-        cash_amount = Decimal(str(tx.total or 0)) - Decimal(str(tx.card_amount or 0))
+    if payment_method == "split":
+        cash_amount = min(Decimal(str(tx.cash_tendered or 0)), Decimal(str(tx.total or 0)))
         if cash_amount > 0:
             payment_parts.append((cash_amount, PaymentMethod.CASH))
         if Decimal(str(tx.card_amount or 0)) > 0:
@@ -1267,8 +1289,9 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
             "tamara": PaymentMethod.CREDIT_CARD,
             "bank_transfer": PaymentMethod.BANK_TRANSFER,
         }
-        payment_method = method_map.get(tx.payment_method, PaymentMethod.CASH)
-        payment_parts.append((Decimal(str(tx.total or 0)), payment_method))
+        payment_method_enum = method_map.get(payment_method, PaymentMethod.CASH)
+        if paid_amount > 0:
+            payment_parts.append((paid_amount, payment_method_enum))
 
     for amount, payment_method in payment_parts:
         if amount <= 0:
@@ -1287,7 +1310,7 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
             notes=f"دفعة تلقائية من نقطة البيع {tx.transaction_number} — طريقة الدفع: {tx.payment_method}",
             created_by=user_id,
         ))
-    invoice.status = InvoiceStatus.PAID
+    invoice.status = InvoiceStatus.PAID if paid_amount >= Decimal(str(tx.total or 0)) - Decimal("0.01") else InvoiceStatus.PARTIAL
 
     # أسطر الفاتورة من أسطر المعاملة، مع تخزين سعر الوحدة قبل الضريبة.
     for i, line in enumerate(lines):

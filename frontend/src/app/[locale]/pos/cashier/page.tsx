@@ -403,17 +403,18 @@ export default function POSCashierPage() {
   const completeSale = async () => {
     if (!session)     { alert(isAr ? "لا توجد جلسة مفتوحة" : "No open session"); return; }
     if (!cart.length) { alert(isAr ? "السلة فارغة" : "Cart is empty"); return; }
-    if (payMethod === "cash" && parseFloat(cashTendered || "0") < grandTotal) {
-      alert(isAr ? "المبلغ المدفوع أقل من الإجمالي" : "Insufficient cash"); return;
+    const enteredCash = parseFloat(cashTendered || "0");
+    const enteredCard = parseFloat(cardAmount || "0");
+    const enteredPaid = payMethod === "cash" ? enteredCash : payMethod === "split" ? enteredCash + enteredCard : enteredCard;
+    if (enteredPaid <= 0 || enteredPaid > grandTotal + 0.01) {
+      alert(isAr ? "أدخل مبلغ تحصيل صحيح" : "Enter a valid payment amount"); return;
     }
-    if ((["mada", "tabby", "tamara", "bank_transfer"] as string[]).includes(payMethod) && Math.abs(parseFloat(cardAmount || "0") - grandTotal) > 0.01) {
-      alert(isAr ? "أدخل مبلغ الشبكة مساويًا للإجمالي" : "Network amount must equal the total"); return;
+    if (enteredPaid < grandTotal - 0.01 && !customerId) {
+      alert(isAr ? "اختر عميلاً أولاً لتسجيل دفعة جزئية" : "Select a customer before recording a partial payment"); return;
     }
     if (payMethod === "split") {
-      const splitCash = parseFloat(cashTendered || "0");
-      const splitNetwork = parseFloat(cardAmount || "0");
-      if (splitCash < 0 || splitNetwork < 0 || Math.abs(splitCash + splitNetwork - grandTotal) > 0.01) {
-        alert(isAr ? "يجب أن يساوي مجموع النقد والشبكة الإجمالي" : "Cash plus network must equal the total"); return;
+      if (enteredCash < 0 || enteredCard < 0) {
+        alert(isAr ? "أدخل مبالغ صحيحة" : "Enter valid amounts"); return;
       }
     }
     setCompleting(true);
