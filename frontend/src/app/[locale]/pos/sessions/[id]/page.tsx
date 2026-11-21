@@ -293,6 +293,7 @@ export default function SessionDetailPage() {
                   <th>{isAr ? "الإجمالي" : "Total"}</th>
                   <th>{isAr ? "ضريبة" : "VAT"}</th>
                   <th>{isAr ? "طريقة الدفع" : "Payment"}</th>
+                  <th>{isAr ? "المدفوع / المتبقي" : "Paid / Remaining"}</th>
                   <th>{isAr ? "الحالة" : "Status"}</th>
                   <th>{isAr ? "الوقت" : "Time"}</th>
                   <th></th>
@@ -321,12 +322,16 @@ export default function SessionDetailPage() {
                         {PAYMENT_LABELS[txn.payment_method] || txn.payment_method}
                       </div>
                     </td>
+                    <td style={{ fontSize: 12, lineHeight: 1.6 }}>
+                      <div style={{ color: "var(--success)", fontWeight: 700 }}>{isAr ? "مدفوع:" : "Paid:"} {fmt(Number(txn.paid_amount || 0))} {sar}</div>
+                      <div style={{ color: Number(txn.remaining_amount || 0) > 0 ? "#B45309" : "var(--text-muted)", fontWeight: 600 }}>{isAr ? "متبقي:" : "Remaining:"} {fmt(Number(txn.remaining_amount || 0))} {sar}</div>
+                    </td>
                     <td>
                       <span className={`badge ${
-                        txn.status === "completed" ? "badge-success" :
+                        txn.payment_status === "partial" ? "badge-warning" : txn.status === "completed" ? "badge-success" :
                         txn.status === "refunded"  ? "badge-warning" : "badge-gray"
                       }`}>
-                        {txn.status === "completed" ? (isAr ? "مكتملة" : "Completed") :
+                        {txn.payment_status === "partial" ? (isAr ? "مدفوعة جزئياً" : "Partially paid") : txn.status === "completed" ? (isAr ? "مدفوعة بالكامل" : "Paid in full") :
                          txn.status === "refunded"  ? (isAr ? "مستردة" : "Refunded") :
                          txn.status === "cancelled" ? (isAr ? "ملغاة" : "Cancelled") :
                          (isAr ? "غير محددة" : "Unknown")}

@@ -444,7 +444,11 @@ export default function POSCashierPage() {
         customer_phone: custPhone || undefined,
         discount_amount: overallDiscAmt,
       });
-      setReceiptModal({ ...res.data, cart: [...cart], grandTotal, change, payMethod, cashTendered, cardAmount, paidNow: enteredPaid, remaining: Math.max(0, grandTotal - enteredPaid) });
+      // نعتمد على المبلغ الذي ثبّته الخادم، لا على قيمة الحقل في الواجهة.
+      // هذا يمنع عرض الدفعة الجزئية كأنها كاملة عند اختلاف التقريب أو طريقة الدفع.
+      const serverPaid = Number(res.data?.paid_amount ?? enteredPaid);
+      const serverRemaining = Number(res.data?.remaining_amount ?? Math.max(0, grandTotal - serverPaid));
+      setReceiptModal({ ...res.data, cart: [...cart], grandTotal, change, payMethod, cashTendered, cardAmount, paidNow: serverPaid, remaining: serverRemaining });
       setCart([]); setCashTendered(""); setCardAmount(""); setCustName(""); setCustPhone(""); setCustomerId(undefined); setCustomerSearch(""); setOverallDisc("0"); setPayMethod("cash");
       // طباعة تلقائية إذا كان الجهاز مضبوطاً على الطباعة — الإيصال فقط.
       if (terminal?.print_receipt) {

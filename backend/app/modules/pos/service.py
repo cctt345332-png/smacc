@@ -677,6 +677,22 @@ async def get_session_report(db: AsyncSession, tenant_id: str, session_id: str) 
                 "id": tx.id,
                 "transaction_number": tx.transaction_number,
                 "total": float(tx.total),
+                # حالة تنفيذ العملية ليست حالة التحصيل؛ الدفع الجزئي يجب أن
+                # يبقى ظاهرًا كجزئي في تقرير الجلسة والفاتورة المرتبطة.
+                "paid_amount": float(min(
+                    Decimal(str(tx.total or 0)),
+                    (Decimal(str(tx.cash_tendered or 0)) if (tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)) in ("cash", "split") else Decimal("0"))
+                    + (Decimal(str(tx.card_amount or 0)) if (tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)) in ("mada", "tabby", "tamara", "bank_transfer", "split") else Decimal("0")),
+                )),
+                "remaining_amount": float(max(Decimal("0"), Decimal(str(tx.total or 0)) - min(
+                    Decimal(str(tx.total or 0)),
+                    (Decimal(str(tx.cash_tendered or 0)) if (tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)) in ("cash", "split") else Decimal("0"))
+                    + (Decimal(str(tx.card_amount or 0)) if (tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)) in ("mada", "tabby", "tamara", "bank_transfer", "split") else Decimal("0")),
+                ))),
+                "payment_status": "paid" if (
+                    (Decimal(str(tx.cash_tendered or 0)) if (tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)) in ("cash", "split") else Decimal("0"))
+                    + (Decimal(str(tx.card_amount or 0)) if (tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)) in ("mada", "tabby", "tamara", "bank_transfer", "split") else Decimal("0"))
+                ) >= Decimal(str(tx.total or 0)) - Decimal("0.01") else "partial",
                 "vat_amount": float(tx.vat_amount),
                 "status": tx.status.value if hasattr(tx.status, "value") else str(tx.status),
                 "payment_method": tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method),
@@ -988,6 +1004,20 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         "transaction_id": tx.id,
         "transaction_number": tx.transaction_number,
         "total": float(grand_total),
+        "paid_amount": float(min(grand_total, (
+            cash_tendered if payment_method in ("cash", "split") else Decimal("0")
+        ) + (
+            card_amount if payment_method in ("mada", "tabby", "tamara", "bank_transfer", "split") else Decimal("0")
+        ))),
+        "remaining_amount": float(max(Decimal("0"), grand_total - min(grand_total, (
+            cash_tendered if payment_method in ("cash", "split") else Decimal("0")
+        ) + (
+            card_amount if payment_method in ("mada", "tabby", "tamara", "bank_transfer", "split") else Decimal("0")
+        )))),
+        "payment_status": "paid" if (
+            (cash_tendered if payment_method in ("cash", "split") else Decimal("0"))
+            + (card_amount if payment_method in ("mada", "tabby", "tamara", "bank_transfer", "split") else Decimal("0"))
+        ) >= grand_total - Decimal("0.01") else "partial",
         "vat_amount": float(vat_total),
         "change_amount": float(change_amount),
         "qr_code": tx.qr_code,

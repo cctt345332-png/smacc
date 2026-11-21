@@ -11,7 +11,6 @@ from app.models.pos import POSCashOutflow, POSSession, POSTerminal, POSTransacti
 from app.models.pos_maintenance import POSMaintenancePayment
 from app.models.purchases import Bill, BillPayment
 from app.models.sales import Invoice, InvoiceLine, Payment
-from app.models.settlements import CustodySettlement
 from app.models.treasury import Voucher
 from app.modules.pos.service import get_terminal_performance_report
 
@@ -171,23 +170,6 @@ async def build_daily_report(
         expense_q = expense_q.where(RepExpense.rep_id == rep_id)
     rep_expenses = (await db.execute(expense_q)).scalars().all()
 
-    settlement_q = select(CustodySettlement).where(CustodySettlement.tenant_id == tenant_id)
-    if start:
-        settlement_q = settlement_q.where(CustodySettlement.settled_at >= start)
-    if end:
-        settlement_q = settlement_q.where(CustodySettlement.settled_at < end)
-    if terminal_id:
-        settlement_q = settlement_q.where(
-            CustodySettlement.source_type == "pos",
-            CustodySettlement.source_id == terminal_id,
-        )
-    elif rep_id:
-        settlement_q = settlement_q.where(
-            CustodySettlement.source_type == "rep",
-            CustodySettlement.source_id == rep_id,
-        )
-    settlements = (await db.execute(settlement_q)).scalars().all()
-
     maintenance_q = select(POSMaintenancePayment).where(POSMaintenancePayment.tenant_id == tenant_id)
     if start:
         maintenance_q = maintenance_q.where(POSMaintenancePayment.created_at >= start)
@@ -272,10 +254,6 @@ async def build_daily_report(
             "gross_profit": gross_profit,
             "net_profit": net_profit,
             "vat": sales_vat,
-            "custody_expected": sum((_money(row.expected_amount) for row in settlements), 0.0),
-            "custody_received": sum((_money(row.received_amount) for row in settlements), 0.0),
-            "custody_difference": sum((_money(row.difference) for row in settlements), 0.0),
-            "custody_count": len(settlements),
             "maintenance_count": len(maintenance_payments),
         },
         "payment_methods": by_method,
@@ -291,6 +269,5 @@ async def build_daily_report(
                 "source": "pos" if row in pos_payment_rows else ("rep" if row in rep_payment_rows else "customer"),
             } for row in payments],
             "bill_payments": [{"number": row.payment_number, "date": row.payment_date.isoformat(), "amount": _money(row.amount), "method": str(row.payment_method or "")} for row in bill_payments],
-            "settlements": [{"source_type": row.source_type, "source_id": row.source_id, "expected": _money(row.expected_amount), "received": _money(row.received_amount), "difference": _money(row.difference)} for row in settlements],
         },
     }
