@@ -1197,6 +1197,18 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
     invoice_id = str(uuid.uuid4())
     now = datetime.utcnow()
 
+    lines_r = await db.execute(
+        select(POSTransactionLine).where(POSTransactionLine.transaction_id == tx.id)
+    )
+    lines = lines_r.scalars().all()
+    invoice_subtotal = Decimal("0")
+    invoice_discount = Decimal("0")
+    for line in lines:
+        rate = Decimal(str(line.vat_rate or 0))
+        divisor = Decimal("1") + rate / Decimal("100") if rate > 0 else Decimal("1")
+        invoice_subtotal += (Decimal(str(line.quantity)) * Decimal(str(line.unit_price)) / divisor).quantize(Decimal("0.01"))
+        invoice_discount += (Decimal(str(line.discount_amount or 0)) / divisor).quantize(Decimal("0.01"))
+
     customer_id = tx.customer_id
     if not customer_id:
         customer = await _get_or_create_pos_cash_customer(db, tenant_id, user_id)
@@ -1217,11 +1229,11 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         seller_vat_number=vat_settings.vat_number if vat_settings else "",
         seller_cr_number=vat_settings.cr_number if vat_settings else "",
         buyer_name_ar=tx.customer_name or "عميل نقدي",
-        subtotal=tx.subtotal,
-        discount_amount=tx.discount_amount,
-        # السعر الذي يحدده الكاشير نهائي وشامل للضريبة؛ الوعاء هو الصافي
-        # بعد تفكيك الضريبة، وليس سعرًا يضاف إليه VAT مرة أخرى.
-        taxable_amount=tx.subtotal - tx.discount_amount - tx.vat_amount,
+        # نوحّد تخزين الفاتورة مع فواتير المندوب والإدارة: subtotal وunit_price
+        # قبل الضريبة، بينما total هو السعر النهائي الشامل للضريبة.
+        subtotal=invoice_subtotal,
+        discount_amount=invoice_discount,
+        taxable_amount=invoice_subtotal - invoice_discount,
         vat_amount=tx.vat_amount,
         total=tx.total,
         currency_code="SAR",
@@ -1277,25 +1289,25 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         ))
     invoice.status = InvoiceStatus.PAID
 
-    # أسطر الفاتورة من أسطر المعاملة
-    lines_r = await db.execute(
-        select(POSTransactionLine).where(POSTransactionLine.transaction_id == tx.id)
-    )
-    lines = lines_r.scalars().all()
+    # أسطر الفاتورة من أسطر المعاملة، مع تخزين سعر الوحدة قبل الضريبة.
     for i, line in enumerate(lines):
         import json as _json
+        rate = Decimal(str(line.vat_rate or 0))
+        divisor = Decimal("1") + rate / Decimal("100") if rate > 0 else Decimal("1")
+        net_unit_price = (Decimal(str(line.unit_price)) / divisor).quantize(Decimal("0.01"))
+        net_discount = (Decimal(str(line.discount_amount or 0)) / divisor).quantize(Decimal("0.01"))
         db.add(InvoiceLine(
             id=str(uuid.uuid4()),
             invoice_id=invoice_id,
             line_order=i,
             description_ar=line.product_name_ar,
             quantity=line.quantity,
-            unit_price=line.unit_price,
+            unit_price=net_unit_price,
             discount_pct=line.discount_pct,
-            discount_amount=line.discount_amount,
+            discount_amount=net_discount,
             vat_rate=line.vat_rate,
             vat_amount=line.vat_amount,
-            subtotal=line.quantity * line.unit_price,
+            subtotal=(Decimal(str(line.quantity)) * net_unit_price).quantize(Decimal("0.01")),
             total=line.total,
             inventory_item_id=line.inventory_item_id,
             serial_item_id=line.serial_item_id,

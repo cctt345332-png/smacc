@@ -1075,9 +1075,15 @@ async def get_invoices(db: AsyncSession, tenant_id: str, status: str | None = No
         for line in invoice.lines or []:
             # unit_price محفوظ قبل الضريبة للمحاسبة؛ هذا الحقل للعرض كسعر البيع
             # الذي يراه المستخدم في بطاقة الصنف والفاتورة.
+            rate = Decimal(str(line.vat_rate or 0))
+            stored = Decimal(str(line.unit_price or 0))
+            is_legacy_pos_gross = (invoice.notes or "").startswith("POS:") and abs(
+                Decimal(str(line.total or 0))
+                - Decimal(str(line.quantity or 0)) * stored
+                + Decimal(str(line.discount_amount or 0))
+            ) <= Decimal("0.01")
             line.__dict__["unit_price_including_vat"] = (
-                Decimal(str(line.unit_price or 0))
-                * (Decimal("1") + Decimal(str(line.vat_rate or 0)) / Decimal("100"))
+                stored if is_legacy_pos_gross else stored * (Decimal("1") + rate / Decimal("100"))
             ).quantize(Decimal("0.01"))
     return invoices
 
@@ -1117,9 +1123,15 @@ async def get_invoice(db: AsyncSession, tenant_id: str, invoice_id: str):
             for serial in serial_result.scalars().all()
         }
     for line in inv.lines or []:
+        rate = Decimal(str(line.vat_rate or 0))
+        stored = Decimal(str(line.unit_price or 0))
+        is_legacy_pos_gross = (inv.notes or "").startswith("POS:") and abs(
+            Decimal(str(line.total or 0))
+            - Decimal(str(line.quantity or 0)) * stored
+            + Decimal(str(line.discount_amount or 0))
+        ) <= Decimal("0.01")
         line.__dict__["unit_price_including_vat"] = (
-            Decimal(str(line.unit_price or 0))
-            * (Decimal("1") + Decimal(str(line.vat_rate or 0)) / Decimal("100"))
+            stored if is_legacy_pos_gross else stored * (Decimal("1") + rate / Decimal("100"))
         ).quantize(Decimal("0.01"))
         line_ids: list[str] = []
         if line.serial_item_id:
