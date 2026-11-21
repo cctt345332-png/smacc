@@ -889,7 +889,7 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
         payment_method=payment_method,
         cash_tendered=cash_tendered,
         change_amount=change_amount,
-        card_amount=card_amount if payment_method == "split" else (grand_total if payment_method in {"mada", "tabby", "tamara", "bank_transfer"} else None),
+        card_amount=card_amount if payment_method in {"split", "mada", "tabby", "tamara", "bank_transfer"} else None,
         qr_code=qr,
         uuid=str(uuid.uuid4()),
         status="completed",
@@ -926,18 +926,20 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
     session.total_vat += vat_total
     session.transaction_count += 1
     if payment_method in ("cash",):
-        session.total_cash += grand_total
+        # لا يدخل في الخزنة إلا المبلغ المحصل فعليًا؛ المتبقي على العميل
+        # لا يُعد نقدًا للجلسة حتى يتم تحصيله لاحقًا.
+        session.total_cash += min(cash_tendered, grand_total)
     elif payment_method in ("mada", "credit_card", "stc_pay"):
-        session.total_card += grand_total
+        session.total_card += min(card_amount, grand_total)
     elif payment_method == "tabby":
-        session.total_tabby += grand_total
+        session.total_tabby += min(card_amount, grand_total)
     elif payment_method == "tamara":
-        session.total_tamara += grand_total
+        session.total_tamara += min(card_amount, grand_total)
     elif payment_method == "bank_transfer":
-        session.total_bank_transfer += grand_total
+        session.total_bank_transfer += min(card_amount, grand_total)
     elif payment_method == "split":
-        session.total_cash += (grand_total - card_amount)
-        session.total_card += card_amount
+        session.total_cash += min(cash_tendered, grand_total)
+        session.total_card += min(card_amount, grand_total)
 
     # إنشاء فاتورة مبسطة تلقائياً
     invoice_id = await _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_settings)
@@ -1674,14 +1676,15 @@ async def refund_transaction(db: AsyncSession, tenant_id: str, user_id: str, tx_
         session.total_vat -= tx.vat_amount
         session.transaction_count = max(0, session.transaction_count - 1)
         pm = tx.payment_method.value if hasattr(tx.payment_method, "value") else str(tx.payment_method)
+        collected_cash = min(Decimal(str(tx.cash_tendered or 0)), tx.total)
+        collected_card = min(Decimal(str(tx.card_amount or 0)), tx.total)
         if pm == "cash":
-            session.total_cash -= tx.total
+            session.total_cash -= collected_cash
         elif pm in ("mada", "credit_card", "stc_pay"):
-            session.total_card -= tx.total
+            session.total_card -= collected_card
         elif pm == "split":
-            card_amt = tx.card_amount or Decimal("0")
-            session.total_cash -= (tx.total - card_amt)
-            session.total_card -= card_amt
+            session.total_cash -= collected_cash
+            session.total_card -= collected_card
         elif pm == "tabby":
             session.total_tabby -= tx.total
         elif pm == "tamara":
