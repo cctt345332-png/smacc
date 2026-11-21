@@ -7,6 +7,14 @@ type IconName = "journal" | "receipt" | "box" | "users" | "pos";
 
 const groups = (base: string, ar: boolean): { title: string; color: string; icon: IconName; reports: { label: string; href: string; desc: string }[] }[] => [
   {
+    title: ar ? "التقرير التنفيذي" : "Executive report",
+    color: "#5A187E",
+    icon: "journal",
+    reports: [
+      { label: ar ? "الملخص اليومي الشامل" : "Daily Comprehensive Summary", href: `${base}/reports/daily`, desc: ar ? "مبيعات ومشتريات وتحصيل وأرباح ومصروفات وPOS وعهد في تقرير واحد" : "Sales, purchases, collections, profit, expenses, POS and custody in one report" },
+    ],
+  },
+  {
     title: ar ? "تقارير المحاسبة المالية" : "Accounting Reports",
     color: "#5A187E",
     icon: "journal",
