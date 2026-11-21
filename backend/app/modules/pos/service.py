@@ -1955,9 +1955,9 @@ async def get_terminal_performance_report(
     for tid in (await db.execute(sessions_q)).scalars().all():
         if tid in rows: rows[tid]["sessions"] += 1
 
-    # لا تعرض التقرير كل الأجهزة النشطة في الحساب؛ اعرض فقط الأجهزة التي
-    # لديها جلسة أو عملية أو مخرج نقدي ضمن الفترة المحددة.
-    values = [row for row in rows.values() if row["sessions"] or row["transactions"] or row["expenses"]]
+    # لا تعرض التقرير كل الأجهزة النشطة في الحساب أو الجلسات الفارغة؛ اعرض
+    # فقط الأجهزة التي لديها بيع أو مخرج نقدي فعلي ضمن الفترة المحددة.
+    values = [row for row in rows.values() if row["transactions"] or row["expenses"]]
     payment_keys = ("cash", "mada", "credit_card", "stc_pay", "tabby", "tamara", "split_cash", "split_card", "bank_transfer", "other_payment")
     totals = {key: sum((r[key] for r in values), 0) for key in ("sessions", "transactions", "sales", "cost", "gross_profit", "expenses", "net_profit", *payment_keys)}
     totals["payments"] = {key: totals[key] for key in payment_keys}
