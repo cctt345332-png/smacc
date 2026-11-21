@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase, getMyTransactions, getTransaction, createCashOutflow } from "@/lib/pos";
 import { getItemsForPicker, getAvailableSerials, searchSerial, getBatches, getVariants } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
-import { getCustomers, createCustomer, getCustomerReceivableAccounts } from "@/lib/sales";
+import { getCustomers, createCustomer } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import ThermalReceipt from "@/components/pos/ThermalReceipt";
 import { useAuthStore } from "@/store/authStore";
@@ -95,7 +95,6 @@ export default function POSCashierPage() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [savingCustomer, setSavingCustomer] = useState(false);
-  const [customerAccounts, setCustomerAccounts] = useState<any[]>([]);
   const [customerForm, setCustomerForm] = useState<any>({
     customer_type: "company", name_ar: "", name_en: "", vat_number: "", cr_number: "",
     national_id: "", owner_name: "", owner_national_id: "", license_number: "", activity_type: "",
@@ -144,7 +143,8 @@ export default function POSCashierPage() {
   const [company, setCompany] = useState<any>(null);
 
   const loadPosCustomers = async (search?: string) => {
-    try { const r = await getCustomers(search || undefined); setCustomers(r.data || []); } catch { setCustomers([]); }
+    if (!terminal?.customer_account_parent_id) { setCustomers([]); return; }
+    try { const r = await getCustomers(search || undefined, terminal?.customer_account_parent_id); setCustomers(r.data || []); } catch { setCustomers([]); }
   };
   const selectCustomer = (customer: any) => {
     setCustomerId(customer.id); setCustName(customer.name_ar || ""); setCustPhone(customer.phone || "");
@@ -152,12 +152,12 @@ export default function POSCashierPage() {
   };
   const savePosCustomer = async () => {
     if (!customerForm.name_ar) { alert(isAr ? "اسم العميل مطلوب" : "Customer name is required"); return; }
-    if (!customerForm.ar_account_id) { alert(isAr ? "اختر حساب العميل من الشجرة" : "Select the customer account"); return; }
+    if (!terminal?.customer_account_parent_id) { alert(isAr ? "لم يتم تحديد حساب العملاء الرئيسي لهذا الجهاز. اطلب من المدير ضبطه من إعدادات أجهزة POS." : "This terminal has no customer account configured. Ask a manager to set it in POS terminal settings."); return; }
     setSavingCustomer(true);
     try {
-      const payload = { ...customerForm, payment_terms_days: parseInt(customerForm.payment_terms_days) || 30,
+      const payload = { ...customerForm, customer_type: "company", payment_terms_days: 30,
         credit_limit: parseFloat(customerForm.credit_limit) || 0, opening_balance: 0,
-        ar_account_id: customerForm.ar_account_id || null,
+        ar_account_id: terminal.customer_account_parent_id,
         ...Object.fromEntries(["name_en","vat_number","cr_number","national_id","owner_name","owner_national_id","license_number","activity_type","address_building","address_street","address_district","address_city","address_postal","address_additional","phone","phone2","email","website","notes"].map(k => [k, customerForm[k] || null])) };
       const r = await createCustomer(payload);
       selectCustomer(r.data); setCustomers((items) => [r.data, ...items]); setShowCustomerForm(false);
@@ -397,6 +397,8 @@ export default function POSCashierPage() {
   }, { sub: 0, disc: 0, vat: 0, total: 0 });
   const overallDiscAmt = (totals.sub * parseFloat(overallDisc || "0")) / 100;
   const grandTotal     = Math.max(0, totals.total - overallDiscAmt);
+  const enteredPayment = payMethod === "cash" ? parseFloat(cashTendered || "0") : payMethod === "split" ? parseFloat(cashTendered || "0") + parseFloat(cardAmount || "0") : parseFloat(cardAmount || "0");
+  const paymentRemaining = Math.max(0, grandTotal - enteredPayment);
   const change         = payMethod === "cash" ? Math.max(0, parseFloat(cashTendered || "0") - grandTotal) : 0;
 
   // ── complete sale ──────────────────────────────────────────────────
@@ -437,12 +439,12 @@ export default function POSCashierPage() {
         payment_method: payMethod,
         customer_id: customerId,
         cash_tendered: payMethod === "cash" ? parseFloat(cashTendered || String(grandTotal)) : payMethod === "split" ? parseFloat(cashTendered || "0") : 0,
-        card_amount: (["mada", "tabby", "tamara", "bank_transfer"] as string[]).includes(payMethod) ? grandTotal : payMethod === "split" ? parseFloat(cardAmount || "0") : undefined,
+        card_amount: (["mada", "tabby", "tamara", "bank_transfer"] as string[]).includes(payMethod) ? enteredCard : payMethod === "split" ? parseFloat(cardAmount || "0") : undefined,
         customer_name: custName || undefined,
         customer_phone: custPhone || undefined,
         discount_amount: overallDiscAmt,
       });
-      setReceiptModal({ ...res.data, cart: [...cart], grandTotal, change, payMethod, cashTendered, cardAmount });
+      setReceiptModal({ ...res.data, cart: [...cart], grandTotal, change, payMethod, cashTendered, cardAmount, paidNow: enteredPaid, remaining: Math.max(0, grandTotal - enteredPaid) });
       setCart([]); setCashTendered(""); setCardAmount(""); setCustName(""); setCustPhone(""); setCustomerId(undefined); setCustomerSearch(""); setOverallDisc("0"); setPayMethod("cash");
       // طباعة تلقائية إذا كان الجهاز مضبوطاً على الطباعة — الإيصال فقط.
       if (terminal?.print_receipt) {
@@ -950,6 +952,7 @@ export default function POSCashierPage() {
           {/* Totals + payment */}
           <div style={{ borderTop: "1px solid var(--border)", padding: "12px 16px", flexShrink: 0, background: "var(--surface)" }}>
             {/* Customer — نفس بيانات العملاء المستخدمة في الإدارة */}
+            {!terminal?.customer_account_parent_id && <div style={{ marginBottom: 8, padding: "7px 9px", borderRadius: 7, background: "#FFF7ED", color: "#9A3412", fontSize: 11 }}>{isAr ? "لم يُضبط حساب العملاء لهذا الجهاز. لن تظهر قائمة العملاء ولن يمكن إضافة عميل حتى يحدده المدير من إعدادات جهاز POS." : "No customer account is configured for this terminal. Customers cannot be listed or added until a manager selects it in POS terminal settings."}</div>}
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <input className="form-input" style={{ fontSize: 12, height: 32 }} placeholder={isAr ? "ابحث عن العميل أو اختره" : "Search/select customer"} value={customerId ? custName : customerSearch} onChange={(e) => { setCustomerId(undefined); setCustName(""); setCustomerSearch(e.target.value); void loadPosCustomers(e.target.value); }} onFocus={() => { if (!customers.length) void loadPosCustomers(); }} />
@@ -957,7 +960,7 @@ export default function POSCashierPage() {
                   {customers.slice(0, 8).map((c: any) => <button key={c.id} type="button" onClick={() => selectCustomer(c)} style={{ display: "block", width: "100%", border: 0, background: "white", padding: "7px 9px", textAlign: isAr ? "right" : "left", cursor: "pointer", fontSize: 12 }}>{c.name_ar} {c.vat_number ? `— ${c.vat_number}` : ""}</button>)}
                 </div>}
               </div>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={async () => { setCustomerForm((f: any) => ({ ...f, name_ar: "", name_en: "", ar_account_id: "" })); try { const r = await getCustomerReceivableAccounts(); setCustomerAccounts(r.data || []); } catch {} setShowCustomerForm(true); }}><Icon name="plus" size={13} /> {isAr ? "عميل جديد" : "New customer"}</button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setCustomerForm((f: any) => ({ ...f, customer_type: "company", name_ar: "", name_en: "", ar_account_id: terminal?.customer_account_parent_id || "" })); setShowCustomerForm(true); }}><Icon name="plus" size={13} /> {isAr ? "عميل جديد" : "New customer"}</button>
             </div>
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
               <input className="form-input" style={{ flex: 1, fontSize: 12, height: 30 }} placeholder={isAr ? "اسم العميل الظاهر" : "Customer name"} value={custName} onChange={(e) => { setCustomerId(undefined); setCustName(e.target.value); }} />
@@ -1015,6 +1018,10 @@ export default function POSCashierPage() {
                 <input type="number" className="form-input" style={{ fontSize: 13 }} placeholder={isAr ? "مبلغ الشبكة" : "Network amount"} value={cardAmount} onChange={(e) => setCardAmount(e.target.value)} />
               </div>
             )}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 10px", marginBottom: 8, borderRadius: 8, background: paymentRemaining > 0 ? "#FFF7ED" : "#F0FDF4", color: paymentRemaining > 0 ? "#9A3412" : "#166534", fontSize: 12, fontWeight: 700 }}>
+              <span>{isAr ? "المدفوع الآن:" : "Paid now:"} {fmt(Math.min(enteredPayment, grandTotal))} {sar}</span>
+              <span>{paymentRemaining > 0 ? (isAr ? "المتبقي:" : "Remaining:") : (isAr ? "مكتمل" : "Paid in full")} {paymentRemaining > 0 ? `${fmt(paymentRemaining)} ${sar}` : ""}</span>
+            </div>
 
             <button className="btn btn-primary" style={{ width: "100%", justifyContent: "center", fontSize: 15, height: 44 }}
               onClick={completeSale} disabled={completing || !cart.length || !session}>
@@ -1030,9 +1037,8 @@ export default function POSCashierPage() {
           <div className="card" style={{ width: "100%", maxWidth: 760, maxHeight: "90vh", overflowY: "auto" }}>
             <div className="card-header"><h3 className="card-title">{isAr ? "إضافة عميل — بيانات الفوترة الكاملة" : "Add customer — Full billing details"}</h3><button className="btn btn-ghost btn-icon" onClick={() => setShowCustomerForm(false)}><Icon name="close" size={18} /></button></div>
             <div className="card-body" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 10 }}>
-              {[["customer_type", isAr ? "نوع العميل" : "Customer type"], ["name_ar", isAr ? "اسم العميل / الشركة *" : "Name *"], ["name_en", isAr ? "الاسم بالإنجليزية" : "English name"], ["vat_number", isAr ? "الرقم الضريبي" : "VAT number"], ["cr_number", isAr ? "السجل التجاري" : "CR number"], ["national_id", isAr ? "رقم الهوية" : "National ID"], ["phone", isAr ? "الجوال" : "Phone"], ["email", isAr ? "البريد الإلكتروني" : "Email"], ["activity_type", isAr ? "النشاط التجاري" : "Business activity"], ["address_building", isAr ? "رقم المبنى" : "Building"], ["address_street", isAr ? "الشارع" : "Street"], ["address_district", isAr ? "الحي" : "District"], ["address_city", isAr ? "المدينة" : "City"], ["address_postal", isAr ? "الرمز البريدي" : "Postal code"], ["address_additional", isAr ? "الرقم الإضافي" : "Additional number"]].map(([key, label]) => key === "customer_type" ? <label key={key} style={{ fontSize: 12 }}>{label}<select className="form-input form-select" value={customerForm[key]} onChange={(e) => setCustomerForm((f: any) => ({ ...f, [key]: e.target.value }))}><option value="company">{isAr ? "شركة" : "Company"}</option><option value="individual">{isAr ? "فرد" : "Individual"}</option><option value="government">{isAr ? "حكومي" : "Government"}</option></select></label> : <label key={key} style={{ fontSize: 12 }}>{label}<input className="form-input" value={customerForm[key]} onChange={(e) => setCustomerForm((f: any) => ({ ...f, [key]: e.target.value }))} /></label>)}
-              <label style={{ fontSize: 12 }}>{isAr ? "حساب العميل الرئيسي *" : "Receivable account *"}<select className="form-input form-select" value={customerForm.ar_account_id} onChange={(e) => setCustomerForm((f: any) => ({ ...f, ar_account_id: e.target.value }))}><option value="">{isAr ? "اختر الحساب" : "Select account"}</option>{customerAccounts.map((a: any) => <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>)}</select></label>
-              <label style={{ fontSize: 12 }}>{isAr ? "شروط السداد بالأيام" : "Payment terms (days)"}<input type="number" className="form-input" value={customerForm.payment_terms_days} onChange={(e) => setCustomerForm((f: any) => ({ ...f, payment_terms_days: e.target.value }))} /></label>
+              {[["name_ar", isAr ? "اسم الشركة *" : "Company name *"], ["vat_number", isAr ? "الرقم الضريبي" : "VAT number"], ["cr_number", isAr ? "السجل التجاري" : "CR number"], ["phone", isAr ? "الجوال" : "Phone"], ["activity_type", isAr ? "النشاط التجاري" : "Business activity"], ["address_building", isAr ? "رقم المبنى" : "Building"], ["address_street", isAr ? "الشارع" : "Street"], ["address_district", isAr ? "الحي" : "District"], ["address_city", isAr ? "المدينة" : "City"], ["address_postal", isAr ? "الرمز البريدي" : "Postal code"], ["address_additional", isAr ? "الرقم الإضافي" : "Additional number"]].map(([key, label]) => <label key={key} style={{ fontSize: 12 }}>{label}<input className="form-input" value={customerForm[key]} onChange={(e) => setCustomerForm((f: any) => ({ ...f, [key]: e.target.value }))} /></label>)}
+
               <label style={{ fontSize: 12, gridColumn: "1 / -1" }}>{isAr ? "ملاحظات" : "Notes"}<textarea className="form-input" rows={2} value={customerForm.notes} onChange={(e) => setCustomerForm((f: any) => ({ ...f, notes: e.target.value }))} /></label>
             </div>
             <div className="card-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><button className="btn btn-secondary" onClick={() => setShowCustomerForm(false)}>{isAr ? "إلغاء" : "Cancel"}</button><button className="btn btn-primary" disabled={savingCustomer} onClick={savePosCustomer}>{savingCustomer ? (isAr ? "جاري الحفظ..." : "Saving...") : (isAr ? "حفظ واختيار العميل" : "Save and select")}</button></div>
@@ -1331,6 +1337,11 @@ export default function POSCashierPage() {
               </button>
             </div>
 
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, margin: "12px 16px 0", padding: "10px 12px", borderRadius: 8, background: receiptModal.remaining > 0 ? "#FFF7ED" : "#F0FDF4", color: receiptModal.remaining > 0 ? "#9A3412" : "#166534", fontSize: 12, fontWeight: 700 }}>
+              <span>{isAr ? "المدفوع:" : "Paid:"} {fmt(receiptModal.paidNow || 0)} {sar}</span>
+              <span>{receiptModal.remaining > 0 ? (isAr ? "المتبقي:" : "Remaining:") : (isAr ? "مدفوعة بالكامل" : "Paid in full")} {receiptModal.remaining > 0 ? `${fmt(receiptModal.remaining)} ${sar}` : ""}</span>
+            </div>
+
             {/* Thermal Receipt Preview */}
             <div style={{ overflowY: "auto", flex: 1, padding: 16, background: "#F8FAFC", display: "flex", justifyContent: "center" }}>
               <div style={{ background: "white", boxShadow: "0 2px 12px rgba(0,0,0,0.1)", borderRadius: 4 }}>
@@ -1363,7 +1374,7 @@ export default function POSCashierPage() {
                   payment_method={receiptModal.payMethod}
                   cash_tendered={receiptModal.payMethod === "cash" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cashTendered || "0") : undefined}
                   change_amount={receiptModal.change}
-                  card_amount={["mada", "bank_transfer"].includes(receiptModal.payMethod) || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
+                  card_amount={["mada", "tabby", "tamara", "bank_transfer"].includes(receiptModal.payMethod) || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || "0") : undefined}
                   customer_name={receiptModal.customer_name}
                   customer_phone={receiptModal.customer_phone}
                   qr_code={receiptModal.qr_code}
@@ -1426,7 +1437,7 @@ export default function POSCashierPage() {
             payment_method={receiptModal.payMethod}
             cash_tendered={receiptModal.payMethod === "cash" || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cashTendered || "0") : undefined}
             change_amount={receiptModal.change}
-            card_amount={["mada", "bank_transfer"].includes(receiptModal.payMethod) || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || String(receiptModal.grandTotal)) : undefined}
+            card_amount={["mada", "tabby", "tamara", "bank_transfer"].includes(receiptModal.payMethod) || receiptModal.payMethod === "split" ? parseFloat(receiptModal.cardAmount || "0") : undefined}
             customer_name={receiptModal.customer_name}
             customer_phone={receiptModal.customer_phone}
             qr_code={receiptModal.qr_code}

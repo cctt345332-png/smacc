@@ -66,13 +66,14 @@ async def opening_balance_aging(
 async def list_customers(
     search: Optional[str] = None,
     rep_id: Optional[str] = None,
+    account_parent_id: Optional[str] = None,
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     # المندوب يشوف عملاءه فقط
     if user["role"] == "sales_rep":
         rep_id = await get_rep_id_for_user(db, user["user_id"])
-    return await service.get_customers(db, user["tenant_id"], search, rep_id)
+    return await service.get_customers(db, user["tenant_id"], search, rep_id, account_parent_id)
 
 
 @router.get("/customers/chart-import/preview")

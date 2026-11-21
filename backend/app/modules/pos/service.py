@@ -29,6 +29,20 @@ TX_REFUNDED    = "refunded"
 logger = logging.getLogger(__name__)
 
 
+async def _validate_customer_account_parent(db: AsyncSession, tenant_id: str, account_id: str | None):
+    if not account_id:
+        return None
+    from app.models.accounting import Account
+    account = await db.get(Account, account_id)
+    if not account or account.tenant_id != tenant_id or not account.is_active:
+        raise HTTPException(400, "حساب العملاء الرئيسي غير موجود أو غير فعال")
+    account_type = getattr(account.account_type, "value", account.account_type)
+    nature = getattr(account.nature, "value", account.nature)
+    if account_type != "asset" or nature != "debit":
+        raise HTTPException(400, "يجب اختيار حساب عملاء مدين ضمن الأصول")
+    return account
+
+
 def _validate_close_pin(pin: str | None) -> str:
     value = str(pin or "")
     if not re.fullmatch(r"\d{4}", value):
@@ -86,6 +100,7 @@ async def get_terminals(db: AsyncSession, tenant_id: str):
             "tabby_account_id": t.tabby_account_id,
             "tamara_account_id": t.tamara_account_id,
             "bank_transfer_account_id": t.bank_transfer_account_id,
+            "customer_account_parent_id": t.customer_account_parent_id,
             "fiscal_year_id": t.fiscal_year_id,
             "receipt_header": t.receipt_header,
             "receipt_footer": t.receipt_footer,
@@ -124,6 +139,7 @@ async def get_terminal_by_user(db: AsyncSession, tenant_id: str, user_id: str):
         "print_receipt": t.print_receipt,
         "warehouse_id": t.warehouse_id,
         "maintenance_warehouse_id": t.maintenance_warehouse_id,
+        "customer_account_parent_id": t.customer_account_parent_id,
         "assigned_user_id": t.assigned_user_id,
     }
 
@@ -193,6 +209,9 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
     cfg = ACTIVITY_CONFIG.get(bt, ACTIVITY_CONFIG["general"])
     allow_purchase = data.get("allow_purchase", bt in POS_PURCHASE_ACTIVITIES)
     maintenance_warehouse_id = data.get("maintenance_warehouse_id") or None
+    customer_account_parent = await _validate_customer_account_parent(
+        db, tenant_id, data.get("customer_account_parent_id")
+    )
     if maintenance_warehouse_id:
         from app.models.inventory import Warehouse
         warehouse = await db.get(Warehouse, maintenance_warehouse_id)
@@ -214,6 +233,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         tabby_account_id=data.get("tabby_account_id"),
         tamara_account_id=data.get("tamara_account_id"),
         bank_transfer_account_id=data.get("bank_transfer_account_id"),
+        customer_account_parent_id=customer_account_parent.id if customer_account_parent else None,
         fiscal_year_id=data.get("fiscal_year_id"),
         receipt_header=data.get("receipt_header"),
         receipt_footer=data.get("receipt_footer"),
@@ -247,6 +267,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         "tabby_account_id": terminal.tabby_account_id,
         "tamara_account_id": terminal.tamara_account_id,
         "bank_transfer_account_id": terminal.bank_transfer_account_id,
+        "customer_account_parent_id": terminal.customer_account_parent_id,
         "fiscal_year_id": terminal.fiscal_year_id,
         "receipt_header": terminal.receipt_header,
         "receipt_footer": terminal.receipt_footer,
@@ -278,16 +299,25 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         warehouse = await db.get(Warehouse, data["maintenance_warehouse_id"])
         if not warehouse or warehouse.tenant_id != tenant_id or not warehouse.is_active:
             raise HTTPException(400, "مستودع الصيانة غير موجود أو غير فعال")
+    if "customer_account_parent_id" in data:
+        customer_account_parent = await _validate_customer_account_parent(
+            db, tenant_id, data.get("customer_account_parent_id")
+        )
+    else:
+        customer_account_parent = None
     allowed = [
         "name", "branch_name", "business_type", "warehouse_id", "maintenance_warehouse_id",
         "cash_account_id", "sales_account_id", "vat_account_id",
         "bank_account_id", "card_settlement_account_id", "tabby_account_id", "tamara_account_id", "bank_transfer_account_id", "fiscal_year_id",
+        "customer_account_parent_id",
         "receipt_header", "receipt_footer", "print_receipt",
         "allow_discount", "max_discount_pct", "allow_purchase", "is_active",
         "assigned_user_id",
     ]
     for k in allowed:
         if k == "maintenance_warehouse_id" and k in data:
+            setattr(t, k, data[k] or None)
+        elif k == "customer_account_parent_id" and k in data:
             setattr(t, k, data[k] or None)
         elif k in data and data[k] is not None:
             setattr(t, k, data[k])
@@ -322,6 +352,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         "tabby_account_id": t.tabby_account_id,
         "tamara_account_id": t.tamara_account_id,
         "bank_transfer_account_id": t.bank_transfer_account_id,
+        "customer_account_parent_id": t.customer_account_parent_id,
         "fiscal_year_id": t.fiscal_year_id,
         "receipt_header": t.receipt_header,
         "receipt_footer": t.receipt_footer,

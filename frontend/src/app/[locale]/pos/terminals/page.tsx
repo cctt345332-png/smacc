@@ -45,7 +45,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
   const emptyForm = {
     name: "", branch_name: "",
     close_pin: "",
-    warehouse_id: "", maintenance_warehouse_id: "", cash_account_id: "", sales_account_id: "",
+    warehouse_id: "", maintenance_warehouse_id: "", cash_account_id: "", sales_account_id: "", customer_account_parent_id: "",
     vat_account_id: "", bank_account_id: "", card_settlement_account_id: "", tabby_account_id: "", tamara_account_id: "", bank_transfer_account_id: "", fiscal_year_id: "",
     receipt_header: "", receipt_footer: "",
     print_receipt: true, allow_discount: true,
@@ -115,6 +115,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
       close_pin: "",
       warehouse_id: t.warehouse_id || "",
       maintenance_warehouse_id: t.maintenance_warehouse_id || "",
+      customer_account_parent_id: t.customer_account_parent_id || "",
       cash_account_id: t.cash_account_id || "",
       sales_account_id: t.sales_account_id || "",
       vat_account_id: t.vat_account_id || "",
@@ -144,6 +145,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
         maintenance_warehouse_id: form.maintenance_warehouse_id || null,
         cash_account_id:  form.cash_account_id  || null,
         sales_account_id: form.sales_account_id || null,
+        customer_account_parent_id: form.customer_account_parent_id || null,
         vat_account_id:   form.vat_account_id   || null,
         bank_account_id:  form.bank_account_id  || null,
         card_settlement_account_id: form.card_settlement_account_id || null,
@@ -482,6 +484,16 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
                       <option key={a.id} value={a.id}>{a.code} — {a.name_ar}</option>
                     ))}
                   </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">{ar ? "حساب العملاء الرئيسي" : "Customer Receivables Parent Account"}</label>
+                  <select className="form-input form-select" value={form.customer_account_parent_id} onChange={(e) => upd("customer_account_parent_id", e.target.value)}>
+                    <option value="">{ar ? "— اختر حساب العملاء من الشجرة —" : "— Select customer account —"}</option>
+                    {accounts.filter((a: any) => a.account_type === "asset" && a.nature === "debit" && a.is_active !== false).map((a: any) => (
+                      <option key={a.id} value={a.id}>{a.code} — {a.name_ar}{a.is_posting ? "" : " (رئيسي)"}</option>
+                    ))}
+                  </select>
+                  <p className="form-hint">{ar ? "يُنشأ حساب كل عميل جديد تحته، ويعرض POS العملاء الموجودين داخل هذا الحساب وفروعه." : "New customers are created below this account, and POS shows customers in this account tree."}</p>
                 </div>
                 <div className="form-group">
                   <label className="form-label">{ar ? "حساب ضريبة القيمة المضافة" : "VAT Account"}</label>

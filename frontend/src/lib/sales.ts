@@ -1,7 +1,9 @@
 import api from "./api";
 
 // Customers
-export const getCustomers = (search?: string) => api.get("/sales/customers", { params: search ? { search } : {} });
+export const getCustomers = (search?: string, accountParentId?: string) => api.get("/sales/customers", {
+  params: { ...(search ? { search } : {}), ...(accountParentId ? { account_parent_id: accountParentId } : {}) },
+});
 export const getCustomer = (id: string) => api.get(`/sales/customers/${id}`);
 export const getCustomerReceivableAccounts = () => api.get("/sales/customers/ar-accounts");
 export const createCustomer = (data: any) => api.post("/sales/customers", data);

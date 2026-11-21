@@ -180,12 +180,29 @@ async def _reserve_invoice_serials(
 
 
 # ─── Customers ───────────────────────────────────────────────────────
-async def get_customers(db: AsyncSession, tenant_id: str, search: str | None = None, rep_id: str | None = None):
+async def get_customers(
+    db: AsyncSession, tenant_id: str, search: str | None = None,
+    rep_id: str | None = None, account_parent_id: str | None = None,
+):
     q = select(Customer).where(Customer.tenant_id == tenant_id)
     if search:
         q = q.where(Customer.name_ar.ilike(f"%{search}%") | Customer.customer_number.ilike(f"%{search}%"))
     if rep_id:
         q = q.where(Customer.rep_id == rep_id)
+    if account_parent_id:
+        accounts = (await db.execute(select(Account.id, Account.parent_id).where(Account.tenant_id == tenant_id))).all()
+        parent_by_id = {account_id: parent_id for account_id, parent_id in accounts}
+        allowed_accounts = set()
+        for account_id, _parent_id in accounts:
+            current = account_id
+            while current:
+                if current == account_parent_id:
+                    allowed_accounts.add(account_id)
+                    break
+                current = parent_by_id.get(current)
+        if not allowed_accounts:
+            return []
+        q = q.where(Customer.ar_account_id.in_(allowed_accounts))
     q = q.order_by(Customer.customer_number)
     r = await db.execute(q)
     return r.scalars().all()
