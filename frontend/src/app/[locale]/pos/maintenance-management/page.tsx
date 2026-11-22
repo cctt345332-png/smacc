@@ -19,8 +19,8 @@ export default function MaintenanceManagementPage(props: { params: Promise<{ loc
   const ar = locale === "ar";
   const searchParams = useSearchParams();
   const view = searchParams.get("view") === "report" ? "report" : "tickets";
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(today);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [status, setStatus] = useState("");
   const [terminalId, setTerminalId] = useState("");
   const [terminals, setTerminals] = useState<any[]>([]);
