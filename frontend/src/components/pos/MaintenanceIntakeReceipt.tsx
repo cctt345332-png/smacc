@@ -22,6 +22,7 @@ export default function MaintenanceIntakeReceipt({ ticket, company, terminalName
       {company?.logo_data && <img src={company.logo_data} alt="logo" style={{ display: "block", maxWidth: 120, maxHeight: 48, margin: "0 auto 5px", objectFit: "contain" }} />}
       <div style={{ textAlign: "center", fontWeight: 800, fontSize: 15 }}>{company?.name || "الشركة"}</div>
       {company?.phone && <div style={{ textAlign: "center", fontSize: 10 }}>{company.phone}</div>}
+      <div style={{ textAlign: "center", fontSize: 10, direction: "ltr", marginTop: 1 }}>www.ab-tw.com</div>
       <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />
       <div style={{ textAlign: "center", fontWeight: 800, fontSize: 14 }}>إيصال استلام جهاز صيانة</div>
       <div style={{ textAlign: "center", fontSize: 10 }}>غير ضريبي — طلب فحص وصيانة</div>
@@ -43,6 +44,8 @@ export default function MaintenanceIntakeReceipt({ ticket, company, terminalName
       <div style={{ marginTop: 5, paddingTop: 5, borderTop: "1px solid #000" }}><b>وصف المشكلة:</b><div style={{ whiteSpace: "pre-wrap", marginTop: 3 }}>{ticket?.reported_problem || "—"}</div></div>
       <div style={{ borderTop: "1px dashed #000", margin: "8px 0 5px" }} />
       <div style={{ textAlign: "center", fontSize: 10 }}>تم استلام الجهاز للفحص أولًا، وسيتم اعتماد السعر بعد تقرير الفحص.</div>
+      <div style={{ textAlign: "center", fontWeight: 800, fontSize: 11, marginTop: 8 }}>شكرًا لثقتكم بنا</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 2 }}>نسعد بخدمتكم دائمًا</div>
       <div style={{ textAlign: "center", marginTop: 8, fontSize: 9 }}>{ticket?.ticket_number}</div>
     </div>
   );
