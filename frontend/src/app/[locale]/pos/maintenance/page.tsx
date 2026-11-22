@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, recordMaintenancePayment, getTerminalMaintenanceSerials, updateMaintenanceTicket, addMaintenanceService } from "@/lib/pos";
 import { getItemsForPicker } from "@/lib/inventory";
 import { getCustomers, createCustomer } from "@/lib/sales";
@@ -16,6 +16,7 @@ type CartLine = { product_id: string; name_ar: string; tracking_type: string; qu
 export default function POSMaintenancePage(props: { params: Promise<{ locale: string }> }) {
   const { locale } = use(props.params);
   const ar = locale === "ar";
+  const router = useRouter();
   const qs = useSearchParams();
   const terminalId = qs.get("terminal_id") || "";
   const sessionId = qs.get("session_id") || "";
@@ -136,11 +137,16 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
   };
 
 
-  return <div dir={ar ? "rtl" : "ltr"} style={{ padding: 20 }}>
-    <div className="page-header">
-      <div><div className="breadcrumb"><Link href={`/${locale}/pos/cashier?terminal=${terminalId}&session_id=${sessionId}`}>{ar ? "الكاشير" : "Cashier"}</Link><span className="breadcrumb-sep">/</span><span>{ar ? "الصيانة" : "Maintenance"}</span></div><h1 className="page-title">{ar ? "تشغيل الصيانة" : "Maintenance Counter"}</h1><p className="page-subtitle">{terminal?.name || "—"} — {ar ? "نفس جلسة الكاشير، وأصناف مستودع الصيانة فقط" : "Same cashier session, maintenance warehouse stock only"}</p></div>
-      <Link href={`/${locale}/pos/cashier?terminal=${terminalId}&session_id=${sessionId}`} className="btn btn-secondary"><Icon name="arrowRight" size={15} />{ar ? "العودة للكاشير" : "Back to cashier"}</Link>
+  return <div dir={ar ? "rtl" : "ltr"} className="legacy-pos" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - var(--header-height))", overflow: "hidden" }}>
+    <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+      <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/${locale}/pos/cashier?terminal=${encodeURIComponent(terminalId)}&session_id=${encodeURIComponent(sessionId)}`)} title={ar ? "العودة للكاشير" : "Back to cashier"}><Icon name={ar ? "arrowRight" : "arrowLeft"} size={16} /></button>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: "#F4EFF7", display: "flex", alignItems: "center", justifyContent: "center", color: "#3E0865" }}><Icon name="settings" size={16} /></div>
+        <div><div style={{ fontWeight: 700, fontSize: 13 }}>{terminal?.name || "—"}</div><div style={{ fontSize: 11, color: "#3E0865", fontWeight: 600 }}>{ar ? "صيانة الأجهزة" : "Device maintenance"}</div></div>
+      </div>
+      <div style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 8 }}><span className="badge badge-info">{ar ? "جلسة الكاشير" : "Cashier session"}</span><span style={{ fontSize: 12, color: "var(--text-muted)" }}>{ar ? "اقتراح القطع فقط — الصرف من الإدارة" : "Parts are proposed here; issue from management"}</span></div>
     </div>
+    <div style={{ padding: 20, overflow: "auto", flex: 1 }}>
     <div className="grid-2" style={{ gridTemplateColumns: "minmax(0, 1.2fr) minmax(360px, .8fr)", alignItems: "start", gap: 18 }}>
       {selectedTicket ? <div className="card" style={{ padding: 18 }}>
         <div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title"><Icon name="settings" size={17} />{ar ? "قطع مستودع الصيانة — بعد الفحص" : "Maintenance parts — after inspection"}</h3><span className="badge badge-info">{items.length} صنف</span></div>
@@ -171,6 +177,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
           <div className="form-hint" style={{ marginTop: 10 }}>بعد حفظ التقرير والقطع المقترحة، تراجع الإدارة الطلب وتعتمد الإصلاح وتصرف القطع من مخزون الصيانة.</div>
         </>}
       </div>
+    </div>
     </div>
     {receiptTicket && <div className="modal-backdrop no-print" style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}><div className="card" style={{ padding: 18, width: 360 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}><h3 className="card-title">إيصال استلام الصيانة</h3><button className="btn btn-ghost btn-sm" onClick={() => setReceiptTicket(null)}>×</button></div><MaintenanceIntakeReceipt ticket={receiptTicket} company={company} terminalName={terminal?.name} /><div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn btn-primary" style={{ flex: 1 }} onClick={printIntakeReceipt}>طباعة حرارية</button><button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setReceiptTicket(null)}>إغلاق</button></div></div></div>}
     {receiptTicket && <div id="maintenance-intake-print-area" style={{ display: "none" }}><MaintenanceIntakeReceipt ticket={receiptTicket} company={company} terminalName={terminal?.name} /></div>}
