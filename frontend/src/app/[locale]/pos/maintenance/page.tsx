@@ -39,8 +39,14 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
 
   const load = async () => {
     try {
-      const [tr, tk, catalog, customerList, companyResult] = await Promise.all([getTerminals(), getMaintenanceTickets({ terminal_id: terminalId || undefined, session_id: sessionId || undefined }), getItemsForPicker({}), getCustomers(), getCompany()]);
+      const tr = await getTerminals();
       const found = (tr.data || []).find((x: any) => x.id === terminalId);
+      const [tk, catalog, customerList, companyResult] = await Promise.all([
+        getMaintenanceTickets({ terminal_id: terminalId || undefined, session_id: sessionId || undefined }),
+        getItemsForPicker({}),
+        getCustomers(undefined, found?.maintenance_customer_account_parent_id || found?.customer_account_parent_id || undefined),
+        getCompany(),
+      ]);
       setTerminal(found || null);
       setTickets(tk.data || []);
       setCatalogItems(catalog.data || []);
@@ -80,13 +86,12 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     const deviceProduct = catalogItems.find((item) => item.id === form.product_id);
     if (!deviceProduct || !form.reported_problem.trim()) return alert("اختر موديل الجهاز من الكتالوج واكتب وصف العطل");
     if (!form.device_serial.trim()) return alert("رقم السيريال مطلوب");
-    if (attachments.length < 3) return alert("ارفع 3 صور للجهاز على الأقل: أمام، خلف، جانب");
     setSaving(true);
     try {
       let customer = customers.find((item) => item.id === form.customer_id);
       if (manualCustomer) {
         if (!form.customer_name.trim()) return alert("اكتب اسم العميل");
-        const createdCustomer = await createCustomer({ customer_type: "individual", name_ar: form.customer_name.trim(), phone: form.customer_phone.trim() || undefined, address_street: form.customer_address.trim() || undefined });
+        const createdCustomer = await createCustomer({ customer_type: "individual", name_ar: form.customer_name.trim(), phone: form.customer_phone.trim() || undefined, address_street: form.customer_address.trim() || undefined, ar_account_id: terminal?.maintenance_customer_account_parent_id || terminal?.customer_account_parent_id || undefined });
         customer = createdCustomer.data;
       }
       if (!manualCustomer && !customer) return alert("اختر العميل أو فعّل الإدخال اليدوي");
@@ -170,7 +175,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
           <div className="grid-2" style={{ marginTop: 10 }}><input className="form-input" type="date" value={form.purchase_date} onChange={e => setForm({ ...form, purchase_date: e.target.value })} /><select className="form-input form-select" value={form.lock_type} onChange={e => setForm({ ...form, lock_type: e.target.value })}><option value="none">الجهاز غير محمي</option><option value="password">كلمة سر</option><option value="pattern">نمط</option><option value="screen_pin">رمز شاشة</option></select></div>
           {form.lock_type !== "none" && <input className="form-input" style={{ marginTop: 10 }} placeholder="كلمة سر / نمط الجهاز *" value={form.lock_secret} onChange={e => setForm({ ...form, lock_secret: e.target.value })} />}
           <div className="grid-2" style={{ marginTop: 10 }}><select className="form-input form-select" value={form.problem_type} onChange={e => setForm({ ...form, problem_type: e.target.value })}><option value="">اختر نوع المشكلة *</option><option value="screen">الشاشة</option><option value="charging">الشحن</option><option value="battery">البطارية</option><option value="software">السوفتوير</option><option value="other">أخرى</option></select><input type="file" accept="image/png,image/jpeg" multiple className="form-input" onChange={e => handleAttachments(e.target.files)} /></div>
-          <div className="form-hint">مطلوب 3 صور على الأقل (أمام، خلف، جانب) — تم اختيار {attachments.length} صور</div>
+          <div className="form-hint">الصور اختيارية — يمكنك رفع صور أمامية أو خلفية أو جانبية عند الحاجة (تم اختيار {attachments.length} صور)</div>
           <div className="card" style={{ marginTop: 10, padding: 10 }}><b>الأعراض</b><div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 6, marginTop: 6 }}>{["لا يشتغل نهائياً", "يشتغل ويطفي", "يسخن كثيراً", "لا يشحن", "مشاكل في الصوت", "مشاكل في اللمس", "الشاشة مظلمة", "تطبيقات تتوقف"].map(symptom => <label key={symptom} style={{ fontSize: 12 }}><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={e => setForm({ ...form, symptoms: e.target.checked ? [...form.symptoms, symptom] : form.symptoms.filter(item => item !== symptom) })} /> {symptom}</label>)}</div></div>
           <textarea className="form-input" rows={4} style={{ marginTop: 10 }} placeholder="وصف تفصيلي للمشكلة *" value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} />
           <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={save} disabled={saving}>{saving ? "جاري التسجيل..." : "إنشاء طلب وطباعة إيصال الاستلام"}</button>

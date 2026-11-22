@@ -101,6 +101,7 @@ async def get_terminals(db: AsyncSession, tenant_id: str):
             "tamara_account_id": t.tamara_account_id,
             "bank_transfer_account_id": t.bank_transfer_account_id,
             "customer_account_parent_id": t.customer_account_parent_id,
+            "maintenance_customer_account_parent_id": t.maintenance_customer_account_parent_id,
             "fiscal_year_id": t.fiscal_year_id,
             "receipt_header": t.receipt_header,
             "receipt_footer": t.receipt_footer,
@@ -212,6 +213,9 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
     customer_account_parent = await _validate_customer_account_parent(
         db, tenant_id, data.get("customer_account_parent_id")
     )
+    maintenance_customer_account_parent = await _validate_customer_account_parent(
+        db, tenant_id, data.get("maintenance_customer_account_parent_id")
+    )
     if maintenance_warehouse_id:
         from app.models.inventory import Warehouse
         warehouse = await db.get(Warehouse, maintenance_warehouse_id)
@@ -234,6 +238,9 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         tamara_account_id=data.get("tamara_account_id"),
         bank_transfer_account_id=data.get("bank_transfer_account_id"),
         customer_account_parent_id=customer_account_parent.id if customer_account_parent else None,
+        maintenance_customer_account_parent_id=(
+            maintenance_customer_account_parent.id if maintenance_customer_account_parent else None
+        ),
         fiscal_year_id=data.get("fiscal_year_id"),
         receipt_header=data.get("receipt_header"),
         receipt_footer=data.get("receipt_footer"),
@@ -268,6 +275,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         "tamara_account_id": terminal.tamara_account_id,
         "bank_transfer_account_id": terminal.bank_transfer_account_id,
         "customer_account_parent_id": terminal.customer_account_parent_id,
+        "maintenance_customer_account_parent_id": terminal.maintenance_customer_account_parent_id,
         "fiscal_year_id": terminal.fiscal_year_id,
         "receipt_header": terminal.receipt_header,
         "receipt_footer": terminal.receipt_footer,
@@ -305,11 +313,18 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         )
     else:
         customer_account_parent = None
+    if "maintenance_customer_account_parent_id" in data:
+        maintenance_customer_account_parent = await _validate_customer_account_parent(
+            db, tenant_id, data.get("maintenance_customer_account_parent_id")
+        )
+    else:
+        maintenance_customer_account_parent = None
     allowed = [
         "name", "branch_name", "business_type", "warehouse_id", "maintenance_warehouse_id",
         "cash_account_id", "sales_account_id", "vat_account_id",
         "bank_account_id", "card_settlement_account_id", "tabby_account_id", "tamara_account_id", "bank_transfer_account_id", "fiscal_year_id",
         "customer_account_parent_id",
+        "maintenance_customer_account_parent_id",
         "receipt_header", "receipt_footer", "print_receipt",
         "allow_discount", "max_discount_pct", "allow_purchase", "is_active",
         "assigned_user_id",
@@ -318,6 +333,8 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         if k == "maintenance_warehouse_id" and k in data:
             setattr(t, k, data[k] or None)
         elif k == "customer_account_parent_id" and k in data:
+            setattr(t, k, data[k] or None)
+        elif k == "maintenance_customer_account_parent_id" and k in data:
             setattr(t, k, data[k] or None)
         elif k in data and data[k] is not None:
             setattr(t, k, data[k])
@@ -353,6 +370,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         "tamara_account_id": t.tamara_account_id,
         "bank_transfer_account_id": t.bank_transfer_account_id,
         "customer_account_parent_id": t.customer_account_parent_id,
+        "maintenance_customer_account_parent_id": t.maintenance_customer_account_parent_id,
         "fiscal_year_id": t.fiscal_year_id,
         "receipt_header": t.receipt_header,
         "receipt_footer": t.receipt_footer,

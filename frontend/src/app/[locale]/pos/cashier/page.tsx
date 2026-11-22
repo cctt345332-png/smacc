@@ -714,8 +714,8 @@ export default function POSCashierPage() {
           <Icon name="invoice" size={14} />
           {isAr ? "الفواتير السابقة" : "Previous invoices"}
         </button>
-        {terminal?.maintenance_warehouse_id && (
-          <button className="btn btn-secondary btn-sm" onClick={() => router.push(`/${locale}/pos/maintenance?terminal_id=${terminal.id}&session_id=${session?.id || ""}`)} title={isAr ? "فتح صيانة هذا الجهاز" : "Open maintenance for this terminal"}>
+        {terminal && (
+          <button className="btn btn-secondary btn-sm" onClick={() => router.push(`/${locale}/pos/maintenance?terminal_id=${encodeURIComponent(terminal.id)}&session_id=${encodeURIComponent(session?.id || "")}`)} title={isAr ? "فتح صيانة هذا الجهاز" : "Open maintenance for this terminal"}>
             <Icon name="settings" size={14} />
             {isAr ? "الصيانة" : "Maintenance"}
           </button>

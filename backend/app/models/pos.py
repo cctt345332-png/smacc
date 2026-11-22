@@ -182,6 +182,10 @@ class POSTerminal(Base):
     customer_account_parent_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("accounts.id"), nullable=True
     )
+    # الحساب الأب الذي تُنشأ تحته حسابات عملاء الصيانة لهذا الجهاز
+    maintenance_customer_account_parent_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("accounts.id"), nullable=True
+    )
     fiscal_year_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("fiscal_years.id"), nullable=True
     )
