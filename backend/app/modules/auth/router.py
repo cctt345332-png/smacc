@@ -13,6 +13,8 @@ from app.core.tenant import get_current_user, require_role
 from app.core.plan_limits import check_plan_limit
 from app.models.user import User
 from app.models.tenant import Tenant
+from app.models.accounting import VATSetting
+from app.modules.accounting.service import normalize_vat_number
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -53,11 +55,13 @@ async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
         business_type=data.business_type,
         plan=data.plan,
         plan_expires_at=plan_expires,
-        vat_number=data.vat_number or None,
+        vat_number=normalize_vat_number(data.vat_number),
         cr_number=data.cr_number or None,
     )
     db.add(tenant)
     await db.flush()  # نحفظ tenant في الـ transaction قبل أي insert يعتمد عليه
+    if tenant.vat_number:
+        db.add(VATSetting(id=str(uuid.uuid4()), tenant_id=tenant.id, vat_number=tenant.vat_number))
 
     # إنشاء المستخدم الأول (admin)
     user = User(

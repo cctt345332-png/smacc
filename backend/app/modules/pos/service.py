@@ -803,6 +803,10 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
     from app.modules.accounting.service import get_vat_settings
     tenant = await db.get(Tenant, tenant_id)
     vat_settings = await get_vat_settings(db, tenant_id)
+    effective_vat_number = (
+        vat_settings.vat_number if vat_settings and vat_settings.vat_number
+        else (tenant.vat_number if tenant else "")
+    )
 
     lines_data = data.get("lines", [])
     if not lines_data:
@@ -883,7 +887,7 @@ async def create_transaction(db: AsyncSession, tenant_id: str, user_id: str, dat
     # QR Code زاتكا
     qr = _qr_tlv(
         seller=tenant.name if tenant else "",
-        vat=vat_settings.vat_number if vat_settings else "",
+        vat=effective_vat_number,
         ts=datetime.utcnow().isoformat(),
         total=grand_total,
         vat_amt=vat_total,
@@ -1300,6 +1304,10 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         customer_id = customer.id
         tx.customer_id = customer_id
 
+    effective_vat_number = (
+        vat_settings.vat_number if vat_settings and vat_settings.vat_number
+        else (tenant.vat_number if tenant else "")
+    )
     invoice = Invoice(
         id=invoice_id,
         tenant_id=tenant_id,
@@ -1311,8 +1319,8 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
         supply_date=now,
         fiscal_year_id=fiscal_year_id,
         seller_name_ar=tenant.name if tenant else "",
-        seller_vat_number=vat_settings.vat_number if vat_settings else "",
-        seller_cr_number=vat_settings.cr_number if vat_settings else "",
+        seller_vat_number=effective_vat_number,
+        seller_cr_number=vat_settings.cr_number if vat_settings else (tenant.cr_number if tenant else ""),
         buyer_name_ar=tx.customer_name or "عميل نقدي",
         # نوحّد تخزين الفاتورة مع فواتير المندوب والإدارة: subtotal وunit_price
         # قبل الضريبة، بينما total هو السعر النهائي الشامل للضريبة.

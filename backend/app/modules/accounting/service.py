@@ -11,6 +11,7 @@ from app.models.accounting import (
     Budget, BudgetLine, VATSetting, AccountingSetup, AccountingAccountMapping,
     JournalEntryStatus, AccountType, AccountNature
 )
+from app.models.tenant import Tenant
 from app.modules.accounting.default_chart import DEFAULT_CHART, DEFAULT_MAPPING_CODES, REQUIRED_MAPPING_KEYS
 from app.modules.accounting.short_default_chart import SHORT_DEFAULT_CHART
 from app.modules.accounting.legacy_company_chart import (
@@ -707,6 +708,14 @@ async def create_budget(db: AsyncSession, tenant_id: str, data: BudgetCreate):
 
 
 # ─── VAT Settings ────────────────────────────────────────────────────
+def normalize_vat_number(value: str | None) -> str | None:
+    """توحيد الرقم الضريبي قبل تخزينه أو استخدامه في QR."""
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
 async def get_vat_settings(db: AsyncSession, tenant_id: str):
     r = await db.execute(select(VATSetting).where(VATSetting.tenant_id == tenant_id))
     return r.scalar_one_or_none()
@@ -729,10 +738,17 @@ async def upsert_vat_settings(db: AsyncSession, tenant_id: str, data: VATSetting
     if not vat:
         vat = VATSetting(id=str(uuid.uuid4()), tenant_id=tenant_id)
         db.add(vat)
-    for k, v in data.model_dump(exclude_none=True).items():
+    values = data.model_dump(exclude_none=True)
+    if "vat_number" in values:
+        values["vat_number"] = normalize_vat_number(values["vat_number"])
+    for k, v in values.items():
         # الحقول الاختيارية القادمة من الواجهة قد تصل كسلسلة فارغة؛
         # يجب حفظها NULL لا كمعرّف حساب فارغ يخالف المفتاح الأجنبي.
         setattr(vat, k, None if v == "" else v)
+    if "vat_number" in values:
+        tenant = await db.get(Tenant, tenant_id)
+        if tenant:
+            tenant.vat_number = values["vat_number"]
     # الربط المحاسبي تلقائي: نستخدم حسابات الشجرة القياسية ولا نطلب اختيارها
     # من هذه الشاشة. لا ننشئ حساباً جديداً ولا نغير أي قيد موجود.
     accounts_result = await db.execute(select(Account).where(Account.tenant_id == tenant_id))

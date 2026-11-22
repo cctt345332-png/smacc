@@ -1231,6 +1231,10 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
     from sqlalchemy import select as sa_select
     tenant_r = await db.execute(sa_select(Tenant).where(Tenant.id == tenant_id))
     tenant = tenant_r.scalar_one_or_none()
+    effective_vat_number = (
+        vat_settings.vat_number if vat_settings and vat_settings.vat_number
+        else (tenant.vat_number if tenant else "")
+    )
 
     if data.invoice_payment_method == InvoicePaymentMethod.CREDIT:
         # المدة الافتراضية للآجل 21 يومًا؛ يحسب النظام التاريخ تلقائيًا
@@ -1291,7 +1295,7 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
     # توليد QR Code (زاتكا TLV)
     qr = _generate_qr_tlv(
         seller_name=tenant.name if tenant else "",
-        vat_number=vat_settings.vat_number if vat_settings else "",
+        vat_number=effective_vat_number,
         timestamp=issue_date.isoformat(),
         total=total,
         vat_amount=total_vat,
@@ -1333,7 +1337,7 @@ async def create_invoice(db: AsyncSession, tenant_id: str, user_id: str, data: I
         fiscal_year_id=data.fiscal_year_id,
         quotation_id=data.quotation_id,
         seller_name_ar=tenant.name if tenant else "",
-        seller_vat_number=vat_settings.vat_number if vat_settings else (tenant.vat_number if tenant else None),
+        seller_vat_number=effective_vat_number or None,
         seller_cr_number=vat_settings.cr_number if vat_settings else (tenant.cr_number if tenant else None),
         seller_address=seller_address,
         buyer_name_ar=customer.name_ar,
@@ -2784,6 +2788,10 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
     from app.models.reps import SalesRep
     from app.modules.inventory.service import _get_default_warehouse_id
     vat_settings = await get_vat_settings(db, tenant_id)
+    effective_vat_number = (
+        vat_settings.vat_number if vat_settings and vat_settings.vat_number
+        else (tenant.vat_number if tenant else "")
+    )
     return_warehouse_id = None
     if original.rep_id:
         rep = await db.get(SalesRep, original.rep_id)
@@ -2794,7 +2802,7 @@ async def create_credit_note(db: AsyncSession, tenant_id: str, user_id: str, dat
         uuid=str(uuid.uuid4()), note_type=data.note_type, original_invoice_id=data.original_invoice_id, customer_id=original.customer_id,
         status=data.status,
         issue_date=issue_date, reason=data.reason, subtotal=taxable_total, vat_amount=total_vat, total=total,
-        qr_code=_generate_qr_tlv(tenant.name if tenant else "", vat_settings.vat_number if vat_settings else "", issue_date.isoformat(), total, total_vat), created_by=user_id,
+        qr_code=_generate_qr_tlv(tenant.name if tenant else "", effective_vat_number, issue_date.isoformat(), total, total_vat), created_by=user_id,
     )
 
     try:

@@ -1,4 +1,5 @@
 import base64
+import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,8 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.tenant import get_tenant_id
 from app.models.tenant import Tenant
+from app.models.accounting import VATSetting
+from app.modules.accounting.service import normalize_vat_number
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -47,8 +50,18 @@ async def update_company(data: CompanyUpdate, tenant_id=Depends(get_tenant_id), 
     tenant = r.scalar_one_or_none()
     if not tenant:
         raise HTTPException(404, "Company not found")
-    for k, v in data.model_dump(exclude_none=True).items():
+    values = data.model_dump(exclude_none=True)
+    if "vat_number" in values:
+        values["vat_number"] = normalize_vat_number(values["vat_number"])
+    for k, v in values.items():
         setattr(tenant, k, v)
+    if "vat_number" in values:
+        vat_result = await db.execute(select(VATSetting).where(VATSetting.tenant_id == tenant_id))
+        vat_settings = vat_result.scalar_one_or_none()
+        if not vat_settings:
+            vat_settings = VATSetting(id=str(uuid.uuid4()), tenant_id=tenant_id)
+            db.add(vat_settings)
+        vat_settings.vat_number = values["vat_number"]
     tenant.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(tenant)
