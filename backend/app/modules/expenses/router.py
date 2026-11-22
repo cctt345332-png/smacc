@@ -11,13 +11,15 @@ router = APIRouter(prefix="/expenses", tags=["expenses"], dependencies=[Depends(
 
 @router.get("", response_model=list[ExpenseOut])
 async def list_expenses(rep_id: str | None = None, status: str | None = None, category: str | None = None,
-                        date_from: datetime | None = None, date_to: datetime | None = None, search: str | None = None,
+                        supervisor_id: str | None = None, date_from: datetime | None = None, date_to: datetime | None = None, search: str | None = None,
                         user=Depends(require_role(["manager", "accountant", "sales_rep"])), db: AsyncSession = Depends(get_db)):
     scoped_rep = rep_id
+    scoped_supervisor = supervisor_id
     if user.get("role") == "sales_rep":
         from app.modules.expenses.service import _rep_for_user
         scoped_rep = (await _rep_for_user(db, user["tenant_id"], user["user_id"])).id
-    return await service.list_expenses(db, user["tenant_id"], rep_id=scoped_rep, status=status, category=category, date_from=date_from, date_to=date_to, search=search)
+        scoped_supervisor = None
+    return await service.list_expenses(db, user["tenant_id"], rep_id=scoped_rep, supervisor_id=scoped_supervisor, status=status, category=category, date_from=date_from, date_to=date_to, search=search)
 
 @router.get("/{expense_id}", response_model=ExpenseOut)
 async def get_expense(expense_id: str, user=Depends(require_role(["manager", "accountant", "sales_rep"])), db: AsyncSession = Depends(get_db)):
@@ -32,13 +34,15 @@ async def get_expense(expense_id: str, user=Depends(require_role(["manager", "ac
 async def create_expense(
     data: ExpenseCreate,
     rep_id: str | None = None,
+    supervisor_id: str | None = None,
     user=Depends(require_role(["manager", "accountant", "sales_rep"])),
     db: AsyncSession = Depends(get_db),
 ):
     # الإدارة تستطيع تسجيل المصروف باسم أي مندوب؛ المندوب لا يستطيع تغيير نفسه.
     if user.get("role") == "sales_rep":
         rep_id = None
-    return await service.create_expense(db, user["tenant_id"], user["user_id"], data, rep_id=rep_id)
+        supervisor_id = None
+    return await service.create_expense(db, user["tenant_id"], user["user_id"], data, rep_id=rep_id, supervisor_id=supervisor_id)
 
 @router.post("/{expense_id}/approve", response_model=ExpenseOut)
 async def approve_expense(expense_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):

@@ -11,7 +11,8 @@ class RepExpense(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
-    rep_id: Mapped[str] = mapped_column(String, ForeignKey("sales_reps.id"), index=True)
+    rep_id: Mapped[str | None] = mapped_column(String, ForeignKey("sales_reps.id"), nullable=True, index=True)
+    supervisor_id: Mapped[str | None] = mapped_column(String, ForeignKey("supervisors.id"), nullable=True, index=True)
     expense_number: Mapped[str] = mapped_column(String(50), index=True)
     expense_date: Mapped[datetime] = mapped_column(DateTime, index=True)
     category: Mapped[str] = mapped_column(String(50), index=True)

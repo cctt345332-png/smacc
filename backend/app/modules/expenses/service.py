@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.expenses import RepExpense, RepExpenseAttachment
-from app.models.reps import SalesRep
+from app.models.reps import SalesRep, Supervisor
 from app.models.user import User
 from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
 from app.modules.expenses.schemas import ExpenseCreate, ExpenseReject
@@ -39,14 +39,17 @@ def _attachment_dto(a: RepExpenseAttachment) -> dict:
             "file_size": a.file_size, "file_data": a.file_data, "created_at": a.created_at}
 
 
-def _dto(e: RepExpense, rep: SalesRep | None = None, user: User | None = None) -> dict:
+def _dto(e: RepExpense, rep: SalesRep | None = None, user: User | None = None, supervisor: Supervisor | None = None) -> dict:
     return {"id": e.id, "tenant_id": e.tenant_id, "rep_id": e.rep_id, "expense_number": e.expense_number,
+            "supervisor_id": e.supervisor_id,
             "expense_date": e.expense_date, "category": e.category, "amount": e.amount,
             "payment_method": e.payment_method, "description": e.description, "status": e.status,
             "rejection_reason": e.rejection_reason, "journal_entry_id": e.journal_entry_id,
             "submitted_by": e.submitted_by, "approved_by": e.approved_by, "approved_at": e.approved_at,
             "created_at": e.created_at, "updated_at": e.updated_at,
             "rep_name": user.full_name if user else None, "rep_code": rep.rep_code if rep else None,
+            "supervisor_name": supervisor.name if supervisor else None,
+            "owner_type": "supervisor" if e.supervisor_id else "rep",
             "attachment_count": len(e.attachments), "attachments": [_attachment_dto(a) for a in e.attachments]}
 
 
@@ -58,8 +61,15 @@ async def _rep_for_user(db: AsyncSession, tenant_id: str, user_id: str) -> Sales
     return rep
 
 
-async def create_expense(db: AsyncSession, tenant_id: str, user_id: str, data: ExpenseCreate, rep_id: str | None = None):
-    if rep_id:
+async def create_expense(db: AsyncSession, tenant_id: str, user_id: str, data: ExpenseCreate, rep_id: str | None = None, supervisor_id: str | None = None):
+    if rep_id and supervisor_id:
+        raise HTTPException(400, "اختر مندوبًا أو مشرفًا فقط")
+    if supervisor_id:
+        supervisor = await db.scalar(select(Supervisor).where(Supervisor.id == supervisor_id, Supervisor.tenant_id == tenant_id, Supervisor.is_active.is_(True)))
+        if not supervisor:
+            raise HTTPException(404, "المشرف غير موجود أو غير فعال")
+        rep = None
+    elif rep_id:
         result = await db.execute(select(SalesRep).where(SalesRep.id == rep_id, SalesRep.tenant_id == tenant_id))
         rep = result.scalar_one_or_none()
         if not rep:
@@ -73,7 +83,7 @@ async def create_expense(db: AsyncSession, tenant_id: str, user_id: str, data: E
         raise HTTPException(400, "حجم المرفق يتجاوز 5 ميجابايت")
     count_result = await db.execute(select(func.count(RepExpense.id)).where(RepExpense.tenant_id == tenant_id))
     number = f"EXP-{(count_result.scalar() or 0) + 1:05d}"
-    expense = RepExpense(id=str(uuid.uuid4()), tenant_id=tenant_id, rep_id=rep_id, expense_number=number,
+    expense = RepExpense(id=str(uuid.uuid4()), tenant_id=tenant_id, rep_id=rep_id, supervisor_id=supervisor_id, expense_number=number,
                          expense_date=data.expense_date.replace(tzinfo=None), category=data.category,
                          amount=data.amount, payment_method=data.payment_method, description=data.description,
                          status="pending", submitted_by=user_id, created_at=datetime.utcnow(), updated_at=datetime.utcnow())
@@ -94,26 +104,28 @@ async def create_expense(db: AsyncSession, tenant_id: str, user_id: str, data: E
     return await get_expense(db, tenant_id, expense.id)
 
 
-async def list_expenses(db: AsyncSession, tenant_id: str, *, rep_id: str | None = None, status: str | None = None,
+async def list_expenses(db: AsyncSession, tenant_id: str, *, rep_id: str | None = None, supervisor_id: str | None = None, status: str | None = None,
                         category: str | None = None, date_from=None, date_to=None, search: str | None = None):
-    q = select(RepExpense, SalesRep, User).join(SalesRep, SalesRep.id == RepExpense.rep_id).join(User, User.id == SalesRep.user_id).options(selectinload(RepExpense.attachments)).where(RepExpense.tenant_id == tenant_id)
+    q = select(RepExpense, SalesRep, User, Supervisor).outerjoin(SalesRep, SalesRep.id == RepExpense.rep_id).outerjoin(User, User.id == SalesRep.user_id).outerjoin(Supervisor, Supervisor.id == RepExpense.supervisor_id).options(selectinload(RepExpense.attachments)).where(RepExpense.tenant_id == tenant_id)
     if rep_id: q = q.where(RepExpense.rep_id == rep_id)
+    if supervisor_id: q = q.where(RepExpense.supervisor_id == supervisor_id)
     if status: q = q.where(RepExpense.status == status)
     if category: q = q.where(RepExpense.category == category)
     if date_from: q = q.where(RepExpense.expense_date >= date_from)
     if date_to: q = q.where(RepExpense.expense_date <= date_to)
     if search: q = q.where(or_(RepExpense.expense_number.ilike(f"%{search}%"), User.full_name.ilike(f"%{search}%"), RepExpense.description.ilike(f"%{search}%")))
     rows = (await db.execute(q.order_by(RepExpense.expense_date.desc(), RepExpense.created_at.desc()))).all()
-    return [_dto(e, r, u) for e, r, u in rows]
+    return [_dto(e, r, u, s) for e, r, u, s in rows]
 
 
 async def get_expense(db: AsyncSession, tenant_id: str, expense_id: str):
     result = await db.execute(select(RepExpense).options(selectinload(RepExpense.attachments)).where(RepExpense.id == expense_id, RepExpense.tenant_id == tenant_id))
     expense = result.scalar_one_or_none()
     if not expense: raise HTTPException(404, "المصروف غير موجود")
-    rep_result = await db.execute(select(SalesRep, User).join(User, User.id == SalesRep.user_id).where(SalesRep.id == expense.rep_id))
-    row = rep_result.first()
-    return _dto(expense, row[0] if row else None, row[1] if row else None)
+    rep_result = await db.execute(select(SalesRep, User).outerjoin(User, User.id == SalesRep.user_id).where(SalesRep.id == expense.rep_id)) if expense.rep_id else None
+    row = rep_result.first() if rep_result else None
+    supervisor = await db.scalar(select(Supervisor).where(Supervisor.id == expense.supervisor_id)) if expense.supervisor_id else None
+    return _dto(expense, row[0] if row else None, row[1] if row else None, supervisor)
 
 
 async def approve_expense(db: AsyncSession, tenant_id: str, user_id: str, expense_id: str):

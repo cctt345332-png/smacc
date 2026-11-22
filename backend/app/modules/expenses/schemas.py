@@ -27,7 +27,8 @@ class ExpenseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
     tenant_id: str
-    rep_id: str
+    rep_id: str | None = None
+    supervisor_id: str | None = None
     expense_number: str
     expense_date: datetime
     category: str
@@ -44,5 +45,7 @@ class ExpenseOut(BaseModel):
     updated_at: datetime
     rep_name: str | None = None
     rep_code: str | None = None
+    supervisor_name: str | None = None
+    owner_type: str = "rep"
     attachment_count: int = 0
     attachments: list[dict] = []
