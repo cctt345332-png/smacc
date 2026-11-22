@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, issueMaintenancePart, recordMaintenancePayment, getTerminalMaintenanceSerials, updateMaintenanceTicket, addMaintenanceService, issueMaintenanceInvoice } from "@/lib/pos";
 import { getItemsForPicker } from "@/lib/inventory";
 import { getCustomers } from "@/lib/sales";
+import { getCompany } from "@/lib/settings";
+import MaintenanceIntakeReceipt from "@/components/pos/MaintenanceIntakeReceipt";
 import { Icon } from "@/components/ui/Icons";
 
 const money = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -28,17 +30,21 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  const [receiptTicket, setReceiptTicket] = useState<any>(null);
+  const [company, setCompany] = useState<any>(null);
   const [inspection, setInspection] = useState({ diagnosis: "", service_name: "", service_amount: "" });
-  const [form, setForm] = useState({ customer_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", approved_cost: "", paid_amount: "" });
+  const [form, setForm] = useState({ customer_id: "", customer_name: "", customer_phone: "", customer_email: "", customer_address: "", product_id: "", device_color: "", device_capacity: "", device_serial: "", purchase_date: "", lock_type: "none", lock_secret: "", problem_type: "", symptoms: [] as string[], reported_problem: "", approved_cost: "", paid_amount: "" });
+  const [attachments, setAttachments] = useState<string[]>([]);
 
   const load = async () => {
     try {
-      const [tr, tk, catalog, customerList] = await Promise.all([getTerminals(), getMaintenanceTickets({ terminal_id: terminalId || undefined, session_id: sessionId || undefined }), getItemsForPicker({}), getCustomers()]);
+      const [tr, tk, catalog, customerList, companyResult] = await Promise.all([getTerminals(), getMaintenanceTickets({ terminal_id: terminalId || undefined, session_id: sessionId || undefined }), getItemsForPicker({}), getCustomers(), getCompany()]);
       const found = (tr.data || []).find((x: any) => x.id === terminalId);
       setTerminal(found || null);
       setTickets(tk.data || []);
       setCatalogItems(catalog.data || []);
       setCustomers(customerList.data || []);
+      setCompany(companyResult.data || null);
       if (found?.maintenance_warehouse_id) {
         const r = await getItemsForPicker({ warehouse_id: found.maintenance_warehouse_id });
         setItems(r.data || []);
@@ -72,16 +78,35 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     if (!terminalId || !sessionId) return alert("افتح جلسة الكاشير أولًا ثم ادخل إلى الصيانة");
     const deviceProduct = catalogItems.find((item) => item.id === form.product_id);
     if (!deviceProduct || !form.reported_problem.trim()) return alert("اختر موديل الجهاز من الكتالوج واكتب وصف العطل");
+    if (!form.device_serial.trim()) return alert("رقم السيريال مطلوب");
+    if (attachments.length < 3) return alert("ارفع 3 صور للجهاز على الأقل: أمام، خلف، جانب");
     setSaving(true);
     try {
       const customer = customers.find((item) => item.id === form.customer_id);
       if (!customer) return alert("اختر العميل قبل رفع التذكرة");
-      const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, customer_id: form.customer_id, customer_name: customer.name_ar, customer_phone: customer.phone || form.customer_phone, device_name: deviceProduct.name_ar, device_serial: form.device_serial, reported_problem: form.reported_problem, approved_cost: 0, paid_amount: 0 });
-      alert("تم تسجيل تذكرة الصيانة. انتقل الآن إلى مرحلة الفحص.");
-      setSelectedTicket(r.data); setCart([]); setForm({ customer_id: "", customer_name: "", customer_phone: "", product_id: "", device_serial: "", reported_problem: "", approved_cost: "", paid_amount: "" });
+      const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, customer_id: form.customer_id, customer_name: customer.name_ar, customer_phone: customer.phone || form.customer_phone, customer_email: form.customer_email, customer_address: form.customer_address, device_name: deviceProduct.name_ar, device_color: form.device_color, device_capacity: form.device_capacity, device_serial: form.device_serial, purchase_date: form.purchase_date || null, lock_type: form.lock_type, lock_secret: form.lock_secret || null, problem_type: form.problem_type, symptoms: form.symptoms, attachment_urls: attachments, reported_problem: form.reported_problem, approved_cost: 0, paid_amount: 0 });
+      alert("تم إنشاء طلب الصيانة. اطبع إيصال الاستلام ثم انتقل الطلب إلى الفحص.");
+      setReceiptTicket(r.data); setSelectedTicket(r.data); setCart([]); setAttachments([]); setForm({ customer_id: "", customer_name: "", customer_phone: "", customer_email: "", customer_address: "", product_id: "", device_color: "", device_capacity: "", device_serial: "", purchase_date: "", lock_type: "none", lock_secret: "", problem_type: "", symptoms: [], reported_problem: "", approved_cost: "", paid_amount: "" });
       await load();
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ عملية الصيانة"); }
     finally { setSaving(false); }
+  };
+
+  const handleAttachments = async (files: FileList | null) => {
+    if (!files) return;
+    const selected = Array.from(files).slice(0, 5);
+    const encoded = await Promise.all(selected.map((file) => new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    })));
+    setAttachments(encoded);
+  };
+
+  const printIntakeReceipt = () => {
+    if (!receiptTicket) return;
+    window.print();
   };
 
   const saveInspection = async () => {
@@ -130,11 +155,18 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
       <div className="card" style={{ padding: 18 }}>
         <div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title">{selectedTicket ? "المرحلة التالية: الفحص والإصلاح" : "المرحلة 1: رفع تذكرة صيانة"}</h3><span className="badge badge-success">جلسة مشتركة</span></div>
         {!selectedTicket ? <>
-          <div className="grid-2"><select className="form-input form-select" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">اختر العميل *</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name_ar} — {customer.customer_number}</option>)}</select><input className="form-input" placeholder="الجوال" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} /></div>
-          <div className="grid-2" style={{ marginTop: 10 }}><select className="form-input form-select" value={form.product_id} onChange={e => setForm({ ...form, product_id: e.target.value })}><option value="">اختر موديل الجهاز من الكتالوج *</option>{catalogItems.map(item => <option key={item.id} value={item.id}>{item.name_ar}{item.sku ? ` — ${item.sku}` : ""}</option>)}</select><input className="form-input" placeholder="سيريال جهاز العميل / IMEI (يدوي)" value={form.device_serial} onChange={e => setForm({ ...form, device_serial: e.target.value })} /></div>
-          <textarea className="form-input" rows={3} style={{ marginTop: 10 }} placeholder="وصف العطل *" value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} />
-          <div className="card" style={{ marginTop: 12, padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>المرحلة 1 — تسجيل الطلب</b><div className="form-hint">لا يوجد سعر أو تحصيل في هذه المرحلة. بعد الحفظ يبدأ الفحص.</div></div>
-          <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={save} disabled={saving}>{saving ? "جاري التسجيل..." : "رفع تذكرة الصيانة"}</button>
+          <div className="card" style={{ padding: 12, background: "#fffbea", border: "1px solid #f4d35e" }}><b>المرحلة 1 — إنشاء طلب صيانة</b><div className="form-hint">لا يوجد سعر أو تحصيل الآن. السعر يحدد بعد الفحص، ويطبع هنا إيصال استلام غير ضريبي.</div></div>
+          <div className="grid-2" style={{ marginTop: 10 }}><select className="form-input form-select" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">اختر العميل *</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name_ar} — {customer.customer_number}</option>)}</select><input className="form-input" placeholder="رقم الجوال *" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} /></div>
+          <div className="grid-2" style={{ marginTop: 10 }}><input className="form-input" placeholder="البريد الإلكتروني (اختياري)" value={form.customer_email} onChange={e => setForm({ ...form, customer_email: e.target.value })} /><input className="form-input" placeholder="العنوان *" value={form.customer_address} onChange={e => setForm({ ...form, customer_address: e.target.value })} /></div>
+          <div className="grid-2" style={{ marginTop: 10 }}><select className="form-input form-select" value={form.product_id} onChange={e => setForm({ ...form, product_id: e.target.value })}><option value="">اختر نوع الجهاز من الكتالوج *</option>{catalogItems.map(item => <option key={item.id} value={item.id}>{item.name_ar}{item.sku ? ` — ${item.sku}` : ""}</option>)}</select><input className="form-input" placeholder="السيريال نمبر *" value={form.device_serial} onChange={e => setForm({ ...form, device_serial: e.target.value })} /></div>
+          <div className="grid-2" style={{ marginTop: 10 }}><input className="form-input" placeholder="اللون" value={form.device_color} onChange={e => setForm({ ...form, device_color: e.target.value })} /><input className="form-input" placeholder="السعة" value={form.device_capacity} onChange={e => setForm({ ...form, device_capacity: e.target.value })} /></div>
+          <div className="grid-2" style={{ marginTop: 10 }}><input className="form-input" type="date" value={form.purchase_date} onChange={e => setForm({ ...form, purchase_date: e.target.value })} /><select className="form-input form-select" value={form.lock_type} onChange={e => setForm({ ...form, lock_type: e.target.value })}><option value="none">الجهاز غير محمي</option><option value="password">كلمة سر</option><option value="pattern">نمط</option><option value="screen_pin">رمز شاشة</option></select></div>
+          {form.lock_type !== "none" && <input className="form-input" style={{ marginTop: 10 }} placeholder="كلمة سر / نمط الجهاز *" value={form.lock_secret} onChange={e => setForm({ ...form, lock_secret: e.target.value })} />}
+          <div className="grid-2" style={{ marginTop: 10 }}><select className="form-input form-select" value={form.problem_type} onChange={e => setForm({ ...form, problem_type: e.target.value })}><option value="">اختر نوع المشكلة *</option><option value="screen">الشاشة</option><option value="charging">الشحن</option><option value="battery">البطارية</option><option value="software">السوفتوير</option><option value="other">أخرى</option></select><input type="file" accept="image/png,image/jpeg" multiple className="form-input" onChange={e => handleAttachments(e.target.files)} /></div>
+          <div className="form-hint">مطلوب 3 صور على الأقل (أمام، خلف، جانب) — تم اختيار {attachments.length} صور</div>
+          <div className="card" style={{ marginTop: 10, padding: 10 }}><b>الأعراض</b><div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 6, marginTop: 6 }}>{["لا يشتغل نهائياً", "يشتغل ويطفي", "يسخن كثيراً", "لا يشحن", "مشاكل في الصوت", "مشاكل في اللمس", "الشاشة مظلمة", "تطبيقات تتوقف"].map(symptom => <label key={symptom} style={{ fontSize: 12 }}><input type="checkbox" checked={form.symptoms.includes(symptom)} onChange={e => setForm({ ...form, symptoms: e.target.checked ? [...form.symptoms, symptom] : form.symptoms.filter(item => item !== symptom) })} /> {symptom}</label>)}</div></div>
+          <textarea className="form-input" rows={4} style={{ marginTop: 10 }} placeholder="وصف تفصيلي للمشكلة *" value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} />
+          <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={save} disabled={saving}>{saving ? "جاري التسجيل..." : "إنشاء طلب وطباعة إيصال الاستلام"}</button>
         </> : <>
           <div className="card" style={{ padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>{selectedTicket.ticket_number} — {selectedTicket.device_name}</b><div className="form-hint">العميل: {selectedTicket.customer_name || "—"} | الحالة: {selectedTicket.status}</div></div>
           <textarea className="form-input" rows={4} style={{ marginTop: 12 }} placeholder="المرحلة 2: تقرير الفحص والتشخيص *" value={inspection.diagnosis} onChange={e => setInspection({ ...inspection, diagnosis: e.target.value })} />
@@ -146,6 +178,9 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
         </>}
       </div>
     </div>
+    {receiptTicket && <div className="modal-backdrop no-print" style={{ position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}><div className="card" style={{ padding: 18, width: 360 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}><h3 className="card-title">إيصال استلام الصيانة</h3><button className="btn btn-ghost btn-sm" onClick={() => setReceiptTicket(null)}>×</button></div><MaintenanceIntakeReceipt ticket={receiptTicket} company={company} terminalName={terminal?.name} /><div style={{ display: "flex", gap: 8, marginTop: 12 }}><button className="btn btn-primary" style={{ flex: 1 }} onClick={printIntakeReceipt}>طباعة حرارية</button><button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setReceiptTicket(null)}>إغلاق</button></div></div></div>}
+    {receiptTicket && <div id="maintenance-intake-print-area" style={{ display: "none" }}><MaintenanceIntakeReceipt ticket={receiptTicket} company={company} terminalName={terminal?.name} /></div>}
     {selectedProduct && <div className="modal-backdrop" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="card" style={{ padding: 20, width: 420 }}><h3 className="card-title">اختر السيريال — {selectedProduct.name_ar}</h3>{serials.length ? serials.map(s => <button key={s.id} className="btn btn-secondary" style={{ width: "100%", marginTop: 8, justifyContent: "space-between" }} onClick={() => addLine(s)}><span>{s.serial_number}</span><span>{money(s.cost_price)} ر.س</span></button>) : <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => addLine()}>إضافة الصنف</button>}<button className="btn btn-ghost" style={{ width: "100%", marginTop: 10 }} onClick={() => { setSelectedProduct(null); setSerials([]); }}>إلغاء</button></div></div>}
+    <style jsx global>{`@media print { body * { visibility:hidden!important; } #maintenance-intake-print-area { display:block!important; visibility:visible!important; position:absolute!important; inset:0!important; width:80mm!important; } #maintenance-intake-print-area * { visibility:visible!important; } @page { size:80mm auto; margin:3mm; } }`}</style>
   </div>;
 }

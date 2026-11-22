@@ -1,8 +1,8 @@
 """صيانة نقاط البيع المعزولة عن فواتير ومبيعات POS."""
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -23,9 +23,20 @@ class POSMaintenanceTicket(Base):
     status: Mapped[str] = mapped_column(String(30), default="open", index=True)
     customer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     customer_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    customer_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    customer_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
     device_name: Mapped[str] = mapped_column(String(300))
+    device_color: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    device_capacity: Mapped[str | None] = mapped_column(String(100), nullable=True)
     device_serial: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    lock_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    lock_secret_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lock_secret_provided: Mapped[bool] = mapped_column(Boolean, default=False)
+    problem_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    symptoms_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     reported_problem: Mapped[str] = mapped_column(Text)
+    attachment_urls_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     assigned_to: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"), nullable=True)

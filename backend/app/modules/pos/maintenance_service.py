@@ -1,4 +1,5 @@
 """خدمة صيانة نقاط البيع — منفصلة عن الفواتير والبيع والتقارير اليومية."""
+import json
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -14,6 +15,7 @@ from app.models.sales import Customer
 from app.models.reps import SalesRep
 from app.models.sales import InvoicePaymentMethod, InvoiceType
 from app.modules.sales.schemas import InvoiceCreate, InvoiceLineCreate
+from app.modules.maintenance.service import _encrypt_secret
 
 MAINTENANCE_STATUSES = {"open", "in_progress", "ready", "completed", "cancelled"}
 
@@ -90,8 +92,16 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
         "rep_id": ticket.rep_id, "invoice_id": ticket.invoice_id,
         "rep_name": rep_name,
         "status": ticket.status, "customer_name": ticket.customer_name,
-        "customer_phone": ticket.customer_phone, "device_name": ticket.device_name,
-        "device_serial": ticket.device_serial, "reported_problem": ticket.reported_problem,
+        "customer_phone": ticket.customer_phone, "customer_email": ticket.customer_email,
+        "customer_address": ticket.customer_address, "device_name": ticket.device_name,
+        "device_color": ticket.device_color, "device_capacity": ticket.device_capacity,
+        "device_serial": ticket.device_serial,
+        "purchase_date": ticket.purchase_date.isoformat() if ticket.purchase_date else None,
+        "lock_type": ticket.lock_type, "lock_secret_provided": bool(ticket.lock_secret_provided),
+        "problem_type": ticket.problem_type,
+        "symptoms": json.loads(ticket.symptoms_json) if ticket.symptoms_json else [],
+        "attachment_urls": json.loads(ticket.attachment_urls_json) if ticket.attachment_urls_json else [],
+        "reported_problem": ticket.reported_problem,
         "diagnosis": ticket.diagnosis, "notes": ticket.notes,
         "assigned_to": ticket.assigned_to, "estimated_cost": float(ticket.estimated_cost or 0),
         "approved_cost": float(ticket.approved_cost or 0), "paid_amount": float(ticket.paid_amount or 0),
@@ -244,7 +254,16 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
         customer_id=customer_id,
         rep_id=rep_id,
         customer_name=(data.get("customer_name") or None), customer_phone=(data.get("customer_phone") or None),
-        device_name=device_name, device_serial=(data.get("device_serial") or None),
+        customer_email=(data.get("customer_email") or None), customer_address=(data.get("customer_address") or None),
+        device_name=device_name, device_color=(data.get("device_color") or None),
+        device_capacity=(data.get("device_capacity") or None), device_serial=(data.get("device_serial") or None),
+        purchase_date=datetime.strptime(data["purchase_date"], "%Y-%m-%d").date() if data.get("purchase_date") else None,
+        lock_type=(data.get("lock_type") or None),
+        lock_secret_encrypted=_encrypt_secret(data.get("lock_secret")),
+        lock_secret_provided=bool(data.get("lock_secret")),
+        problem_type=(data.get("problem_type") or None),
+        symptoms_json=json.dumps(data.get("symptoms") or [], ensure_ascii=False),
+        attachment_urls_json=json.dumps(data.get("attachment_urls") or [], ensure_ascii=False),
         reported_problem=problem, diagnosis=(data.get("diagnosis") or None), notes=(data.get("notes") or None),
         assigned_to=data.get("assigned_to") or None,
         estimated_cost=estimated_cost, approved_cost=approved_cost, paid_amount=paid_amount,
@@ -281,10 +300,20 @@ async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: 
             raise HTTPException(400, "جهاز الكاشير غير صالح أو لا يوجد له مستودع صيانة")
         ticket.terminal_id = terminal.id
         ticket.maintenance_warehouse_id = terminal.maintenance_warehouse_id
-    allowed = {"status", "customer_id", "rep_id", "customer_name", "customer_phone", "device_name", "device_serial", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost"}
+    allowed = {"status", "customer_id", "rep_id", "customer_name", "customer_phone", "customer_email", "customer_address", "device_name", "device_color", "device_capacity", "device_serial", "purchase_date", "lock_type", "problem_type", "reported_problem", "diagnosis", "notes", "assigned_to", "estimated_cost", "approved_cost"}
     for key in allowed:
         if key in data:
-            setattr(ticket, key, Decimal(str(data[key] or 0)) if key in {"estimated_cost", "approved_cost", "paid_amount"} else (data[key] or None if key not in {"status", "device_name", "reported_problem"} else data[key]))
+            if key == "purchase_date" and data[key]:
+                setattr(ticket, key, datetime.strptime(str(data[key]), "%Y-%m-%d").date())
+            else:
+                setattr(ticket, key, Decimal(str(data[key] or 0)) if key in {"estimated_cost", "approved_cost", "paid_amount"} else (data[key] or None if key not in {"status", "device_name", "reported_problem"} else data[key]))
+    if "lock_secret" in data:
+        ticket.lock_secret_encrypted = _encrypt_secret(data.get("lock_secret"))
+        ticket.lock_secret_provided = bool(data.get("lock_secret"))
+    if "symptoms" in data:
+        ticket.symptoms_json = json.dumps(data.get("symptoms") or [], ensure_ascii=False)
+    if "attachment_urls" in data:
+        ticket.attachment_urls_json = json.dumps(data.get("attachment_urls") or [], ensure_ascii=False)
     if ticket.approved_cost is not None and ticket.paid_amount is not None:
         if min(Decimal(str(ticket.approved_cost)), Decimal(str(ticket.paid_amount))) < 0 or Decimal(str(ticket.paid_amount)) > Decimal(str(ticket.approved_cost)):
             raise HTTPException(400, "المبلغ المحصل لا يمكن أن يتجاوز المبلغ المعتمد")
