@@ -43,7 +43,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
       const tr = await getTerminals();
       const found = (tr.data || []).find((x: any) => x.id === terminalId);
       const [tk, catalog, customerList, companyResult] = await Promise.all([
-        getMaintenanceTickets({ terminal_id: terminalId || undefined, session_id: sessionId || undefined }),
+        getMaintenanceTickets({ terminal_id: terminalId || undefined }),
         getItemsForPicker({}),
         getCustomers(undefined, found?.maintenance_customer_account_parent_id || found?.customer_account_parent_id || undefined),
         getCompany(),
@@ -98,7 +98,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
       if (!manualCustomer && !customer) return alert("اختر العميل أو فعّل الإدخال اليدوي");
       const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, customer_id: customer?.id || null, customer_name: manualCustomer ? form.customer_name.trim() : customer?.name_ar, customer_phone: manualCustomer ? form.customer_phone : (customer?.phone || form.customer_phone), customer_address: form.customer_address, device_name: deviceProduct.name_ar, device_color: form.device_color || null, device_capacity: form.device_capacity || null, device_serial: form.device_serial, purchase_date: form.purchase_date || null, lock_type: form.lock_type, lock_secret: form.lock_secret || null, problem_type: form.problem_type, symptoms: form.symptoms, attachment_urls: attachments, reported_problem: form.reported_problem, approved_cost: 0, paid_amount: 0 });
       alert("تم إنشاء طلب الصيانة. اطبع إيصال الاستلام ثم انتقل الطلب إلى الفحص.");
-      setReceiptTicket(r.data); setSelectedTicket(r.data); setCart([]); setAttachments([]); setManualCustomer(false); setForm({ customer_id: "", customer_name: "", customer_phone: "", customer_address: "", product_id: "", device_color: "", device_capacity: "", device_serial: "", purchase_date: "", lock_type: "none", lock_secret: "", problem_type: "", symptoms: [], reported_problem: "", approved_cost: "", paid_amount: "" });
+      setReceiptTicket(r.data); setSelectedTicket(null); setCart([]); setAttachments([]); setManualCustomer(false); setForm({ customer_id: "", customer_name: "", customer_phone: "", customer_address: "", product_id: "", device_color: "", device_capacity: "", device_serial: "", purchase_date: "", lock_type: "none", lock_secret: "", problem_type: "", symptoms: [], reported_problem: "", approved_cost: "", paid_amount: "" });
       await load();
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ عملية الصيانة"); }
     finally { setSaving(false); }
@@ -121,6 +121,21 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     window.print();
   };
 
+  const openTicketInspection = (ticket: any) => {
+    setSelectedTicket(ticket);
+    setCart([]);
+    setInspection({ diagnosis: ticket.diagnosis || "", service_name: "", service_amount: "" });
+  };
+
+  const printInspectionReport = (ticket: any) => {
+    const popup = window.open("", "_blank", "width=760,height=900");
+    if (!popup) return alert("اسمح بالنوافذ المنبثقة لطباعة تقرير الفحص");
+    const esc = (value: any) => String(value || "—").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char] || char));
+    const parts = (ticket.parts || []).map((part: any) => `<tr><td>${esc(part.product_name)}</td><td>${esc(part.quantity)}</td><td>${esc(money(part.unit_price))} ر.س</td></tr>`).join("");
+    popup.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>تقرير فحص ${esc(ticket.ticket_number)}</title><style>@page{size:A4;margin:14mm}body{font-family:Arial,Tahoma,sans-serif;color:#111;line-height:1.6}.header{text-align:center;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:18px}.title{font-size:22px;font-weight:800}.meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;border:1px solid #bbb;padding:12px;margin-bottom:16px}.row{display:flex;gap:8px}.label{font-weight:700}.section{font-weight:800;font-size:16px;border-bottom:1px solid #111;margin-top:18px;margin-bottom:8px;padding-bottom:4px}.diagnosis{border:1px solid #aaa;min-height:80px;padding:10px;white-space:pre-wrap}table{width:100%;border-collapse:collapse}th,td{border:1px solid #aaa;padding:7px;text-align:right}th{background:#f1f1f1}</style></head><body><div class="header"><div class="title">تقرير فحص وصيانة</div><div>رقم الطلب: ${esc(ticket.ticket_number)}</div></div><div class="meta"><div class="row"><span class="label">العميل:</span><span>${esc(ticket.customer_name)}</span></div><div class="row"><span class="label">الجوال:</span><span>${esc(ticket.customer_phone)}</span></div><div class="row"><span class="label">الجهاز:</span><span>${esc(ticket.device_name)}</span></div><div class="row"><span class="label">السيريال:</span><span>${esc(ticket.device_serial)}</span></div></div><div class="section">المشكلة عند الاستلام</div><div class="diagnosis">${esc(ticket.reported_problem)}</div><div class="section">نتيجة الفحص</div><div class="diagnosis">${esc(ticket.diagnosis)}</div><div class="section">القطع المقترحة</div><table><thead><tr><th>القطعة</th><th>الكمية</th><th>السعر</th></tr></thead><tbody>${parts || '<tr><td colspan="3">لا توجد قطع مقترحة</td></tr>'}</tbody></table><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`);
+    popup.document.close();
+  };
+
   const saveInspection = async () => {
     if (!selectedTicket) return;
     if (!inspection.diagnosis.trim()) return alert("اكتب تقرير الفحص والمشكلة المكتشفة أولاً");
@@ -130,7 +145,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
       await updateMaintenanceTicket(selectedTicket.id, { diagnosis: inspection.diagnosis, status: "ready" });
       for (const line of cart) await addMaintenancePart(selectedTicket.id, { product_id: line.product_id, quantity: line.quantity, unit_price: line.unit_price, serial_item_id: line.serial_item_id });
       if (inspection.service_name.trim()) await addMaintenanceService(selectedTicket.id, { service_name: inspection.service_name.trim(), amount: Number(inspection.service_amount) });
-      const refreshed = (await getMaintenanceTickets({ terminal_id: terminalId, session_id: sessionId })).data.find((x: any) => x.id === selectedTicket.id);
+      const refreshed = (await getMaintenanceTickets({ terminal_id: terminalId })).data.find((x: any) => x.id === selectedTicket.id);
       setSelectedTicket(refreshed || selectedTicket); setCart([]); setInspection({ ...inspection, service_name: "", service_amount: "" });
       alert("تم حفظ تقرير الفحص والتكلفة والقطع المقترحة. راجعها ثم اعتمد الإصلاح."); await load();
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ تقرير الفحص"); } finally { setSaving(false); }
@@ -151,9 +166,9 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
       {selectedTicket ? <div className="card" style={{ padding: 18 }}>
         <div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title"><Icon name="settings" size={17} />{ar ? "قطع مستودع الصيانة — بعد الفحص" : "Maintenance parts — after inspection"}</h3><span className="badge badge-info">{items.length} صنف</span></div>
         {!terminal?.maintenance_warehouse_id ? <div className="empty-state">اربط مستودع الصيانة بالجهاز أولًا</div> : loading ? <div className="empty-state">جاري تحميل المخزون...</div> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(170px,1fr))", gap: 10 }}>{items.map(item => <button key={item.id} onClick={() => addProduct(item)} className="card" style={{ padding: 12, textAlign: "right", cursor: "pointer", background: "#fff", border: "1px solid var(--border)" }}><div style={{ fontWeight: 700 }}>{item.name_ar}</div><div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>المتاح: {money(item.quantity_on_hand)}</div><div style={{ color: "var(--primary)", fontWeight: 700, marginTop: 5 }}>{money(item.sale_price)} ر.س</div></button>)}</div>}
-      </div> : <div className="card" style={{ padding: 18, minHeight: 180, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}><div><Icon name="settings" size={28} /><div style={{ fontWeight: 700, marginTop: 10 }}>سيتم عرض قطع الصيانة هنا بعد إنشاء الطلب وفتح مرحلة الفحص</div><div className="form-hint" style={{ marginTop: 6 }}>في البداية يتم تسجيل بيانات الجهاز والعميل والمشكلة فقط.</div></div></div>}
+      </div> : <div className="card" style={{ padding: 18 }}><div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title"><Icon name="receipt" size={17} />طلبات نقطة البيع</h3><span className="badge badge-info">{tickets.length}</span></div>{tickets.length === 0 ? <div className="empty-state">لا توجد طلبات صيانة لهذه الجلسة</div> : <div style={{ display: "grid", gap: 10 }}>{tickets.map((ticket: any) => <div key={ticket.id} className="card" style={{ padding: 12, border: "1px solid var(--border)" }}><div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "start" }}><div><b style={{ color: "var(--primary)" }}>{ticket.ticket_number}</b><div style={{ fontWeight: 700, marginTop: 4 }}>{ticket.device_name}</div><div className="form-hint">{ticket.customer_name || "—"} {ticket.device_serial ? ` — ${ticket.device_serial}` : ""}</div></div><span className="badge badge-gray">{ticket.status}</span></div><div style={{ fontSize: 12, color: "#b91c1c", marginTop: 8 }}>{ticket.reported_problem || "—"}</div><div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}><button className="btn btn-primary btn-sm" onClick={() => openTicketInspection(ticket)}>{ticket.diagnosis ? "تعديل الفحص" : "إجراء الفحص"}</button><button className="btn btn-secondary btn-sm" onClick={() => printInspectionReport(ticket)}>طباعة تقرير الفحص</button></div></div>)}</div>}</div>}
       <div className="card" style={{ padding: 18 }}>
-        <div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title">{selectedTicket ? "المرحلة التالية: الفحص والإصلاح" : "المرحلة 1: رفع تذكرة صيانة"}</h3><span className="badge badge-success">جلسة مشتركة</span></div>
+        <div className="card-header" style={{ padding: 0, marginBottom: 12 }}><h3 className="card-title">{selectedTicket ? "المرحلة التالية: الفحص والإصلاح" : "المرحلة 1: رفع تذكرة صيانة"}</h3>{selectedTicket ? <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedTicket(null); setCart([]); }}>العودة للطلبات</button> : <span className="badge badge-success">جلسة مشتركة</span>}</div>
         {!selectedTicket ? <>
           <div className="card" style={{ padding: 12, background: "#fffbea", border: "1px solid #f4d35e" }}><b>المرحلة 1 — إنشاء طلب صيانة</b><div className="form-hint">لا يوجد سعر أو تحصيل الآن. السعر يحدد بعد الفحص، ويطبع هنا إيصال استلام غير ضريبي.</div></div>
           <div className="grid-2" style={{ marginTop: 10 }}>{manualCustomer ? <input className="form-input" placeholder="اسم العميل *" value={form.customer_name} onChange={e => setForm({ ...form, customer_name: e.target.value, customer_id: "" })} /> : <select className="form-input form-select" value={form.customer_id} onChange={e => setForm({ ...form, customer_id: e.target.value })}><option value="">اختر العميل</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name_ar} — {customer.customer_number}</option>)}</select>}<input className="form-input" placeholder="رقم الجوال *" value={form.customer_phone} onChange={e => setForm({ ...form, customer_phone: e.target.value })} /></div>

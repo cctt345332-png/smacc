@@ -137,11 +137,8 @@ async def management_report(
     terminal_id: str | None = None,
 ):
     """تقرير إداري مستقل للصيانة: الأجهزة، العهدة، القطع، والتحصيل."""
-    # التقرير الإداري يتابع دورة نقاط البيع فقط، لا الطلبات اليدوية غير المرتبطة بجلسة.
-    q = select(POSMaintenanceTicket).where(
-        POSMaintenanceTicket.tenant_id == tenant_id,
-        POSMaintenanceTicket.session_id.is_not(None),
-    )
+    # يشمل طلبات نقاط البيع والطلبات التي أضافتها الإدارة، حتى لا تختفي التذاكر السابقة.
+    q = select(POSMaintenanceTicket).where(POSMaintenanceTicket.tenant_id == tenant_id)
     try:
         if from_date:
             start = datetime.fromisoformat(from_date.replace("Z", "+00:00")).replace(tzinfo=None)
