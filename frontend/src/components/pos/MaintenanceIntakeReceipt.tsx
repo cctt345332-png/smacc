@@ -7,6 +7,13 @@ export type MaintenanceIntakeReceiptProps = {
 };
 
 const fmtDate = (value: any) => value ? new Date(value).toLocaleString("ar-SA") : "—";
+const problemTypeLabels: Record<string, string> = {
+  screen: "الشاشة",
+  charging: "الشحن",
+  battery: "البطارية",
+  software: "السوفتوير",
+  other: "أخرى",
+};
 
 export default function MaintenanceIntakeReceipt({ ticket, company, terminalName }: MaintenanceIntakeReceiptProps) {
   const symptoms = Array.isArray(ticket?.symptoms) ? ticket.symptoms : [];
@@ -31,12 +38,11 @@ export default function MaintenanceIntakeReceipt({ ticket, company, terminalName
       <Row label="اللون" value={ticket?.device_color} />
       <Row label="السعة" value={ticket?.device_capacity} />
       <Row label="السيريال" value={ticket?.device_serial} />
-      <Row label="نوع المشكلة" value={ticket?.problem_type} />
+      <Row label="نوع المشكلة" value={problemTypeLabels[ticket?.problem_type] || ticket?.problem_type} />
       {symptoms.length > 0 && <Row label="الأعراض" value={symptoms.join("، ")} />}
       <div style={{ marginTop: 5, paddingTop: 5, borderTop: "1px solid #000" }}><b>وصف المشكلة:</b><div style={{ whiteSpace: "pre-wrap", marginTop: 3 }}>{ticket?.reported_problem || "—"}</div></div>
       <div style={{ borderTop: "1px dashed #000", margin: "8px 0 5px" }} />
       <div style={{ textAlign: "center", fontSize: 10 }}>تم استلام الجهاز للفحص أولًا، وسيتم اعتماد السعر بعد تقرير الفحص.</div>
-      <div style={{ textAlign: "center", marginTop: 10, fontSize: 10 }}>توقيع العميل: __________________</div>
       <div style={{ textAlign: "center", marginTop: 8, fontSize: 9 }}>{ticket?.ticket_number}</div>
     </div>
   );
