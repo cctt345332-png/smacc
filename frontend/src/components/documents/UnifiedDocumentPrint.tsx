@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 
 export type PrintDocumentKind =
   | "tax_invoice"
@@ -103,13 +103,24 @@ const paymentLabels: Record<string, string> = {
 };
 
 function QR({ value }: { value?: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
+  const [src, setSrc] = useState<string>("");
+
+  // قالب الطباعة فقط: نخرج نفس QR كصورة مكتملة بدل canvas.
+  // المتصفح/صفحة عرض الفاتورة لا تستخدم هذا المكوّن ولا تتأثر به.
   useEffect(() => {
-    if (!value || !ref.current) return;
-    import("qrcode").then(QR => QR.toCanvas(ref.current!, value, { width: 94, margin: 1, errorCorrectionLevel: "M" }, () => {}));
+    let active = true;
+    setSrc("");
+    if (!value) return () => { active = false; };
+    import("qrcode").then(QR =>
+      QR.toDataURL(value, { width: 94, margin: 1, errorCorrectionLevel: "M" })
+        .then(dataUrl => { if (active) setSrc(dataUrl); })
+        .catch(() => { if (active) setSrc(""); })
+    );
+    return () => { active = false; };
   }, [value]);
-  if (!value) return null;
-  return <canvas ref={ref} aria-label="QR" />;
+
+  if (!src) return null;
+  return <img src={src} width={94} height={94} aria-label="QR" alt="QR" />;
 }
 
 function Party({ title, data, fallback, ar }: { title: string; data?: any; fallback?: string; ar: boolean }) {
@@ -137,13 +148,29 @@ export default function UnifiedDocumentPrint({ kind, document, company, party, l
   const partyTitle = isPurchase ? (ar ? "المورد" : "Vendor") : (ar ? "العميل / المشتري" : "Customer / Buyer");
   const lines = document.lines?.length ? document.lines : [{ description_ar: document.party_name || document.notes || meta.ar, quantity: 1, total: document.total, subtotal: document.subtotal ?? document.total }];
   const remaining = Number(document.total || 0) - Number(document.paid_amount || 0);
+  const [qrReady, setQrReady] = useState(!meta.tax || !document.qr_code);
 
   useEffect(() => {
-    if (autoPrint) {
+    if (!meta.tax || !document.qr_code) {
+      setQrReady(true);
+      return;
+    }
+    setQrReady(false);
+    let active = true;
+    import("qrcode").then(QR =>
+      QR.toDataURL(document.qr_code!, { width: 94, margin: 1, errorCorrectionLevel: "M" })
+        .then(() => { if (active) setQrReady(true); })
+        .catch(() => { if (active) setQrReady(true); })
+    );
+    return () => { active = false; };
+  }, [meta.tax, document.qr_code]);
+
+  useEffect(() => {
+    if (autoPrint && qrReady) {
       const timer = window.setTimeout(() => window.print(), 650);
       return () => window.clearTimeout(timer);
     }
-  }, [autoPrint]);
+  }, [autoPrint, qrReady]);
 
   return (
     <div className="udoc-root" dir={ar ? "rtl" : "ltr"} style={{ "--udoc-accent": meta.accent } as React.CSSProperties}>
