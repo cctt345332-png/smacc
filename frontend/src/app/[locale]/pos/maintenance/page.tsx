@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, issueMaintenancePart, recordMaintenancePayment, getTerminalMaintenanceSerials, updateMaintenanceTicket, addMaintenanceService, issueMaintenanceInvoice } from "@/lib/pos";
+import { getTerminals, getMaintenanceTickets, createMaintenanceTicket, addMaintenancePart, recordMaintenancePayment, getTerminalMaintenanceSerials, updateMaintenanceTicket, addMaintenanceService } from "@/lib/pos";
 import { getItemsForPicker } from "@/lib/inventory";
 import { getCustomers, createCustomer } from "@/lib/sales";
 import { getCompany } from "@/lib/settings";
@@ -97,7 +97,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
       if (!manualCustomer && !customer) return alert("اختر العميل أو فعّل الإدخال اليدوي");
       const r = await createMaintenanceTicket({ terminal_id: terminalId, session_id: sessionId, customer_id: customer?.id || null, customer_name: manualCustomer ? form.customer_name.trim() : customer?.name_ar, customer_phone: manualCustomer ? form.customer_phone : (customer?.phone || form.customer_phone), customer_address: form.customer_address, device_name: deviceProduct.name_ar, device_color: form.device_color || null, device_capacity: form.device_capacity || null, device_serial: form.device_serial, purchase_date: form.purchase_date || null, lock_type: form.lock_type, lock_secret: form.lock_secret || null, problem_type: form.problem_type, symptoms: form.symptoms, attachment_urls: attachments, reported_problem: form.reported_problem, approved_cost: 0, paid_amount: 0 });
       alert("تم إنشاء طلب الصيانة. اطبع إيصال الاستلام ثم انتقل الطلب إلى الفحص.");
-      setReceiptTicket(r.data); setSelectedTicket(null); setCart([]); setAttachments([]); setManualCustomer(false); setForm({ customer_id: "", customer_name: "", customer_phone: "", customer_address: "", product_id: "", device_color: "", device_capacity: "", device_serial: "", purchase_date: "", lock_type: "none", lock_secret: "", problem_type: "", symptoms: [], reported_problem: "", approved_cost: "", paid_amount: "" });
+      setReceiptTicket(r.data); setSelectedTicket(r.data); setCart([]); setAttachments([]); setManualCustomer(false); setForm({ customer_id: "", customer_name: "", customer_phone: "", customer_address: "", product_id: "", device_color: "", device_capacity: "", device_serial: "", purchase_date: "", lock_type: "none", lock_secret: "", problem_type: "", symptoms: [], reported_problem: "", approved_cost: "", paid_amount: "" });
       await load();
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ عملية الصيانة"); }
     finally { setSaving(false); }
@@ -135,23 +135,6 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ تقرير الفحص"); } finally { setSaving(false); }
   };
 
-  const approveRepair = async () => {
-    if (!selectedTicket) return;
-    if (!selectedTicket.diagnosis) return alert("احفظ تقرير الفحص أولاً");
-    setSaving(true);
-    try {
-      const current = (await getMaintenanceTickets({ terminal_id: terminalId, session_id: sessionId })).data.find((x: any) => x.id === selectedTicket.id);
-      for (const part of (current?.parts || [])) if (part.status !== "issued") await issueMaintenancePart(selectedTicket.id, part.id);
-      const refreshed = (await getMaintenanceTickets({ terminal_id: terminalId, session_id: sessionId })).data.find((x: any) => x.id === selectedTicket.id);
-      setSelectedTicket(refreshed || current); await load(); alert("تم اعتماد الإصلاح وصرف القطع المغيّرة من مستودع الصيانة.");
-    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر اعتماد الإصلاح وصرف القطع"); } finally { setSaving(false); }
-  };
-
-  const issueInvoiceForTicket = async () => {
-    if (!selectedTicket) return;
-    if (!selectedTicket.customer_id) return alert("اربط التذكرة بعميل قبل إصدار الفاتورة من الإدارة");
-    try { const result = await issueMaintenanceInvoice(selectedTicket.id); alert(`تم إصدار الفاتورة ${result.data?.invoice_number || ""}`); await load(); } catch (e: any) { alert(e?.response?.data?.detail || "تعذر إصدار الفاتورة"); }
-  };
 
   return <div dir={ar ? "rtl" : "ltr"} style={{ padding: 20 }}>
     <div className="page-header">
@@ -185,8 +168,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
           <div className="grid-2" style={{ marginTop: 10 }}><input className="form-input" placeholder="اسم الخدمة / الإصلاح" value={inspection.service_name} onChange={e => setInspection({ ...inspection, service_name: e.target.value })} /><input className="form-input" type="number" min="0" placeholder="سعر الخدمة بعد الفحص" value={inspection.service_amount} onChange={e => setInspection({ ...inspection, service_amount: e.target.value })} /></div>
           <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}><strong>المرحلة 3: القطع المغيّرة إن وجدت</strong>{cart.length === 0 ? <div className="empty-state" style={{ padding: 16 }}>اختر القطع من القائمة لتضاف كتخطيط، ولن تُصرف قبل الاعتماد.</div> : cart.map((line, i) => <div key={`${line.product_id}-${line.serial_item_id || i}`} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}><span>{line.name_ar} {line.serial_number ? `— ${line.serial_number}` : `× ${line.quantity}`}</span><b>{money(line.quantity * line.unit_price)} ر.س</b></div>)}</div>
           <button className="btn btn-secondary" style={{ width: "100%", marginTop: 14 }} onClick={saveInspection} disabled={saving}>حفظ تقرير الفحص والقطع والسعر</button>
-          <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} onClick={approveRepair} disabled={saving || !selectedTicket.diagnosis}>اعتماد الإصلاح وصرف القطع</button>
-          <button className="btn btn-success" style={{ width: "100%", marginTop: 8 }} onClick={issueInvoiceForTicket} disabled={saving || !selectedTicket.diagnosis}>إصدار الفاتورة بعد الاعتماد</button>
+          <div className="form-hint" style={{ marginTop: 10 }}>بعد حفظ التقرير والقطع المقترحة، تراجع الإدارة الطلب وتعتمد الإصلاح وتصرف القطع من مخزون الصيانة.</div>
         </>}
       </div>
     </div>

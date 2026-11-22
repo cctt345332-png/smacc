@@ -24,7 +24,7 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
   useEffect(() => {
     if (!_hasHydrated || !token || !user) return;
     if (user.role === "cashier") {
-      const allowed = pathname.startsWith(`/${locale}/pos/cashier`);
+      const allowed = pathname.startsWith(`/${locale}/pos/cashier`) || pathname.startsWith(`/${locale}/pos/maintenance`);
       if (!allowed) {
         router.replace(`/${locale}/pos/cashier`);
       }
@@ -84,8 +84,8 @@ export default function AppLayout({ children, locale }: { children: React.ReactN
 
   // الكاشير — شاشة كاملة بدون sidebar أو header، مباشرة للكاشير
   if (user?.role === "cashier") {
-    // إذا مش في صفحة الكاشير، لا تعرض شي حتى يصير الـ redirect
-    if (!pathname.startsWith(`/${locale}/pos/cashier`)) {
+    // شاشة الكاشير والصيانة تعملان بوضع الشاشة الكاملة للحساب المخصص.
+    if (!pathname.startsWith(`/${locale}/pos/cashier`) && !pathname.startsWith(`/${locale}/pos/maintenance`)) {
       return (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
           <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>

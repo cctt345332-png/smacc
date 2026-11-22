@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
@@ -52,13 +52,28 @@ async def delete_terminal(terminal_id: str, user=Depends(require_role(["manager"
 
 # ─── صيانة نقاط البيع — مستقلة عن المبيعات والفواتير ───────────────
 
+async def _ensure_cashier_ticket_access(db: AsyncSession, user: dict, ticket_id: str):
+    if user.get("role") != "cashier":
+        return
+    terminal = await service.get_terminal_by_user(db, user["tenant_id"], user["user_id"])
+    ticket = await maintenance_service._ticket(db, user["tenant_id"], ticket_id)
+    if not terminal or ticket.terminal_id != terminal.get("id"):
+        raise HTTPException(status_code=403, detail="لا يمكنك تعديل تذكرة ليست تابعة لجهازك")
+
 @router.get("/maintenance")
-async def list_pos_maintenance(status: Optional[str] = None, terminal_id: Optional[str] = None, session_id: Optional[str] = None, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
-    return await maintenance_service.list_tickets(db, tenant_id, status, terminal_id, session_id)
+async def list_pos_maintenance(status: Optional[str] = None, terminal_id: Optional[str] = None, session_id: Optional[str] = None, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if user.get("role") == "cashier":
+        terminal = await service.get_terminal_by_user(db, user["tenant_id"], user["user_id"])
+        terminal_id = terminal.get("id") if terminal else "__no_assigned_terminal__"
+    return await maintenance_service.list_tickets(db, user["tenant_id"], status, terminal_id, session_id)
 
 
 @router.post("/maintenance", status_code=201)
 async def create_pos_maintenance(data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    if user.get("role") == "cashier":
+        terminal = await service.get_terminal_by_user(db, user["tenant_id"], user["user_id"])
+        if not terminal or data.get("terminal_id") != terminal.get("id"):
+            raise HTTPException(status_code=403, detail="لا يمكنك إنشاء طلب صيانة إلا لجهازك المخصص")
     return await maintenance_service.create_ticket(db, user["tenant_id"], user["user_id"], data)
 
 
@@ -90,6 +105,7 @@ async def get_pos_maintenance(ticket_id: str, tenant_id=Depends(get_tenant_id), 
 
 @router.patch("/maintenance/{ticket_id}")
 async def update_pos_maintenance(ticket_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    await _ensure_cashier_ticket_access(db, user, ticket_id)
     return await maintenance_service.update_ticket(db, user["tenant_id"], ticket_id, data)
 
 
@@ -100,6 +116,7 @@ async def delete_pos_maintenance(ticket_id: str, user=Depends(require_role(["man
 
 @router.post("/maintenance/{ticket_id}/parts", status_code=201)
 async def add_pos_maintenance_part(ticket_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    await _ensure_cashier_ticket_access(db, user, ticket_id)
     return await maintenance_service.add_part(db, user["tenant_id"], ticket_id, data)
 
 
@@ -124,7 +141,7 @@ async def get_pos_maintenance_serials(ticket_id: str, product_id: str, tenant_id
 
 
 @router.post("/maintenance/{ticket_id}/parts/{part_id}/issue")
-async def issue_pos_maintenance_part(ticket_id: str, part_id: str, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+async def issue_pos_maintenance_part(ticket_id: str, part_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
     return await maintenance_service.issue_part(db, user["tenant_id"], user["user_id"], ticket_id, part_id)
 
 
