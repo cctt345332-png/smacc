@@ -43,6 +43,13 @@ async def _last(db, tenant_id, source_type, source_id, exclude_id=None):
     return (await db.execute(q.order_by(CustodySettlement.settled_at.desc()).limit(1))).scalar_one_or_none()
 
 
+def _carryover(last):
+    """المبلغ غير المسلّم من آخر تسوية، ولا نرحّل الزيادة للمرة التالية."""
+    if not last:
+        return Decimal("0")
+    return max(Decimal("0"), Decimal(str(last.expected_amount or 0)) - Decimal(str(last.received_amount or 0)))
+
+
 async def _balance(db, tenant_id, source_type, source_id, last, date_from=None, date_to=None):
     since = last.settled_at if last else None
     start = date_from or since
@@ -89,6 +96,12 @@ async def _balance(db, tenant_id, source_type, source_id, last, date_from=None, 
         oq = oq.where(POSCashOutflow.created_at <= end)
     outflows = Decimal(str((await db.execute(oq)).scalar() or 0))
     return sales + opening - outflows
+
+
+async def _expected_balance(db, tenant_id, source_type, source_id, last, date_from=None, date_to=None):
+    activity = await _balance(db, tenant_id, source_type, source_id, last, date_from, date_to)
+    carryover = _carryover(last)
+    return activity + carryover, activity, carryover
 
 
 async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to=None):
@@ -207,17 +220,19 @@ async def _sources(db, tenant_id, date_from=None, date_to=None):
     result = []
     for rep, user in reps:
         last = await _last(db, tenant_id, "rep", rep.id)
-        balance = await _balance(db, tenant_id, "rep", rep.id, last, date_from, date_to)
+        balance, activity, carryover = await _expected_balance(db, tenant_id, "rep", rep.id, last, date_from, date_to)
         result.append({"source_type": "rep", "source_id": rep.id, "name": user.full_name,
                        "label": f"مندوب — {user.full_name}", "rep_code": rep.rep_code,
                        "last_settled_at": last.settled_at.isoformat() if last else None,
-                       "expected_amount": float(balance)})
+                       "expected_amount": float(balance), "period_amount": float(activity),
+                       "carried_amount": float(carryover)})
     for terminal in terminals:
         last = await _last(db, tenant_id, "pos", terminal.id)
-        balance = await _balance(db, tenant_id, "pos", terminal.id, last, date_from, date_to)
+        balance, activity, carryover = await _expected_balance(db, tenant_id, "pos", terminal.id, last, date_from, date_to)
         result.append({"source_type": "pos", "source_id": terminal.id, "name": terminal.name,
                        "label": f"جهاز POS — {terminal.name}", "last_settled_at": last.settled_at.isoformat() if last else None,
-                       "expected_amount": float(balance)})
+                       "expected_amount": float(balance), "period_amount": float(activity),
+                       "carried_amount": float(carryover)})
     return result
 
 
@@ -332,7 +347,7 @@ async def create_settlement(data: dict, user=Depends(require_role(MANAGER_ROLES)
     if date_from and date_to and date_from > date_to:
         raise HTTPException(400, "الفترة غير صحيحة")
     last = await _last(db, tenant_id, source_type, source_id)
-    expected = await _balance(db, tenant_id, source_type, source_id, last, date_from, date_to)
+    expected, _, _ = await _expected_balance(db, tenant_id, source_type, source_id, last, date_from, date_to)
     received = Decimal(str(data.get("received_amount") or 0))
     if received < 0:
         raise HTTPException(400, "المبلغ المستلم لا يمكن أن يكون سالباً")
@@ -365,7 +380,7 @@ async def update_settlement(settlement_id: str, data: dict,
     if date_from and date_to and date_from > date_to:
         raise HTTPException(400, "الفترة غير صحيحة")
     last = await _last(db, tenant_id, source_type, source_id, exclude_id=row.id)
-    expected = await _balance(db, tenant_id, source_type, source_id, last, date_from, date_to)
+    expected, _, _ = await _expected_balance(db, tenant_id, source_type, source_id, last, date_from, date_to)
     received = Decimal(str(data.get("received_amount", row.received_amount) or 0))
     if received < 0:
         raise HTTPException(400, "المبلغ المستلم لا يمكن أن يكون سالباً")
