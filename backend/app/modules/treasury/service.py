@@ -158,6 +158,29 @@ async def create_voucher(db: AsyncSession, tenant_id: str, user_id: str, data: d
         if data.get("vat_amount", 0) and not vat_account_id:
             vat_account_id = (await get_operational_account(db, tenant_id, "vat_input")).id
 
+    if vtype in {VoucherType.RECEIPT, VoucherType.PAYMENT}:
+        # الجهة والحسابات التفصيلية اختيارية في السندات العامة.
+        from app.modules.accounting.service import get_operational_account
+        party_type = data.get("party_type")
+        if vtype == VoucherType.RECEIPT:
+            if not debit_account_id:
+                debit_account_id = (await get_operational_account(db, tenant_id, "default_cash")).id
+            if not credit_account_id:
+                credit_account_id = (await get_operational_account(
+                    db, tenant_id,
+                    "default_ar" if party_type == "customer" and data.get("party_id") else "other_income"
+                )).id
+        else:
+            if not credit_account_id:
+                credit_account_id = (await get_operational_account(db, tenant_id, "default_cash")).id
+            if not debit_account_id:
+                debit_account_id = (await get_operational_account(
+                    db, tenant_id,
+                    "default_ap" if party_type == "vendor" and data.get("party_id")
+                    else "default_ar" if party_type == "customer" and data.get("party_id")
+                    else "operating_expenses"
+                )).id
+
     voucher = Voucher(
         id=str(uuid.uuid4()),
         tenant_id=tenant_id,

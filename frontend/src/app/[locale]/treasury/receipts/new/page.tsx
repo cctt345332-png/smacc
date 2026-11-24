@@ -67,9 +67,9 @@ export default function NewReceiptPage(props: { params: Promise<{ locale: string
 
   const handleSave = async (post = false) => {
     if (!form.amount || !form.description_ar) return alert(ar ? "أدخل المبلغ والبيان" : "Enter amount and description");
-    if (!form.debit_account_id || !form.credit_account_id) return alert(ar ? "حدد حساب المدين والدائن" : "Select debit and credit accounts");
     setSaving(true);
     try {
+      const hasParty = Boolean(form.party_id || form.party_name.trim());
       const { data } = await createVoucher({
         ...form,
         voucher_type: "receipt",
@@ -78,8 +78,9 @@ export default function NewReceiptPage(props: { params: Promise<{ locale: string
         voucher_date: new Date(form.voucher_date).toISOString(),
         cheque_date: form.cheque_date ? new Date(form.cheque_date).toISOString() : null,
         bank_account_id: form.bank_account_id || null,
+        party_type: hasParty ? form.party_type : "other",
         party_id: form.party_id || null,
-        party_name: form.party_name || null,
+        party_name: form.party_name || (hasParty ? null : "قبض عام"),
         invoice_id: form.invoice_id || null,
         debit_account_id: form.debit_account_id || null,
         credit_account_id: form.credit_account_id || null,
@@ -232,14 +233,14 @@ export default function NewReceiptPage(props: { params: Promise<{ locale: string
             <div className="card-header"><span className="card-title">{ar ? "الحسابات المحاسبية" : "GL Accounts"}</span></div>
             <div className="card-body">
               <div className="form-group">
-                <label className="form-label">{ar ? "حساب مدين (البنك/الصندوق)" : "Debit Account (Bank/Cash)"} <span className="required">*</span></label>
+                <label className="form-label">{ar ? "حساب مدين (البنك/الصندوق) — اختياري" : "Debit Account (Bank/Cash) — Optional"}</label>
                 <select className="form-input form-select" value={form.debit_account_id} onChange={e => upd("debit_account_id", e.target.value)}>
                   <option value="">{ar ? "— اختر —" : "— Select —"}</option>
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">{ar ? "حساب دائن (القبض)" : "Credit Account (Receivable)"} <span className="required">*</span></label>
+                <label className="form-label">{ar ? "حساب دائن (القبض) — اختياري" : "Credit Account (Receivable) — Optional"}</label>
                 <select className="form-input form-select" value={form.credit_account_id} onChange={e => upd("credit_account_id", e.target.value)}>
                   <option value="">{ar ? "— اختر —" : "— Select —"}</option>
                   {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {ar ? a.name_ar : a.name_en}</option>)}
