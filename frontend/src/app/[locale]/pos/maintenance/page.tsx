@@ -151,6 +151,46 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ تقرير الفحص"); } finally { setSaving(false); }
   };
 
+  const changeTicketStatus = async (status: string) => {
+    if (!selectedTicket) return;
+    try {
+      const result = await updateMaintenanceTicket(selectedTicket.id, { status });
+      setSelectedTicket(result.data || { ...selectedTicket, status });
+      await load();
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر تحديث حالة طلب الصيانة"); }
+  };
+
+  const printPaymentReceipt = (ticket: any, amount: number, previousPaid: number) => {
+    const popup = window.open("", "_blank", "width=420,height=700");
+    if (!popup) return alert("اسمح بالنوافذ المنبثقة لطباعة إيصال الدفع");
+    const esc = (value: any) => String(value || "—").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char] || char));
+    const total = Math.max(Number(ticket.approved_cost || 0), Number(ticket.parts_total || 0) + Number(ticket.services_total || 0));
+    const paid = Number(ticket.paid_amount ?? previousPaid + amount);
+    const remaining = Math.max(0, total - paid);
+    popup.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>إيصال دفع صيانة ${esc(ticket.ticket_number)}</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font-family:Arial,Tahoma,sans-serif;margin:0;width:74mm;color:#111;font-size:11px;line-height:1.5}.center{text-align:center}.title{font-size:17px;font-weight:800}.sub{font-size:10px}.rule{border-top:1px dashed #111;margin:8px 0}.row{display:flex;justify-content:space-between;gap:6px;margin:5px 0}.value{font-weight:700}.paid{font-size:18px;font-weight:900;text-align:center;margin:10px 0}.remaining{font-weight:800;font-size:13px}</style></head><body><div class="center"><div class="title">إيصال دفع صيانة</div><div class="sub">غير ضريبي</div><div class="sub">${esc(ticket.ticket_number)}</div></div><div class="rule"></div><div class="row"><span>العميل:</span><span class="value">${esc(ticket.customer_name)}</span></div><div class="row"><span>الجهاز:</span><span class="value">${esc(ticket.device_name)}</span></div><div class="row"><span>السيريال:</span><span class="value">${esc(ticket.device_serial)}</span></div><div class="rule"></div><div class="paid">تم استلام ${esc(money(amount))} ر.س نقدًا</div><div class="row"><span>إجمالي الطلب:</span><span>${esc(money(total))} ر.س</span></div><div class="row"><span>إجمالي المدفوع:</span><span>${esc(money(paid))} ر.س</span></div><div class="row remaining"><span>المتبقي:</span><span>${esc(money(remaining))} ر.س</span></div><div class="rule"></div><div class="center sub">شكرًا لثقتكم بنا — www.ab-tw.com</div><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`);
+    popup.document.close();
+  };
+
+  const collectFromPOS = async () => {
+    if (!selectedTicket) return;
+    const current = (await getMaintenanceTickets({ terminal_id: terminalId })).data.find((x: any) => x.id === selectedTicket.id) || selectedTicket;
+    const total = Math.max(Number(current.approved_cost || 0), Number(current.parts_total || 0) + Number(current.services_total || 0));
+    const outstanding = Math.max(0, total - Number(current.paid_amount || 0));
+    if (outstanding <= 0) return alert("هذا الطلب مدفوع بالكامل");
+    const raw = window.prompt(`المتبقي ${money(outstanding)} ريال — أدخل مبلغ الدفع النقدي`);
+    if (raw === null) return;
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > outstanding) return alert("أدخل مبلغًا صحيحًا لا يتجاوز المتبقي");
+    setSaving(true);
+    try {
+      const result = await recordMaintenancePayment(current.id, { session_id: sessionId, amount, payment_method: "cash" });
+      setSelectedTicket(result.data || current);
+      await load();
+      printPaymentReceipt(result.data || current, amount, Number(current.paid_amount || 0));
+    } catch (e: any) { alert(e?.response?.data?.detail || "تعذر تسجيل دفعة الصيانة"); }
+    finally { setSaving(false); }
+  };
+
 
   return <div dir={ar ? "rtl" : "ltr"} className="legacy-pos" style={{ display: "flex", flexDirection: "column", height: "calc(100vh - var(--header-height))", overflow: "hidden" }}>
     <div style={{ padding: "10px 20px", borderBottom: "1px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
@@ -184,12 +224,12 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
           <textarea className="form-input" rows={4} style={{ marginTop: 10 }} placeholder="وصف تفصيلي للمشكلة *" value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} />
           <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={save} disabled={saving}>{saving ? "جاري التسجيل..." : "إنشاء طلب وطباعة إيصال الاستلام"}</button>
         </> : <>
-          <div className="card" style={{ padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>{selectedTicket.ticket_number} — {selectedTicket.device_name}</b><div className="form-hint">العميل: {selectedTicket.customer_name || "—"} | الحالة: {selectedTicket.status}</div></div>
+          <div className="card" style={{ padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>{selectedTicket.ticket_number} — {selectedTicket.device_name}</b><div className="form-hint">العميل: {selectedTicket.customer_name || "—"}</div><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}><select className="form-input form-select" style={{ maxWidth: 180 }} value={selectedTicket.status || "open"} onChange={(e) => changeTicketStatus(e.target.value)} disabled={saving}><option value="open">استقبال</option><option value="in_progress">الفحص</option><option value="ready">بانتظار الاعتماد</option><option value="completed">مكتملة</option><option value="cancelled">ملغاة</option></select><span className="form-hint">مدفوع: {money(selectedTicket.paid_amount)} ر.س</span><span className="form-hint">المتبقي: {money(Math.max(0, Math.max(Number(selectedTicket.approved_cost || 0), Number(selectedTicket.parts_total || 0) + Number(selectedTicket.services_total || 0)) - Number(selectedTicket.paid_amount || 0)))} ر.س</span></div></div>
           <textarea className="form-input" rows={4} style={{ marginTop: 12 }} placeholder="المرحلة 2: تقرير الفحص والتشخيص *" value={inspection.diagnosis} onChange={e => setInspection({ ...inspection, diagnosis: e.target.value })} />
           <div className="grid-2" style={{ marginTop: 10 }}><input className="form-input" placeholder="اسم الخدمة / الإصلاح" value={inspection.service_name} onChange={e => setInspection({ ...inspection, service_name: e.target.value })} /><input className="form-input" type="number" min="0" placeholder="سعر الخدمة بعد الفحص" value={inspection.service_amount} onChange={e => setInspection({ ...inspection, service_amount: e.target.value })} /></div>
           <div style={{ marginTop: 14, borderTop: "1px solid var(--border)", paddingTop: 12 }}><strong>المرحلة 3: القطع المغيّرة إن وجدت</strong>{cart.length === 0 ? <div className="empty-state" style={{ padding: 16 }}>اختر القطع من القائمة لتضاف كتخطيط، ولن تُصرف قبل الاعتماد.</div> : cart.map((line, i) => <div key={`${line.product_id}-${line.serial_item_id || i}`} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border)" }}><span>{line.name_ar} {line.serial_number ? `— ${line.serial_number}` : `× ${line.quantity}`}</span><b>{money(line.quantity * line.unit_price)} ر.س</b></div>)}</div>
           <button className="btn btn-secondary" style={{ width: "100%", marginTop: 14 }} onClick={saveInspection} disabled={saving}>حفظ تقرير الفحص والقطع والسعر</button>
-          <div className="form-hint" style={{ marginTop: 10 }}>بعد حفظ التقرير والقطع المقترحة، تراجع الإدارة الطلب وتعتمد الإصلاح وتصرف القطع من مخزون الصيانة.</div>
+          <div className="form-hint" style={{ marginTop: 10 }}>بعد حفظ التقرير والقطع المقترحة، تراجع الإدارة الطلب وتعتمد الإصلاح وتصرف القطع من مخزون الصيانة.</div><button className="btn btn-success" style={{ width: "100%", marginTop: 12 }} onClick={collectFromPOS} disabled={saving || !selectedTicket.diagnosis}>تسجيل دفعة وطباعة إيصال الدفع</button>
         </>}
       </div>
     </div>
