@@ -2,7 +2,7 @@
 from alembic import op
 import sqlalchemy as sa
 
-revision = "t4u5v6w7x8y9"
+revision = "treasury_20261124"
 down_revision = "s1t2u3v4w5x6"
 branch_labels = None
 depends_on = None
