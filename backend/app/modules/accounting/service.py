@@ -1050,6 +1050,34 @@ async def _ensure_accrued_expenses_mapping(db: AsyncSession, tenant_id: str) -> 
     await db.commit()
 
 
+async def _ensure_other_income_mapping(db: AsyncSession, tenant_id: str) -> None:
+    """يربط الإيرادات العامة بحساب الإيرادات الموجود في مخططات النظام المختلفة."""
+    existing = await db.execute(select(AccountingAccountMapping).where(
+        AccountingAccountMapping.tenant_id == tenant_id,
+        AccountingAccountMapping.mapping_key == "other_income",
+    ))
+    if existing.scalar_one_or_none():
+        return
+    account_result = await db.execute(select(Account).where(
+        Account.tenant_id == tenant_id,
+        Account.is_active.is_(True),
+        Account.is_posting.is_(True),
+        or_(
+            Account.code.in_(["440004", "0444", "601"]),
+            Account.name_ar.in_(["إيرادات أخرى", "إيرادات متنوعة"]),
+        ),
+    ).order_by(Account.code.desc()))
+    account = account_result.scalars().first()
+    if not account:
+        return
+    db.add(AccountingAccountMapping(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        mapping_key="other_income", account_id=account.id,
+        updated_at=datetime.utcnow(),
+    ))
+    await db.commit()
+
+
 async def get_accounting_readiness(db: AsyncSession, tenant_id: str) -> dict:
     """فحص الجاهزية دون إنشاء حسابات أو تغيير أرصدة؛ يضيف فقط مفتاح توافق للمخزون الموجود."""
     from app.models.sales import Customer, Invoice, Payment, InvoiceStatus
@@ -1761,6 +1789,17 @@ async def get_operational_account(db: AsyncSession, tenant_id: str, mapping_key:
         mapping = result.scalar_one_or_none()
     if not mapping and mapping_key == "accrued_expenses":
         await _ensure_accrued_expenses_mapping(db, tenant_id)
+        result = await db.execute(
+            select(AccountingAccountMapping)
+            .options(selectinload(AccountingAccountMapping.account))
+            .where(
+                AccountingAccountMapping.tenant_id == tenant_id,
+                AccountingAccountMapping.mapping_key == mapping_key,
+            )
+        )
+        mapping = result.scalar_one_or_none()
+    if not mapping and mapping_key == "other_income":
+        await _ensure_other_income_mapping(db, tenant_id)
         result = await db.execute(
             select(AccountingAccountMapping)
             .options(selectinload(AccountingAccountMapping.account))
