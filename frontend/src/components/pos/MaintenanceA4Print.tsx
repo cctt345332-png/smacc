@@ -25,7 +25,11 @@ export default function MaintenanceA4Print({ ticket, company, document = "intake
   const isInspection = document === "inspection";
   const parts = ticket?.parts || [];
   const services = ticket?.services || [];
-  const lines = [...services.map((x: any) => ({ name: x.service_name, qty: 1, unit: x.amount, total: x.amount })), ...parts.map((x: any) => ({ name: x.product_name, qty: x.quantity, unit: x.unit_price, total: x.total }))];
+  const warrantyLaborLines = isInspection ? [
+    { name: "أجور الفحص (ضمن الضمان)", qty: 1, unit: 0, total: 0 },
+    { name: "أجور الصيانة (ضمن الضمان)", qty: 1, unit: 0, total: 0 },
+  ] : [];
+  const lines = [...warrantyLaborLines, ...services.map((x: any) => ({ name: x.service_name, qty: 1, unit: x.amount, total: x.amount })), ...parts.map((x: any) => ({ name: x.product_name, qty: x.quantity, unit: x.unit_price, total: x.total }))];
   const subtotal = lines.reduce((sum: number, x: any) => sum + Number(x.total || 0) / 1.15, 0);
   const vat = lines.reduce((sum: number, x: any) => sum + Number(x.total || 0) - Number(x.total || 0) / 1.15, 0);
   const total = lines.reduce((sum: number, x: any) => sum + Number(x.total || 0), 0);
