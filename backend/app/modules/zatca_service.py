@@ -586,19 +586,36 @@ def _build_ubl(invoice: Invoice, previous_hash: str, vat: VATSetting, customer: 
     clegal = _q(cparty, CAC, "PartyLegalEntity"); _q(clegal, CBC, "RegistrationName", invoice.buyer_name_ar)
     delivery = _q(root, CAC, "Delivery"); _q(delivery, CBC, "ActualDeliveryDate", invoice.issue_date.date().isoformat())
     payment = _q(root, CAC, "PaymentMeans"); _q(payment, CBC, "PaymentMeansCode", "30")
+    pos_invoice = str(invoice.notes or "").startswith("POS:")
+    invoice_lines = sorted(invoice.lines, key=lambda x: x.line_order)
+    line_nets: list[Decimal] = []
+    for line in invoice_lines:
+        # POS prices are stored/displayed as tax-inclusive prices. UBL's
+        # InvoiceLine net amount (BT-131) must exclude VAT. New POS invoices
+        # already store subtotal/unit_price before VAT. Older POS invoices
+        # stored gross unit_price and total, so convert those records only.
+        quantity = Decimal(str(line.quantity or 0))
+        stored_unit_price = Decimal(str(line.unit_price or 0))
+        discount_amount = Decimal(str(line.discount_amount or 0))
+        rate = Decimal(str(line.vat_rate or 0))
+        legacy_gross = pos_invoice and abs(
+            Decimal(str(line.total or 0))
+            - quantity * stored_unit_price
+            + discount_amount
+        ) <= Decimal("0.01")
+        if legacy_gross and rate > 0:
+            divisor = Decimal("1") + rate / Decimal("100")
+            line_net = (quantity * stored_unit_price / divisor - discount_amount / divisor).quantize(Decimal("0.01"))
+        else:
+            line_net = (Decimal(str(line.subtotal or 0)) - discount_amount).quantize(Decimal("0.01"))
+        line_nets.append(line_net)
+    line_extension_amount = sum(line_nets, Decimal("0"))
     tax_total = _q(root, CAC, "TaxTotal"); _q(tax_total, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     subtotal = _q(tax_total, CAC, "TaxSubtotal"); _q(subtotal, CBC, "TaxableAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(subtotal, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     tax_currency_total = _q(root, CAC, "TaxTotal"); _q(tax_currency_total, CBC, "TaxAmount", _money(invoice.vat_amount), currencyID="SAR")
     category = _q(subtotal, CAC, "TaxCategory"); _q(category, CBC, "ID", "S"); _q(category, CBC, "Percent", "15"); scheme = _q(category, CAC, "TaxScheme"); _q(scheme, CBC, "ID", "VAT")
-    monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(invoice.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(invoice.total), currencyID="SAR")
-    pos_invoice = str(invoice.notes or "").startswith("POS:")
-    for index, line in enumerate(sorted(invoice.lines, key=lambda x: x.line_order), 1):
-        # POS prices are stored/displayed as tax-inclusive prices. UBL's
-        # InvoiceLine net amount (BT-131) must exclude VAT. Other invoices
-        # already store subtotal before VAT.
-        line_net = Decimal(str(line.subtotal or 0)) - Decimal(str(line.discount_amount or 0))
-        if pos_invoice:
-            line_net -= Decimal(str(line.vat_amount or 0))
+    monetary = _q(root, CAC, "LegalMonetaryTotal"); _q(monetary, CBC, "LineExtensionAmount", _money(line_extension_amount), currencyID="SAR"); _q(monetary, CBC, "TaxExclusiveAmount", _money(invoice.taxable_amount), currencyID="SAR"); _q(monetary, CBC, "TaxInclusiveAmount", _money(invoice.total), currencyID="SAR"); _q(monetary, CBC, "PayableAmount", _money(invoice.total), currencyID="SAR")
+    for index, (line, line_net) in enumerate(zip(invoice_lines, line_nets), 1):
         il = _q(root, CAC, "InvoiceLine"); _q(il, CBC, "ID", index); _q(il, CBC, "InvoicedQuantity", str(line.quantity), unitCode=line.unit or "PCE"); _q(il, CBC, "LineExtensionAmount", _money(line_net), currencyID="SAR")
         line_tax = _q(il, CAC, "TaxTotal"); _q(line_tax, CBC, "TaxAmount", _money(line.vat_amount), currencyID="SAR"); _q(line_tax, CBC, "RoundingAmount", _money(line_net + Decimal(str(line.vat_amount or 0))), currencyID="SAR")
         item = _q(il, CAC, "Item"); _q(item, CBC, "Name", line.description_ar); tax = _q(item, CAC, "ClassifiedTaxCategory"); _q(tax, CBC, "ID", line.vat_category or "S"); _q(tax, CBC, "Percent", str(line.vat_rate)); ts = _q(tax, CAC, "TaxScheme"); _q(ts, CBC, "ID", "VAT")
