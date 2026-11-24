@@ -44,8 +44,15 @@ export default function MaintenanceIntakeReceipt({ ticket, company, terminalName
       <div style={{ marginTop: 5, paddingTop: 5, borderTop: "1px solid #000" }}><b>وصف المشكلة:</b><div style={{ whiteSpace: "pre-wrap", marginTop: 3 }}>{ticket?.reported_problem || "—"}</div></div>
       <div style={{ borderTop: "1px dashed #000", margin: "8px 0 5px" }} />
       <div style={{ textAlign: "center", fontSize: 10 }}>تم استلام الجهاز للفحص أولًا، وسيتم اعتماد السعر بعد تقرير الفحص.</div>
-      <div style={{ textAlign: "center", fontWeight: 800, fontSize: 11, marginTop: 8 }}>شكرًا لثقتكم بنا</div>
-      <div style={{ textAlign: "center", fontSize: 9, marginTop: 2 }}>نسعد بخدمتكم دائمًا</div>
+      <div style={{ borderTop: "1px dashed #000", margin: "8px 0 6px" }} />
+      <div style={{ textAlign: "center", fontWeight: 800, fontSize: 11 }}>شكرًا لثقتكم بنا</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 2 }}>نسعد بخدمتكم، ونحرص على إعادة جهازكم بحالة أفضل</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 4, fontWeight: 700 }}>فروعنا وخدمتكم أقرب</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 2 }}>الفرع الرئيسي: جدة — شارع فلسطين</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 2 }}>الفرع الثاني: الرياض — البطحاء</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 4 }}>للاستفسار والمتابعة يرجى ذكر رقم الطلب الموضح أعلاه</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 2 }}>هذا الإيصال يثبت استلام الجهاز للفحص، والسعر يعتمد بعد تقرير الصيانة</div>
+      <div style={{ textAlign: "center", fontSize: 9, marginTop: 4 }}>موقعنا: www.ab-tw.com</div>
       <div style={{ textAlign: "center", marginTop: 8, fontSize: 9 }}>{ticket?.ticket_number}</div>
     </div>
   );
