@@ -27,10 +27,14 @@ def upgrade():
     op.create_index("ix_treasuries_account_id", "treasuries", ["account_id"])
     op.add_column("vouchers", sa.Column("treasury_id", sa.String(), sa.ForeignKey("treasuries.id"), nullable=True))
     op.create_index("ix_vouchers_treasury_id", "vouchers", ["treasury_id"])
+    op.add_column("vouchers", sa.Column("to_treasury_id", sa.String(), sa.ForeignKey("treasuries.id"), nullable=True))
+    op.create_index("ix_vouchers_to_treasury_id", "vouchers", ["to_treasury_id"])
 
 
 def downgrade():
     op.drop_index("ix_vouchers_treasury_id", table_name="vouchers")
+    op.drop_index("ix_vouchers_to_treasury_id", table_name="vouchers")
+    op.drop_column("vouchers", "to_treasury_id")
     op.drop_column("vouchers", "treasury_id")
     op.drop_index("ix_treasuries_account_id", table_name="treasuries")
     op.drop_index("ix_treasuries_tenant_id", table_name="treasuries")

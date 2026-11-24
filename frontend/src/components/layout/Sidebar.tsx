@@ -149,6 +149,7 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
       {
         key: "treasury", label: ar ? "الخزينة والمدفوعات" : "Treasury", icon: IC.treasury,
         children: [
+          { label: ar ? "الخزائن" : "Cashboxes", href: `${base}/treasury` },
           { label: ar ? "سندات القبض" : "Receipt Vouchers", href: `${base}/treasury/receipts` },
           { label: ar ? "سندات الصرف" : "Payment Vouchers", href: `${base}/treasury/payments` },
           { label: ar ? "المصروفات" : "Expenses", href: `${base}/treasury/expenses` },

@@ -63,6 +63,7 @@ class Voucher(Base):
 
     # الربط
     treasury_id: Mapped[str | None] = mapped_column(String, ForeignKey("treasuries.id"), nullable=True, index=True)
+    to_treasury_id: Mapped[str | None] = mapped_column(String, ForeignKey("treasuries.id"), nullable=True, index=True)
     invoice_id: Mapped[str | None] = mapped_column(String, nullable=True)       # فاتورة مبيعات
     purchase_id: Mapped[str | None] = mapped_column(String, nullable=True)      # فاتورة مشتريات
     asset_id: Mapped[str | None] = mapped_column(String, ForeignKey("assets.id"), nullable=True)  # أصل ثابت

@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createVoucher } from "@/lib/treasury";
+import { createVoucher, getTreasuries } from "@/lib/treasury";
 import { getAccounts, getFiscalYears, getBankAccounts } from "@/lib/accounting";
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -19,18 +19,20 @@ export default function NewTransferPage(props: { params: Promise<{ locale: strin
   const [accounts, setAccounts] = useState<any[]>([]);
   const [fiscalYears, setFiscalYears] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [treasuries, setTreasuries] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     voucher_date: today(), amount: "",
     bank_account_id: "", to_bank_account_id: "",
     debit_account_id: "", credit_account_id: "",
+    treasury_id: "", to_treasury_id: "",
     fiscal_year_id: "", description_ar: "", reference: "", notes: "",
   });
 
   useEffect(() => {
-    Promise.all([getAccounts(), getFiscalYears(), getBankAccounts()])
-      .then(([a, f, b]) => {
-        setAccounts(a.data); setFiscalYears(f.data); setBankAccounts(b.data);
+    Promise.all([getAccounts(), getFiscalYears(), getBankAccounts(), getTreasuries()])
+      .then(([a, f, b, t]) => {
+        setAccounts(a.data); setFiscalYears(f.data); setBankAccounts(b.data); setTreasuries(t.data || []);
         if (f.data.length) setForm(p => ({ ...p, fiscal_year_id: f.data[0].id }));
       });
   }, []);
@@ -39,7 +41,7 @@ export default function NewTransferPage(props: { params: Promise<{ locale: strin
 
   const handleSave = async (post = false) => {
     if (!form.amount || !form.description_ar) return alert(ar ? "أدخل المبلغ والبيان" : "Enter amount and description");
-    if (!form.debit_account_id || !form.credit_account_id) return alert(ar ? "حدد الحسابات" : "Select accounts");
+    if ((!form.debit_account_id || !form.credit_account_id) && !(form.treasury_id && form.to_treasury_id)) return alert(ar ? "حدد الحسابات أو اختر خزينة المصدر والوجهة" : "Select accounts or source and destination treasuries");
     setSaving(true);
     try {
       const { data } = await createVoucher({
@@ -48,6 +50,7 @@ export default function NewTransferPage(props: { params: Promise<{ locale: strin
         voucher_date: new Date(form.voucher_date).toISOString(),
         bank_account_id: form.bank_account_id || null,
         to_bank_account_id: form.to_bank_account_id || null,
+        treasury_id: form.treasury_id || null, to_treasury_id: form.to_treasury_id || null,
         reference: form.reference || null, notes: form.notes || null,
       });
       if (post) { const { postVoucher } = await import("@/lib/treasury"); await postVoucher(data.id); }
@@ -105,6 +108,21 @@ export default function NewTransferPage(props: { params: Promise<{ locale: strin
                 <option value="">{ar ? "— اختر —" : "— Select —"}</option>
                 {bankAccounts.filter(b => b.id !== form.bank_account_id).map(b => <option key={b.id} value={b.id}>{b.bank_name} — {b.account_number}</option>)}
               </select>
+            </div>
+            <div className="form-group" style={{ borderTop: "1px solid var(--border)", paddingTop: 12, marginTop: 12 }}>
+              <label className="form-label">من خزينة</label>
+              <select className="form-input form-select" value={form.treasury_id} onChange={e => upd("treasury_id", e.target.value)}>
+                <option value="">— بدون خزينة —</option>
+                {treasuries.map(t => <option key={t.id} value={t.id}>{t.name_ar} — {Number(t.balance || 0).toFixed(2)} ر.س</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">إلى خزينة</label>
+              <select className="form-input form-select" value={form.to_treasury_id} onChange={e => upd("to_treasury_id", e.target.value)}>
+                <option value="">— بدون خزينة —</option>
+                {treasuries.filter(t => t.id !== form.treasury_id).map(t => <option key={t.id} value={t.id}>{t.name_ar}</option>)}
+              </select>
+              <div className="form-hint">اختر الخزانتين لتحويل داخلي لا يحتسب إيرادًا أو مصروفًا.</div>
             </div>
           </div>
         </div>
