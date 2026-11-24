@@ -9,6 +9,26 @@ from app.modules.treasury import service
 router = APIRouter(prefix="/treasury", tags=["treasury"])
 
 
+@router.get("/treasuries")
+async def list_treasuries(include_inactive: bool = False, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_treasuries(db, tenant_id, include_inactive)
+
+
+@router.post("/treasuries", status_code=201)
+async def create_treasury(data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.create_treasury(db, user["tenant_id"], user["user_id"], data)
+
+
+@router.patch("/treasuries/{treasury_id}")
+async def update_treasury(treasury_id: str, data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    return await service.update_treasury(db, user["tenant_id"], treasury_id, data)
+
+
+@router.get("/treasuries/{treasury_id}/movements")
+async def treasury_movements(treasury_id: str, tenant_id=Depends(get_tenant_id), db: AsyncSession = Depends(get_db)):
+    return await service.get_treasury_movements(db, tenant_id, treasury_id)
+
+
 @router.get("/vouchers")
 async def list_vouchers(
     voucher_type: Optional[str] = None,

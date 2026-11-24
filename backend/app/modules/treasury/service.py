@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from fastapi import HTTPException
 
-from app.models.treasury import Voucher, VoucherType, VoucherStatus, PaymentMethod
+from app.models.treasury import Voucher, Treasury, VoucherType, VoucherStatus, PaymentMethod
+from app.models.accounting import Account
 
 
 async def _next_number(db: AsyncSession, tenant_id: str, vtype: VoucherType) -> str:
@@ -31,6 +32,88 @@ async def get_vouchers(db: AsyncSession, tenant_id: str,
     return r.scalars().all()
 
 
+async def _treasury_view(db: AsyncSession, treasury: Treasury, tenant_id: str):
+    rows = (await db.execute(select(Voucher).where(
+        Voucher.tenant_id == tenant_id,
+        Voucher.treasury_id == treasury.id,
+        Voucher.status == VoucherStatus.POSTED,
+    ))).scalars().all()
+    incoming = sum((v.amount for v in rows if v.voucher_type == VoucherType.RECEIPT), Decimal("0"))
+    outgoing = sum((v.amount + (v.vat_amount or 0) for v in rows if v.voucher_type in {VoucherType.PAYMENT, VoucherType.EXPENSE}), Decimal("0"))
+    return {
+        "id": treasury.id, "name_ar": treasury.name_ar, "name_en": treasury.name_en,
+        "branch_name": treasury.branch_name, "account_id": treasury.account_id,
+        "opening_balance": float(treasury.opening_balance or 0), "incoming": float(incoming),
+        "outgoing": float(outgoing), "balance": float((treasury.opening_balance or 0) + incoming - outgoing),
+        "is_active": treasury.is_active, "notes": treasury.notes,
+    }
+
+
+async def get_treasuries(db: AsyncSession, tenant_id: str, include_inactive: bool = False):
+    q = select(Treasury).where(Treasury.tenant_id == tenant_id).order_by(Treasury.name_ar)
+    if not include_inactive:
+        q = q.where(Treasury.is_active.is_(True))
+    rows = (await db.execute(q)).scalars().all()
+    return [await _treasury_view(db, row, tenant_id) for row in rows]
+
+
+async def create_treasury(db: AsyncSession, tenant_id: str, user_id: str, data: dict):
+    name = str(data.get("name_ar") or "").strip()
+    account_id = data.get("account_id")
+    if not name or not account_id:
+        raise HTTPException(400, "اسم الخزينة والحساب المحاسبي مطلوبان")
+    account = await db.get(Account, account_id)
+    if not account or account.tenant_id != tenant_id or not account.is_active or not account.is_posting:
+        raise HTTPException(400, "الحساب المحاسبي غير صالح أو غير قابل للترحيل")
+    row = Treasury(id=str(uuid.uuid4()), tenant_id=tenant_id, name_ar=name,
+                   name_en=data.get("name_en"), branch_name=data.get("branch_name"),
+                   account_id=account_id, opening_balance=Decimal(str(data.get("opening_balance") or 0)),
+                   is_active=bool(data.get("is_active", True)), notes=data.get("notes"),
+                   created_by=user_id, created_at=datetime.utcnow())
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return await _treasury_view(db, row, tenant_id)
+
+
+async def update_treasury(db: AsyncSession, tenant_id: str, treasury_id: str, data: dict):
+    row = await db.scalar(select(Treasury).where(Treasury.id == treasury_id, Treasury.tenant_id == tenant_id))
+    if not row:
+        raise HTTPException(404, "الخزينة غير موجودة")
+    if "account_id" in data:
+        account = await db.get(Account, data["account_id"])
+        if not account or account.tenant_id != tenant_id or not account.is_active or not account.is_posting:
+            raise HTTPException(400, "الحساب المحاسبي غير صالح أو غير قابل للترحيل")
+        row.account_id = data["account_id"]
+    for key in ("name_ar", "name_en", "branch_name", "notes"):
+        if key in data:
+            setattr(row, key, data[key])
+    if "is_active" in data:
+        row.is_active = bool(data["is_active"])
+    await db.commit()
+    await db.refresh(row)
+    return await _treasury_view(db, row, tenant_id)
+
+
+async def get_treasury_movements(db: AsyncSession, tenant_id: str, treasury_id: str):
+    row = await db.scalar(select(Treasury).where(Treasury.id == treasury_id, Treasury.tenant_id == tenant_id))
+    if not row:
+        raise HTTPException(404, "الخزينة غير موجودة")
+    vouchers = (await db.execute(select(Voucher).where(
+        Voucher.tenant_id == tenant_id, Voucher.treasury_id == treasury_id,
+        Voucher.status == VoucherStatus.POSTED,
+    ).order_by(Voucher.voucher_date, Voucher.created_at))).scalars().all()
+    balance = Decimal(str(row.opening_balance or 0)); result = []
+    if balance:
+        result.append({"date": None, "voucher_number": "OPENING", "description_ar": "الرصيد الافتتاحي", "incoming": float(balance), "outgoing": 0, "balance": float(balance)})
+    for voucher in vouchers:
+        incoming = voucher.amount if voucher.voucher_type == VoucherType.RECEIPT else Decimal("0")
+        outgoing = voucher.amount + (voucher.vat_amount or 0) if voucher.voucher_type in {VoucherType.PAYMENT, VoucherType.EXPENSE} else Decimal("0")
+        balance += incoming - outgoing
+        result.append({"date": voucher.voucher_date, "voucher_id": voucher.id, "voucher_number": voucher.voucher_number, "description_ar": voucher.description_ar, "voucher_type": voucher.voucher_type.value, "incoming": float(incoming), "outgoing": float(outgoing), "balance": float(balance)})
+    return {"treasury": await _treasury_view(db, row, tenant_id), "movements": result}
+
+
 async def get_voucher(db: AsyncSession, tenant_id: str, voucher_id: str):
     v = await db.get(Voucher, voucher_id)
     if not v or v.tenant_id != tenant_id:
@@ -48,6 +131,15 @@ async def create_voucher(db: AsyncSession, tenant_id: str, user_id: str, data: d
     debit_account_id = data.get("debit_account_id")
     credit_account_id = data.get("credit_account_id")
     vat_account_id = data.get("vat_account_id")
+    treasury_id = data.get("treasury_id")
+    if treasury_id:
+        treasury = await db.scalar(select(Treasury).where(Treasury.id == treasury_id, Treasury.tenant_id == tenant_id, Treasury.is_active.is_(True)))
+        if not treasury:
+            raise HTTPException(400, "الخزينة غير موجودة أو غير فعالة")
+        if vtype == VoucherType.RECEIPT:
+            debit_account_id = treasury.account_id
+        elif vtype in {VoucherType.PAYMENT, VoucherType.EXPENSE}:
+            credit_account_id = treasury.account_id
     if vtype == VoucherType.EXPENSE:
         from app.modules.accounting.service import get_operational_account
         payment_mapping = {"cash": "default_cash", "bank_transfer": "default_bank", "cheque": "default_bank"}
@@ -71,6 +163,7 @@ async def create_voucher(db: AsyncSession, tenant_id: str, user_id: str, data: d
         vat_amount=Decimal(str(data.get("vat_amount", 0))),
         currency_code=data.get("currency_code", "SAR"),
         payment_method=PaymentMethod(data.get("payment_method", "cash")),
+        treasury_id=treasury_id,
         bank_account_id=data.get("bank_account_id"),
         cheque_number=data.get("cheque_number"),
         party_type=data.get("party_type"),

@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createVoucher } from "@/lib/treasury";
+import { createVoucher, getTreasuries } from "@/lib/treasury";
 import { getAccounts, getFiscalYears, getCostCenters, getBankAccounts, getOperationalAccountMappings } from "@/lib/accounting";
 
 const today = () => new Date().toISOString().split("T")[0];
@@ -29,21 +29,22 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
   const [costCenters, setCostCenters] = useState<any[]>([]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [accountMappings, setAccountMappings] = useState<any[]>([]);
+  const [treasuries, setTreasuries] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     voucher_date: today(), amount: "", vat_amount: "0",
     payment_method: "cash", bank_account_id: "",
     expense_category: "other", party_name: "",
-    debit_account_id: "", credit_account_id: "", vat_account_id: "",
+    debit_account_id: "", credit_account_id: "", vat_account_id: "", treasury_id: "",
     cost_center_id: "", fiscal_year_id: "",
     description_ar: "", reference: "", notes: "",
   });
 
   useEffect(() => {
-    Promise.all([getAccounts(), getFiscalYears(), getCostCenters(), getBankAccounts(), getOperationalAccountMappings().catch(() => ({ data: [] }))])
-      .then(([a, f, cc, b, mappings]) => {
+    Promise.all([getAccounts(), getFiscalYears(), getCostCenters(), getBankAccounts(), getOperationalAccountMappings().catch(() => ({ data: [] })), getTreasuries()])
+      .then(([a, f, cc, b, mappings, t]) => {
         setAccounts(a.data); setFiscalYears(f.data); setCostCenters(cc.data); setBankAccounts(b.data);
-        setAccountMappings(mappings.data || []);
+        setAccountMappings(mappings.data || []); setTreasuries(t.data || []);
         const mappingByKey = Object.fromEntries((mappings.data || []).map((m: any) => [m.mapping_key, m.account_id]));
         setForm(p => ({
           ...p,
@@ -82,6 +83,7 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
         party_type: "other", party_id: null,
         party_name: form.party_name || null,
         vat_account_id: form.vat_account_id || null,
+        treasury_id: form.treasury_id || null,
         cost_center_id: form.cost_center_id || null,
         reference: form.reference || null, notes: form.notes || null,
       });
@@ -150,6 +152,13 @@ export default function NewExpensePage(props: { params: Promise<{ locale: string
                 <label className="form-label">{ar ? "طريقة الدفع" : "Method"}</label>
                 <select className="form-input form-select" value={form.payment_method} onChange={e => upd("payment_method", e.target.value)}>
                   {METHODS.map(m => <option key={m.value} value={m.value}>{m.ar}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">الخزينة المصروف منها</label>
+                <select className="form-input form-select" value={form.treasury_id} onChange={e => upd("treasury_id", e.target.value)}>
+                  <option value="">— بدون خزينة محددة —</option>
+                  {treasuries.map(t => <option key={t.id} value={t.id}>{t.name_ar} — الرصيد {Number(t.balance || 0).toFixed(2)} ر.س</option>)}
                 </select>
               </div>
               <div className="form-group">

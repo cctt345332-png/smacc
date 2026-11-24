@@ -2,7 +2,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createVoucher } from "@/lib/treasury";
+import { createVoucher, getTreasuries } from "@/lib/treasury";
 import { getAccounts, getFiscalYears, getCostCenters, getBankAccounts } from "@/lib/accounting";
 import { getAssets } from "@/lib/assets";
 import { getVendors } from "@/lib/purchases";
@@ -30,6 +30,7 @@ export default function NewPaymentPage(props: { params: Promise<{ locale: string
   const [assets, setAssets] = useState<any[]>([]);
   const [vendors, setVendors] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
+  const [treasuries, setTreasuries] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [isAssetPurchase, setIsAssetPurchase] = useState(false);
   const [partyType, setPartyType] = useState<"vendor" | "customer" | "other">("vendor");
@@ -37,17 +38,17 @@ export default function NewPaymentPage(props: { params: Promise<{ locale: string
     voucher_date: today(), amount: "", payment_method: "cash",
     bank_account_id: "", cheque_number: "", cheque_date: "",
     party_id: "", party_name: "", asset_id: "",
-    debit_account_id: "", credit_account_id: "",
+    debit_account_id: "", credit_account_id: "", treasury_id: "",
     cost_center_id: "", fiscal_year_id: "",
     description_ar: "", reference: "", notes: "",
   });
 
   useEffect(() => {
-    Promise.all([getAccounts(), getFiscalYears(), getCostCenters(), getBankAccounts(), getAssets(), getVendors(), getCustomers()])
-      .then(([a, f, cc, b, ast, v, c]) => {
+    Promise.all([getAccounts(), getFiscalYears(), getCostCenters(), getBankAccounts(), getAssets(), getVendors(), getCustomers(), getTreasuries()])
+      .then(([a, f, cc, b, ast, v, c, t]) => {
         setAccounts(a.data); setFiscalYears(f.data); setCostCenters(cc.data);
         setBankAccounts(b.data); setAssets(ast.data);
-        setVendors(v.data); setCustomers(c.data);
+        setVendors(v.data); setCustomers(c.data); setTreasuries(t.data || []);
         if (f.data.length) setForm(p => ({ ...p, fiscal_year_id: f.data[0].id }));
       });
   }, []);
@@ -68,6 +69,7 @@ export default function NewPaymentPage(props: { params: Promise<{ locale: string
         party_type: partyType,
         party_id: form.party_id || null,
         party_name: form.party_name || null,
+        treasury_id: form.treasury_id || null,
         asset_id: isAssetPurchase && form.asset_id ? form.asset_id : null,
         cost_center_id: form.cost_center_id || null,
         cheque_number: form.cheque_number || null,
@@ -114,6 +116,14 @@ export default function NewPaymentPage(props: { params: Promise<{ locale: string
             <div className="form-group">
               <label className="form-label">{ar ? "البيان" : "Description"} <span className="required">*</span></label>
               <input className="form-input" value={form.description_ar} onChange={e => upd("description_ar", e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">الخزينة المصروف منها</label>
+              <select className="form-input form-select" value={form.treasury_id} onChange={e => upd("treasury_id", e.target.value)}>
+                <option value="">— بدون خزينة محددة —</option>
+                {treasuries.map(t => <option key={t.id} value={t.id}>{t.name_ar} — الرصيد {Number(t.balance || 0).toFixed(2)} ر.س</option>)}
+              </select>
+              <div className="form-hint">عند الاختيار يرحّل الطرف النقدي تلقائيًا إلى حساب هذه الخزينة.</div>
             </div>
             <div className="grid-2">
               <div className="form-group">

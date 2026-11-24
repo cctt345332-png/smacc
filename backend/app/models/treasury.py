@@ -62,6 +62,7 @@ class Voucher(Base):
     party_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
 
     # الربط
+    treasury_id: Mapped[str | None] = mapped_column(String, ForeignKey("treasuries.id"), nullable=True, index=True)
     invoice_id: Mapped[str | None] = mapped_column(String, nullable=True)       # فاتورة مبيعات
     purchase_id: Mapped[str | None] = mapped_column(String, nullable=True)      # فاتورة مشتريات
     asset_id: Mapped[str | None] = mapped_column(String, ForeignKey("assets.id"), nullable=True)  # أصل ثابت
@@ -94,4 +95,21 @@ class Voucher(Base):
     created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
     posted_by: Mapped[str | None] = mapped_column(String, nullable=True)
     posted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Treasury(Base):
+    """خزينة مستقلة مرتبطة بحساب أصول نقدية في شجرة الحسابات."""
+    __tablename__ = "treasuries"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String, ForeignKey("tenants.id"), index=True)
+    name_ar: Mapped[str] = mapped_column(String(200))
+    name_en: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    branch_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.id"), index=True)
+    opening_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
