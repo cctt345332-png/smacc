@@ -278,8 +278,16 @@ async def create_ticket(db: AsyncSession, tenant_id: str, user_id: str, data: di
 
 async def update_ticket(db: AsyncSession, tenant_id: str, ticket_id: str, data: dict):
     ticket = await _ticket(db, tenant_id, ticket_id)
-    if ticket.status in {"completed", "cancelled"} and any(key != "status" for key in data):
+    # بعد التحصيل/إصدار الفاتورة لا نسمح بتغيير المبلغ أو الحالة المالية،
+    # لكن يجب أن يستطيع المدير تصحيح تقرير الفحص والوصف دون إنشاء تذكرة جديدة.
+    # شاشة POS كانت ترسل approved_cost مع diagnosis دائمًا، لذلك كان حفظ التقرير
+    # يُرفض بالكامل حتى عندما لم يتغير السعر.
+    if ticket.status == "cancelled" and any(key != "status" for key in data):
         raise HTTPException(400, "لا يمكن تعديل تذكرة مكتملة أو ملغاة؛ أنشئ إجراء تصحيح إداري مستقل")
+    if ticket.status == "completed":
+        allowed_completed = {"diagnosis", "notes", "reported_problem"}
+        if any(key not in allowed_completed for key in data):
+            raise HTTPException(400, "التذكرة مكتملة؛ يمكن تصحيح تقرير الفحص والوصف فقط، ولا يمكن تغيير السعر أو الحالة")
     if "status" in data and data["status"] not in MAINTENANCE_STATUSES:
         raise HTTPException(400, "حالة الصيانة غير صحيحة")
     if data.get("assigned_to"):

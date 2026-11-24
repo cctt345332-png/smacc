@@ -141,15 +141,22 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
   const saveInspection = async () => {
     if (!selectedTicket) return;
     if (!inspection.diagnosis.trim()) return alert("اكتب تقرير الفحص والمشكلة المكتشفة أولاً");
+    if (selectedTicket.status === "cancelled") return alert("لا يمكن تعديل تذكرة ملغاة");
     if (inspection.service_name.trim() && Number(inspection.service_amount) <= 0) return alert("أدخل سعر الخدمة بشكل صحيح");
     setSaving(true);
     try {
       const repairAmount = Number(inspection.service_amount || 0);
-      await updateMaintenanceTicket(selectedTicket.id, { diagnosis: inspection.diagnosis, approved_cost: repairAmount, status: selectedTicket.status === "open" ? "in_progress" : selectedTicket.status });
-      if (inspection.service_name.trim() && repairAmount > 0) await addMaintenanceService(selectedTicket.id, { service_name: inspection.service_name.trim(), amount: repairAmount });
+      const isCompleted = selectedTicket.status === "completed";
+      if (isCompleted) {
+        if (inspection.service_name.trim() || repairAmount > 0) return alert("التذكرة مكتملة؛ لا يمكن تغيير السعر أو إضافة خدمة بعد التحصيل. يمكنك حفظ تقرير الفحص والوصف فقط.");
+        await updateMaintenanceTicket(selectedTicket.id, { diagnosis: inspection.diagnosis });
+      } else {
+        await updateMaintenanceTicket(selectedTicket.id, { diagnosis: inspection.diagnosis, approved_cost: repairAmount, status: selectedTicket.status === "open" ? "in_progress" : selectedTicket.status });
+        if (inspection.service_name.trim() && repairAmount > 0) await addMaintenanceService(selectedTicket.id, { service_name: inspection.service_name.trim(), amount: repairAmount });
+      }
       const refreshed = (await getMaintenanceTickets({ terminal_id: terminalId })).data.find((x: any) => x.id === selectedTicket.id);
       setSelectedTicket(refreshed || selectedTicket); setCart([]); setInspection({ ...inspection, service_name: "", service_amount: "" });
-      alert("تم حفظ تقرير الفحص ووصف القطعة وسعر الإصلاح."); await load();
+      alert(isCompleted ? "تم حفظ تصحيح تقرير الفحص." : "تم حفظ تقرير الفحص ووصف القطعة وسعر الإصلاح."); await load();
     } catch (e: any) { alert(e?.response?.data?.detail || "تعذر حفظ تقرير الفحص"); } finally { setSaving(false); }
   };
 
