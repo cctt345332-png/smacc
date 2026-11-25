@@ -14,6 +14,7 @@ from app.models.inventory import InventoryItem, InventoryStock, SerialItem, Ware
 from app.models.sales import Customer
 from app.models.reps import SalesRep
 from app.models.sales import InvoicePaymentMethod, InvoiceType
+from app.models.user import User
 from app.modules.sales.schemas import InvoiceCreate, InvoiceLineCreate
 from app.modules.maintenance.service import _encrypt_secret
 
@@ -160,6 +161,7 @@ async def management_report(
 
     rows = (await db.execute(q.order_by(POSMaintenanceTicket.created_at.desc()).limit(1000))).scalars().all()
     tickets = []
+    payment_rows = []
     terminal_totals: dict[str, dict] = {}
     approved_total = paid_total = parts_total = Decimal("0")
     issued_parts = 0
@@ -168,7 +170,10 @@ async def management_report(
         details = await _out(db, tenant_id, ticket)
         ticket_parts = Decimal(str(details["parts_total"]))
         approved = Decimal(str(details["approved_cost"]))
-        paid = Decimal(str(ticket.paid_amount or 0))
+        # الدفعات المسجلة فعليًا في POS هي مصدر التحصيل. أما paid_amount
+        # فهو احتياط للتذاكر القديمة التي لم يكن لها سجل دفعة مستقل.
+        payment_total = sum((Decimal(str(payment["amount"])) for payment in details["payments"]), Decimal("0"))
+        paid = payment_total if details["payments"] else Decimal(str(ticket.paid_amount or 0))
         fees = max(Decimal("0"), approved - ticket_parts)
         outstanding = max(Decimal("0"), approved - paid)
         issued = sum(1 for part in details["parts"] if part["status"] == "issued")
@@ -191,7 +196,20 @@ async def management_report(
         group["outstanding"] += outstanding
         group["parts_total"] += ticket_parts
         group["fees_total"] += fees
-        tickets.append({**details, "parts_total": float(ticket_parts), "fees_total": float(fees), "outstanding": float(outstanding), "issued_parts": issued})
+        tickets.append({**details, "paid_amount": float(paid), "parts_total": float(ticket_parts), "fees_total": float(fees), "outstanding": float(outstanding), "issued_parts": issued})
+        for payment in details["payments"]:
+            session = await db.get(POSSession, payment["session_id"]) if payment.get("session_id") else None
+            cashier = await db.get(User, session.cashier_id) if session and session.cashier_id else None
+            payment_rows.append({
+                **payment,
+                "ticket_id": ticket.id,
+                "ticket_number": ticket.ticket_number,
+                "terminal_id": ticket.terminal_id,
+                "terminal_name": terminal.name if terminal else None,
+                "branch_name": terminal.branch_name if terminal else None,
+                "session_status": session.status if session else None,
+                "cashier_name": cashier.full_name if cashier else None,
+            })
 
     def clean(group: dict) -> dict:
         return {key: (float(value) if isinstance(value, Decimal) else value) for key, value in group.items()}
@@ -205,8 +223,10 @@ async def management_report(
             "parts_total": float(parts_total),
             "fees_total": float(max(Decimal("0"), approved_total - parts_total)),
             "issued_parts": issued_parts,
+            "payment_count": len(payment_rows),
         },
         "by_terminal": [clean(group) for group in terminal_totals.values()],
+        "payments": payment_rows,
         "tickets": tickets,
     }
 
