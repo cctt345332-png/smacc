@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, HTTPException, Depends
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
-from app.models.maintenance_case import MaintenanceCase, MaintenanceCaseStatusLog
+from app.models.maintenance_case import MaintenanceCase, MaintenanceCaseStatusLog, MaintenanceInspection, MaintenanceInspectionPart
+from app.models.inventory import InventoryItem
 
 router = APIRouter(prefix="/maintenance-cases", tags=["maintenance-cases"])
 WORKFLOW = {
@@ -34,9 +35,18 @@ async def _case(db, tenant_id, case_id):
         raise HTTPException(404, "طلب الصيانة غير موجود")
     return case
 
+async def _inspection_out(db, tenant_id, case_id):
+    inspection = await db.scalar(select(MaintenanceInspection).where(MaintenanceInspection.case_id == case_id, MaintenanceInspection.tenant_id == tenant_id))
+    if not inspection:
+        return None
+    rows = (await db.execute(select(MaintenanceInspectionPart, InventoryItem).join(InventoryItem, InventoryItem.id == MaintenanceInspectionPart.product_id).where(MaintenanceInspectionPart.inspection_id == inspection.id).order_by(MaintenanceInspectionPart.created_at))).all()
+    return {"id": inspection.id, "diagnosis": inspection.diagnosis, "failure_cause": inspection.failure_cause, "repair_required": inspection.repair_required, "warranty_status": inspection.warranty_status, "cost_responsibility": inspection.cost_responsibility, "labor_amount": float(inspection.labor_amount or 0), "expected_days": inspection.expected_days, "customer_approval": inspection.customer_approval, "customer_approved_at": inspection.customer_approved_at.isoformat() if inspection.customer_approved_at else None, "parts": [{"id": part.id, "product_id": part.product_id, "product_name": item.name_ar, "sku": item.sku, "quantity": float(part.quantity), "unit_price": float(part.unit_price), "status": part.status} for part, item in rows]}
+
+
 async def _out(db, tenant_id, case):
+    inspection = await _inspection_out(db, tenant_id, case.id)
     logs = (await db.execute(select(MaintenanceCaseStatusLog).where(MaintenanceCaseStatusLog.case_id == case.id).order_by(MaintenanceCaseStatusLog.created_at))).scalars().all()
-    return {"id": case.id, "case_number": case.case_number, "status": case.status, "status_label": LABELS.get(case.status, case.status), "source": case.source, "terminal_id": case.terminal_id, "customer_id": case.customer_id, "rep_id": case.rep_id, "device_name": case.device_name, "device_model": case.device_model, "device_serial": case.device_serial, "customer_name": case.customer_name, "customer_phone": case.customer_phone, "purchase_date": case.purchase_date.isoformat() if case.purchase_date else None, "reported_problem": case.reported_problem, "device_condition": case.device_condition, "received_accessories": case.received_accessories, "attachment_urls": json.loads(case.attachment_urls_json or "[]"), "created_by": case.created_by, "received_by": case.received_by, "created_at": case.created_at.isoformat(), "updated_at": case.updated_at.isoformat(), "status_history": [{"from_status": x.from_status, "to_status": x.to_status, "status_label": LABELS.get(x.to_status, x.to_status), "note": x.note, "changed_by": x.changed_by, "created_at": x.created_at.isoformat()} for x in logs]}
+    return {"id": case.id, "case_number": case.case_number, "status": case.status, "status_label": LABELS.get(case.status, case.status), "source": case.source, "terminal_id": case.terminal_id, "customer_id": case.customer_id, "rep_id": case.rep_id, "device_name": case.device_name, "device_model": case.device_model, "device_serial": case.device_serial, "customer_name": case.customer_name, "customer_phone": case.customer_phone, "purchase_date": case.purchase_date.isoformat() if case.purchase_date else None, "reported_problem": case.reported_problem, "device_condition": case.device_condition, "received_accessories": case.received_accessories, "attachment_urls": json.loads(case.attachment_urls_json or "[]"), "created_by": case.created_by, "received_by": case.received_by, "created_at": case.created_at.isoformat(), "updated_at": case.updated_at.isoformat(), "inspection": inspection, "status_history": [{"from_status": x.from_status, "to_status": x.to_status, "status_label": LABELS.get(x.to_status, x.to_status), "note": x.note, "changed_by": x.changed_by, "created_at": x.created_at.isoformat()} for x in logs]}
 
 @router.get("")
 async def list_cases(status: str | None = None, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -67,4 +77,36 @@ async def change_status(case_id: str, data: dict, user=Depends(require_role(["ma
     if target not in WORKFLOW.get(case.status, set()): raise HTTPException(400, "الانتقال المطلوب غير مسموح؛ يجب اتباع دورة الصيانة بالترتيب")
     now = datetime.utcnow(); old = case.status; case.status = target; case.updated_at = now
     db.add(MaintenanceCaseStatusLog(id=str(uuid.uuid4()), tenant_id=user["tenant_id"], case_id=case.id, from_status=old, to_status=target, note=data.get("note") or None, changed_by=user["user_id"], created_at=now))
+    await db.commit(); return await _out(db, user["tenant_id"], case)
+
+
+@router.get("/{case_id}/inspection")
+async def get_inspection(case_id: str, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    await _case(db, user["tenant_id"], case_id)
+    return await _inspection_out(db, user["tenant_id"], case_id)
+
+@router.post("/{case_id}/inspection")
+async def save_inspection(case_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    case = await _case(db, user["tenant_id"], case_id)
+    if case.status not in {"awaiting_inspection", "inspected"}:
+        raise HTTPException(400, "ابدأ مرحلة الفحص أولاً قبل حفظ التقرير")
+    diagnosis = str(data.get("diagnosis") or "").strip()
+    if not diagnosis:
+        raise HTTPException(400, "نتيجة الفحص مطلوبة")
+    inspection = await db.scalar(select(MaintenanceInspection).where(MaintenanceInspection.case_id == case.id))
+    now = datetime.utcnow()
+    if not inspection:
+        inspection = MaintenanceInspection(id=str(uuid.uuid4()), tenant_id=user["tenant_id"], case_id=case.id, created_by=user["user_id"], created_at=now, updated_at=now)
+        db.add(inspection)
+    inspection.diagnosis = diagnosis; inspection.failure_cause = data.get("failure_cause") or None; inspection.repair_required = data.get("repair_required") or None
+    inspection.warranty_status = data.get("warranty_status") or "unknown"; inspection.cost_responsibility = data.get("cost_responsibility") or "customer"
+    inspection.labor_amount = data.get("labor_amount") or 0; inspection.expected_days = data.get("expected_days") or None; inspection.updated_at = now
+    if case.status == "awaiting_inspection":
+        old = case.status; case.status = "inspected"; case.updated_at = now
+        db.add(MaintenanceCaseStatusLog(id=str(uuid.uuid4()), tenant_id=user["tenant_id"], case_id=case.id, from_status=old, to_status="inspected", note="تم حفظ تقرير الفحص", changed_by=user["user_id"], created_at=now))
+    for line in data.get("parts") or []:
+        product = await db.get(InventoryItem, line.get("product_id"))
+        if not product or product.tenant_id != user["tenant_id"] or not product.is_active:
+            raise HTTPException(400, "قطعة الغيار غير موجودة في الكتالوج")
+        db.add(MaintenanceInspectionPart(id=str(uuid.uuid4()), tenant_id=user["tenant_id"], inspection_id=inspection.id, product_id=product.id, quantity=line.get("quantity") or 1, unit_price=line.get("unit_price") if line.get("unit_price") is not None else product.sale_price or 0, status="requested", created_at=now))
     await db.commit(); return await _out(db, user["tenant_id"], case)

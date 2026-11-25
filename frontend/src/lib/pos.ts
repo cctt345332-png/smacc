@@ -60,3 +60,5 @@ export const getMaintenanceCases = (params?: { status?: string }) => api.get("/m
 export const createMaintenanceCase = (data: any) => api.post("/maintenance-cases", data);
 export const getMaintenanceCase = (id: string) => api.get(`/maintenance-cases/${id}`);
 export const changeMaintenanceCaseStatus = (id: string, data: { status: string; note?: string }) => api.post(`/maintenance-cases/${id}/status`, data);
+export const getMaintenanceInspection = (id: string) => api.get(`/maintenance-cases/${id}/inspection`);
+export const saveMaintenanceInspection = (id: string, data: any) => api.post(`/maintenance-cases/${id}/inspection`, data);
