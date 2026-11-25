@@ -54,3 +54,9 @@ export const refundTransaction = (id: string) => api.post(`/pos/transactions/${i
 
 // ─── Purchase ────────────────────────────────────────────────────────
 export const posPurchase = (data: any) => api.post("/pos/purchase", data);
+
+// ─── وحدة الصيانة الجديدة المستقلة ─────────────────────────────────
+export const getMaintenanceCases = (params?: { status?: string }) => api.get("/maintenance-cases", { params });
+export const createMaintenanceCase = (data: any) => api.post("/maintenance-cases", data);
+export const getMaintenanceCase = (id: string) => api.get(`/maintenance-cases/${id}`);
+export const changeMaintenanceCaseStatus = (id: string, data: { status: string; note?: string }) => api.post(`/maintenance-cases/${id}/status`, data);

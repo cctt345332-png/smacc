@@ -29,6 +29,7 @@ from app.modules.expenses.router import router as expenses_router
 from app.modules.zatca.router import router as zatca_router
 from app.modules.settlements.router import router as settlements_router
 from app.modules.daily_report.router import router as daily_report_router
+from app.modules.maintenance_cases import router as maintenance_cases_router
 
 app = FastAPI(title="ERP System", version="1.0.0")
 _notification_scheduler_task: asyncio.Task | None = None
@@ -201,6 +202,7 @@ app.include_router(expenses_router, prefix="/api/v1")
 app.include_router(zatca_router, prefix="/api/v1")
 app.include_router(settlements_router, prefix="/api/v1")
 app.include_router(daily_report_router, prefix="/api/v1")
+app.include_router(maintenance_cases_router, prefix="/api/v1")
 
 
 @app.get("/health")
