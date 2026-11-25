@@ -5,6 +5,7 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { getCustomers } from "@/lib/sales";
 import { getItems, getSerials } from "@/lib/inventory";
+import { getMaintenanceTickets, updateMaintenanceTicket } from "@/lib/pos";
 
 const STATUS = [
   ["new", "جديد"], ["received", "تم الاستلام"], ["inspecting", "قيد الفحص"],
@@ -12,6 +13,13 @@ const STATUS = [
   ["waiting_part", "بانتظار قطعة"], ["ready", "جاهز للتسليم"],
   ["delivered", "تم التسليم"], ["closed", "مغلق"], ["rejected", "مرفوض"], ["cancelled", "ملغي"],
 ] as const;
+
+const POS_STATUS: Record<string, string> = {
+  open: "new", in_progress: "inspecting", ready: "waiting_customer", completed: "delivered", cancelled: "cancelled",
+};
+const POS_STATUS_LABEL: Record<string, string> = {
+  open: "استقبال", in_progress: "قيد الفحص", ready: "بانتظار الاعتماد", completed: "مكتملة", cancelled: "ملغاة",
+};
 
 const emptyForm = {
   customer_id: "", product_id: "", serial_item_id: "", invoice_id: "", device_name: "",
@@ -42,15 +50,30 @@ export default function MaintenanceWorkspace({ locale, repOnly = false }: { loca
   const load = async () => {
     setLoading(true);
     try {
-      const [requestResult, customerResult, itemResult] = await Promise.allSettled([
+      const [requestResult, posResult, customerResult, itemResult] = await Promise.allSettled([
         api.get("/maintenance", { params: { status: status || undefined } }),
+        getMaintenanceTickets(),
         getCustomers(),
         repOnly ? api.get("/inventory/items/picker") : getItems(),
       ]);
-      if (requestResult.status === "fulfilled") setRows(Array.isArray(requestResult.value.data) ? requestResult.value.data : []);
+      const legacyRows = requestResult.status === "fulfilled" && Array.isArray(requestResult.value.data) ? requestResult.value.data : [];
+      const posRows = posResult.status === "fulfilled" && Array.isArray(posResult.value.data) ? posResult.value.data : [];
+      const normalizedPosRows = posRows.map((row: any) => ({
+        ...row,
+        source: "pos",
+        request_number: row.ticket_number,
+        customer_id: row.customer_id || row.customer_name,
+        serial_number: row.device_serial,
+        lock_secret_provided: row.lock_secret_provided,
+        lock_secret_returned: false,
+        status: POS_STATUS[row.status] || row.status,
+        pos_status: row.status,
+      }));
+      const visiblePosRows = status ? normalizedPosRows.filter((row: any) => row.status === status) : normalizedPosRows;
+      setRows([...legacyRows.map((row: any) => ({ ...row, source: "legacy" })), ...visiblePosRows]);
       if (customerResult.status === "fulfilled") setCustomers(Array.isArray(customerResult.value.data) ? customerResult.value.data : []);
       if (itemResult.status === "fulfilled") setItems(Array.isArray(itemResult.value.data) ? itemResult.value.data : []);
-      if (requestResult.status === "rejected") throw requestResult.reason;
+      if (requestResult.status === "rejected" && posResult.status === "rejected") throw requestResult.reason;
     } catch (e: any) {
       setError(e?.response?.data?.detail || (ar ? "تعذر تحميل طلبات الصيانة" : "Could not load maintenance requests"));
     } finally { setLoading(false); }
@@ -112,7 +135,15 @@ export default function MaintenanceWorkspace({ locale, repOnly = false }: { loca
     finally { setSaving(false); }
   };
   const changeStatus = async (row: any, next: string) => {
-    try { await api.post(`/maintenance/${row.id}/status`, { status: next }); load(); }
+    try {
+      if (row.source === "pos") {
+        const posStatus = Object.entries(POS_STATUS).find(([, value]) => value === next)?.[0] || next;
+        await updateMaintenanceTicket(row.id, { status: posStatus });
+      } else {
+        await api.post(`/maintenance/${row.id}/status`, { status: next });
+      }
+      load();
+    }
     catch (e: any) { setError(e?.response?.data?.detail || (ar ? "تعذر تغيير الحالة" : "Could not change status")); }
   };
 
@@ -134,12 +165,12 @@ export default function MaintenanceWorkspace({ locale, repOnly = false }: { loca
     <div className="card"><div className="table-wrapper"><table><thead><tr>
       <th>{ar ? "رقم الطلب" : "Request"}</th><th>{ar ? "الجهاز / السيريال" : "Device / Serial"}</th><th>{ar ? "المشكلة" : "Problem"}</th><th>{ar ? "الحالة" : "Status"}</th><th>{ar ? "كلمة المرور" : "Lock"}</th><th>{ar ? "إجراء" : "Action"}</th>
     </tr></thead><tbody>{loading ? <tr><td colSpan={6}>{ar ? "جاري التحميل..." : "Loading..."}</td></tr> : rows.length === 0 ? <tr><td colSpan={6}>{ar ? "لا توجد طلبات" : "No requests"}</td></tr> : rows.map(row => <tr key={row.id}>
-      <td><strong>{row.request_number}</strong><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{row.customer_id}</div></td>
+      <td><strong>{row.request_number}</strong><div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{row.customer_name || row.customer_id}</div>{row.source === "pos" && <span className="badge badge-info" style={{ marginTop: 4 }}>من نقطة البيع</span>}</td>
       <td>{row.device_name || "—"}<div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{row.serial_number || row.imei_1 || "—"}</div></td>
       <td style={{ maxWidth: 240 }}>{row.reported_problem}</td>
-      <td><select className="form-input form-select" value={row.status} onChange={e => changeStatus(row, e.target.value)}>{STATUS.map(([v, l]) => <option key={v} value={v}>{ar ? l : v}</option>)}</select></td>
+      <td>{row.source === "pos" ? <select className="form-input form-select" value={row.status} onChange={e => changeStatus(row, e.target.value)}>{Object.entries(POS_STATUS_LABEL).map(([v, l]) => <option key={POS_STATUS[v]} value={POS_STATUS[v]}>{l}</option>)}</select> : <select className="form-input form-select" value={row.status} onChange={e => changeStatus(row, e.target.value)}>{STATUS.map(([v, l]) => <option key={v} value={v}>{ar ? l : v}</option>)}</select>}</td>
       <td>{row.lock_secret_provided ? (row.lock_secret_returned ? (ar ? "أعيدت للعميل" : "Returned") : (ar ? "موجودة" : "Provided")) : (ar ? "لا يوجد" : "None")}</td>
-      <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><Link className="btn btn-secondary btn-sm" href={`/${locale}/maintenance/${row.id}/print?copy=rep`}>{ar ? "نسخة المندوب" : "Rep copy"}</Link><Link className="btn btn-ghost btn-sm" href={`/${locale}/maintenance/${row.id}/print?copy=maintenance`}>{ar ? "نسخة الصيانة" : "Technician copy"}</Link></td>
+      <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{row.source === "pos" ? <><Link className="btn btn-secondary btn-sm" href={`/${locale}/pos/maintenance/${row.id}/print?document=intake`}>إيصال الاستلام</Link><Link className="btn btn-ghost btn-sm" href={`/${locale}/pos/maintenance/${row.id}/print?document=inspection`}>تقرير الفحص</Link></> : <><Link className="btn btn-secondary btn-sm" href={`/${locale}/maintenance/${row.id}/print?copy=rep`}>{ar ? "نسخة المندوب" : "Rep copy"}</Link><Link className="btn btn-ghost btn-sm" href={`/${locale}/maintenance/${row.id}/print?copy=maintenance`}>{ar ? "نسخة الصيانة" : "Technician copy"}</Link></>}</td>
     </tr>)}</tbody></table></div></div>
     {showForm && <div onClick={() => setShowForm(false)} style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(15, 23, 42, .42)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}><div onClick={e => e.stopPropagation()} style={{ width: "min(820px, 100%)", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 24px 60px rgba(15,23,42,.22)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "1px solid var(--border)", background: "var(--bg)" }}><div><h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>{ar ? "إنشاء طلب صيانة" : "New Maintenance Request"}</h2><p style={{ margin: "5px 0 0", color: "var(--text-secondary)", fontSize: 12 }}>{ar ? "أدخل بيانات الجهاز والمشكلة قبل إرساله للصيانة" : "Enter the device and problem details before submitting"}</p></div><button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)} aria-label={ar ? "إغلاق" : "Close"}>×</button></div>
