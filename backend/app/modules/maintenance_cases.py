@@ -4,11 +4,13 @@ import uuid
 from datetime import datetime
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from decimal import Decimal
 from fastapi import APIRouter, HTTPException, Depends
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
 from app.models.maintenance_case import MaintenanceCase, MaintenanceCaseStatusLog, MaintenanceInspection, MaintenanceInspectionPart
-from app.models.inventory import InventoryItem
+from app.models.inventory import InventoryItem, InventoryStock, Warehouse
+from app.modules.inventory.service import add_stock, deduct_stock
 
 router = APIRouter(prefix="/maintenance-cases", tags=["maintenance-cases"])
 WORKFLOW = {
@@ -40,7 +42,7 @@ async def _inspection_out(db, tenant_id, case_id):
     if not inspection:
         return None
     rows = (await db.execute(select(MaintenanceInspectionPart, InventoryItem).join(InventoryItem, InventoryItem.id == MaintenanceInspectionPart.product_id).where(MaintenanceInspectionPart.inspection_id == inspection.id).order_by(MaintenanceInspectionPart.created_at))).all()
-    return {"id": inspection.id, "diagnosis": inspection.diagnosis, "failure_cause": inspection.failure_cause, "repair_required": inspection.repair_required, "warranty_status": inspection.warranty_status, "cost_responsibility": inspection.cost_responsibility, "labor_amount": float(inspection.labor_amount or 0), "expected_days": inspection.expected_days, "customer_approval": inspection.customer_approval, "customer_approved_at": inspection.customer_approved_at.isoformat() if inspection.customer_approved_at else None, "parts": [{"id": part.id, "product_id": part.product_id, "product_name": item.name_ar, "sku": item.sku, "quantity": float(part.quantity), "unit_price": float(part.unit_price), "status": part.status} for part, item in rows]}
+    return {"id": inspection.id, "diagnosis": inspection.diagnosis, "failure_cause": inspection.failure_cause, "repair_required": inspection.repair_required, "warranty_status": inspection.warranty_status, "cost_responsibility": inspection.cost_responsibility, "labor_amount": float(inspection.labor_amount or 0), "expected_days": inspection.expected_days, "customer_approval": inspection.customer_approval, "customer_approved_at": inspection.customer_approved_at.isoformat() if inspection.customer_approved_at else None, "parts": [{"id": part.id, "product_id": part.product_id, "product_name": item.name_ar, "sku": item.sku, "quantity": float(part.quantity), "unit_price": float(part.unit_price), "status": part.status, "warehouse_id": part.warehouse_id, "issued_by": part.issued_by, "issued_at": part.issued_at.isoformat() if part.issued_at else None, "returned_by": part.returned_by, "returned_at": part.returned_at.isoformat() if part.returned_at else None} for part, item in rows]}
 
 
 async def _out(db, tenant_id, case):
@@ -109,4 +111,64 @@ async def save_inspection(case_id: str, data: dict, user=Depends(require_role(["
         if not product or product.tenant_id != user["tenant_id"] or not product.is_active:
             raise HTTPException(400, "قطعة الغيار غير موجودة في الكتالوج")
         db.add(MaintenanceInspectionPart(id=str(uuid.uuid4()), tenant_id=user["tenant_id"], inspection_id=inspection.id, product_id=product.id, quantity=line.get("quantity") or 1, unit_price=line.get("unit_price") if line.get("unit_price") is not None else product.sale_price or 0, status="requested", created_at=now))
+    await db.commit(); return await _out(db, user["tenant_id"], case)
+
+
+@router.post("/{case_id}/approval")
+async def customer_approval(case_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    case = await _case(db, user["tenant_id"], case_id)
+    if case.status not in {"inspected", "awaiting_customer_approval"}:
+        raise HTTPException(400, "لا يمكن تسجيل موافقة قبل اكتمال تقرير الفحص")
+    approved = bool(data.get("approved")); now = datetime.utcnow(); old = case.status; inspection = None
+    if approved:
+        inspection = await db.scalar(select(MaintenanceInspection).where(MaintenanceInspection.case_id == case.id))
+        part_count = await db.scalar(select(func.count(MaintenanceInspectionPart.id)).where(MaintenanceInspectionPart.inspection_id == inspection.id)) if inspection else 0
+        target = "awaiting_parts" if part_count else "in_repair"
+    else:
+        target = "cancelled"
+    if old == "inspected" and target not in WORKFLOW[old]:
+        raise HTTPException(400, "حالة الموافقة غير متوافقة مع دورة الصيانة")
+    case.status = target; case.updated_at = now
+    if inspection:
+        inspection.customer_approval = "approved" if approved else "rejected"; inspection.customer_approved_at = now if approved else None
+    db.add(MaintenanceCaseStatusLog(id=str(uuid.uuid4()), tenant_id=user["tenant_id"], case_id=case.id, from_status=old, to_status=target, note=data.get("note") or ("تمت موافقة العميل" if approved else "رفض العميل الإصلاح"), changed_by=user["user_id"], created_at=now))
+    await db.commit(); return await _out(db, user["tenant_id"], case)
+
+@router.post("/{case_id}/parts/{part_id}/reserve")
+async def reserve_part(case_id: str, part_id: str, data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    case = await _case(db, user["tenant_id"], case_id)
+    part = await db.scalar(select(MaintenanceInspectionPart).where(MaintenanceInspectionPart.id == part_id, MaintenanceInspectionPart.tenant_id == user["tenant_id"]))
+    if not part: raise HTTPException(404, "قطعة الصيانة غير موجودة")
+    if part.status != "requested": raise HTTPException(400, "لا يمكن حجز القطعة في حالتها الحالية")
+    warehouse = await db.get(Warehouse, data.get("warehouse_id"))
+    stock = await db.scalar(select(InventoryStock).where(InventoryStock.tenant_id == user["tenant_id"], InventoryStock.item_id == part.product_id, InventoryStock.warehouse_id == data.get("warehouse_id")))
+    if not warehouse or warehouse.tenant_id != user["tenant_id"] or not stock or stock.quantity - stock.reserved_qty < part.quantity:
+        raise HTTPException(400, "الكمية المتاحة في المستودع غير كافية للحجز")
+    stock.reserved_qty += part.quantity; part.warehouse_id = warehouse.id; part.status = "reserved"
+    await db.commit(); return await _out(db, user["tenant_id"], case)
+
+@router.post("/{case_id}/parts/{part_id}/issue")
+async def issue_part(case_id: str, part_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    case = await _case(db, user["tenant_id"], case_id)
+    part = await db.scalar(select(MaintenanceInspectionPart).where(MaintenanceInspectionPart.id == part_id, MaintenanceInspectionPart.tenant_id == user["tenant_id"]))
+    if not part: raise HTTPException(404, "قطعة الصيانة غير موجودة")
+    if part.status == "issued": return await _out(db, user["tenant_id"], case)
+    if part.status != "reserved" or not part.warehouse_id: raise HTTPException(400, "احجز القطعة من مستودع أولاً")
+    stock = await db.scalar(select(InventoryStock).where(InventoryStock.item_id == part.product_id, InventoryStock.warehouse_id == part.warehouse_id, InventoryStock.tenant_id == user["tenant_id"]))
+    if not stock or stock.quantity < part.quantity: raise HTTPException(400, "المخزون غير كافٍ للصرف")
+    stock.reserved_qty = max(Decimal("0"), stock.reserved_qty - part.quantity)
+    await deduct_stock(db, user["tenant_id"], part.product_id, Decimal(str(part.quantity)), part.warehouse_id, "maintenance_case", case.id, user["user_id"], auto_commit=False)
+    part.status = "issued"; part.issued_by = user["user_id"]; part.issued_at = datetime.utcnow()
+    if case.status == "awaiting_parts": case.status = "in_repair"; case.updated_at = datetime.utcnow()
+    await db.commit(); return await _out(db, user["tenant_id"], case)
+
+@router.post("/{case_id}/parts/{part_id}/return")
+async def return_part(case_id: str, part_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    case = await _case(db, user["tenant_id"], case_id)
+    part = await db.scalar(select(MaintenanceInspectionPart).where(MaintenanceInspectionPart.id == part_id, MaintenanceInspectionPart.tenant_id == user["tenant_id"]))
+    if not part: raise HTTPException(404, "قطعة الصيانة غير موجودة")
+    if part.status == "returned": return await _out(db, user["tenant_id"], case)
+    if part.status != "issued" or not part.warehouse_id: raise HTTPException(400, "لا يمكن إرجاع قطعة غير مصروفة")
+    await add_stock(db, user["tenant_id"], part.product_id, Decimal(str(part.quantity)), Decimal(str(part.unit_price or 0)), part.warehouse_id, "maintenance_case_return", case.id, user["user_id"], auto_commit=False, movement_type="return_in")
+    part.status = "returned"; part.returned_by = user["user_id"]; part.returned_at = datetime.utcnow()
     await db.commit(); return await _out(db, user["tenant_id"], case)
