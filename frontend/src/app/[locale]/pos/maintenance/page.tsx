@@ -82,7 +82,9 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     setSelectedProduct(null); setSerials([]);
   };
   const totalParts = cart.reduce((s, x) => s + x.quantity * x.unit_price, 0);
-  const totalDue = Number(form.approved_cost || 0) + totalParts;
+  // الإجمالي المعتمد في التذكرة هو المصدر الوحيد للحساب؛ القطع والخدمات
+  // تعرض كتفاصيل فقط ولا تُجمع مرة ثانية في الواجهة.
+  const totalDue = Number(form.approved_cost || 0);
 
   const save = async () => {
     if (!terminalId || !sessionId) return alert("افتح جلسة الكاشير أولًا ثم ادخل إلى الصيانة");
@@ -150,7 +152,11 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
         if (inspection.service_name.trim() || repairAmount > 0) return alert("التذكرة مكتملة؛ لا يمكن تغيير السعر أو إضافة خدمة بعد التحصيل. يمكنك حفظ تقرير الفحص والوصف فقط.");
         await updateMaintenanceTicket(selectedTicket.id, { diagnosis: inspection.diagnosis });
       } else {
-        await updateMaintenanceTicket(selectedTicket.id, { diagnosis: inspection.diagnosis, approved_cost: repairAmount, status: selectedTicket.status === "open" ? "in_progress" : selectedTicket.status });
+        const updatePayload: any = { diagnosis: inspection.diagnosis, status: selectedTicket.status === "open" ? "in_progress" : selectedTicket.status };
+        // عند وجود وصف خدمة، قيمتها تُضاف مرة واحدة بواسطة API الخدمات.
+        // لا نرسلها أيضًا كـ approved_cost حتى لا تتكرر في الإجمالي.
+        if (!inspection.service_name.trim() && repairAmount > 0) updatePayload.approved_cost = repairAmount;
+        await updateMaintenanceTicket(selectedTicket.id, updatePayload);
         if (inspection.service_name.trim() && repairAmount > 0) await addMaintenanceService(selectedTicket.id, { service_name: inspection.service_name.trim(), amount: repairAmount });
       }
       const refreshed = (await getMaintenanceTickets({ terminal_id: terminalId })).data.find((x: any) => x.id === selectedTicket.id);
@@ -172,7 +178,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
     const popup = window.open("", "_blank", "width=420,height=700");
     if (!popup) return alert("اسمح بالنوافذ المنبثقة لطباعة إيصال الدفع");
     const esc = (value: any) => String(value || "—").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char] || char));
-    const total = Math.max(Number(ticket.approved_cost || 0), Number(ticket.parts_total || 0) + Number(ticket.services_total || 0));
+    const total = Number(ticket.approved_cost || 0);
     const paid = Number(ticket.paid_amount ?? previousPaid + amount);
     const remaining = Math.max(0, total - paid);
     popup.document.write(`<!doctype html><html dir="rtl"><head><meta charset="utf-8"><title>إيصال دفع صيانة ${esc(ticket.ticket_number)}</title><style>@page{size:80mm auto;margin:3mm}*{box-sizing:border-box}body{font-family:Arial,Tahoma,sans-serif;margin:0;width:74mm;color:#111;font-size:11px;line-height:1.5}.center{text-align:center}.title{font-size:17px;font-weight:800}.sub{font-size:10px}.rule{border-top:1px dashed #111;margin:8px 0}.row{display:flex;justify-content:space-between;gap:6px;margin:5px 0}.value{font-weight:700}.paid{font-size:18px;font-weight:900;text-align:center;margin:10px 0}.remaining{font-weight:800;font-size:13px}</style></head><body><div class="center"><div class="title">إيصال دفع صيانة</div><div class="sub">غير ضريبي</div><div class="sub">${esc(ticket.ticket_number)}</div></div><div class="rule"></div><div class="row"><span>العميل:</span><span class="value">${esc(ticket.customer_name)}</span></div><div class="row"><span>الجهاز:</span><span class="value">${esc(ticket.device_name)}</span></div><div class="row"><span>السيريال:</span><span class="value">${esc(ticket.device_serial)}</span></div><div class="rule"></div><div class="paid">تم استلام ${esc(money(amount))} ر.س نقدًا</div><div class="row"><span>إجمالي الطلب:</span><span>${esc(money(total))} ر.س</span></div><div class="row"><span>إجمالي المدفوع:</span><span>${esc(money(paid))} ر.س</span></div><div class="row remaining"><span>المتبقي:</span><span>${esc(money(remaining))} ر.س</span></div><div class="rule"></div><div class="center sub">شكرًا لثقتكم بنا — www.ab-tw.com</div><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`);
@@ -182,7 +188,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
   const collectFromPOS = async () => {
     if (!selectedTicket) return;
     const current = (await getMaintenanceTickets({ terminal_id: terminalId })).data.find((x: any) => x.id === selectedTicket.id) || selectedTicket;
-    const total = Math.max(Number(current.approved_cost || 0), Number(current.parts_total || 0) + Number(current.services_total || 0));
+    const total = Number(current.approved_cost || 0);
     const outstanding = Math.max(0, total - Number(current.paid_amount || 0));
     if (outstanding <= 0) return alert("هذا الطلب مدفوع بالكامل");
     const raw = window.prompt(`المتبقي ${money(outstanding)} ريال — أدخل مبلغ الدفع النقدي`);
@@ -243,7 +249,7 @@ export default function POSMaintenancePage(props: { params: Promise<{ locale: st
           <textarea className="form-input" rows={4} style={{ marginTop: 10 }} placeholder="وصف تفصيلي للمشكلة *" value={form.reported_problem} onChange={e => setForm({ ...form, reported_problem: e.target.value })} />
           <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }} onClick={save} disabled={saving}>{saving ? "جاري التسجيل..." : "إنشاء طلب وطباعة إيصال الاستلام"}</button>
         </> : <>
-          <div className="card" style={{ padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>{selectedTicket.ticket_number} — {selectedTicket.device_name}</b><div className="form-hint">العميل: {selectedTicket.customer_name || "—"}</div><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}><span className="maintenance-status" style={{ background: statusColors[selectedTicket.status] || "#64748b" }}>حالة الطلب: {statusLabels[selectedTicket.status] || "غير محددة"}</span><select className="form-input form-select maintenance-status-select" style={{ maxWidth: 180 }} value={selectedTicket.status || "open"} onChange={(e) => changeTicketStatus(e.target.value)} disabled={saving}><option value="open">استقبال</option><option value="in_progress">قيد الفحص</option><option value="ready">بانتظار الاعتماد</option><option value="completed">مكتملة</option><option value="cancelled">ملغاة</option></select>{(() => { const total = Math.max(Number(selectedTicket.approved_cost || 0), Number(selectedTicket.parts_total || 0) + Number(selectedTicket.services_total || 0)); const paid = Number(selectedTicket.paid_amount || 0); return total > 0 ? <><span className="payment-chip">المدفوع: {money(paid)} ر.س</span><span className="payment-chip">المتبقي: {money(Math.max(0, total - paid))} ر.س</span></> : <span className="payment-chip payment-chip-muted">لم يحدد سعر الإصلاح بعد — لا يوجد مبلغ مستحق</span>; })()}</div></div>
+          <div className="card" style={{ padding: 12, background: "var(--surface-secondary, #f8fafc)" }}><b>{selectedTicket.ticket_number} — {selectedTicket.device_name}</b><div className="form-hint">العميل: {selectedTicket.customer_name || "—"}</div><div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}><span className="maintenance-status" style={{ background: statusColors[selectedTicket.status] || "#64748b" }}>حالة الطلب: {statusLabels[selectedTicket.status] || "غير محددة"}</span><select className="form-input form-select maintenance-status-select" style={{ maxWidth: 180 }} value={selectedTicket.status || "open"} onChange={(e) => changeTicketStatus(e.target.value)} disabled={saving}><option value="open">استقبال</option><option value="in_progress">قيد الفحص</option><option value="ready">بانتظار الاعتماد</option><option value="completed">مكتملة</option><option value="cancelled">ملغاة</option></select>{(() => { const total = Number(selectedTicket.approved_cost || 0); const paid = Number(selectedTicket.paid_amount || 0); return total > 0 ? <><span className="payment-chip">المدفوع: {money(paid)} ر.س</span><span className="payment-chip">المتبقي: {money(Math.max(0, total - paid))} ر.س</span></> : <span className="payment-chip payment-chip-muted">لم يحدد سعر الإصلاح بعد — لا يوجد مبلغ مستحق</span>; })()}</div></div>
           <textarea className="form-input" rows={4} style={{ marginTop: 12 }} placeholder="تقرير الفحص والمشكلة المكتشفة *" value={inspection.diagnosis} onChange={e => setInspection({ ...inspection, diagnosis: e.target.value })} />
           <input className="form-input" style={{ marginTop: 10 }} placeholder="وصف القطعة التي تم تغييرها أو الإصلاح المنفذ" value={inspection.service_name} onChange={e => setInspection({ ...inspection, service_name: e.target.value })} />
           <input className="form-input" style={{ marginTop: 10 }} type="number" min="0" placeholder="سعر الإصلاح النهائي" value={inspection.service_amount} onChange={e => setInspection({ ...inspection, service_amount: e.target.value })} />

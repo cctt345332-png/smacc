@@ -112,7 +112,12 @@ async def _out(db: AsyncSession, tenant_id: str, ticket: POSMaintenanceTicket) -
     data["payments"] = await _payments(db, tenant_id, ticket.id)
     data["services"] = await _services(db, tenant_id, ticket.id)
     data["services_total"] = round(sum(line["amount"] for line in data["services"]), 2)
-    data["approved_cost"] = max(float(ticket.approved_cost or 0), data["parts_total"] + data["services_total"])
+    # approved_cost هو الإجمالي المعتمد الوحيد للتذكرة. يتم تحديثه عند إضافة
+    # خدمة أو قطعة، لذلك لا نجمع تفاصيل الخدمات والقطع معه مرة ثانية هنا.
+    # الجمع السابق كان يضاعف أجرة الإصلاح: حفظ 150 في approved_cost وإنشاء
+    # سطر خدمة بقيمة 150 كان يعيد 300 ريال.
+    data["approved_cost"] = round(float(ticket.approved_cost or 0), 2)
+    data["outstanding"] = round(max(0.0, data["approved_cost"] - float(ticket.paid_amount or 0)), 2)
     return data
 
 
@@ -162,7 +167,8 @@ async def management_report(
     for ticket in rows:
         details = await _out(db, tenant_id, ticket)
         ticket_parts = Decimal(str(details["parts_total"]))
-        approved = max(Decimal(str(ticket.approved_cost or 0)), Decimal(str(details["parts_total"])) + Decimal(str(details["services_total"])))
+        # approved_cost هو الإجمالي المحاسبي المعتمد، والتفاصيل للتوضيح فقط.
+        approved = Decimal(str(ticket.approved_cost or 0))
         paid = Decimal(str(ticket.paid_amount or 0))
         fees = max(Decimal("0"), approved - ticket_parts)
         outstanding = max(Decimal("0"), approved - paid)
@@ -461,9 +467,9 @@ async def record_payment(db: AsyncSession, tenant_id: str, user_id: str, ticket_
     amount = Decimal(str(data.get("amount") or 0))
     if amount <= 0:
         raise HTTPException(400, "مبلغ الدفعة يجب أن يكون أكبر من صفر")
-    parts = await _parts(db, tenant_id, ticket.id)
-    services = await _services(db, tenant_id, ticket.id)
-    effective_total = max(Decimal(str(ticket.approved_cost or 0)), sum((Decimal(str(part["total"])) for part in parts), Decimal("0")) + sum((Decimal(str(line["amount"])) for line in services), Decimal("0")))
+    # استخدم نفس الإجمالي الذي تعرضه التذكرة والواجهة؛ لا تعُد إلى جمع
+    # تفاصيل الخدمات والقطع فوق approved_cost أثناء قبول الدفعة.
+    effective_total = Decimal(str(ticket.approved_cost or 0))
     outstanding = effective_total - Decimal(str(ticket.paid_amount or 0))
     if amount > outstanding:
         raise HTTPException(400, "مبلغ الدفعة أكبر من المتبقي على التذكرة")
