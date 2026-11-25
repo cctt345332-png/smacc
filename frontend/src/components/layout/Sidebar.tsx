@@ -170,9 +170,9 @@ const buildNav = (base: string, ar: boolean, bt: string = "general", plan: strin
         key: "maintenance", label: ar ? "إدارة الصيانة" : "Maintenance", icon: IC.settings,
         children: [
           { label: ar ? "لوحة الصيانة" : "Maintenance Dashboard", href: `${base}/maintenance` },
-          { label: ar ? "طلبات وتذاكر الصيانة" : "Requests & Tickets", href: `${base}/pos/maintenance-management?view=tickets` },
+          { label: ar ? "طلبات وتذاكر الصيانة" : "Requests & Tickets", href: `${base}/maintenance` },
           { label: ar ? "مستودعات الصيانة" : "Maintenance Warehouses", href: `${base}/maintenance/warehouses` },
-          { label: ar ? "التقرير والعهدة" : "Report & Custody", href: `${base}/pos/maintenance-management?view=report` },
+          { label: ar ? "التقرير والعهدة" : "Report & Custody", href: `${base}/reports/maintenance` },
         ],
       },
       {
