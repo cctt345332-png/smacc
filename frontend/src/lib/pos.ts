@@ -68,3 +68,4 @@ export const issueMaintenanceCasePart = (caseId: string, partId: string) => api.
 export const returnMaintenanceCasePart = (caseId: string, partId: string) => api.post(`/maintenance-cases/${caseId}/parts/${partId}/return`);
 export const calculateMaintenanceBilling = (id: string, data: any) => api.post(`/maintenance-cases/${id}/billing`, data);
 export const issueMaintenanceCaseInvoice = (id: string) => api.post(`/maintenance-cases/${id}/invoice`);
+export const receiveMaintenancePayment = (id: string, data: any) => api.post(`/maintenance-cases/${id}/payment`, data);

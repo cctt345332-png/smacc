@@ -11,8 +11,8 @@ from app.core.tenant import get_current_user, require_role
 from app.models.maintenance_case import MaintenanceCase, MaintenanceCaseStatusLog, MaintenanceInspection, MaintenanceInspectionPart, MaintenanceBilling
 from app.models.inventory import InventoryItem, InventoryStock, Warehouse
 from app.modules.inventory.service import add_stock, deduct_stock
-from app.models.sales import InvoiceType, InvoicePaymentMethod
-from app.modules.sales.schemas import InvoiceCreate, InvoiceLineCreate
+from app.models.sales import Invoice, InvoiceType, InvoicePaymentMethod
+from app.modules.sales.schemas import InvoiceCreate, InvoiceLineCreate, PaymentCreate
 
 router = APIRouter(prefix="/maintenance-cases", tags=["maintenance-cases"])
 WORKFLOW = {
@@ -50,7 +50,10 @@ async def _inspection_out(db, tenant_id, case_id):
 async def _billing_out(db, tenant_id, case_id):
     billing = await db.scalar(select(MaintenanceBilling).where(MaintenanceBilling.case_id == case_id, MaintenanceBilling.tenant_id == tenant_id))
     if not billing: return None
-    return {"id": billing.id, "labor_amount": float(billing.labor_amount or 0), "parts_amount": float(billing.parts_amount or 0), "discount_amount": float(billing.discount_amount or 0), "vat_amount": float(billing.vat_amount or 0), "total_amount": float(billing.total_amount or 0), "invoice_id": billing.invoice_id, "created_at": billing.created_at.isoformat(), "updated_at": billing.updated_at.isoformat()}
+    invoice = await db.scalar(select(Invoice).where(Invoice.id == billing.invoice_id, Invoice.tenant_id == tenant_id)) if billing.invoice_id else None
+    paid = Decimal(str(invoice.paid_amount or 0)) if invoice else Decimal("0")
+    total = Decimal(str(invoice.total or billing.total_amount or 0)) if invoice else Decimal(str(billing.total_amount or 0))
+    return {"id": billing.id, "labor_amount": float(billing.labor_amount or 0), "parts_amount": float(billing.parts_amount or 0), "discount_amount": float(billing.discount_amount or 0), "vat_amount": float(billing.vat_amount or 0), "total_amount": float(total), "paid_amount": float(paid), "remaining_amount": float(max(Decimal("0"), total - paid)), "invoice_id": billing.invoice_id, "invoice_status": invoice.status.value if invoice and hasattr(invoice.status, "value") else (invoice.status if invoice else None), "created_at": billing.created_at.isoformat(), "updated_at": billing.updated_at.isoformat()}
 
 
 async def _out(db, tenant_id, case):
@@ -213,3 +216,31 @@ async def issue_maintenance_invoice(case_id: str, user=Depends(require_role(["ma
     now = datetime.utcnow(); invoice = await create_invoice(db, user["tenant_id"], user["user_id"], InvoiceCreate(customer_id=case.customer_id, invoice_type=InvoiceType.SIMPLIFIED, issue_date=now, supply_date=now, invoice_payment_method=InvoicePaymentMethod.CREDIT, notes=f"فاتورة صيانة — {case.case_number}", lines=lines))
     invoice = await confirm_invoice(db, user["tenant_id"], user["user_id"], invoice.id); billing.invoice_id = invoice.id; billing.updated_at = datetime.utcnow(); await db.commit()
     return {**(await _out(db, user["tenant_id"], case)), "invoice_number": invoice.invoice_number}
+
+
+@router.post("/{case_id}/payment")
+async def receive_maintenance_payment(case_id: str, data: dict, user=Depends(require_role(["manager", "accountant", "cashier"])), db: AsyncSession = Depends(get_db)):
+    """تسجيل دفعة جزئية أو كاملة عبر دورة سندات القبض الموحدة."""
+    case = await _case(db, user["tenant_id"], case_id)
+    billing = await db.scalar(select(MaintenanceBilling).where(MaintenanceBilling.case_id == case.id, MaintenanceBilling.tenant_id == user["tenant_id"]))
+    if not billing or not billing.invoice_id:
+        raise HTTPException(400, "أصدر فاتورة الصيانة أولاً")
+    amount = Decimal(str(data.get("amount") or 0))
+    if amount <= 0:
+        raise HTTPException(400, "يجب أن يكون مبلغ التحصيل أكبر من صفر")
+    invoice = await db.scalar(select(Invoice).where(Invoice.id == billing.invoice_id, Invoice.tenant_id == user["tenant_id"]))
+    if not invoice or not case.customer_id:
+        raise HTTPException(400, "فاتورة الصيانة أو العميل غير موجود")
+    remaining = Decimal(str(invoice.total or 0)) - Decimal(str(invoice.paid_amount or 0))
+    if amount > remaining + Decimal("0.01"):
+        raise HTTPException(400, f"المبلغ أكبر من المتبقي ({remaining:.2f})")
+    from app.modules.sales.service import create_payment
+    from app.models.sales import PaymentMethod
+    method = data.get("payment_method") or "cash"
+    try:
+        method = PaymentMethod(method)
+    except ValueError:
+        raise HTTPException(400, "طريقة الدفع غير صحيحة")
+    payment_date = datetime.fromisoformat(data["payment_date"]) if data.get("payment_date") else datetime.utcnow()
+    payment = await create_payment(db, user["tenant_id"], user["user_id"], PaymentCreate(invoice_id=invoice.id, customer_id=case.customer_id, payment_date=payment_date, amount=amount, payment_method=method, reference=data.get("reference"), bank_account_id=data.get("bank_account_id"), notes=f"تحصيل صيانة — {case.case_number}"))
+    return {**(await _out(db, user["tenant_id"], case)), "payment_id": payment.id, "payment_number": payment.payment_number}
