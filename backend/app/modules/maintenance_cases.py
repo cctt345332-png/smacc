@@ -8,9 +8,11 @@ from decimal import Decimal
 from fastapi import APIRouter, HTTPException, Depends
 from app.core.database import get_db
 from app.core.tenant import get_current_user, require_role
-from app.models.maintenance_case import MaintenanceCase, MaintenanceCaseStatusLog, MaintenanceInspection, MaintenanceInspectionPart
+from app.models.maintenance_case import MaintenanceCase, MaintenanceCaseStatusLog, MaintenanceInspection, MaintenanceInspectionPart, MaintenanceBilling
 from app.models.inventory import InventoryItem, InventoryStock, Warehouse
 from app.modules.inventory.service import add_stock, deduct_stock
+from app.models.sales import InvoiceType, InvoicePaymentMethod
+from app.modules.sales.schemas import InvoiceCreate, InvoiceLineCreate
 
 router = APIRouter(prefix="/maintenance-cases", tags=["maintenance-cases"])
 WORKFLOW = {
@@ -45,10 +47,16 @@ async def _inspection_out(db, tenant_id, case_id):
     return {"id": inspection.id, "diagnosis": inspection.diagnosis, "failure_cause": inspection.failure_cause, "repair_required": inspection.repair_required, "warranty_status": inspection.warranty_status, "cost_responsibility": inspection.cost_responsibility, "labor_amount": float(inspection.labor_amount or 0), "expected_days": inspection.expected_days, "customer_approval": inspection.customer_approval, "customer_approved_at": inspection.customer_approved_at.isoformat() if inspection.customer_approved_at else None, "parts": [{"id": part.id, "product_id": part.product_id, "product_name": item.name_ar, "sku": item.sku, "quantity": float(part.quantity), "unit_price": float(part.unit_price), "status": part.status, "warehouse_id": part.warehouse_id, "issued_by": part.issued_by, "issued_at": part.issued_at.isoformat() if part.issued_at else None, "returned_by": part.returned_by, "returned_at": part.returned_at.isoformat() if part.returned_at else None} for part, item in rows]}
 
 
+async def _billing_out(db, tenant_id, case_id):
+    billing = await db.scalar(select(MaintenanceBilling).where(MaintenanceBilling.case_id == case_id, MaintenanceBilling.tenant_id == tenant_id))
+    if not billing: return None
+    return {"id": billing.id, "labor_amount": float(billing.labor_amount or 0), "parts_amount": float(billing.parts_amount or 0), "discount_amount": float(billing.discount_amount or 0), "vat_amount": float(billing.vat_amount or 0), "total_amount": float(billing.total_amount or 0), "invoice_id": billing.invoice_id, "created_at": billing.created_at.isoformat(), "updated_at": billing.updated_at.isoformat()}
+
+
 async def _out(db, tenant_id, case):
     inspection = await _inspection_out(db, tenant_id, case.id)
     logs = (await db.execute(select(MaintenanceCaseStatusLog).where(MaintenanceCaseStatusLog.case_id == case.id).order_by(MaintenanceCaseStatusLog.created_at))).scalars().all()
-    return {"id": case.id, "case_number": case.case_number, "status": case.status, "status_label": LABELS.get(case.status, case.status), "source": case.source, "terminal_id": case.terminal_id, "customer_id": case.customer_id, "rep_id": case.rep_id, "device_name": case.device_name, "device_model": case.device_model, "device_serial": case.device_serial, "customer_name": case.customer_name, "customer_phone": case.customer_phone, "purchase_date": case.purchase_date.isoformat() if case.purchase_date else None, "reported_problem": case.reported_problem, "device_condition": case.device_condition, "received_accessories": case.received_accessories, "attachment_urls": json.loads(case.attachment_urls_json or "[]"), "created_by": case.created_by, "received_by": case.received_by, "created_at": case.created_at.isoformat(), "updated_at": case.updated_at.isoformat(), "inspection": inspection, "status_history": [{"from_status": x.from_status, "to_status": x.to_status, "status_label": LABELS.get(x.to_status, x.to_status), "note": x.note, "changed_by": x.changed_by, "created_at": x.created_at.isoformat()} for x in logs]}
+    return {"id": case.id, "case_number": case.case_number, "status": case.status, "status_label": LABELS.get(case.status, case.status), "source": case.source, "terminal_id": case.terminal_id, "customer_id": case.customer_id, "rep_id": case.rep_id, "device_name": case.device_name, "device_model": case.device_model, "device_serial": case.device_serial, "customer_name": case.customer_name, "customer_phone": case.customer_phone, "purchase_date": case.purchase_date.isoformat() if case.purchase_date else None, "reported_problem": case.reported_problem, "device_condition": case.device_condition, "received_accessories": case.received_accessories, "attachment_urls": json.loads(case.attachment_urls_json or "[]"), "created_by": case.created_by, "received_by": case.received_by, "created_at": case.created_at.isoformat(), "updated_at": case.updated_at.isoformat(), "inspection": inspection, "billing": await _billing_out(db, tenant_id, case.id), "status_history": [{"from_status": x.from_status, "to_status": x.to_status, "status_label": LABELS.get(x.to_status, x.to_status), "note": x.note, "changed_by": x.changed_by, "created_at": x.created_at.isoformat()} for x in logs]}
 
 @router.get("")
 async def list_cases(status: str | None = None, user=Depends(get_current_user), db: AsyncSession = Depends(get_db)):
@@ -172,3 +180,36 @@ async def return_part(case_id: str, part_id: str, user=Depends(require_role(["ma
     await add_stock(db, user["tenant_id"], part.product_id, Decimal(str(part.quantity)), Decimal(str(part.unit_price or 0)), part.warehouse_id, "maintenance_case_return", case.id, user["user_id"], auto_commit=False, movement_type="return_in")
     part.status = "returned"; part.returned_by = user["user_id"]; part.returned_at = datetime.utcnow()
     await db.commit(); return await _out(db, user["tenant_id"], case)
+
+
+@router.post("/{case_id}/billing")
+async def calculate_billing(case_id: str, data: dict, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    case = await _case(db, user["tenant_id"], case_id)
+    inspection = await db.scalar(select(MaintenanceInspection).where(MaintenanceInspection.case_id == case.id))
+    if not inspection: raise HTTPException(400, "احفظ تقرير الفحص أولاً")
+    parts = (await db.execute(select(MaintenanceInspectionPart).where(MaintenanceInspectionPart.inspection_id == inspection.id))).scalars().all()
+    labor = Decimal(str(data.get("labor_amount") if data.get("labor_amount") is not None else inspection.labor_amount or 0)); discount = Decimal(str(data.get("discount_amount") or 0))
+    parts_total = sum((Decimal(str(x.quantity)) * Decimal(str(x.unit_price)) for x in parts), Decimal("0"))
+    taxable = max(Decimal("0"), labor + parts_total - discount); vat = (taxable * Decimal("0.15") / Decimal("1.15")).quantize(Decimal("0.01")); total = taxable
+    billing = await db.scalar(select(MaintenanceBilling).where(MaintenanceBilling.case_id == case.id))
+    now = datetime.utcnow()
+    if not billing:
+        billing = MaintenanceBilling(id=str(uuid.uuid4()), tenant_id=user["tenant_id"], case_id=case.id, created_by=user["user_id"], created_at=now, updated_at=now); db.add(billing)
+    billing.labor_amount = labor; billing.parts_amount = parts_total; billing.discount_amount = discount; billing.vat_amount = vat; billing.total_amount = total; billing.updated_at = now
+    await db.commit(); return await _out(db, user["tenant_id"], case)
+
+@router.post("/{case_id}/invoice")
+async def issue_maintenance_invoice(case_id: str, user=Depends(require_role(["manager", "accountant"])), db: AsyncSession = Depends(get_db)):
+    case = await _case(db, user["tenant_id"], case_id); billing = await db.scalar(select(MaintenanceBilling).where(MaintenanceBilling.case_id == case.id))
+    if not billing: raise HTTPException(400, "احسب قيمة طلب الصيانة أولاً")
+    if billing.invoice_id: return await _out(db, user["tenant_id"], case)
+    if not case.customer_id: raise HTTPException(400, "اربط الطلب بعميل مسجل قبل إصدار الفاتورة")
+    inspection = await db.scalar(select(MaintenanceInspection).where(MaintenanceInspection.case_id == case.id)); parts = (await db.execute(select(MaintenanceInspectionPart).where(MaintenanceInspectionPart.inspection_id == inspection.id))).scalars().all() if inspection else []
+    lines = []
+    if billing.labor_amount > 0: lines.append(InvoiceLineCreate(description_ar="أجرة صيانة", description_en="Maintenance labor", quantity=Decimal("1"), unit_price=billing.labor_amount, vat_rate=Decimal("15"), prices_include_vat=True, line_order=0))
+    for i, part in enumerate(parts): lines.append(InvoiceLineCreate(description_ar="قطعة غيار صيانة", description_en="Maintenance spare part", quantity=part.quantity, unit_price=part.unit_price, vat_rate=Decimal("15"), prices_include_vat=True, line_order=len(lines)))
+    if not lines: raise HTTPException(400, "لا توجد أجور أو قطع لإصدار الفاتورة")
+    from app.modules.sales.service import create_invoice, confirm_invoice
+    now = datetime.utcnow(); invoice = await create_invoice(db, user["tenant_id"], user["user_id"], InvoiceCreate(customer_id=case.customer_id, invoice_type=InvoiceType.SIMPLIFIED, issue_date=now, supply_date=now, invoice_payment_method=InvoicePaymentMethod.CREDIT, notes=f"فاتورة صيانة — {case.case_number}", lines=lines))
+    invoice = await confirm_invoice(db, user["tenant_id"], user["user_id"], invoice.id); billing.invoice_id = invoice.id; billing.updated_at = datetime.utcnow(); await db.commit()
+    return {**(await _out(db, user["tenant_id"], case)), "invoice_number": invoice.invoice_number}

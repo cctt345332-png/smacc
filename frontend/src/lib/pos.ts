@@ -66,3 +66,5 @@ export const approveMaintenanceCase = (id: string, data: { approved: boolean; no
 export const reserveMaintenancePart = (caseId: string, partId: string, warehouse_id: string) => api.post(`/maintenance-cases/${caseId}/parts/${partId}/reserve`, { warehouse_id });
 export const issueMaintenanceCasePart = (caseId: string, partId: string) => api.post(`/maintenance-cases/${caseId}/parts/${partId}/issue`);
 export const returnMaintenanceCasePart = (caseId: string, partId: string) => api.post(`/maintenance-cases/${caseId}/parts/${partId}/return`);
+export const calculateMaintenanceBilling = (id: string, data: any) => api.post(`/maintenance-cases/${id}/billing`, data);
+export const issueMaintenanceCaseInvoice = (id: string) => api.post(`/maintenance-cases/${id}/invoice`);
