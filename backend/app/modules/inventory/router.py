@@ -189,6 +189,7 @@ async def list_items(
             "tracking_type": getattr(item.tracking_type, "value", item.tracking_type),
             "unit_type": getattr(item.unit_type, "value", item.unit_type),
             "sale_price": float(item.sale_price or 0),
+            "pos_sale_price": float(item.pos_sale_price) if item.pos_sale_price is not None else None,
             "cost_price": float(item.cost_price or 0),
             "vat_rate": float(item.vat_rate or 0),
             "quantity_on_hand": float(serial_counts.get(item.id, 0) if getattr(item.tracking_type, "value", item.tracking_type) == "serial" else (quantity_by_item.get(item.id, 0) if warehouse_id else item.quantity_on_hand or 0)),
@@ -298,6 +299,7 @@ async def items_for_picker(
                 "unit_type": item.unit_type,
                 # بطاقة الصنف هي مصدر السعر الموحد للسيريالات وغيرها.
                 "sale_price": float(item.sale_price),
+                "pos_sale_price": float(item.pos_sale_price) if item.pos_sale_price is not None else None,
                 "vat_rate": float(item.vat_rate),
                 "quantity_on_hand": float(
                     item_ids_serial.get(item.id, 0) if item.tracking_type == "serial"
@@ -322,6 +324,7 @@ async def items_for_picker(
             "tracking_type": item.tracking_type,
             "unit_type": item.unit_type,
             "sale_price": float(item.sale_price),
+            "pos_sale_price": float(item.pos_sale_price) if item.pos_sale_price is not None else None,
             "vat_rate": float(item.vat_rate),
             "quantity_on_hand": float(item.quantity_on_hand),
             "reorder_point": float(item.reorder_point),

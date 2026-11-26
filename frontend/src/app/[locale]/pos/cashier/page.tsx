@@ -32,8 +32,10 @@ interface CartLine {
 }
 interface Product {
   id: string; name_ar: string; sku?: string; barcode?: string;
-  tracking_type: string; sale_price: number; vat_rate: number; quantity_on_hand: number;
+  tracking_type: string; sale_price: number; pos_sale_price?: number | null; vat_rate: number; quantity_on_hand: number;
 }
+
+const posPrice = (p: Product | any) => Number(p?.pos_sale_price ?? p?.sale_price ?? 0);
 
 const calcLine = (l: CartLine) => {
   const gross = l.quantity * l.unit_price;
@@ -286,8 +288,8 @@ export default function POSCashierPage() {
             addLine(product, {
               serial_item_id: selectedSerial.id,
               serial_number: selectedSerial.serial_number,
-              wholesale_price: selectedSerial.sale_price || product.sale_price,
-              unit_price: selectedSerial.sale_price || product.sale_price,
+              wholesale_price: selectedSerial.sale_price || posPrice(product),
+              unit_price: selectedSerial.sale_price || posPrice(product),
             });
             setSearch("");
             setProducts(allProducts);
@@ -382,8 +384,8 @@ export default function POSCashierPage() {
       id: Math.random().toString(36).slice(2),
       inventory_item_id: p.id, product_name_ar: p.name_ar,
       barcode: p.barcode, tracking_type: p.tracking_type,
-      wholesale_price: p.sale_price,
-      quantity: 1, unit_price: p.sale_price,
+      wholesale_price: posPrice(p),
+      quantity: 1, unit_price: posPrice(p),
       discount_pct: 0, vat_rate: p.vat_rate, prices_include_vat: true, ...extra,
     }]);
     setSearch(""); setProducts(allProducts);
@@ -846,7 +848,7 @@ export default function POSCashierPage() {
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--surface)"; }}>
                   <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4, lineHeight: 1.3 }}>{p.name_ar}</div>
                   {p.barcode && <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>{p.barcode}</div>}
-                  <div style={{ fontSize: 12, fontWeight: 700, color: actCfg.color }}>{isAr ? "سعر الجملة: " : "Wholesale: "}{fmt(p.sale_price)} {sar}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: actCfg.color }}>{isAr ? "سعر الجملة: " : "Wholesale: "}{fmt(posPrice(p))} {sar}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
                     {p.tracking_type === "serial" ? (isAr ? `${p.quantity_on_hand} سيريال` : `${p.quantity_on_hand} serials`) :
                      p.tracking_type === "batch"  ? (isAr ? "تشغيلة" : "Batch") :
@@ -1061,7 +1063,7 @@ export default function POSCashierPage() {
             <div style={{ padding: "8px 16px 4px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>{serialModal.product.name_ar}</div>
             <div style={{ overflowY: "auto", flex: 1, padding: "8px 16px 16px" }}>
               {serialModal.serials.map((s: any) => (
-                <button key={s.id} onClick={() => { addLine(serialModal.product, { serial_item_id: s.id, serial_number: s.serial_number, wholesale_price: s.sale_price || serialModal.product.sale_price, unit_price: s.sale_price || serialModal.product.sale_price }); setSerialModal(null); }}
+                <button key={s.id} onClick={() => { addLine(serialModal.product, { serial_item_id: s.id, serial_number: s.serial_number, wholesale_price: s.sale_price || posPrice(serialModal.product), unit_price: s.sale_price || posPrice(serialModal.product) }); setSerialModal(null); }}
                   style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 6, background: "white", cursor: "pointer", textAlign: isAr ? "right" : "left" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = actCfg.color; e.currentTarget.style.background = actCfg.bg; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "white"; }}>
@@ -1072,7 +1074,7 @@ export default function POSCashierPage() {
                       {s.will_transfer_to_terminal ? (isAr ? "من الرئيسي — سيُنقل للفرع تلقائياً" : "From main — auto-transfer to branch") : (s.warehouse_name || (isAr ? "مستودع الفرع" : "Branch warehouse"))}
                     </div>
                   </div>
-                  <div style={{ fontWeight: 700, color: actCfg.color, fontSize: 13 }}>{fmt(s.sale_price || serialModal.product.sale_price)} {sar}</div>
+                  <div style={{ fontWeight: 700, color: actCfg.color, fontSize: 13 }}>{fmt(s.sale_price || posPrice(serialModal.product))} {sar}</div>
                 </button>
               ))}
             </div>
@@ -1091,13 +1093,13 @@ export default function POSCashierPage() {
             <div style={{ padding: "8px 16px 4px", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>{variantModal.product.name_ar}</div>
             <div style={{ overflowY: "auto", flex: 1, padding: "8px 16px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8 }}>
               {variantModal.variants.map((v: any) => (
-                <button key={v.id} onClick={() => { addLine(variantModal.product, { variant_id: v.id, variant_label: [v.size, v.color, v.other_attribute].filter(Boolean).join(" / "), wholesale_price: v.sale_price || variantModal.product.sale_price, unit_price: v.sale_price || variantModal.product.sale_price }); setVariantModal(null); }}
+                <button key={v.id} onClick={() => { addLine(variantModal.product, { variant_id: v.id, variant_label: [v.size, v.color, v.other_attribute].filter(Boolean).join(" / "), wholesale_price: v.sale_price || posPrice(variantModal.product), unit_price: v.sale_price || posPrice(variantModal.product) }); setVariantModal(null); }}
                   style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "10px 8px", background: "white", cursor: "pointer", textAlign: "center" }}
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = actCfg.color; e.currentTarget.style.background = actCfg.bg; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "white"; }}>
                   <div style={{ fontWeight: 600, fontSize: 12 }}>{[v.size, v.color].filter(Boolean).join(" / ") || v.sku}</div>
                   {v.other_attribute && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{v.other_attribute}</div>}
-                  <div style={{ fontSize: 12, fontWeight: 700, color: actCfg.color, marginTop: 4 }}>{fmt(v.sale_price || variantModal.product.sale_price)} {sar}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: actCfg.color, marginTop: 4 }}>{fmt(v.sale_price || posPrice(variantModal.product))} {sar}</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{isAr ? `متاح: ${v.quantity}` : `Avail: ${v.quantity}`}</div>
                 </button>
               ))}

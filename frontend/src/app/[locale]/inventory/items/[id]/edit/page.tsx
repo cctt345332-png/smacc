@@ -23,7 +23,7 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
   const [item, setItem] = useState<any>(null);
   const [form, setForm] = useState<any>({
     name_ar: "", name_en: "", barcode: "", category_id: "",
-    sale_price: "", cost_price: "", vat_rate: "15",
+    sale_price: "", pos_sale_price: "", cost_price: "", vat_rate: "15",
     reorder_point: "", color: "", storage: "",
     pos_enabled: true, store_enabled: false, is_active: true, default_warehouse_id: "",
   });
@@ -42,6 +42,7 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
           barcode: i.barcode || "",
           category_id: i.category_id || "",
           sale_price: i.sale_price ?? "",
+          pos_sale_price: i.pos_sale_price ?? "",
           cost_price: i.cost_price ?? "",
           vat_rate: i.vat_rate ?? "15",
           reorder_point: i.reorder_point ?? "",
@@ -64,6 +65,7 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
       await updateItem(id, {
         ...form,
         sale_price: parseFloat(form.sale_price) || 0,
+        pos_sale_price: String(form.pos_sale_price).trim() ? parseFloat(form.pos_sale_price) : null,
         cost_price: parseFloat(form.cost_price) || 0,
         vat_rate: parseFloat(form.vat_rate) || 15,
         reorder_point: parseFloat(form.reorder_point) || 0,
@@ -240,6 +242,13 @@ export default function EditItemPage(props: { params: Promise<{ locale: string; 
                 min="0"
                 step="0.01"
               />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{ar ? "سعر البيع لنقاط البيع (ر.س)" : "POS Sale Price (SAR)"}</label>
+              <input type="number" className="form-input" value={form.pos_sale_price}
+                onChange={e => setForm((f: any) => ({ ...f, pos_sale_price: e.target.value }))}
+                onFocus={e => e.target.select()} placeholder={ar ? "اختياري — يستخدم سعر البيع عند تركه فارغًا" : "Optional — falls back to sale price"} min="0" step="0.01" />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{ar ? "السعر النهائي شامل الضريبة، ويطبق على نقاط البيع فقط" : "Final price including VAT; used only at POS"}</div>
             </div>
             <div className="form-group">
               <label className="form-label">{ar ? "ضريبة القيمة المضافة %" : "VAT %"}</label>

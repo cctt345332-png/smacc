@@ -288,6 +288,7 @@ async def create_item(db: AsyncSession, tenant_id: str, data: dict) -> Inventory
         unit_type=data.get("unit_type", "piece"),
         cost_price=Decimal(str(data.get("cost_price", 0))),
         sale_price=Decimal(str(data.get("sale_price", 0))),
+        pos_sale_price=_decimal_price(data.get("pos_sale_price")),
         vat_rate=Decimal(str(data.get("vat_rate", 15))),
         reorder_point=Decimal(str(data.get("reorder_point", 0))),
         store_enabled=data.get("store_enabled", False),
@@ -395,7 +396,7 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
 
     allowed = [
         "name_ar", "name_en", "barcode", "description_ar", "category_id",
-        "cost_price", "sale_price", "vat_rate", "reorder_point", "store_enabled",
+        "cost_price", "sale_price", "pos_sale_price", "vat_rate", "reorder_point", "store_enabled",
         "store_description_ar", "store_images_json", "store_price",
         "store_featured", "pos_enabled", "is_active", "tracking_type", "default_warehouse_id",
         # حقول الصيدلية
@@ -405,8 +406,8 @@ async def update_item(db: AsyncSession, tenant_id: str, item_id: str, data: dict
     ]
     price_updates: dict[str, Decimal] = {}
     for k in allowed:
-        if k in data and data[k] is not None:
-            if k in ("cost_price", "sale_price"):
+        if k in data and (data[k] is not None or k == "pos_sale_price"):
+            if k in ("cost_price", "sale_price", "pos_sale_price"):
                 value = _decimal_price(data[k])
                 setattr(item, k, value)
                 price_updates[k] = value

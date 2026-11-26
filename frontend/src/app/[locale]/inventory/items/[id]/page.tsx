@@ -167,6 +167,7 @@ export default function ItemDetailPage(props: { params: Promise<{ locale: string
               { label: ar ? "السعة" : "Storage", value: item.storage },
               { label: item.tracking_type === "serial" ? (ar ? "سعر التكلفة الموحد" : "Unified Cost Price") : (ar ? "سعر التكلفة" : "Cost Price"), value: `${fmt(item.cost_price)} SAR` },
               { label: item.tracking_type === "serial" ? (ar ? "سعر البيع الموحد" : "Unified Sale Price") : (ar ? "سعر البيع" : "Sale Price"), value: `${fmt(item.sale_price)} SAR` },
+              { label: ar ? "سعر البيع لنقاط البيع" : "POS Sale Price", value: item.pos_sale_price != null ? `${fmt(item.pos_sale_price)} SAR` : (ar ? "يستخدم سعر البيع" : "Uses sale price") },
               { label: ar ? "ضريبة القيمة المضافة" : "VAT", value: `${item.vat_rate}%` },
             ].filter(f => f.value).map(f => (
               <div key={f.label}>

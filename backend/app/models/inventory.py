@@ -144,6 +144,8 @@ class InventoryItem(Base):
     # ── التسعير (للمنتجات العادية — متوسط متحرك) ────────────────────
     cost_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"))
     sale_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), default=Decimal("0"))
+    # سعر بيع اختياري خاص بنقاط البيع؛ إذا كان فارغًا يستخدم sale_price
+    pos_sale_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
     vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("15"))
 
     # ── الكمية (للمنتجات العادية فقط — serial/batch لها جداولها) ────

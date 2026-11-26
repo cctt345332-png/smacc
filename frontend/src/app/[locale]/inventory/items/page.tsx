@@ -84,7 +84,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
     setEditForm({
       name_ar: item.name_ar, name_en: item.name_en || "",
       barcode: item.barcode || "", category_id: item.category_id || "",
-      sale_price: item.sale_price, cost_price: item.cost_price,
+      sale_price: item.sale_price, pos_sale_price: item.pos_sale_price ?? "", cost_price: item.cost_price,
       vat_rate: item.vat_rate, reorder_point: item.reorder_point,
       color: item.color || "", storage: item.storage || "",
       pos_enabled: item.pos_enabled === true,
@@ -108,6 +108,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
         pos_enabled: Boolean(editForm.pos_enabled),
         store_enabled: Boolean(editForm.store_enabled),
         sale_price: parseFloat(editForm.sale_price) || 0,
+        pos_sale_price: String(editForm.pos_sale_price).trim() ? parseFloat(editForm.pos_sale_price) : null,
         cost_price: parseFloat(editForm.cost_price) || 0,
         vat_rate: parseFloat(editForm.vat_rate) || 15,
         reorder_point: parseFloat(editForm.reorder_point) || 0,
@@ -293,7 +294,7 @@ export default function ItemsPage(props: { params: Promise<{ locale: string }> }
                           </span>
                         )}
                       </td>
-                      <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(item.sale_price)} SAR</td>
+                      <td style={{ textAlign: "end", fontWeight: 600 }}>{fmt(item.sale_price)} SAR<br /><span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>POS: {item.pos_sale_price != null ? `${fmt(item.pos_sale_price)} SAR` : "—"}</span></td>
                       <td>
                         <span className={`badge ${item.is_active ? "badge-success" : "badge-gray"}`}>
                           {item.is_active ? (ar ? "نشط" : "Active") : (ar ? "موقوف" : "Inactive")}
@@ -432,6 +433,13 @@ function EditItemModal({ item, form, setForm, onSave, onClose, saving, ar, categ
                 placeholder="0.00"
                 min="0" step="0.01"
                 onChange={e => setForm((f: any) => ({ ...f, sale_price: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{ar ? "سعر البيع لنقاط البيع" : "POS Sale Price"}</label>
+              <input type="number" className="form-input" value={form.pos_sale_price ?? ""}
+                onFocus={e => (e.target as HTMLInputElement).select()} placeholder={ar ? "اختياري" : "Optional"}
+                min="0" step="0.01" onChange={e => setForm((f: any) => ({ ...f, pos_sale_price: e.target.value }))} />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{ar ? "شامل الضريبة — فارغ = سعر البيع" : "Including VAT — blank uses sale price"}</div>
             </div>
             <div className="form-group">
               <label className="form-label">{ar ? "ضريبة %" : "VAT %"}</label>

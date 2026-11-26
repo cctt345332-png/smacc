@@ -56,7 +56,7 @@ export default function NewItemPage(props: { params: Promise<{ locale: string }>
     name_ar: "", name_en: "", sku: "", barcode: "",
     tracking_type: "quantity", unit_type: "piece",
     category_id: "", default_warehouse_id: "",
-    cost_price: "", sale_price: "", vat_rate: "15",
+    cost_price: "", sale_price: "", pos_sale_price: "", vat_rate: "15",
     reorder_point: "0", initial_qty: "0",
     store_enabled: false, pos_enabled: true,
     store_images_json: "",
@@ -129,6 +129,7 @@ export default function NewItemPage(props: { params: Promise<{ locale: string }>
         tracking_type: useSerial ? "serial" : "quantity",
         cost_price: parseFloat(form.cost_price) || 0,
         sale_price: parseFloat(form.sale_price) || 0,
+        pos_sale_price: form.pos_sale_price.trim() ? parseFloat(form.pos_sale_price) : null,
         vat_rate: parseFloat(form.vat_rate) || 15,
         reorder_point: parseFloat(form.reorder_point) || 0,
         category_id: form.category_id || null,
@@ -400,6 +401,13 @@ export default function NewItemPage(props: { params: Promise<{ locale: string }>
                 onChange={e => upd("sale_price", e.target.value)} min="0" step="0.01"
                 onFocus={e => e.target.select()}
                 placeholder="0.00" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">{ar ? "سعر البيع لنقاط البيع (ر.س)" : "POS Sale Price (SAR)"}</label>
+              <input type="number" className="form-input" value={form.pos_sale_price}
+                onChange={e => upd("pos_sale_price", e.target.value)} min="0" step="0.01"
+                placeholder={ar ? "اختياري — يستخدم سعر البيع عند تركه فارغًا" : "Optional — falls back to sale price"} />
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{ar ? "السعر النهائي شامل الضريبة، ويطبق على نقاط البيع فقط" : "Final price including VAT; used only at POS"}</div>
             </div>
             <div className="form-group">
               <label className="form-label">{ar ? "ضريبة القيمة المضافة %" : "VAT %"}</label>
