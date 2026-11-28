@@ -1262,6 +1262,22 @@ export default function POSCashierPage() {
         </div>
       )}
 
+      {/* ── POS Receipt Modal ── */}
+      {showPOSReceipt && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div className="card" style={{ width: "100%", maxWidth: 460 }}>
+            <div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{isAr ? "سند قبض من العميل" : "Customer receipt"}</h3><button className="btn btn-ghost btn-icon" onClick={() => setShowPOSReceipt(false)}><Icon name="close" size={18} /></button></div>
+            <div className="card-body">
+              <div className="form-group"><label className="form-label">{isAr ? "العميل" : "Customer"}</label><select className="form-input form-select" value={posReceiptForm.customer_id} onChange={e => setPosReceiptForm({ ...posReceiptForm, customer_id: e.target.value })}><option value="">{isAr ? "اختر العميل" : "Select customer"}</option>{customers.map((c: any) => <option key={c.id} value={c.id}>{c.name_ar}{c.phone ? ` — ${c.phone}` : ""}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">{isAr ? "المبلغ" : "Amount"} ({sar})</label><input type="number" min="0.01" step="0.01" className="form-input" value={posReceiptForm.amount} onChange={e => setPosReceiptForm({ ...posReceiptForm, amount: e.target.value })} autoFocus /></div>
+              <div className="form-group"><label className="form-label">{isAr ? "طريقة الدفع" : "Payment method"}</label><select className="form-input form-select" value={posReceiptForm.payment_method} onChange={e => setPosReceiptForm({ ...posReceiptForm, payment_method: e.target.value })}><option value="cash">{isAr ? "نقدي" : "Cash"}</option><option value="mada">{isAr ? "شبكة" : "Mada"}</option><option value="credit_card">{isAr ? "بطاقة ائتمانية" : "Credit card"}</option><option value="stc_pay">STC Pay</option><option value="bank_transfer">{isAr ? "تحويل بنكي" : "Bank transfer"}</option></select></div>
+              <div className="form-group"><label className="form-label">{isAr ? "رقم الفاتورة (اختياري)" : "Invoice ID (optional)"}</label><input className="form-input" value={posReceiptForm.invoice_id} onChange={e => setPosReceiptForm({ ...posReceiptForm, invoice_id: e.target.value })} placeholder={isAr ? "اتركه فارغًا للتحصيل من الرصيد العام" : "Leave blank for customer balance"} /></div>
+              <div className="form-group"><label className="form-label">{isAr ? "البيان" : "Description"}</label><input className="form-input" value={posReceiptForm.description} onChange={e => setPosReceiptForm({ ...posReceiptForm, description: e.target.value })} /></div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button className="btn btn-secondary" onClick={() => setShowPOSReceipt(false)}>{isAr ? "إلغاء" : "Cancel"}</button><button className="btn btn-primary" onClick={handlePOSReceipt} disabled={savingPOSReceipt}><Icon name="check" size={15} />{savingPOSReceipt ? (isAr ? "جاري الحفظ..." : "Saving...") : (isAr ? "حفظ وترحيل السند" : "Post receipt")}</button></div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Cash Outflow Modal ── */}
       {showCashOutflow && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
