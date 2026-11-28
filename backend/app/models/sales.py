@@ -309,6 +309,9 @@ class Payment(Base):
     rep_id: Mapped[str | None] = mapped_column(String, ForeignKey("sales_reps.id"), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
+    # تحصيل صادر من نقطة البيع؛ يربط السند بالجلسة والجهاز لمنع فقدانه أو تكراره.
+    pos_session_id: Mapped[str | None] = mapped_column(String, ForeignKey("pos_sessions.id"), nullable=True, index=True)
+    pos_terminal_id: Mapped[str | None] = mapped_column(String, ForeignKey("pos_terminals.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     invoice: Mapped["Invoice | None"] = relationship("Invoice", back_populates="payments")

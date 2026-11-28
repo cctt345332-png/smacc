@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase, getMyTransactions, getTransaction, createCashOutflow } from "@/lib/pos";
+import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase, getMyTransactions, getTransaction, createCashOutflow, createPOSReceipt } from "@/lib/pos";
 import { getItemsForPicker, getAvailableSerials, searchSerial, getBatches, getVariants } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
 import { getCustomers, createCustomer } from "@/lib/sales";
@@ -126,6 +126,9 @@ export default function POSCashierPage() {
   const [showCashOutflow, setShowCashOutflow] = useState(false);
   const [cashOutflowForm, setCashOutflowForm] = useState({ outflow_type: "donation", amount: "", description: "" });
   const [savingCashOutflow, setSavingCashOutflow] = useState(false);
+  const [showPOSReceipt, setShowPOSReceipt] = useState(false);
+  const [posReceiptForm, setPosReceiptForm] = useState({ customer_id: "", amount: "", payment_method: "cash", invoice_id: "", description: "" });
+  const [savingPOSReceipt, setSavingPOSReceipt] = useState(false);
 
   // modals for tracking types
   const [serialModal,  setSerialModal]  = useState<{ product: Product; serials: any[] } | null>(null);
@@ -538,6 +541,20 @@ export default function POSCashierPage() {
     } catch (e: any) { alert(e?.response?.data?.detail || (isAr ? "تعذر تسجيل المخرج النقدي" : "Could not save cash outflow")); }
     finally { setSavingCashOutflow(false); }
   };
+  const handlePOSReceipt = async () => {
+    if (!session) return;
+    const amount = parseFloat(posReceiptForm.amount);
+    if (!posReceiptForm.customer_id || !amount || amount <= 0) { alert(isAr ? "اختر العميل وأدخل مبلغًا صحيحًا" : "Select a customer and enter a valid amount"); return; }
+    setSavingPOSReceipt(true);
+    try {
+      const { data } = await createPOSReceipt(session.id, { ...posReceiptForm, amount });
+      alert(`${isAr ? "تم إنشاء سند القبض" : "Receipt created"}: ${data?.receipt_number || data?.payment_number || data?.id || "OK"}`);
+      setPosReceiptForm({ customer_id: "", amount: "", payment_method: "cash", invoice_id: "", description: "" });
+      setShowPOSReceipt(false);
+      if (posReceiptForm.payment_method === "cash") setSession({ ...session, total_cash: Number(session.total_cash || 0) + amount });
+    } catch (e: any) { alert(e?.response?.data?.detail || (isAr ? "تعذر تسجيل سند القبض" : "Could not save receipt")); }
+    finally { setSavingPOSReceipt(false); }
+  };
 
   const openPreviousInvoices = async () => {
     setShowHistory(true);
@@ -737,6 +754,10 @@ export default function POSCashierPage() {
             <button className="btn btn-secondary btn-sm" onClick={() => setShowCashOutflow(true)}>
               <Icon name="cash" size={14} />
               {isAr ? "مخرج نقدي" : "Cash outflow"}
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setShowPOSReceipt(true); void loadPosCustomers(); }}>
+              <Icon name="receipt" size={14} />
+              {isAr ? "سند قبض" : "Receipt"}
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => { setClosingCash(String((Number(session.opening_cash || 0) + Number(session.total_cash || 0) - Number(session.total_cash_outflows || 0)).toFixed(2))); setShowCloseForm(true); }}>
               <Icon name="lock" size={14} />

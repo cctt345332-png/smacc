@@ -603,6 +603,165 @@ async def close_session(db: AsyncSession, tenant_id: str, session_id: str, data:
     }
 
 
+async def create_pos_receipt(db: AsyncSession, tenant_id: str, user_id: str, data: dict) -> dict:
+    """إنشاء سند قبض من جهاز POS وربطه بالجلسة والخزينة وحساب العميل."""
+    from app.models.accounting import Account, FiscalYear, FiscalYearStatus, JournalEntry, JournalEntryLine, JournalEntryStatus
+    from app.models.sales import Customer, Invoice, InvoiceStatus, Payment, PaymentMethod
+    from app.models.treasury import Treasury, Voucher, VoucherType, VoucherStatus
+    from app.modules.sales.orders_service import get_customer_statement
+    from app.modules.sales.service import _next_payment_number
+    from app.modules.treasury.service import _next_number as next_voucher_number
+
+    session_id = str(data.get("session_id") or "")
+    customer_id = str(data.get("customer_id") or "")
+    if not session_id or not customer_id:
+        raise HTTPException(400, "الجلسة والعميل مطلوبان لإنشاء سند القبض")
+    try:
+        amount = Decimal(str(data.get("amount"))).quantize(Decimal("0.01"))
+    except Exception as exc:
+        raise HTTPException(400, "مبلغ سند القبض غير صحيح") from exc
+    if amount <= 0:
+        raise HTTPException(400, "مبلغ سند القبض يجب أن يكون أكبر من صفر")
+
+    session = await db.get(POSSession, session_id)
+    if not session or session.tenant_id != tenant_id or session.status != SESSION_OPEN:
+        raise HTTPException(400, "الجلسة غير موجودة أو مغلقة")
+    terminal = await db.get(POSTerminal, session.terminal_id)
+    if not terminal or terminal.tenant_id != tenant_id:
+        raise HTTPException(404, "جهاز نقطة البيع غير موجود")
+    if not terminal.customer_account_parent_id:
+        raise HTTPException(409, "لم يتم إعداد حساب عملاء نقطة البيع لهذا الجهاز")
+
+    customer = await db.get(Customer, customer_id)
+    if not customer or customer.tenant_id != tenant_id or not customer.is_active or not customer.ar_account_id:
+        raise HTTPException(404, "العميل غير موجود أو غير مرتبط بحساب مدين")
+    accounts = (await db.execute(select(Account.id, Account.parent_id).where(Account.tenant_id == tenant_id))).all()
+    parent_by_id = {account_id: parent_id for account_id, parent_id in accounts}
+    current, visited, belongs = customer.ar_account_id, set(), False
+    while current and current not in visited:
+        if current == terminal.customer_account_parent_id:
+            belongs = True
+            break
+        visited.add(current)
+        current = parent_by_id.get(current)
+    if not belongs:
+        raise HTTPException(403, "هذا العميل غير تابع لحساب عملاء جهاز نقطة البيع")
+
+    method = str(data.get("payment_method") or "cash")
+    method_map = {
+        "cash": PaymentMethod.CASH,
+        "mada": PaymentMethod.MADA,
+        "credit_card": PaymentMethod.CREDIT_CARD,
+        "stc_pay": PaymentMethod.STC_PAY,
+        "bank_transfer": PaymentMethod.BANK_TRANSFER,
+    }
+    payment_method = method_map.get(method)
+    if not payment_method:
+        raise HTTPException(400, "طريقة الدفع غير مدعومة لسند قبض POS")
+
+    payment_date = datetime.utcnow()
+    invoice = None
+    if data.get("invoice_id"):
+        invoice = await db.get(Invoice, data["invoice_id"])
+        if not invoice or invoice.tenant_id != tenant_id or invoice.customer_id != customer.id:
+            raise HTTPException(400, "الفاتورة لا تتبع العميل المختار")
+        if invoice.status == InvoiceStatus.CANCELLED:
+            raise HTTPException(400, "لا يمكن التحصيل من فاتورة ملغاة")
+        remaining = Decimal(str(invoice.total or 0)) - Decimal(str(invoice.paid_amount or 0))
+        if amount > remaining + Decimal("0.01"):
+            raise HTTPException(400, f"المبلغ أكبر من المتبقي على الفاتورة ({remaining:.2f})")
+    else:
+        statement = await get_customer_statement(db, tenant_id, customer.id, datetime(1970, 1, 1), payment_date)
+        balance_due = Decimal(str(statement["summary"].get("closing_balance") or 0))
+        if balance_due <= Decimal("0.01"):
+            raise HTTPException(400, "لا يوجد رصيد مستحق على هذا العميل")
+        if amount > balance_due + Decimal("0.01"):
+            raise HTTPException(400, f"المبلغ أكبر من رصيد العميل ({balance_due:.2f})")
+
+    fiscal = await db.get(FiscalYear, terminal.fiscal_year_id) if terminal.fiscal_year_id else None
+    if not fiscal:
+        fiscal = await db.scalar(select(FiscalYear).where(
+            FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN,
+            FiscalYear.start_date <= payment_date, FiscalYear.end_date >= payment_date,
+        ).order_by(FiscalYear.is_default.desc(), FiscalYear.start_date.desc()).limit(1))
+    if not fiscal or fiscal.status != FiscalYearStatus.OPEN:
+        raise HTTPException(409, "لا توجد سنة مالية مفتوحة لسند القبض")
+
+    treasury_id = None
+    if method == "cash":
+        if not terminal.treasury_id:
+            raise HTTPException(409, "اربط جهاز نقطة البيع بخزينة درج أولاً")
+        treasury = await db.scalar(select(Treasury).where(
+            Treasury.id == terminal.treasury_id, Treasury.tenant_id == tenant_id, Treasury.is_active.is_(True)
+        ))
+        if not treasury:
+            raise HTTPException(409, "خزينة درج جهاز نقطة البيع غير موجودة أو غير فعالة")
+        debit_account = await db.get(Account, treasury.account_id)
+        treasury_id = treasury.id
+    else:
+        account_id = terminal.card_settlement_account_id if method in {"mada", "credit_card", "stc_pay"} else terminal.bank_transfer_account_id
+        debit_account = await db.get(Account, account_id) if account_id else None
+    if not debit_account or debit_account.tenant_id != tenant_id or not debit_account.is_active or not debit_account.is_posting:
+        raise HTTPException(409, "حساب طريقة الدفع غير مهيأ لجهاز نقطة البيع")
+
+    payment_number = await _next_payment_number(db, tenant_id)
+    payment = Payment(
+        id=str(uuid.uuid4()), tenant_id=tenant_id, payment_number=payment_number,
+        payment_type="receipt", status="posted", invoice_id=invoice.id if invoice else None,
+        customer_id=customer.id, payment_date=payment_date, amount=amount,
+        payment_method=payment_method, reference=data.get("reference"),
+        notes=data.get("notes") or f"تحصيل من نقطة البيع {terminal.name}", created_by=user_id,
+        pos_session_id=session.id, pos_terminal_id=terminal.id,
+    )
+    db.add(payment)
+    if invoice:
+        invoice.paid_amount = Decimal(str(invoice.paid_amount or 0)) + amount
+        remaining = Decimal(str(invoice.total or 0)) - invoice.paid_amount
+        invoice.status = InvoiceStatus.PAID if remaining <= Decimal("0.01") else InvoiceStatus.PARTIAL
+
+    entry_id = str(uuid.uuid4())
+    entry = JournalEntry(
+        id=entry_id, tenant_id=tenant_id, entry_number=f"POS-RC-{payment_number}", entry_date=payment_date,
+        fiscal_year_id=fiscal.id, description_ar=f"سند قبض POS {payment_number} — {customer.name_ar}",
+        description_en=f"POS receipt {payment_number} — {customer.name_ar}", status=JournalEntryStatus.POSTED,
+        source="pos_receipt", reference=payment_number, total_debit=amount, total_credit=amount,
+        created_by=user_id, posted_by=user_id, posted_at=payment_date,
+    )
+    db.add(entry)
+    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry_id, account_id=debit_account.id,
+                            description=f"تحصيل {payment_number} — {method}", debit=amount, credit=Decimal("0"), line_order=0))
+    db.add(JournalEntryLine(id=str(uuid.uuid4()), entry_id=entry_id, account_id=customer.ar_account_id,
+                            description=f"تسوية رصيد العميل {customer.name_ar}", debit=Decimal("0"), credit=amount, line_order=1))
+    payment.journal_entry_id = entry_id
+    voucher = Voucher(
+        id=str(uuid.uuid4()), tenant_id=tenant_id,
+        voucher_number=await next_voucher_number(db, tenant_id, VoucherType.RECEIPT),
+        voucher_type=VoucherType.RECEIPT, status=VoucherStatus.POSTED, voucher_date=payment_date,
+        amount=amount, vat_amount=Decimal("0"), currency_code="SAR", payment_method=payment_method,
+        treasury_id=treasury_id, party_type="customer", party_id=customer.id, party_name=customer.name_ar,
+        invoice_id=invoice.id if invoice else None, debit_account_id=debit_account.id,
+        credit_account_id=customer.ar_account_id, fiscal_year_id=fiscal.id, journal_entry_id=entry_id,
+        description_ar=f"سند قبض POS {payment_number} — {customer.name_ar}",
+        description_en=f"POS receipt {payment_number} — {customer.name_ar}", reference=payment_number,
+        notes=data.get("notes"), created_by=user_id, posted_by=user_id, posted_at=payment_date,
+    )
+    db.add(voucher)
+    if method == "cash":
+        session.total_cash += amount
+    elif method in {"mada", "credit_card", "stc_pay"}:
+        session.total_card += amount
+    else:
+        session.total_bank_transfer += amount
+    await db.commit()
+    await db.refresh(payment)
+    return {
+        "id": payment.id, "payment_number": payment.payment_number, "voucher_number": voucher.voucher_number,
+        "customer_id": customer.id, "customer_name": customer.name_ar, "invoice_id": invoice.id if invoice else None,
+        "amount": float(amount), "payment_method": method, "session_id": session.id, "treasury_id": treasury_id,
+        "journal_entry_id": entry_id, "payment_date": payment_date.isoformat(),
+    }
+
+
 async def get_session_by_id(db: AsyncSession, tenant_id: str, session_id: str) -> POSSession:
     session = await db.get(POSSession, session_id)
     if not session or session.tenant_id != tenant_id:

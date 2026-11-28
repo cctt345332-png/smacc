@@ -200,6 +200,12 @@ async def create_cash_outflow(session_id: str, data: dict, user=Depends(require_
     return await service.create_cash_outflow(db, user["tenant_id"], user["user_id"], data)
 
 
+@router.post("/sessions/{session_id}/receipts", status_code=201)
+async def create_pos_receipt(session_id: str, data: dict, user=Depends(require_role(["manager", "cashier"])), db: AsyncSession = Depends(get_db)):
+    data = {**data, "session_id": session_id, "_actor_role": user.get("role")}
+    return await service.create_pos_receipt(db, user["tenant_id"], user["user_id"], data)
+
+
 # ─── Transactions ────────────────────────────────────────────────────
 
 @router.get("/transactions/my-history")

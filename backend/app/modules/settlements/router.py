@@ -11,7 +11,7 @@ from app.core.tenant import require_role
 from app.models.expenses import RepExpense
 from app.models.pos import POSCashOutflow, POSSession, POSTerminal, POSTransaction
 from app.models.reps import SalesRep
-from app.models.sales import Invoice, Payment
+from app.models.sales import Customer, Invoice, Payment
 from app.models.settlements import CustodySettlement
 from app.models.treasury import Treasury
 from app.models.accounting import FiscalYear, FiscalYearStatus
@@ -118,6 +118,7 @@ async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to
     sessions = (await db.execute(q.order_by(POSSession.closed_at.asc()))).scalars().all()
     result = []
     source_transactions = []
+    source_receipts = []
     source_outflows = []
     for index, session in enumerate(sessions):
         oq = select(func.coalesce(func.sum(POSCashOutflow.amount), 0)).where(
@@ -151,9 +152,23 @@ async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to
         )).where(
             Payment.tenant_id == tenant_id, Payment.payment_type == "receipt",
             Payment.payment_method == "cash", Payment.status != "cancelled",
+            Payment.pos_session_id.is_(None),
             Invoice.tenant_id == tenant_id, POSTransaction.session_id == session.id,
             POSTransaction.status != "refunded",
         ).order_by(Payment.payment_date.asc(), Payment.payment_number.asc()))).all()
+        receipt_q = select(Payment, Customer).join(Customer, Customer.id == Payment.customer_id).where(
+            Payment.tenant_id == tenant_id, Payment.pos_session_id == session.id,
+            Payment.payment_type == "receipt", Payment.payment_method == "cash",
+            Payment.status != "cancelled",
+        )
+        receipt_rows = (await db.execute(receipt_q.order_by(Payment.payment_date.asc(), Payment.payment_number.asc()))).all()
+        for payment, customer in receipt_rows:
+            source_receipts.append({
+                "payment_id": payment.id, "payment_number": payment.payment_number,
+                "customer_id": customer.id, "customer_name": customer.name_ar,
+                "invoice_id": payment.invoice_id, "date": payment.payment_date.isoformat() if payment.payment_date else None,
+                "payment_method": "cash", "amount": float(payment.amount or 0),
+            })
         for payment, invoice, tx in payment_rows:
             source_transactions.append({
                 "transaction_id": tx.id, "payment_id": payment.id,
@@ -162,7 +177,7 @@ async def _pos_breakdown(db, tenant_id, source_id, last, date_from=None, date_to
                 "date": payment.payment_date.isoformat() if payment.payment_date else None,
                 "payment_method": "cash", "amount": float(payment.amount or 0),
             })
-    return {"sessions": result, "transactions": source_transactions, "outflows": source_outflows}
+    return {"sessions": result, "transactions": source_transactions, "receipts": source_receipts, "outflows": source_outflows}
 
 
 async def _rep_breakdown(db, tenant_id, source_id, last, date_from=None, date_to=None):
@@ -324,12 +339,13 @@ async def source_breakdown(source_type: str, source_id: str, date_from: str | No
         sessions = details["sessions"]
         return {"source_type": source_type, "source_id": source_id, "rows": sessions,
                 "transactions": details["transactions"], "invoices": details["transactions"],
-                "receipts": details["transactions"], "expenses": details["outflows"],
+                "receipts": details["receipts"], "expenses": details["outflows"],
                 "totals": {"cash_sales": sum(x["cash_sales"] for x in sessions),
                            "opening_cash": sum(x["opening_cash"] for x in sessions),
                            "cash_outflows": sum(x["cash_outflows"] for x in sessions),
                            "expected": sum(x["expected"] for x in sessions),
-                           "transaction_cash": sum(x["amount"] for x in details["transactions"])}}
+                           "transaction_cash": sum(x["amount"] for x in details["transactions"]),
+                           "receipts": sum(x["amount"] for x in details["receipts"])}}
     details = await _rep_breakdown(db, tenant_id, source_id, last, start, end)
     return {"source_type": source_type, "source_id": source_id, "rows": [], **details,
             "totals": {"invoices": sum(x["amount"] for x in details["invoices"]),
