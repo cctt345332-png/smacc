@@ -22,6 +22,11 @@ class CustodySettlement(Base):
     expected_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     received_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     difference: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
+    # التحويل الفعلي من خزينة POS إلى خزينة الإدارة عند استلام النقد
+    source_treasury_id: Mapped[str | None] = mapped_column(String, ForeignKey("treasuries.id"), nullable=True)
+    destination_treasury_id: Mapped[str | None] = mapped_column(String, ForeignKey("treasuries.id"), nullable=True)
+    transfer_voucher_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    retained_amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"))
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

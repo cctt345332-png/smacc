@@ -13,6 +13,8 @@ from app.models.pos import POSCashOutflow, POSSession, POSTerminal, POSTransacti
 from app.models.reps import SalesRep
 from app.models.sales import Invoice, Payment
 from app.models.settlements import CustodySettlement
+from app.models.treasury import Treasury
+from app.models.accounting import FiscalYear, FiscalYearStatus
 from app.models.user import User
 
 router = APIRouter(prefix="/settlements", tags=["custody-settlements"])
@@ -229,10 +231,14 @@ async def _sources(db, tenant_id, date_from=None, date_to=None):
     for terminal in terminals:
         last = await _last(db, tenant_id, "pos", terminal.id)
         balance, activity, carryover = await _expected_balance(db, tenant_id, "pos", terminal.id, last, date_from, date_to)
+        source_treasury = None
+        if terminal.treasury_id:
+            source_treasury = await db.scalar(select(Treasury).where(Treasury.id == terminal.treasury_id, Treasury.tenant_id == tenant_id))
         result.append({"source_type": "pos", "source_id": terminal.id, "name": terminal.name,
                        "label": f"جهاز POS — {terminal.name}", "last_settled_at": last.settled_at.isoformat() if last else None,
                        "expected_amount": float(balance), "period_amount": float(activity),
-                       "carried_amount": float(carryover)})
+                       "carried_amount": float(carryover),
+                       "treasury_id": terminal.treasury_id, "treasury_name": source_treasury.name_ar if source_treasury else None})
     return result
 
 
@@ -250,7 +256,10 @@ def _row(row, label):
             "period_from": row.period_from.isoformat() if row.period_from else None,
             "period_to": row.period_to.isoformat() if row.period_to else None,
             "settled_at": row.settled_at.isoformat(), "expected_amount": float(row.expected_amount),
-            "received_amount": float(row.received_amount), "difference": float(row.difference), "notes": row.notes}
+            "received_amount": float(row.received_amount), "difference": float(row.difference),
+            "source_treasury_id": row.source_treasury_id, "destination_treasury_id": row.destination_treasury_id,
+            "transfer_voucher_id": row.transfer_voucher_id, "retained_amount": float(row.retained_amount or 0),
+            "notes": row.notes}
 
 
 @router.get("")
@@ -352,10 +361,46 @@ async def create_settlement(data: dict, user=Depends(require_role(MANAGER_ROLES)
     if received < 0:
         raise HTTPException(400, "المبلغ المستلم لا يمكن أن يكون سالباً")
     now = datetime.utcnow()
-    row = CustodySettlement(id=str(uuid4()), tenant_id=tenant_id, source_type=source_type, source_id=source_id,
+    settlement_id = str(uuid4())
+    source_treasury_id = None
+    destination_treasury_id = None
+    transfer_voucher_id = None
+    if source_type == "pos" and received > 0:
+        terminal = await _get_owned_source(db, tenant_id, "pos", source_id)
+        source_treasury_id = terminal.treasury_id
+        destination_treasury_id = data.get("destination_treasury_id")
+        if not source_treasury_id:
+            raise HTTPException(409, "اربط جهاز نقطة البيع بخزينة درج أولاً قبل تحويل مبلغ التسوية")
+        if not destination_treasury_id:
+            raise HTTPException(400, "حدد الخزينة الرئيسية المستلمة لمبلغ التسوية")
+        destination = await db.scalar(select(Treasury).where(Treasury.id == destination_treasury_id, Treasury.tenant_id == tenant_id, Treasury.is_active.is_(True)))
+        source = await db.scalar(select(Treasury).where(Treasury.id == source_treasury_id, Treasury.tenant_id == tenant_id, Treasury.is_active.is_(True)))
+        if not source or not destination:
+            raise HTTPException(400, "خزينة المصدر أو الوجهة غير موجودة أو غير فعالة")
+        if source.id == destination.id:
+            raise HTTPException(400, "خزينة نقطة البيع والخزينة الرئيسية يجب أن تكونا مختلفتين")
+        if not terminal.fiscal_year_id:
+            raise HTTPException(409, "حدد السنة المالية لجهاز نقطة البيع قبل تسجيل التحويل")
+        fiscal = await db.scalar(select(FiscalYear).where(FiscalYear.id == terminal.fiscal_year_id, FiscalYear.tenant_id == tenant_id, FiscalYear.status == FiscalYearStatus.OPEN))
+        if not fiscal:
+            raise HTTPException(409, "السنة المالية المرتبطة بجهاز نقطة البيع غير مفتوحة")
+        from app.modules.treasury import service as treasury_service
+        voucher = await treasury_service.create_voucher(db, tenant_id, _user_id(user), {
+            "voucher_type": "transfer", "voucher_date": now.isoformat(), "amount": str(received),
+            "payment_method": "cash", "treasury_id": source.id, "to_treasury_id": destination.id,
+            "fiscal_year_id": fiscal.id, "description_ar": f"تسوية عهدة {terminal.name} — تحويل نقد إلى {destination.name_ar}",
+            "description_en": f"POS custody settlement transfer — {terminal.name}",
+            "reference": settlement_id, "notes": data.get("notes"),
+        })
+        posted = await treasury_service.post_voucher(db, tenant_id, _user_id(user), voucher.id)
+        transfer_voucher_id = posted.id
+    retained = max(Decimal("0"), expected - received)
+    row = CustodySettlement(id=settlement_id, tenant_id=tenant_id, source_type=source_type, source_id=source_id,
                             period_from=date_from or (last.settled_at if last else None), period_to=date_to,
                             settled_at=now, expected_amount=expected, received_amount=received,
-                            difference=received - expected, notes=data.get("notes"), created_by=_user_id(user))
+                            difference=received - expected, source_treasury_id=source_treasury_id,
+                            destination_treasury_id=destination_treasury_id, transfer_voucher_id=transfer_voucher_id,
+                            retained_amount=retained, notes=data.get("notes"), created_by=_user_id(user))
     db.add(row)
     await db.commit()
     await db.refresh(row)
@@ -370,6 +415,8 @@ async def update_settlement(settlement_id: str, data: dict,
         CustodySettlement.id == settlement_id, CustodySettlement.tenant_id == tenant_id))
     if not row:
         raise HTTPException(404, "التسوية غير موجودة")
+    if row.transfer_voucher_id:
+        raise HTTPException(409, "لا يمكن تعديل تسوية حوّلت مبلغًا فعليًا؛ استخدم تسوية عكسية معتمدة")
     source_type = data.get("source_type", row.source_type)
     source_id = data.get("source_id", row.source_id)
     if source_type not in {"rep", "pos"}:
@@ -401,6 +448,8 @@ async def delete_settlement(settlement_id: str, user=Depends(require_role(MANAGE
         CustodySettlement.id == settlement_id, CustodySettlement.tenant_id == user["tenant_id"]))
     if not row:
         raise HTTPException(404, "التسوية غير موجودة")
+    if row.transfer_voucher_id:
+        raise HTTPException(409, "لا يمكن حذف تسوية مرتبطة بتحويل خزينة فعلي")
     await db.delete(row)
     await db.commit()
     return {"message": "تم حذف التسوية"}

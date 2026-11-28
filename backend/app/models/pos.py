@@ -153,6 +153,11 @@ class POSTerminal(Base):
     # كلمة مرور من 4 أرقام لإغلاق جلسة الجهاز؛ تُحفظ مشفرة ولا تُعاد للواجهة.
     close_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # خزينة درج النقد المرتبطة بالجهاز؛ حسابها المحاسبي هو cash_account_id
+    treasury_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("treasuries.id"), nullable=True, index=True
+    )
+
     # الربط المحاسبي
     cash_account_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("accounts.id"), nullable=True

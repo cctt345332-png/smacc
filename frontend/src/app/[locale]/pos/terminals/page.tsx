@@ -5,6 +5,7 @@ import { getTerminals, createTerminal, updateTerminal, deleteTerminal } from "@/
 import { getAccounts, getFiscalYears, getBankAccounts } from "@/lib/accounting";
 import { getWarehouses } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
+import { getTreasuries } from "@/lib/treasury";
 import { Icon } from "@/components/ui/Icons";
 import api from "@/lib/api";
 
@@ -41,6 +42,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [warehouses,   setWarehouses]   = useState<any[]>([]);
   const [users,        setUsers]        = useState<any[]>([]);
+  const [treasuries,   setTreasuries]   = useState<any[]>([]);
 
   const emptyForm = {
     name: "", branch_name: "",
@@ -51,6 +53,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
     print_receipt: true, allow_discount: true,
     max_discount_pct: "10",
     assigned_user_id: "",
+    treasury_id: "",
   };
   const [form, setForm] = useState<any>(emptyForm);
 
@@ -65,12 +68,13 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
   useEffect(() => {
     load();
     getCompany().then((r) => setCompanyBT(r.data?.business_type || "general")).catch(() => {});
-    Promise.all([getAccounts(), getFiscalYears(), getBankAccounts(), getWarehouses()])
-      .then(([a, f, b, w]) => {
+    Promise.all([getAccounts(), getFiscalYears(), getBankAccounts(), getWarehouses(), getTreasuries()])
+      .then(([a, f, b, w, t]) => {
         setAccounts(a.data || []);
         setFiscalYears(f.data || []);
         setBankAccounts(b.data || []);
         setWarehouses(w.data || []);
+        setTreasuries((t.data || []).filter((row: any) => row.is_active));
       }).catch(() => {});
     // جلب المستخدمين ذوي دور cashier
     api.get("/auth/users").then((r) => {
@@ -129,6 +133,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
       allow_discount: t.allow_discount ?? true,
       max_discount_pct: String(t.max_discount_pct ?? "10"),
       assigned_user_id: t.assigned_user_id || "",
+      treasury_id: t.treasury_id || "",
     });
     setShowModal(true);
   };
@@ -158,6 +163,7 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
         receipt_header:   form.receipt_header   || null,
         receipt_footer:   form.receipt_footer   || null,
         assigned_user_id: form.assigned_user_id || null,
+        treasury_id: form.treasury_id || null,
       };
       if (editing) await updateTerminal(editing.id, payload);
       else await createTerminal(payload);
@@ -462,6 +468,19 @@ export default function POSTerminalsPage(props: { params: Promise<{ locale: stri
                   </select>
                   <p className="form-hint">{ar ? "مطلوب لإنشاء الفواتير تلقائياً" : "Required for auto invoice creation"}</p>
                 </div>
+              </div>
+
+              {/* خزينة درج POS */}
+              <div className="form-group" style={{ marginTop: 8 }}>
+                <label className="form-label">{ar ? "خزينة درج نقطة البيع" : "POS Cash Drawer Treasury"}</label>
+                <select className="form-input form-select" value={form.treasury_id} onChange={(e) => {
+                  const treasury = treasuries.find((x: any) => x.id === e.target.value);
+                  setForm((f: any) => ({ ...f, treasury_id: e.target.value, cash_account_id: treasury?.account_id || f.cash_account_id }));
+                }}>
+                  <option value="">{ar ? "— بدون ربط خزينة —" : "— No treasury linked —"}</option>
+                  {treasuries.map((t: any) => <option key={t.id} value={t.id}>{t.name_ar}{t.branch_name ? ` — ${t.branch_name}` : ""}</option>)}
+                </select>
+                <p className="form-hint">{ar ? "اربط كل محل بخزينة درج مستقلة. عند التسوية ينتقل المبلغ المستلم منها إلى الخزينة الرئيسية." : "Link each shop to its own drawer treasury. Settlements transfer received cash to the main treasury."}</p>
               </div>
 
               {/* الحسابات */}

@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { deleteSettlement, getSettlementBreakdown, getSettlementReport, getSettlementSources, getSettlements, createSettlement, updateSettlement } from "@/lib/settlements";
+import { getTreasuries } from "@/lib/treasury";
 
 const money = (n: any) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const day = (value: any, ar: boolean) => value ? new Date(value).toLocaleDateString(ar ? "ar-SA" : "en-GB") : "—";
@@ -17,6 +18,8 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [received, setReceived] = useState("");
+  const [destinationTreasuryId, setDestinationTreasuryId] = useState("");
+  const [treasuries, setTreasuries] = useState<any[]>([]);
   const [notes, setNotes] = useState("");
   const [detail, setDetail] = useState<any>(null);
   const [detailTab, setDetailTab] = useState<"invoices" | "receipts" | "expenses">("invoices");
@@ -33,12 +36,14 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
   const load = async () => {
     setLoading(true);
     try {
-      const [sourceResponse, rowResponse] = await Promise.all([
+      const [sourceResponse, rowResponse, treasuryResponse] = await Promise.all([
         getSettlementSources({ date_from: dateFrom || undefined, date_to: dateTo || undefined }),
         getSettlements(),
+        getTreasuries(),
       ]);
       setSources(sourceResponse.data || []);
       setRows(rowResponse.data || []);
+      setTreasuries((treasuryResponse.data || []).filter((x: any) => x.is_active));
     } finally {
       setLoading(false);
     }
@@ -63,6 +68,7 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
   useEffect(() => { loadReport(); }, [reportFrom, reportTo, reportSource]);
 
   const current = useMemo(() => sources.find(x => `${x.source_type}:${x.source_id}` === selected), [sources, selected]);
+  useEffect(() => { setDestinationTreasuryId(""); setReceived(""); }, [selected]);
 
   useEffect(() => {
     let active = true;
@@ -87,7 +93,11 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
     if (!current || Number(received) < 0) return;
     setSaving(true); setMessage("");
     try {
-      await createSettlement({ source_type: current.source_type, source_id: current.source_id, date_from: dateFrom || null, date_to: dateTo || null, received_amount: Number(received || 0), notes: notes || null });
+      if (current.source_type === "pos" && Number(received || 0) > 0 && !destinationTreasuryId) {
+        setMessage(ar ? "حدد الخزينة الرئيسية المستلمة للمبلغ" : "Select the destination treasury");
+        return;
+      }
+      await createSettlement({ source_type: current.source_type, source_id: current.source_id, date_from: dateFrom || null, date_to: dateTo || null, received_amount: Number(received || 0), destination_treasury_id: current.source_type === "pos" ? (destinationTreasuryId || null) : null, notes: notes || null });
       setReceived(""); setNotes(""); setMessage(ar ? "تم حفظ التسوية بنجاح" : "Settlement saved successfully");
       await Promise.all([load(), loadReport()]);
     } catch (e: any) { setMessage(e?.response?.data?.detail || "Error"); }
@@ -123,7 +133,17 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
       <div className="card" style={{ padding: 20 }}><h2 style={{ marginTop: 0 }}>{ar ? "تسجيل تسوية جديدة" : "New settlement"}</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><div className="form-group"><label className="form-label">{ar ? "من تاريخ" : "From date"}</label><input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div><div className="form-group"><label className="form-label">{ar ? "إلى تاريخ" : "To date"}</label><input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div></div>
         <div className="form-group"><label className="form-label">{ar ? "العهدة" : "Custody"}</label><select className="form-input form-select" value={selected} onChange={e => setSelected(e.target.value)}><option value="">{ar ? "اختر مندوباً أو جهازاً" : "Select a representative or POS"}</option>{sources.map(x => <option key={`${x.source_type}:${x.source_id}`} value={`${x.source_type}:${x.source_id}`}>{x.label} — {money(x.expected_amount)} SAR</option>)}</select></div>
-        {current && <div style={{ background: "#F5F3FF", padding: 16, borderRadius: 8, margin: "12px 0" }}><div style={{ fontSize: 12, color: "#6B7280" }}>{ar ? "تفصيل العهدة المطلوبة" : "Custody due breakdown"}</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, fontSize: 13 }}><div>{ar ? "تحصيل الفترة" : "Current period"}<br /><b>{money(current.period_amount)} SAR</b></div><div style={{ color: Number(current.carried_amount || 0) > 0 ? "#B45309" : "inherit" }}>{ar ? "مرحّل من السابق" : "Carried from previous"}<br /><b>{money(current.carried_amount)} SAR</b></div></div><div style={{ borderTop: "1px solid #DDD6FE", marginTop: 10, paddingTop: 8, fontSize: 12 }}>{ar ? "إجمالي المطلوب للتسوية" : "Total due for settlement"}<br /><strong style={{ fontSize: 25, color: "#5A187E" }}>{money(current.expected_amount)} SAR</strong></div><div style={{ fontSize: 12, marginTop: 6 }}>{current.last_settled_at ? `${ar ? "آخر تسوية" : "Last settlement"}: ${new Date(current.last_settled_at).toLocaleString(ar ? "ar-SA" : "en-GB")}` : ar ? "لا توجد تسوية سابقة" : "No previous settlement"}</div></div>}
+        {current && <div style={{ background: "#F5F3FF", padding: 16, borderRadius: 8, margin: "12px 0" }}><div style={{ fontSize: 12, color: "#6B7280" }}>{ar ? "تفصيل العهدة المطلوبة" : "Custody due breakdown"}</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8, fontSize: 13 }}><div>{ar ? "تحصيل الفترة" : "Current period"}<br /><b>{money(current.period_amount)} SAR</b></div><div style={{ color: Number(current.carried_amount || 0) > 0 ? "#B45309" : "inherit" }}>{ar ? "مرحّل من السابق" : "Carried from previous"}<br /><b>{money(current.carried_amount)} SAR</b></div></div><div style={{ borderTop: "1px solid #DDD6FE", marginTop: 10, paddingTop: 8, fontSize: 12 }}>{ar ? "إجمالي المطلوب للتسوية" : "Total due for settlement"}<br /><strong style={{ fontSize: 25, color: "#5A187E" }}>{money(current.expected_amount)} SAR</strong></div><div style={{ fontSize: 12, marginTop: 6 }}>{current.source_type === "pos" && <div style={{ fontSize: 12, marginTop: 8, color: "#B45309" }}>{ar ? "المتبقي بعد الاستلام سيرحل للتسوية القادمة" : "The unpaid amount will carry to the next settlement"}</div>}{current.last_settled_at ? `${ar ? "آخر تسوية" : "Last settlement"}: ${new Date(current.last_settled_at).toLocaleString(ar ? "ar-SA" : "en-GB")}` : ar ? "لا توجد تسوية سابقة" : "No previous settlement"}</div></div>}
+        {current?.source_type === "pos" && <div className="form-group">
+          <label className="form-label">{ar ? "خزينة درج المصدر" : "Source drawer treasury"}</label>
+          <div className="form-input" style={{ background: "#F8FAFC" }}>{current.treasury_name || (ar ? "غير مربوط — اربط الجهاز أولاً" : "Not linked — configure the POS first")}</div>
+          <label className="form-label" style={{ marginTop: 10 }}>{ar ? "الخزينة الرئيسية المستلمة" : "Destination main treasury"}</label>
+          <select className="form-input form-select" value={destinationTreasuryId} onChange={e => setDestinationTreasuryId(e.target.value)}>
+            <option value="">{ar ? "— اختر الخزينة التي سيودع فيها النقد —" : "— Select destination treasury —"}</option>
+            {treasuries.filter((t: any) => t.id !== current.treasury_id).map((t: any) => <option key={t.id} value={t.id}>{t.name_ar}{t.branch_name ? ` — ${t.branch_name}` : ""}</option>)}
+          </select>
+          <div className="form-hint">{ar ? "سيُنشأ تحويل خزينة فعلي بالمبلغ المستلم عند الحفظ." : "A real treasury transfer is posted for the received amount when saved."}</div>
+        </div>}
         <div className="form-group"><label className="form-label">{ar ? "المبلغ المستلم فعلياً" : "Actually received"}</label><input type="number" min="0" step="0.01" className="form-input" value={received} onChange={e => setReceived(e.target.value)} placeholder="0.00" /></div><div className="form-group"><label className="form-label">{ar ? "ملاحظات" : "Notes"}</label><textarea className="form-input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} /></div><button className="btn btn-primary" disabled={!current || saving} onClick={save}>{saving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ التسوية" : "Save settlement")}</button>
       </div>
       <div className="card" style={{ padding: 20, minHeight: 240 }}>
@@ -147,7 +167,7 @@ export default function SettlementsPage(props: { params: Promise<{ locale: strin
 
     <div className="card" style={{ marginTop: 16 }}><div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div className="card-title">{ar ? "تقرير استلام العهد" : "Custody collection report"}</div><Link href={`/${locale}/treasury/settlements/report`} className="btn btn-ghost btn-sm">{ar ? "فتح التقرير الكامل" : "Open full report"}</Link></div><div className="card-body" style={{ color: "var(--text-secondary)", fontSize: 13 }}>{ar ? "استخدم التقرير الموحد لتحديد الفترة والمندوب وعرض إجمالي المتوقع والمستلم والفرق بالتفصيل." : "Use the unified report to filter by period and representative and view expected, received and variance totals."}</div></div>
 
-    <div className="card" style={{ padding: 20, marginTop: 16 }}><h2 style={{ marginTop: 0 }}>{ar ? "سجل التسويات" : "Settlement history"}</h2><div className="table-wrapper"><table><thead><tr><th>{ar ? "العهدة" : "Custody"}</th><th>{ar ? "الفترة" : "Period"}</th><th>{ar ? "تاريخ التسوية" : "Settled"}</th><th>{ar ? "المتوقع" : "Expected"}</th><th>{ar ? "المستلم" : "Received"}</th><th>{ar ? "الإجراءات" : "Actions"}</th></tr></thead><tbody>{rows.map(x => <tr key={x.id}><td>{x.source_label}</td><td>{day(x.period_from, ar)} — {day(x.period_to, ar)}</td><td>{day(x.settled_at, ar)}</td><td>{money(x.expected_amount)}</td><td>{money(x.received_amount)}</td><td><button className="btn btn-secondary" style={{ marginInlineEnd: 6 }} onClick={() => setEditRow({ ...x, date_from: dateValue(x.period_from), date_to: dateValue(x.period_to) })}>{ar ? "تعديل" : "Edit"}</button><button className="btn btn-danger" onClick={() => remove(x)}>{ar ? "حذف" : "Delete"}</button></td></tr>)}</tbody></table></div></div>
+    <div className="card" style={{ padding: 20, marginTop: 16 }}><h2 style={{ marginTop: 0 }}>{ar ? "سجل التسويات" : "Settlement history"}</h2><div className="table-wrapper"><table><thead><tr><th>{ar ? "العهدة" : "Custody"}</th><th>{ar ? "الفترة" : "Period"}</th><th>{ar ? "تاريخ التسوية" : "Settled"}</th><th>{ar ? "المتوقع" : "Expected"}</th><th>{ar ? "المستلم" : "Received"}</th><th>{ar ? "المرحل" : "Carried"}</th><th>{ar ? "التحويل" : "Transfer"}</th><th>{ar ? "الإجراءات" : "Actions"}</th></tr></thead><tbody>{rows.map(x => <tr key={x.id}><td>{x.source_label}</td><td>{day(x.period_from, ar)} — {day(x.period_to, ar)}</td><td>{day(x.settled_at, ar)}</td><td>{money(x.expected_amount)}</td><td>{money(x.received_amount)}</td><td>{money(x.retained_amount)}</td><td>{x.transfer_voucher_id ? (ar ? "تم التحويل" : "Transferred") : "—"}</td><td>{!x.transfer_voucher_id && <button className="btn btn-secondary" style={{ marginInlineEnd: 6 }} onClick={() => setEditRow({ ...x, date_from: dateValue(x.period_from), date_to: dateValue(x.period_to) })}>{ar ? "تعديل" : "Edit"}</button>}<button className="btn btn-danger" onClick={() => remove(x)}>{ar ? "حذف" : "Delete"}</button></td></tr>)}</tbody></table></div></div>
 
     {editRow && <div className="modal-backdrop" onClick={() => setEditRow(null)}><div className="modal" onClick={e => e.stopPropagation()}><div className="modal-header"><h2>{ar ? "تعديل تسوية العهدة" : "Edit settlement"}</h2><button className="btn btn-secondary" onClick={() => setEditRow(null)}>×</button></div><div className="modal-body"><label className="form-label">{ar ? "المبلغ المستلم" : "Received amount"}</label><input type="number" min="0" step="0.01" className="form-input" value={editRow.received_amount} onChange={e => setEditRow({ ...editRow, received_amount: e.target.value })} /><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}><div><label className="form-label">{ar ? "من تاريخ" : "From"}</label><input type="date" className="form-input" value={editRow.date_from} onChange={e => setEditRow({ ...editRow, date_from: e.target.value })} /></div><div><label className="form-label">{ar ? "إلى تاريخ" : "To"}</label><input type="date" className="form-input" value={editRow.date_to} onChange={e => setEditRow({ ...editRow, date_to: e.target.value })} /></div></div><label className="form-label" style={{ marginTop: 12 }}>{ar ? "ملاحظات" : "Notes"}</label><textarea className="form-input" rows={3} value={editRow.notes || ""} onChange={e => setEditRow({ ...editRow, notes: e.target.value })} /></div><div className="modal-footer"><button className="btn btn-secondary" onClick={() => setEditRow(null)}>{ar ? "إلغاء" : "Cancel"}</button><button className="btn btn-primary" disabled={saving} onClick={edit}>{ar ? "حفظ التعديل" : "Save changes"}</button></div></div></div>}
   </div>;

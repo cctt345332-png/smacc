@@ -92,6 +92,7 @@ async def get_terminals(db: AsyncSession, tenant_id: str):
             "allow_purchase": t.allow_purchase,
             "warehouse_id": t.warehouse_id,
             "maintenance_warehouse_id": t.maintenance_warehouse_id,
+            "treasury_id": t.treasury_id,
             "cash_account_id": t.cash_account_id,
             "sales_account_id": t.sales_account_id,
             "vat_account_id": t.vat_account_id,
@@ -140,6 +141,7 @@ async def get_terminal_by_user(db: AsyncSession, tenant_id: str, user_id: str):
         "print_receipt": t.print_receipt,
         "warehouse_id": t.warehouse_id,
         "maintenance_warehouse_id": t.maintenance_warehouse_id,
+        "treasury_id": t.treasury_id,
         "customer_account_parent_id": t.customer_account_parent_id,
         "assigned_user_id": t.assigned_user_id,
     }
@@ -208,6 +210,14 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
                 raise HTTPException(400, f"حساب {label} يجب أن يكون حساب أصول تفصيليًا ونشطًا")
     bt = data.get("business_type", "general")
     cfg = ACTIVITY_CONFIG.get(bt, ACTIVITY_CONFIG["general"])
+    treasury_id = data.get("treasury_id") or None
+    if treasury_id:
+        from app.models.treasury import Treasury
+        treasury = await db.scalar(select(Treasury).where(Treasury.id == treasury_id, Treasury.tenant_id == tenant_id, Treasury.is_active.is_(True)))
+        if not treasury:
+            raise HTTPException(400, "خزينة نقطة البيع غير موجودة أو غير فعالة")
+        # الحساب النقدي للجهاز يجب أن يطابق حساب الخزينة فعليًا
+        data["cash_account_id"] = treasury.account_id
     allow_purchase = data.get("allow_purchase", bt in POS_PURCHASE_ACTIVITIES)
     maintenance_warehouse_id = data.get("maintenance_warehouse_id") or None
     customer_account_parent = await _validate_customer_account_parent(
@@ -229,6 +239,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         business_type=bt,
         warehouse_id=data.get("warehouse_id"),
         maintenance_warehouse_id=maintenance_warehouse_id,
+        treasury_id=treasury_id,
         cash_account_id=data.get("cash_account_id"),
         sales_account_id=data.get("sales_account_id"),
         vat_account_id=data.get("vat_account_id"),
@@ -266,6 +277,7 @@ async def create_terminal(db: AsyncSession, tenant_id: str, data: dict) -> dict:
         "allow_purchase": terminal.allow_purchase,
         "warehouse_id": terminal.warehouse_id,
         "maintenance_warehouse_id": terminal.maintenance_warehouse_id,
+        "treasury_id": terminal.treasury_id,
         "cash_account_id": terminal.cash_account_id,
         "sales_account_id": terminal.sales_account_id,
         "vat_account_id": terminal.vat_account_id,
@@ -291,6 +303,12 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
     t = await db.get(POSTerminal, terminal_id)
     if not t or t.tenant_id != tenant_id:
         raise HTTPException(404, "Terminal not found")
+    if data.get("treasury_id"):
+        from app.models.treasury import Treasury
+        treasury = await db.scalar(select(Treasury).where(Treasury.id == data["treasury_id"], Treasury.tenant_id == tenant_id, Treasury.is_active.is_(True)))
+        if not treasury:
+            raise HTTPException(400, "خزينة نقطة البيع غير موجودة أو غير فعالة")
+        data["cash_account_id"] = treasury.account_id
     if data.get("card_settlement_account_id"):
         from app.models.accounting import Account
         account = await db.get(Account, data["card_settlement_account_id"])
@@ -320,7 +338,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
     else:
         maintenance_customer_account_parent = None
     allowed = [
-        "name", "branch_name", "business_type", "warehouse_id", "maintenance_warehouse_id",
+        "name", "branch_name", "business_type", "warehouse_id", "maintenance_warehouse_id", "treasury_id",
         "cash_account_id", "sales_account_id", "vat_account_id",
         "bank_account_id", "card_settlement_account_id", "tabby_account_id", "tamara_account_id", "bank_transfer_account_id", "fiscal_year_id",
         "customer_account_parent_id",
@@ -335,6 +353,8 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         elif k == "customer_account_parent_id" and k in data:
             setattr(t, k, data[k] or None)
         elif k == "maintenance_customer_account_parent_id" and k in data:
+            setattr(t, k, data[k] or None)
+        elif k == "treasury_id" and k in data:
             setattr(t, k, data[k] or None)
         elif k in data and data[k] is not None:
             setattr(t, k, data[k])
@@ -361,6 +381,7 @@ async def update_terminal(db: AsyncSession, tenant_id: str, terminal_id: str, da
         "allow_purchase": t.allow_purchase,
         "warehouse_id": t.warehouse_id,
         "maintenance_warehouse_id": t.maintenance_warehouse_id,
+        "treasury_id": t.treasury_id,
         "cash_account_id": t.cash_account_id,
         "sales_account_id": t.sales_account_id,
         "vat_account_id": t.vat_account_id,
