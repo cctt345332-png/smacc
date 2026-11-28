@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getSessions, openSession, getTerminals, getMyTerminal, getTerminalSerials, createTransaction, closeSession, posPurchase, getMyTransactions, getTransaction, createCashOutflow, createPOSReceipt } from "@/lib/pos";
 import { getItemsForPicker, getAvailableSerials, searchSerial, getBatches, getVariants } from "@/lib/inventory";
 import { getCompany } from "@/lib/settings";
-import { getCustomers, createCustomer } from "@/lib/sales";
+import { getCustomers, createCustomer, getCustomerStatement } from "@/lib/sales";
 import { Icon } from "@/components/ui/Icons";
 import ThermalReceipt from "@/components/pos/ThermalReceipt";
 import { useAuthStore } from "@/store/authStore";
@@ -129,6 +129,8 @@ export default function POSCashierPage() {
   const [showPOSReceipt, setShowPOSReceipt] = useState(false);
   const [posReceiptForm, setPosReceiptForm] = useState({ customer_id: "", amount: "", payment_method: "cash", invoice_id: "", description: "" });
   const [savingPOSReceipt, setSavingPOSReceipt] = useState(false);
+  const [posReceiptBalance, setPosReceiptBalance] = useState<number | null>(null);
+  const [loadingPOSReceiptBalance, setLoadingPOSReceiptBalance] = useState(false);
 
   // modals for tracking types
   const [serialModal,  setSerialModal]  = useState<{ product: Product; serials: any[] } | null>(null);
@@ -541,6 +543,16 @@ export default function POSCashierPage() {
     } catch (e: any) { alert(e?.response?.data?.detail || (isAr ? "تعذر تسجيل المخرج النقدي" : "Could not save cash outflow")); }
     finally { setSavingCashOutflow(false); }
   };
+  const loadPOSReceiptBalance = async (customerId: string) => {
+    if (!customerId) { setPosReceiptBalance(null); return; }
+    setLoadingPOSReceiptBalance(true);
+    try {
+      const { data } = await getCustomerStatement(customerId, "1970-01-01", new Date().toISOString().slice(0, 10));
+      setPosReceiptBalance(Number(data?.summary?.closing_balance || 0));
+    } catch { setPosReceiptBalance(null); }
+    finally { setLoadingPOSReceiptBalance(false); }
+  };
+
   const handlePOSReceipt = async () => {
     if (!session) return;
     const amount = parseFloat(posReceiptForm.amount);
@@ -1268,7 +1280,8 @@ export default function POSCashierPage() {
           <div className="card" style={{ width: "100%", maxWidth: 460 }}>
             <div className="card-header"><h3 className="card-title"><Icon name="receipt" size={16} />{isAr ? "سند قبض من العميل" : "Customer receipt"}</h3><button className="btn btn-ghost btn-icon" onClick={() => setShowPOSReceipt(false)}><Icon name="close" size={18} /></button></div>
             <div className="card-body">
-              <div className="form-group"><label className="form-label">{isAr ? "العميل" : "Customer"}</label><select className="form-input form-select" value={posReceiptForm.customer_id} onChange={e => setPosReceiptForm({ ...posReceiptForm, customer_id: e.target.value })}><option value="">{isAr ? "اختر العميل" : "Select customer"}</option>{customers.map((c: any) => <option key={c.id} value={c.id}>{c.name_ar}{c.phone ? ` — ${c.phone}` : ""}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">{isAr ? "العميل" : "Customer"}</label><select className="form-input form-select" value={posReceiptForm.customer_id} onChange={e => { const id = e.target.value; setPosReceiptForm({ ...posReceiptForm, customer_id: id }); void loadPOSReceiptBalance(id); }}><option value="">{isAr ? "اختر العميل" : "Select customer"}</option>{customers.map((c: any) => <option key={c.id} value={c.id}>{c.name_ar}{c.phone ? ` — ${c.phone}` : ""}</option>)}</select></div>
+              {posReceiptForm.customer_id && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}><div style={{ background: "#FFF7ED", borderRadius: 8, padding: "9px 10px" }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{isAr ? "الرصيد المستحق قبل التحصيل" : "Outstanding balance"}</div><strong style={{ color: "#B45309" }}>{loadingPOSReceiptBalance ? "..." : `${fmt(posReceiptBalance || 0)} ${sar}`}</strong></div><div style={{ background: "#F0FDF4", borderRadius: 8, padding: "9px 10px" }}><div style={{ fontSize: 11, color: "var(--text-muted)" }}>{isAr ? "المتبقي بعد السند" : "Remaining after receipt"}</div><strong style={{ color: "#15803D" }}>{posReceiptBalance === null ? "—" : `${fmt(Math.max(0, posReceiptBalance - (parseFloat(posReceiptForm.amount) || 0)))} ${sar}`}</strong></div></div>}
               <div className="form-group"><label className="form-label">{isAr ? "المبلغ" : "Amount"} ({sar})</label><input type="number" min="0.01" step="0.01" className="form-input" value={posReceiptForm.amount} onChange={e => setPosReceiptForm({ ...posReceiptForm, amount: e.target.value })} autoFocus /></div>
               <div className="form-group"><label className="form-label">{isAr ? "طريقة الدفع" : "Payment method"}</label><select className="form-input form-select" value={posReceiptForm.payment_method} onChange={e => setPosReceiptForm({ ...posReceiptForm, payment_method: e.target.value })}><option value="cash">{isAr ? "نقدي" : "Cash"}</option><option value="mada">{isAr ? "شبكة" : "Mada"}</option><option value="credit_card">{isAr ? "بطاقة ائتمانية" : "Credit card"}</option><option value="stc_pay">STC Pay</option><option value="bank_transfer">{isAr ? "تحويل بنكي" : "Bank transfer"}</option></select></div>
               <div className="form-group"><label className="form-label">{isAr ? "رقم الفاتورة (اختياري)" : "Invoice ID (optional)"}</label><input className="form-input" value={posReceiptForm.invoice_id} onChange={e => setPosReceiptForm({ ...posReceiptForm, invoice_id: e.target.value })} placeholder={isAr ? "اتركه فارغًا للتحصيل من الرصيد العام" : "Leave blank for customer balance"} /></div>
