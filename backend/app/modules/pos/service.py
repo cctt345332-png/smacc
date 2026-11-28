@@ -1398,7 +1398,7 @@ async def _deduct_inventory(db: AsyncSession, tenant_id: str, user_id: str, tx_i
         )
 
 
-async def _get_or_create_pos_cash_customer(db: AsyncSession, tenant_id: str, user_id: str):
+async def _get_or_create_pos_cash_customer(db: AsyncSession, tenant_id: str, user_id: str, customer_parent_id: str | None = None):
     """يعيد عميل POS النقدي الثابت حتى لا تبقى فاتورة POS بلا customer_id."""
     from app.models.sales import Customer, CustomerType
     from app.models.accounting import Account, AccountType, AccountNature, AccountingAccountMapping
@@ -1412,8 +1412,18 @@ async def _get_or_create_pos_cash_customer(db: AsyncSession, tenant_id: str, use
     if customer:
         return customer
 
+    # استخدم حساب العملاء المربوط بجهاز POS أولًا.
+    # لا نعتمد على default_ar العام لأن الشركة الجديدة قد لا تكون أعدته بعد.
+    parent = None
+    if customer_parent_id:
+        candidate = await db.get(Account, customer_parent_id)
+        if (candidate and candidate.tenant_id == tenant_id and candidate.is_active
+                and candidate.account_type == AccountType.ASSET
+                and candidate.nature == AccountNature.DEBIT):
+            parent = candidate
     try:
-        parent = await get_operational_account(db, tenant_id, "default_ar")
+        if not parent:
+            parent = await get_operational_account(db, tenant_id, "default_ar")
     except HTTPException:
         # بعض الشركات القديمة تربط default_ar بحساب تجميعي (مثل 01131).
         # هذا الحساب صالح كفرع للشجرة لكنه ليس حساب قيد نهائيًا، لذلك نختار
@@ -1498,7 +1508,7 @@ async def _create_pos_invoice(db, tenant_id, user_id, tx, session, tenant, vat_s
 
     customer_id = tx.customer_id
     if not customer_id:
-        customer = await _get_or_create_pos_cash_customer(db, tenant_id, user_id)
+        customer = await _get_or_create_pos_cash_customer(db, tenant_id, user_id, terminal.customer_account_parent_id)
         customer_id = customer.id
         tx.customer_id = customer_id
 
